@@ -5,7 +5,8 @@
     "rootDir": ".",
     "paths": {
       "@fentaris/core": ["./src/index.ts"],
-      "@fentaris/core/extensions": ["./src/extensions.ts"]
+      "@fentaris/core/extensions": ["./src/extensions.ts"],
+      "@fentaris/core/experimental/plugins": ["./src/experimental/plugins.ts"]
     }
   },
   "include": ["test-d/**/*.ts"]

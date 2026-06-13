@@ -13,6 +13,10 @@
       "types": "./dist/extensions.d.ts",
       "import": "./dist/extensions.js"
     },
+    "./experimental/plugins": {
+      "types": "./dist/experimental/plugins.d.ts",
+      "import": "./dist/experimental/plugins.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
