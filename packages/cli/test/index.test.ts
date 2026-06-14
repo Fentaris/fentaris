@@ -138,7 +138,7 @@ describe("project template", () => {
     expect(rendered.files["src/index.ts"]).toContain("https://mcp.specification.website/mcp");
     expect(rendered.files["src/index.ts"]).toContain("app.mcp(");
     expect(rendered.files["src/index.ts"]).toContain("credentialJson");
-    expect(rendered.files["src/index.ts"]).toContain("rateLimitMiddleware");
+    expect(rendered.files["src/index.ts"]).toContain("profiler()");
     expect(rendered.files["src/index.ts"]).toContain("admin-full-access");
 
     const packageJson = JSON.parse(rendered.files["package.json"] ?? "{}") as { devDependencies?: Record<string, string> };
