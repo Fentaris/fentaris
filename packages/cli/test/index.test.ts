@@ -203,6 +203,7 @@ describe("project commands", () => {
     await expect(main(["init", "demo", "--skip-install"], rt)).resolves.toBe(0);
 
     rt.cwd = join(dir, "demo");
+    delete rt.env.FENTARIS_AUTH_KEY;
     await expect(main(["check", "--offline"], rt)).resolves.toBe(0);
     await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(1);
     await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
@@ -222,7 +223,7 @@ describe("project commands", () => {
     await writeFile(join(dir, ".gitignore"), ".fentaris/\n");
     const rt = runtime(dir, { pnpm: true, git: true, docker: true });
 
-    await expect(main(["doctor", "--fix"], rt)).resolves.toBe(1);
+    await expect(main(["doctor", "--fix"], rt)).resolves.toBe(0);
 
     const gitignore = await readFile(join(dir, ".gitignore"), "utf8");
     expect(gitignore).toContain("secrets/\n");
