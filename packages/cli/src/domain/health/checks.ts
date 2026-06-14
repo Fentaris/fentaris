@@ -67,7 +67,7 @@ export async function getDoctorResults(runtime: Runtime, options: boolean | Doct
   return results;
 }
 
-export async function getProjectCheckResults(project: ProjectDiscovery, offline: boolean): Promise<HealthResult[]> {
+export async function getProjectCheckResults(project: ProjectDiscovery, offline: boolean, runtime?: Runtime): Promise<HealthResult[]> {
   const expectedFiles = [
     "package.json",
     "tsconfig.json",
@@ -92,7 +92,7 @@ export async function getProjectCheckResults(project: ProjectDiscovery, offline:
 
   results.push(...(await configResults(project)).results);
   results.push(...await packageResults(project));
-  results.push(...await authResults(project, undefined));
+  results.push(...await authResults(project, runtime));
 
   if (!offline) {
     results.push(await portResult(project.config.port));
@@ -425,7 +425,7 @@ async function authResults(project: ProjectDiscovery, runtime: Runtime | undefin
       detail: key?.trim() ? "Set" : "Not set",
       hint: key?.trim() ? undefined : "Set FENTARIS_AUTH_KEY before decrypting local credentials. The value is never printed by doctor.",
     },
-    await gitignoreAuthResult(project.root),
+    await gitignoreAuthResult(project.root, project.config.authDir),
   ];
 
   if (credentialsExist && key?.trim()) {
@@ -616,8 +616,9 @@ async function lockfileResult(root: string, packageManager: PackageManager): Pro
   };
 }
 
-async function gitignoreAuthResult(root: string): Promise<HealthResult> {
+async function gitignoreAuthResult(root: string, configuredAuthDir: string): Promise<HealthResult> {
   const gitignorePath = path.join(root, ".gitignore");
+  const gitignoreEntry = `${configuredAuthDir.replace(/\\/g, "/").replace(/\/+$/u, "")}/`;
   const present = await exists(gitignorePath);
   if (!present) {
     return {
@@ -625,23 +626,26 @@ async function gitignoreAuthResult(root: string): Promise<HealthResult> {
       label: ".gitignore auth entry",
       status: "warn",
       detail: ".gitignore is missing.",
-      hint: "doctor --fix can create .gitignore with .fentaris/ ignored.",
+      hint: `doctor --fix can create .gitignore with ${gitignoreEntry} ignored.`,
       fix: async () => {
-        await writeFile(gitignorePath, ".fentaris/\n");
+        await writeFile(gitignorePath, `${gitignoreEntry}\n`);
       },
     };
   }
 
   const contents = await readFile(gitignorePath, "utf8");
-  const ignoresAuth = contents.split(/\r?\n/).some((line) => line.trim() === ".fentaris/" || line.trim() === ".fentaris");
+  const gitignoreEntryWithoutSlash = gitignoreEntry.slice(0, -1);
+  const ignoresAuth = contents
+    .split(/\r?\n/)
+    .some((line) => line.trim() === gitignoreEntry || line.trim() === gitignoreEntryWithoutSlash);
   return {
     group: "Auth",
     label: ".gitignore auth entry",
     status: ignoresAuth ? "pass" : "warn",
-    detail: ignoresAuth ? ".fentaris/ is ignored." : ".fentaris/ is not ignored.",
-    hint: ignoresAuth ? undefined : "doctor --fix can add .fentaris/ to .gitignore.",
+    detail: ignoresAuth ? `${gitignoreEntry} is ignored.` : `${gitignoreEntry} is not ignored.`,
+    hint: ignoresAuth ? undefined : `doctor --fix can add ${gitignoreEntry} to .gitignore.`,
     fix: async () => {
-      await writeFile(gitignorePath, `${contents.trimEnd()}\n.fentaris/\n`);
+      await writeFile(gitignorePath, `${contents.trimEnd()}\n${gitignoreEntry}\n`);
     },
   };
 }

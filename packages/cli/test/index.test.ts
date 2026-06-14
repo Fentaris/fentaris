@@ -27,6 +27,39 @@ function prompt(values: string[] = []): Prompt {
   };
 }
 
+async function writeHealthyProject(root: string, authDirectory = ".fentaris"): Promise<void> {
+  await mkdir(join(root, "src"), { recursive: true });
+  await mkdir(join(root, authDirectory), { recursive: true });
+  await writeFile(join(root, "README.md"), "# Demo\n");
+  await writeFile(join(root, ".env.example"), "FENTARIS_AUTH_KEY=test-key\n");
+  await writeFile(join(root, ".gitignore"), `${authDirectory}/\n`);
+  await writeFile(join(root, "src", "index.ts"), "console.log('demo');\n");
+  await writeFile(join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+  await writeFile(
+    join(root, "package.json"),
+    JSON.stringify({
+      name: "demo",
+      version: "0.1.0",
+      type: "module",
+      scripts: { dev: "tsx src/index.ts", build: "tsc -p tsconfig.json", start: "node dist/index.js" },
+      dependencies: { "@fentaris/core": "latest", tsx: "latest" },
+      devDependencies: { typescript: "latest" },
+    }),
+  );
+  await writeFile(
+    join(root, "tsconfig.json"),
+    JSON.stringify({ compilerOptions: { target: "ES2022", module: "NodeNext", moduleResolution: "NodeNext" }, include: ["src"] }),
+  );
+  await writeFile(
+    join(root, "fentaris.json"),
+    JSON.stringify({ name: "demo", packageManager: "pnpm", entrypoint: "src/index.ts", port: 4000, path: "/mcp", authDir: authDirectory }),
+  );
+  await writeFile(
+    join(root, authDirectory, "credentials.enc.json"),
+    JSON.stringify(FentarisAuth.encryptCredentials({ users: {}, groups: {}, defaults: {} }, "test-key")),
+  );
+}
+
 function runtime(cwd: string, probes: Record<string, boolean> = {}): Runtime & { calls: Array<{ command: string; args: string[]; cwd?: string | URL }> } {
   const calls: Array<{ command: string; args: string[]; cwd?: string | URL }> = [];
   return {
@@ -173,6 +206,27 @@ describe("project commands", () => {
     await expect(main(["check", "--offline"], rt)).resolves.toBe(0);
     await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(1);
     await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
+  });
+
+  it("uses runtime auth keys for strict project checks", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+
+    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
+  });
+
+  it("checks and fixes .gitignore entries for custom auth directories", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir, "secrets");
+    await writeFile(join(dir, ".gitignore"), ".fentaris/\n");
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+
+    await expect(main(["doctor", "--fix"], rt)).resolves.toBe(1);
+
+    const gitignore = await readFile(join(dir, ".gitignore"), "utf8");
+    expect(gitignore).toContain("secrets/\n");
+    expect(rt.prompt.confirm).toHaveBeenCalledWith("Apply fix for .gitignore auth entry?");
   });
 
   it("prompts before applying doctor fixes", async () => {
