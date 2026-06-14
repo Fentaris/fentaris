@@ -49,6 +49,8 @@ export type HealthResult = {
   label: string;
   status: HealthStatus;
   detail: string;
+  hint?: string;
+  metadata?: Record<string, unknown>;
   fix?: () => Promise<void>;
 };
 
