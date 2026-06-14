@@ -171,7 +171,7 @@ describe("project commands", () => {
 
     rt.cwd = join(dir, "demo");
     await expect(main(["check", "--offline"], rt)).resolves.toBe(0);
-    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
+    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(1);
     await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
   });
 
@@ -183,6 +183,34 @@ describe("project commands", () => {
 
     expect(rt.prompt.confirm).toHaveBeenCalledWith("Apply fix for CLI local directory?");
     await expect(readdir(join(dir, ".fentaris"))).resolves.toEqual([]);
+  });
+
+  it("reports invalid fentaris.json diagnostics without throwing discovery errors", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeFile(join(dir, "fentaris.json"), JSON.stringify({ name: "demo", packageManager: "yarn", entrypoint: "/tmp/app.ts", port: 90_000, path: "mcp", authDir: "." }));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+
+    await expect(main(["doctor", "--json"], rt)).resolves.toBe(1);
+
+    const output = String(vi.mocked(rt.out.log).mock.calls[0]?.[0]);
+    expect(output).toContain('"label": "project root"');
+    expect(output).toContain("not valid");
+  });
+
+  it("emits richer doctor diagnostics for generated projects", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+    await expect(main(["init", "demo", "--skip-install"], rt)).resolves.toBe(0);
+
+    rt.cwd = join(dir, "demo");
+    await expect(main(["doctor", "--json"], rt)).resolves.toBe(1);
+
+    const output = String(vi.mocked(rt.out.log).mock.calls.at(-1)?.[0]);
+    expect(output).toContain('"group": "Config"');
+    expect(output).toContain('"label": "@fentaris/core"');
+    expect(output).toContain('"label": "lockfile"');
+    expect(output).toContain('"label": "credential decrypt"');
+    expect(output).not.toContain("test-key");
   });
 
   it("does not expose deploy before it is implemented", async () => {

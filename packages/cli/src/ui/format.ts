@@ -38,6 +38,9 @@ export function printHealthResults(runtime: Runtime, results: HealthResult[]): v
     runtime.out.log(`  ${style.label(groupName)}`);
     for (const result of results.filter((item) => item.group === groupName)) {
       runtime.out.log(`    ${marker(result.status)} ${result.label} ${style.hint(result.detail)}`);
+      if (result.hint) {
+        runtime.out.log(`      ${style.hint(result.hint)}`);
+      }
     }
   }
 
@@ -56,7 +59,7 @@ export function printHelp(runtime: Runtime): void {
   ${style.command("fentaris init [project-name] [--skip-install]")}
   ${style.command("fentaris dev")}
   ${style.command("fentaris check [--offline] [--strict]")}
-  ${style.command("fentaris doctor [--fix]")}
+  ${style.command("fentaris doctor [--fix] [--strict] [--json] [--runtime] [--timeout <ms>]")}
   ${style.command("fentaris build")}
   ${style.command("fentaris secrets set <reference> [--user <id> | --group <id>]")}
 

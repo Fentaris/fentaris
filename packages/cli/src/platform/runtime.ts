@@ -8,7 +8,7 @@ export function defaultRuntime(): Runtime {
     env: process.env,
     out: console,
     runner: runProcess,
-    probe: (command, args = ["--version"]) => spawnSync(command, args, { stdio: "ignore" }).status === 0,
+    probe: (command, args = ["--version"]) => spawnSync(command, args, { stdio: "ignore", timeout: 2_000 }).status === 0,
     prompt: createPrompt(),
   };
 }
