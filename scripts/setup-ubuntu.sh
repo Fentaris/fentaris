@@ -175,7 +175,17 @@ install_node() {
 install_pnpm() {
   log "Enabling Corepack and preparing pnpm ${PNPM_VERSION}"
   run_as_root corepack enable
-  run_as_root corepack prepare "pnpm@${PNPM_VERSION}" --activate
+
+  if ! run_as_root corepack prepare "pnpm@${PNPM_VERSION}" --activate; then
+    log "Corepack could not install pnpm ${PNPM_VERSION}; falling back to npm"
+    run_as_root corepack disable || true
+    run_as_root npm install -g "pnpm@${PNPM_VERSION}" --no-audit --no-fund --force
+  fi
+
+  hash -r 2>/dev/null || true
+
+  [ "$(pnpm --version)" = "$PNPM_VERSION" ] \
+    || fail "pnpm ${PNPM_VERSION} is required, but $(command -v pnpm 2>/dev/null || printf pnpm) reports $(pnpm --version 2>/dev/null || printf unavailable)"
 }
 
 install_project_dependencies() {
