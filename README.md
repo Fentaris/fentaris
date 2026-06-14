@@ -228,6 +228,12 @@ Credential values are not exposed to middleware, hooks, logs, or policy callback
 
 ## Development
 
+On Ubuntu, after cloning the repository, install the system and project dependencies non-interactively:
+
+```bash
+./scripts/setup-ubuntu.sh
+```
+
 Install dependencies:
 
 ```bash
