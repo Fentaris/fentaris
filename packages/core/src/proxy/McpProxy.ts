@@ -512,6 +512,15 @@ export class McpProxy {
    * @pk
    */
   async listen<THandle extends ProxyExposureHandle>(transport: ProxyExposureTransport<THandle>): Promise<THandle> {
+    const state = this.state().state;
+    if (state === "ready" || state === "degraded") {
+      return this.listenInternal(transport);
+    }
+    if (state === "starting") {
+      await this.lifecycle.ready({ startupTimeoutMs: this.lifecycleDefaults.startupTimeoutMs });
+      return this.listenInternal(transport);
+    }
+
     return this.lifecycle.start(() => this.listenInternal(transport), {
       startupTimeoutMs: this.lifecycleDefaults.startupTimeoutMs,
     }) as Promise<THandle>;
@@ -600,6 +609,10 @@ export class McpProxy {
       },
       emitRuntimeEvent: (event) => this.emitRuntimeEvent(event),
     });
+    if (report.status === "degraded" && this.state().state === "degraded" && isOnlyLifecycleCheckDegraded(report)) {
+      await this.lifecycle.markReady();
+      return this.health();
+    }
     if (report.status === "degraded") {
       await this.lifecycle.markDegraded("One or more health checks are degraded");
       await this.emitRuntimeEvent(createRuntimeEvent({
@@ -610,6 +623,8 @@ export class McpProxy {
         reason: "One or more health checks are degraded",
         metadata: { status: report.status },
       }));
+    } else if (report.status === "ok") {
+      await this.lifecycle.markReady();
     }
     return report;
   }
@@ -2402,6 +2417,15 @@ function normalizeHeaders(headers: IncomingHttpHeaders): Record<string, string> 
   }
 
   return normalized;
+}
+
+function isOnlyLifecycleCheckDegraded(report: HealthReport): boolean {
+  return report.checks.every((check) => {
+    if (check.name === "runtime.lifecycle") {
+      return check.status === "degraded";
+    }
+    return check.status === "ok";
+  });
 }
 
 function normalizeAutoLog(autoLog: McpProxyOptions["autoLog"] | undefined): Required<AutoLogOptions> | null {

@@ -233,8 +233,9 @@ describe("proxied resource URIs", () => {
 
 describe("McpProxy", () => {
   it("exposes lifecycle state and idempotent stop behavior", async () => {
+    const transport = new MockTransport();
     const proxy = new McpProxy({
-      servers: [new McpServer({ name: "github", transport: new MockTransport() })],
+      servers: [new McpServer({ name: "github", transport })],
     });
 
     expect(proxy.state().state).toBe("created");
@@ -243,6 +244,7 @@ describe("McpProxy", () => {
     await proxy.stop();
 
     expect(proxy.state().state).toBe("stopped");
+    expect(transport.close).toHaveBeenCalledTimes(1);
   });
 
   it("starts idempotently while startup is in progress", async () => {
@@ -269,6 +271,25 @@ describe("McpProxy", () => {
       code: "FENTARIS_TIMEOUT_ERROR",
     });
     expect(proxy.state().state).toBe("failed");
+  });
+
+  it("restores readiness after degraded health checks recover", async () => {
+    let healthy = false;
+    const proxy = new McpProxy({
+      servers: [new McpServer({ name: "github", transport: new MockTransport() })],
+      health: health({ include: ["runtime"] }).check("transient", () => (healthy ? "ok" : "degraded")),
+    });
+
+    await proxy.start({ port: 0 });
+
+    await expect(proxy.health()).resolves.toMatchObject({ status: "degraded" });
+    expect(proxy.state().state).toBe("degraded");
+
+    healthy = true;
+    await expect(proxy.health()).resolves.toMatchObject({ status: "ok" });
+    expect(proxy.state().state).toBe("ready");
+
+    await proxy.stop();
   });
 
   it("normalizes builder and object health configuration", async () => {

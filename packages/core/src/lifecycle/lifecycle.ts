@@ -140,12 +140,17 @@ export class RuntimeLifecycleController {
   }
 
   async stop(operation: () => Promise<void>, options?: RuntimeLifecycleOptions): Promise<void> {
-    if (this.currentState === "stopped" || this.currentState === "created") {
-      await this.transition("stopped");
+    if (this.currentState === "stopped") {
       return;
     }
     if (this.currentState === "stopping" && this.stopPromise) {
       return this.stopPromise;
+    }
+
+    if (this.currentState === "created") {
+      await this.runStopOperation(operation, options);
+      await this.transition("stopped");
+      return;
     }
 
     await this.transition("stopping");
@@ -172,10 +177,34 @@ export class RuntimeLifecycleController {
     return this.stopPromise;
   }
 
+  async markReady(): Promise<void> {
+    if (this.currentState === "degraded") {
+      this.metadata.failure = undefined;
+      await this.transition("ready");
+    }
+  }
+
   async markDegraded(reason: string): Promise<void> {
     if (this.currentState === "ready" || this.currentState === "degraded") {
       this.metadata.failure = { name: "RuntimeDegraded", message: reason };
       await this.transition("degraded");
+    }
+  }
+
+  private async runStopOperation(operation: () => Promise<void>, options?: RuntimeLifecycleOptions): Promise<void> {
+    const timeoutMs = normalizeRuntimeLifecycleOptions({ ...this.defaults, ...options }).shutdownTimeoutMs;
+    try {
+      await timeoutAfter(operation(), timeoutMs, "Runtime shutdown timed out", "shutdown");
+      this.metadata.stoppedAt = new Date();
+    } catch (error) {
+      const normalized = normalizeRuntimeError(error, { context: { phase: "shutdown" } });
+      this.metadata.failure = {
+        name: normalized.name,
+        code: normalized.code,
+        message: normalized.message,
+      };
+      await this.transition("failed");
+      throw normalized;
     }
   }
 
