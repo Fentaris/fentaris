@@ -41,6 +41,7 @@ import {
   FentarisExtensionError,
   FentarisMcpError,
   FentarisPolicyError,
+  FentarisRuntimeError,
   FentarisTimeoutError,
   FentarisTransportError,
   RuntimeProfiler,
@@ -50,7 +51,22 @@ import {
   type RuntimeEvent,
   type RuntimeProfilerConfig,
 } from "../profiler/index.js";
-import { McpServer, type ServerCredentialBinding } from "../server/McpServer.js";
+import {
+  RuntimeLifecycleController,
+  normalizeRuntimeLifecycleOptions,
+  type RuntimeLifecycleOptions,
+  type RuntimeLifecycleSnapshot,
+  type RuntimeLifecycleTransition,
+} from "../lifecycle/index.js";
+import {
+  normalizeHealthConfig,
+  runHealthChecks,
+  type HealthCheckResult,
+  type HealthConfig,
+  type HealthReport,
+  type NormalizedHealthConfig,
+} from "../health/index.js";
+import { McpServer, type McpServerOptions, type ServerCredentialBinding } from "../server/McpServer.js";
 import {
   fromProxyPromptName,
   fromProxyResourceTemplateUri,
@@ -100,7 +116,9 @@ import type {
   ProxyExposureTransport,
   ProxyRuntime,
   ProxyGroupHandle,
-  ProxyServerHandle,
+  ProxyMcpDeclarationConfig,
+  ProxyMcpDeclarationOptions,
+  ProxyMcpHandle,
   ProxyOperationHandler,
   ProxyToolHandler,
   ProxyToolPattern,
@@ -138,6 +156,8 @@ export type McpProxyOptions = {
   registry?: Registry;
   autoLog?: boolean | AutoLogOptions;
   profiler?: RuntimeProfilerConfig;
+  lifecycle?: RuntimeLifecycleOptions;
+  health?: HealthConfig;
   errorMapper?: ErrorMapper;
   name?: string;
   version?: string;
@@ -170,6 +190,15 @@ export type IdentityResolverOptions = {
 export type McpProxyStartOptions = {
   port?: number;
   path?: string;
+  startupTimeoutMs?: number;
+};
+
+/**
+ * Optional stop overrides for the MCP proxy.
+ * @pk
+ */
+export type McpProxyStopOptions = {
+  shutdownTimeoutMs?: number;
 };
 
 
@@ -198,6 +227,9 @@ export class McpProxy {
   private readonly registry?: Registry;
   private readonly autoLog: Required<AutoLogOptions> | null;
   private readonly profiler: RuntimeProfiler;
+  private readonly lifecycle: RuntimeLifecycleController;
+  private readonly lifecycleDefaults: ReturnType<typeof normalizeRuntimeLifecycleOptions>;
+  private readonly healthConfig: NormalizedHealthConfig;
   private readonly errorMapper: ErrorMapper;
   private readonly name: string;
   private readonly version: string;
@@ -210,7 +242,7 @@ export class McpProxy {
    * Create a new MCP proxy instance.
    * @pk
    */
-  constructor(options: McpProxyOptions) {
+  constructor(options: McpProxyOptions = {}) {
     const resolved = resolveFentarisConfig(options);
     this.servers = resolved.servers;
     this.logger = options.logger ?? new Logger();
@@ -228,9 +260,17 @@ export class McpProxy {
     this.registry = options.registry;
     this.autoLog = normalizeAutoLog(options.autoLog);
     this.profiler = new RuntimeProfiler(options.profiler === undefined ? null : normalizeRuntimeProfiler(options.profiler, this.logger));
+    this.lifecycleDefaults = normalizeRuntimeLifecycleOptions(options.lifecycle);
+    this.healthConfig = normalizeHealthConfig(options.health);
     this.errorMapper = options.errorMapper ?? new DefaultErrorMapper();
     this.name = options.name ?? "fentaris-core-proxy";
     this.version = options.version ?? "0.1.0";
+    this.lifecycle = new RuntimeLifecycleController({
+      name: this.name,
+      version: this.version,
+      defaults: this.lifecycleDefaults,
+      onTransition: (transition) => this.emitLifecycleTransition(transition),
+    });
     this.defaultPort = options.port;
     this.defaultPath = options.path ?? "/mcp";
 
@@ -268,13 +308,25 @@ export class McpProxy {
   }
 
   /**
-   * Register or retrieve a scoped server handle.
+   * Register or retrieve a scoped upstream MCP handle.
    * @pk
    */
-  server(name: string, server?: McpServer): ProxyServerHandle {
-    if (server) {
+  mcp(name: string): ProxyMcpHandle;
+  mcp(name: string, options: ProxyMcpDeclarationOptions): ProxyMcpHandle;
+  mcp(name: string, server: McpServer): ProxyMcpHandle;
+  mcp(config: ProxyMcpDeclarationConfig): ProxyMcpHandle;
+  mcp(
+    nameOrConfig: string | ProxyMcpDeclarationConfig,
+    optionsOrServer?: ProxyMcpDeclarationOptions | McpServer,
+  ): ProxyMcpHandle {
+    const name = typeof nameOrConfig === "string" ? nameOrConfig : nameOrConfig.name;
+    const declaration = typeof nameOrConfig === "string" ? optionsOrServer : nameOrConfig;
+    if (declaration) {
+      const server = declaration instanceof McpServer
+        ? declaration
+        : new McpServer({ ...(declaration as Omit<McpServerOptions, "name">), name });
       if (server.name !== name) {
-        throw new Error(`Server handle "${name}" cannot register MCP server "${server.name}"`);
+        throw new Error(`MCP handle "${name}" cannot register MCP server "${server.name}"`);
       }
       if (!this.serverByName.has(name)) {
         this.servers.push(server);
@@ -283,20 +335,20 @@ export class McpProxy {
       }
     }
 
-    if (!server && !this.serverByName.has(name)) {
+    if (!declaration && !this.serverByName.has(name)) {
       throw new FentarisConfigError([
         {
           severity: "error",
           code: "FENTARIS_CONFIG_HANDLE_UNKNOWN_SERVER",
-          title: "Scoped server handle references an unknown server",
-          message: `Server handle "${name}" does not match a configured MCP server.`,
-          path: ["proxy", "server", name],
-          hint: "Configure the server first or pass the MCP server when registering the handle.",
+          title: "Scoped MCP handle references an unknown upstream",
+          message: `MCP handle "${name}" does not match a configured upstream MCP server.`,
+          path: ["proxy", "mcp", name],
+          hint: "Configure the upstream first or pass MCP options when registering the handle.",
         },
       ]);
     }
 
-    return new McpProxyServerHandle(this, name);
+    return new McpProxyMcpHandle(this, name);
   }
 
   /**
@@ -407,35 +459,39 @@ export class McpProxy {
     optionsOrCallback: McpProxyStartOptions | (() => void) = {},
     onStarted?: () => void,
   ): Promise<HttpServer> {
+    const options = typeof optionsOrCallback === "function" ? {} : optionsOrCallback;
+    const callback = typeof optionsOrCallback === "function" ? optionsOrCallback : onStarted;
     if (this.httpServer) {
       return this.httpServer;
     }
 
-    const options = typeof optionsOrCallback === "function" ? {} : optionsOrCallback;
-    const callback = typeof optionsOrCallback === "function" ? optionsOrCallback : onStarted;
-    const port = options.port ?? this.defaultPort ?? 3000;
-    const path = options.path ?? this.defaultPath;
     const startedAt = Date.now();
-    await this.emitRuntimeEvent(createRuntimeEvent({
-      name: "runtime.start",
-      category: "lifecycle",
-      level: "info",
-      runtime: this.name,
-      version: this.version,
-      operation: "runtime:start",
-      message: "Runtime starting",
-    }));
-    const handle = await this.listen(
-      new HttpProxyExposureTransport({
-        port,
-        path,
-        onStarted: () => {
-        this.printStartupBanner(port, path);
-        callback?.();
-        },
-      }),
-    );
-    this.httpServer = handle.server;
+    const result = await this.lifecycle.start(async () => {
+      const port = options.port ?? this.defaultPort ?? 3000;
+      const path = options.path ?? this.defaultPath;
+      const handle = await this.listenInternal(
+        new HttpProxyExposureTransport({
+          port,
+          path,
+          onStarted: () => {
+            this.printStartupBanner(port, path);
+            callback?.();
+          },
+        }),
+      );
+      this.httpServer = handle.server;
+      return this.httpServer;
+    }, { startupTimeoutMs: options.startupTimeoutMs ?? this.lifecycleDefaults.startupTimeoutMs });
+
+    if (!result && this.httpServer) {
+      return this.httpServer;
+    }
+    if (!result) {
+      throw new FentarisRuntimeError("Runtime start completed without an HTTP server", {
+        code: "FENTARIS_RUNTIME_START_FAILED",
+      });
+    }
+
     await this.emitRuntimeEvent(createRuntimeEvent({
       name: "runtime.ready",
       category: "lifecycle",
@@ -445,10 +501,10 @@ export class McpProxy {
       operation: "runtime:ready",
       startupMs: Date.now() - startedAt,
       durationMs: Date.now() - startedAt,
+      metadata: this.state().metadata as unknown as Record<string, unknown>,
       message: "Runtime ready",
     }));
-
-    return this.httpServer;
+    return result;
   }
 
   /**
@@ -456,6 +512,21 @@ export class McpProxy {
    * @pk
    */
   async listen<THandle extends ProxyExposureHandle>(transport: ProxyExposureTransport<THandle>): Promise<THandle> {
+    const state = this.state().state;
+    if (state === "ready" || state === "degraded") {
+      return this.listenInternal(transport);
+    }
+    if (state === "starting") {
+      await this.lifecycle.ready({ startupTimeoutMs: this.lifecycleDefaults.startupTimeoutMs });
+      return this.listenInternal(transport);
+    }
+
+    return this.lifecycle.start(() => this.listenInternal(transport), {
+      startupTimeoutMs: this.lifecycleDefaults.startupTimeoutMs,
+    }) as Promise<THandle>;
+  }
+
+  private async listenInternal<THandle extends ProxyExposureHandle>(transport: ProxyExposureTransport<THandle>): Promise<THandle> {
     try {
       const handle = await transport.listen(this.createRuntime());
       this.exposureHandles.add(handle);
@@ -477,11 +548,29 @@ export class McpProxy {
    * @pk
    */
   async close(): Promise<void> {
+    await this.stop();
+  }
+
+  /**
+   * Wait for the runtime to reach readiness.
+   * @pk
+   */
+  async ready(options?: RuntimeLifecycleOptions): Promise<RuntimeLifecycleSnapshot> {
+    return this.lifecycle.ready(options);
+  }
+
+  /**
+   * Stop the runtime and close owned resources.
+   * @pk
+   */
+  async stop(options: McpProxyStopOptions = {}): Promise<void> {
     const startedAt = Date.now();
-    await Promise.all([...this.exposureHandles].map((handle) => handle.close()));
-    this.exposureHandles.clear();
-    this.httpServer = null;
-    await Promise.all(this.serverCatalog.allServers().map((server) => server.close()));
+    await this.lifecycle.stop(async () => {
+      await Promise.all([...this.exposureHandles].map((handle) => handle.close()));
+      this.exposureHandles.clear();
+      this.httpServer = null;
+      await Promise.all(this.serverCatalog.allServers().map((server) => server.close()));
+    }, { shutdownTimeoutMs: options.shutdownTimeoutMs ?? this.lifecycleDefaults.shutdownTimeoutMs });
     await this.emitRuntimeEvent(createRuntimeEvent({
       name: "runtime.stop",
       category: "lifecycle",
@@ -489,8 +578,71 @@ export class McpProxy {
       runtime: this.name,
       operation: "runtime:stop",
       durationMs: Date.now() - startedAt,
+      metadata: this.state().metadata as unknown as Record<string, unknown>,
       message: "Runtime stopped",
     }));
+  }
+
+  /**
+   * Inspect the current runtime lifecycle state.
+   * @pk
+   */
+  state(): RuntimeLifecycleSnapshot {
+    return this.lifecycle.state();
+  }
+
+  /**
+   * Run configured runtime health checks.
+   * @pk
+   */
+  async health(): Promise<HealthReport> {
+    const report = await runHealthChecks({
+      config: this.healthConfig,
+      state: {
+        lifecycle: this.state(),
+        servers: this.serverCatalog.allServers(),
+        groups: this.groups,
+        exposureCount: this.exposureHandles.size,
+        policy: this.policy,
+        auth: this.auth,
+        identityRequired: Boolean(this.identityOptions?.required),
+      },
+      emitRuntimeEvent: (event) => this.emitRuntimeEvent(event),
+    });
+    if (report.status === "degraded" && this.state().state === "degraded" && isOnlyLifecycleCheckDegraded(report)) {
+      await this.lifecycle.markReady();
+      return this.health();
+    }
+    if (report.status === "degraded") {
+      await this.lifecycle.markDegraded("One or more health checks are degraded");
+      await this.emitRuntimeEvent(createRuntimeEvent({
+        name: "runtime.degraded",
+        category: "lifecycle",
+        level: "warn",
+        component: "health",
+        reason: "One or more health checks are degraded",
+        metadata: { status: report.status },
+      }));
+    } else if (report.status === "ok") {
+      await this.lifecycle.markReady();
+    }
+    return report;
+  }
+
+  /**
+   * Ping a configured upstream MCP server by listing tools.
+   * @pk
+   */
+  async pingMcp(name: string): Promise<HealthCheckResult> {
+    return this.checkMcpHealth(name);
+  }
+
+  /**
+   * Check a configured upstream MCP server health.
+   * @pk
+   */
+  async mcpHealth(name: string): Promise<HealthCheckResult> {
+    return this.checkMcpHealth(name);
   }
 
   /**
@@ -1323,6 +1475,36 @@ export class McpProxy {
     await this.profiler.emit(event);
   }
 
+  private async emitLifecycleTransition(transition: RuntimeLifecycleTransition): Promise<void> {
+    if (transition.to === "starting") {
+      await this.emitRuntimeEvent(createRuntimeEvent({
+        name: "runtime.start",
+        category: "lifecycle",
+        level: "info",
+        runtime: this.name,
+        version: this.version,
+        operation: "runtime:start",
+        metadata: { from: transition.from, to: transition.to },
+        message: "Runtime starting",
+      }));
+      return;
+    }
+
+    if (transition.to === "failed") {
+      await this.emitRuntimeEvent(createRuntimeEvent({
+        name: "runtime.error",
+        category: "errors",
+        level: "error",
+        operation: "runtime:transition",
+        error: runtimeErrorToEventPayload(new FentarisRuntimeError("Runtime lifecycle transition failed", {
+          context: { from: transition.from, to: transition.to },
+        })),
+        metadata: { from: transition.from, to: transition.to },
+        message: "Runtime failed",
+      }));
+    }
+  }
+
   private async emitExtensionError(
     boundary: "hook" | "middleware" | "route" | "sink" | "extension",
     error: unknown,
@@ -2006,13 +2188,51 @@ export class McpProxy {
       context.log.info("MCP capability operation", metadata);
     }
   }
+
+  private async checkMcpHealth(name: string): Promise<HealthCheckResult> {
+    const checkedAt = new Date();
+    const startedAt = Date.now();
+    const server = this.serverByName.get(name);
+    if (!server) {
+      return {
+        name: `mcp.${name}.ping`,
+        status: "unknown",
+        message: `MCP server "${name}" is not configured`,
+        checkedAt,
+        durationMs: Date.now() - startedAt,
+        metadata: { name },
+      };
+    }
+
+    try {
+      await server.listTools();
+      return {
+        name: `mcp.${name}.ping`,
+        status: "ok",
+        message: "MCP server ping succeeded",
+        checkedAt,
+        durationMs: Date.now() - startedAt,
+        metadata: { name: server.name, displayName: server.displayName },
+      };
+    } catch (error) {
+      return {
+        name: `mcp.${name}.ping`,
+        status: "down",
+        message: "MCP server ping failed",
+        checkedAt,
+        durationMs: Date.now() - startedAt,
+        metadata: { name: server.name, displayName: server.displayName },
+        error: runtimeErrorToEventPayload(new FentarisMcpError("MCP server ping failed", { cause: error })),
+      };
+    }
+  }
 }
 
 /**
  * Create a Fentaris proxy with the express-like routing API.
  * @pk
  */
-export function createProxy(options: McpProxyOptions): McpProxy {
+export function createProxy(options: McpProxyOptions = {}): McpProxy {
   assertValidFentarisConfig(options);
   return new McpProxy(options);
 }
@@ -2023,35 +2243,35 @@ export function createProxy(options: McpProxyOptions): McpProxy {
  */
 export const fentaris = createProxy;
 
-class McpProxyServerHandle implements ProxyServerHandle {
+class McpProxyMcpHandle implements ProxyMcpHandle {
   constructor(
     private readonly proxy: McpProxy,
     readonly name: string,
     private readonly groupId?: string,
   ) {}
 
-  use(handler: Middleware): ProxyServerHandle {
+  use(handler: Middleware): ProxyMcpHandle {
     this.proxy.registerServerMiddleware(this.name, handler, this.groupId);
     return this;
   }
 
-  tool(pattern: ProxyToolPattern, handler: ProxyToolHandler): ProxyServerHandle {
+  tool(pattern: ProxyToolPattern, handler: ProxyToolHandler): ProxyMcpHandle {
     this.proxy.registerServerTool(this.name, pattern, handler, this.groupId);
     return this;
   }
 
-  operation(operation: ProxyContext["operation"], handler: ProxyOperationHandler): ProxyServerHandle {
+  operation(operation: ProxyContext["operation"], handler: ProxyOperationHandler): ProxyMcpHandle {
     this.proxy.registerServerOperation(this.name, operation, handler, this.groupId);
     return this;
   }
 
-  on(eventName: ProxyEventName, handler: ProxyEventHandler): ProxyServerHandle;
-  on(eventName: ProxyEventName, filter: ProxyEventFilter, handler: ProxyEventHandler): ProxyServerHandle;
+  on(eventName: ProxyEventName, handler: ProxyEventHandler): ProxyMcpHandle;
+  on(eventName: ProxyEventName, filter: ProxyEventFilter, handler: ProxyEventHandler): ProxyMcpHandle;
   on(
     eventName: ProxyEventName,
     filterOrHandler: ProxyEventFilter | ProxyEventHandler,
     maybeHandler?: ProxyEventHandler,
-  ): ProxyServerHandle {
+  ): ProxyMcpHandle {
     const filter = typeof filterOrHandler === "function" ? {} : filterOrHandler;
     const handler = typeof filterOrHandler === "function" ? filterOrHandler : maybeHandler;
     if (!handler) {
@@ -2059,6 +2279,14 @@ class McpProxyServerHandle implements ProxyServerHandle {
     }
     this.proxy.registerServerEvent(this.name, eventName, filter, handler, this.groupId);
     return this;
+  }
+
+  ping(): Promise<HealthCheckResult> {
+    return this.proxy.pingMcp(this.name);
+  }
+
+  health(): Promise<HealthCheckResult> {
+    return this.proxy.mcpHealth(this.name);
   }
 }
 
@@ -2068,8 +2296,8 @@ class McpProxyGroupHandle implements ProxyGroupHandle {
     readonly id: string,
   ) {}
 
-  server(name: string): ProxyServerHandle {
-    return new McpProxyServerHandle(this.proxy, name, this.id);
+  mcp(name: string): ProxyMcpHandle {
+    return new McpProxyMcpHandle(this.proxy, name, this.id);
   }
 
   use(handler: Middleware): ProxyGroupHandle {
@@ -2189,6 +2417,15 @@ function normalizeHeaders(headers: IncomingHttpHeaders): Record<string, string> 
   }
 
   return normalized;
+}
+
+function isOnlyLifecycleCheckDegraded(report: HealthReport): boolean {
+  return report.checks.every((check) => {
+    if (check.name === "runtime.lifecycle") {
+      return check.status === "degraded";
+    }
+    return check.status === "ok";
+  });
 }
 
 function normalizeAutoLog(autoLog: McpProxyOptions["autoLog"] | undefined): Required<AutoLogOptions> | null {

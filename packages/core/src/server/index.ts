@@ -1,4 +1,4 @@
-export { McpServer, bearer, header, mcp, server } from "./McpServer.js";
+export { McpServer, bearer, header, mcp } from "./McpServer.js";
 export type {
   BearerCredentialAuth,
   EnvResolver,

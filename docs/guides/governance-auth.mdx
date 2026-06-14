@@ -24,13 +24,13 @@ import {
 } from "@fentaris/core";
 
 const readOnly = policy("read-only")
-  .server("github")
+  .mcp("github")
   .allow("search_issues");
 
 const maintainers = policy("maintainers")
-  .server("github")
+  .mcp("github")
   .allow("*")
-  .server("github")
+  .mcp("github")
   .deny("delete_repo", sensitive({ reason: "destructive" }));
 
 const proxy = fentaris({
@@ -127,7 +127,7 @@ Middleware receives credential source metadata through `ctx.credentials.sources`
 Keep durable authorization in groups and policies. Use server-scoped tool routes for runtime behavior after policy allows a call.
 
 ```ts theme={null}
-const supportPolicy = policy("support").server("github").allow("create_issue");
+const supportPolicy = policy("support").mcp("github").allow("create_issue");
 
 const support = group({
   id: "support",
@@ -140,7 +140,7 @@ const proxy = new McpProxy({
   groups: [support],
 });
 
-proxy.server("github").tool("create_issue", async (ctx, next) => {
+proxy.mcp("github").tool("create_issue", async (ctx, next) => {
   if (typeof ctx.args?.title !== "string") {
     return ctx.deny("Issue title is required.");
   }
@@ -157,7 +157,7 @@ proxy.server("github").tool("create_issue", async (ctx, next) => {
 Use `ctx.subject` for resolved subject data and `ctx.policy` for the effective authorization decision:
 
 ```ts theme={null}
-proxy.server("github").use(async (ctx, next) => {
+proxy.mcp("github").use(async (ctx, next) => {
   if (!ctx.subject?.hasGroup("maintainers")) {
     return ctx.deny("Maintainer group required.");
   }
@@ -186,20 +186,20 @@ Tool permissions are still supported, but Fentaris also accepts operation-based 
 
 ```ts theme={null}
 const policy = new Policy({ name: "support" })
-  .server("github")
+  .mcp("github")
   .allow("create_issue")
-  .server("docs")
+  .mcp("docs")
   .allowCapability({
     operation: "resources:list",
     targetKind: "resource",
   })
-  .server("docs")
+  .mcp("docs")
   .allowCapability({
     operation: "resource:read",
     target: "file:///handbook.md",
     targetKind: "resource",
   })
-  .server("docs")
+  .mcp("docs")
   .denyCapability({
     operation: "prompt:get",
     target: "admin_review",
@@ -212,7 +212,7 @@ List operations can be allowed or denied at the operation level. Returned resour
 Use operation routes when runtime validation should apply to non-tool operations:
 
 ```ts theme={null}
-proxy.server("docs").operation("resource:read", async (ctx, next) => {
+proxy.mcp("docs").operation("resource:read", async (ctx, next) => {
   ctx.log.info("docs.resource.read", {
     uri: ctx.resource?.uri,
     allowed: ctx.policy.allowed,
@@ -230,9 +230,9 @@ Existing tool policy declarations continue to work:
 
 ```ts theme={null}
 const policy = new Policy({ name: "existing" })
-  .server("github")
+  .mcp("github")
   .allow("search_issues")
-  .server("github")
+  .mcp("github")
   .deny("delete_repo");
 ```
 

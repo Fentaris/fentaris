@@ -127,7 +127,7 @@ Consider layering policies: first deny destructive calls for non-admins, then en
 Use operation routes for proxied resources, prompts, and completion:
 
 ```ts theme={null}
-proxy.server("filesystem").operation("resource:read", async (ctx, next) => {
+proxy.mcp("filesystem").operation("resource:read", async (ctx, next) => {
   if (ctx.resource?.uri?.includes("/private/")) {
     return ctx.fail(-32030, "Private resources are not available.");
   }
@@ -183,7 +183,7 @@ const proxy = new McpProxy({
   autoLog: true,
 });
 
-const githubApp = proxy.server("github");
+const githubApp = proxy.mcp("github");
 
 proxy.use(async (ctx, next) => {
   ctx.log.setTag("subject", ctx.subject?.id ?? "anonymous");

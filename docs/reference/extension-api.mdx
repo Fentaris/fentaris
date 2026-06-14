@@ -13,20 +13,67 @@ Use `@fentaris/core` as the primary import path. Use `@fentaris/core/extensions`
 
 Avoid deep imports from `@fentaris/core/dist/*` or source-layout paths. Those paths are package internals and can move during pre-alpha.
 
+## Experimental plugin contracts
+
+Plugin support is experimental and mostly placeholder-only in the current alpha surface. The package exposes the reserved contracts from `@fentaris/core/experimental/plugins`, but Fentaris does not yet provide a working plugin runtime.
+
+What exists today:
+
+- Manifest types.
+- Registry contract.
+- Loader contract.
+- Lifecycle hook contract.
+- Capability metadata placeholder.
+
+What does not exist yet:
+
+- Real plugin loading flow.
+- Package discovery.
+- Activation runtime.
+- Permission negotiation.
+- Plugin auth integration.
+- CLI plugin management.
+
+```ts theme={null}
+import type {
+  PluginCapabilities,
+  PluginLifecycleHooks,
+  PluginLoader,
+  PluginManifest,
+  PluginRegistry,
+} from "@fentaris/core/experimental/plugins";
+
+class CustomPluginLoader implements PluginLoader {
+  async load(name: string): Promise<PluginManifest> {
+    return { name, version: "0.0.0" };
+  }
+}
+
+const capabilities: PluginCapabilities = {
+  requiresAuth: true,
+  requiredPermissions: ["tools:call"],
+};
+
+const lifecycle: PluginLifecycleHooks = {
+  async onActivate() {},
+};
+```
+
+Do not rely on these contracts for production plugin behavior yet. They are a reserved boundary for future work and may change during alpha.
+
 ## High-level app builders
 
 Prefer `fentaris()` with declaration helpers for new applications:
 
 ```ts theme={null}
-import { fentaris, group, mcp, policy, server, stdio, user } from "@fentaris/core";
+import { fentaris, group, mcp, policy, stdio, user } from "@fentaris/core";
 
 const proxy = fentaris({
   servers: [
     mcp("github", {
       transport: stdio({ command: "github-mcp-server" }),
     }),
-    server({
-      name: "internal",
+    mcp("internal", {
       transport: stdio({ command: "internal-mcp-server" }),
     }),
   ],
@@ -35,7 +82,7 @@ const proxy = fentaris({
     group({
       id: "admins",
       users: [user("alice")],
-      policy: policy("admins").server("*").allow("*"),
+      policy: policy("admins").mcp("*").allow("*"),
     }),
   ],
 });
@@ -207,4 +254,5 @@ const eventHandler: ProxyEventHandler = ({ ctx, durationMs }) => {
 | High-level builders | `@fentaris/core` | Public |
 | Advanced runtime APIs | `@fentaris/core` | Public advanced |
 | Extension contracts | `@fentaris/core/extensions` or top-level type aliases | Public extension |
+| Plugin contracts | `@fentaris/core/experimental/plugins` | Experimental placeholder |
 | Source files and `dist/*` internals | Deep package paths | Internal compatibility only |

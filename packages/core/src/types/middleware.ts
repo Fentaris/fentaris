@@ -2,6 +2,7 @@ import type { CallToolResult, ListToolsResult } from "@modelcontextprotocol/sdk/
 import type { Logger } from "../logging/index.js";
 import type { ToolCallRequest, ProxyOperationResult } from "./mcp-operation.js";
 import type {
+  ApprovalDecisionController,
   CredentialSourceMetadata,
   IdentityMetadata,
   MaybePromise,
@@ -217,6 +218,7 @@ export type MiddlewareContext = {
   user: UserContext;
   subject?: ResolvedSubject;
   identity?: IdentityMetadata;
+  approval: ApprovalDecisionController;
   log: Logger;
   res: ResponseController;
   policy?: Policy | ProxyPolicyContext;

@@ -229,19 +229,6 @@ importers:
         specifier: ^8.60.0
         version: 8.60.0(eslint@10.4.0)(typescript@6.0.3)
 
-  packages/approval-telegram:
-    dependencies:
-      '@fentaris/core':
-        specifier: workspace:*
-        version: link:../core
-    devDependencies:
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      vitest:
-        specifier: ^4.1.7
-        version: 4.1.7(@types/node@25.9.1)(vite@8.0.14(@types/node@25.9.1)(yaml@2.9.0))
-
   packages/cli:
     dependencies:
       '@fentaris/core':

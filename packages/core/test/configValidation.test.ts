@@ -9,7 +9,6 @@ import {
   group,
   mcp,
   policy,
-  server,
   user,
   validateFentarisConfig,
 } from "../src/index.js";
@@ -44,24 +43,24 @@ describe("config validation", () => {
         { name: "broken", getCredentialBindings: () => [] } as unknown as McpServer,
       ],
       identity: { required: true } as never,
-      policy: policy("global").server("missing").allow("*"),
+      policy: policy("global").mcp("missing").allow("*"),
       groups: [
         group({
           id: "engineering",
           users: [user("u1")],
-          policy: policy("engineering").server("linear").allow("*"),
+          policy: policy("engineering").mcp("linear").allow("*"),
           servers: [mcp("github", { transport: new TestTransport() }), mcp("linear", { transport: new TestTransport() })],
         }),
         group({
           id: "product",
           users: [user("u1")],
-          policy: policy("product").server("github").allow("*"),
+          policy: policy("product").mcp("github").allow("*"),
           servers: [mcp("github", { transport: new TestTransport() })],
         }),
         group({
           id: "engineering",
           users: [user("u2")],
-          policy: policy("duplicate").server("*").allow("*"),
+          policy: policy("duplicate").mcp("*").allow("*"),
         }),
       ],
     });
@@ -94,7 +93,7 @@ describe("config validation", () => {
 
   it("allows warning-only configs to start and exposes warnings through validation", () => {
     const config = defineFentarisConfig({
-      policy: policy("wide").server("*").allow("*"),
+      policy: policy("wide").mcp("*").allow("*"),
     });
 
     const result = validateFentarisConfig(config);
@@ -106,7 +105,7 @@ describe("config validation", () => {
 
   it("preserves existing valid global MCP behavior", () => {
     const proxy = createProxy({
-      servers: [server("custom", { transport: new TestTransport() })],
+      servers: [mcp("custom", { transport: new TestTransport() })],
     });
 
     expect(proxy).toBeTruthy();
@@ -119,22 +118,22 @@ describe("config validation", () => {
         group({
           id: "engineering",
           users: [user("u1")],
-          policy: policy("engineering").server("global").allow("*"),
+          policy: policy("engineering").mcp("global").allow("*"),
           servers: [mcp("linear", { transport: new TestTransport() })],
         }),
         group({
           id: "product",
           users: [user("u2")],
-          policy: policy("product").server("stripe").allow("*"),
+          policy: policy("product").mcp("stripe").allow("*"),
           servers: [mcp("stripe", { transport: new TestTransport() })],
         }),
       ],
     });
 
     expect(() => proxy.group("missing")).toThrow(FentarisConfigError);
-    expect(() => proxy.server("missing")).toThrow(FentarisConfigError);
-    expect(() => proxy.group("engineering").server("missing").tool("*", (_ctx, next) => next())).toThrow(FentarisConfigError);
-    expect(() => proxy.group("engineering").server("stripe").tool("*", (_ctx, next) => next())).toThrow(FentarisConfigError);
+    expect(() => proxy.mcp("missing")).toThrow(FentarisConfigError);
+    expect(() => proxy.group("engineering").mcp("missing").tool("*", (_ctx, next) => next())).toThrow(FentarisConfigError);
+    expect(() => proxy.group("engineering").mcp("stripe").tool("*", (_ctx, next) => next())).toThrow(FentarisConfigError);
   });
 });
 

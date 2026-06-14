@@ -179,7 +179,9 @@ describe("McpProxy profiler integration", () => {
     expect(events.map((event) => event.name)).toEqual([
       "runtime.ready",
       "runtime.stop",
+      "runtime.start",
       "transport.error",
+      "runtime.error",
     ]);
   });
 });

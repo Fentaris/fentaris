@@ -16,17 +16,17 @@ const sections = [
   {
     title: "McpProxy",
     slug: "mcp-proxy",
-    entryPoints: ["packages/core/src/McpProxy.ts"],
+    entryPoints: ["packages/core/src/proxy/McpProxy.ts"],
   },
   {
     title: "McpServer",
     slug: "mcp-server",
-    entryPoints: ["packages/core/src/McpServer.ts"],
+    entryPoints: ["packages/core/src/server/McpServer.ts"],
   },
   {
     title: "Transports",
     slug: "transports",
-    entryPoints: ["packages/core/src/transports/StdioTransport.ts"],
+    entryPoints: ["packages/core/src/transports/client/StdioTransport.ts"],
   },
   {
     title: "Logger",

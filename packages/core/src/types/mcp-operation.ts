@@ -59,6 +59,16 @@ export type ToolCallRequest = {
 };
 
 /**
+ * Normalized tool-call request passed to approval callbacks.
+ * @pk
+ */
+export type ToolApprovalRequest = ToolCallRequest & {
+  operation: "tool:call";
+  target: string;
+  targetKind: "tool";
+};
+
+/**
  * Operation names handled by the unified proxy context.
  * @pk
  */

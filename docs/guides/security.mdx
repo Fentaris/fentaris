@@ -28,11 +28,11 @@ Resources, prompts, resource templates, and completion can expose data or shape 
 
 ```ts theme={null}
 const policy = new Policy({ name: "least-privilege" })
-  .server("filesystem")
+  .mcp("filesystem")
   .allow("read_file")
-  .server("filesystem")
+  .mcp("filesystem")
   .allowCapability({ operation: "resources:list", targetKind: "resource" })
-  .server("filesystem")
+  .mcp("filesystem")
   .denyCapability({
     operation: "resource:read",
     target: "file:///secrets.env",

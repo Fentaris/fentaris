@@ -41,6 +41,7 @@ export type {
   RuntimeEventMap,
   RuntimeEventName,
   RuntimeExtensionEvent,
+  RuntimeHealthEvent,
   RuntimeLifecycleEvent,
   RuntimeMcpEvent,
   RuntimePolicyEvent,

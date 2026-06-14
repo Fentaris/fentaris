@@ -76,6 +76,7 @@ export type {
   RuntimeEventMap,
   RuntimeEventName,
   RuntimeExtensionEvent,
+  RuntimeHealthEvent,
   RuntimeLifecycleEvent,
   RuntimeMcpEvent,
   RuntimePolicyEvent,
@@ -85,6 +86,32 @@ export type {
   RuntimeProfilerHandlerEntry,
   RuntimeTransportEvent,
 } from "./profiler/index.js";
+/**
+ * Runtime lifecycle and health APIs.
+ * @pk
+ */
+export { health } from "./health/index.js";
+export type {
+  HealthBuilderOptions,
+  HealthCheckContext,
+  HealthCheckHandler,
+  HealthCheckResult,
+  HealthConfig,
+  HealthGroupContext,
+  HealthIncludeCategory,
+  HealthReport,
+  HealthRuntimeContext,
+  HealthServerContext,
+  HealthStatus,
+  HealthTransportContext,
+} from "./health/index.js";
+export type {
+  RuntimeLifecycle,
+  RuntimeLifecycleMetadata,
+  RuntimeLifecycleOptions,
+  RuntimeLifecycleSnapshot,
+  RuntimeLifecycleState,
+} from "./lifecycle/index.js";
 /**
  * MCP proxy server.
  * @pk
@@ -115,12 +142,12 @@ export type {
  * MCP proxy options.
  * @pk
  */
-export type { AutoLogOptions, IdentityResolverOptions, McpProxyOptions, McpProxyStartOptions } from "./proxy/index.js";
+export type { AutoLogOptions, IdentityResolverOptions, McpProxyOptions, McpProxyStartOptions, McpProxyStopOptions } from "./proxy/index.js";
 /**
  * MCP server wrapper.
  * @pk
  */
-export { McpServer, bearer, header, mcp, server } from "./server/index.js";
+export { McpServer, bearer, header, mcp } from "./server/index.js";
 /**
  * MCP server option types.
  * @pk
@@ -193,6 +220,7 @@ export { ResponseController } from "./types/index.js";
  */
 export type {
   ErrorMapper,
+  ApprovalDecisionController,
   ApprovalHandler,
   ApprovalMetadata,
   ApprovalResult,
@@ -230,6 +258,7 @@ export type {
   CapabilityPermission,
   CapabilityTargetKind,
   McpOperationName,
+  ToolApprovalRequest,
   ProxyAuthContext,
   ProxyContext,
   ProxyEventFilter,
@@ -240,6 +269,9 @@ export type {
   ProxyRuntime,
   ProxyGroupHandle,
   ProxyHookEvent,
+  ProxyMcpDeclarationConfig,
+  ProxyMcpDeclarationOptions,
+  ProxyMcpHandle,
   ProxyMiddleware,
   ProxyNext,
   ProxyOperation,
@@ -250,7 +282,6 @@ export type {
   ProxyPromptContext,
   ProxyResourceContext,
   ProxyServerContext,
-  ProxyServerHandle,
   ProxyToolHandler,
   ProxyToolPattern,
   ProxyToolContext,
@@ -285,7 +316,7 @@ export { bearerTokenIdentityStrategy, headerIdentityStrategy } from "./identity/
 export {
   Group,
   Policy,
-  PolicyServerBuilder,
+  PolicyMcpBuilder,
   User,
   allow,
   allowCapability,

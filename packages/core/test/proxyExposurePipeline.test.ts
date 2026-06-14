@@ -119,6 +119,24 @@ type PipelineProbeHandle = ProxyExposureHandle & {
 };
 
 describe("proxy exposure pipeline", () => {
+  it("starts each explicit exposure registered after the runtime is ready", async () => {
+    const proxy = new McpProxy({
+      servers: [new McpServer({ name: "github", transport: new MockTransport() })],
+    });
+
+    const first = await proxy.listen(new PipelineProbeExposure("http", "http-user"));
+    const second = await proxy.listen(new PipelineProbeExposure("stdio", "stdio-user"));
+
+    await expect(first.client.listTools()).resolves.toMatchObject({
+      tools: [{ name: "github__read" }],
+    });
+    await expect(second.client.listTools()).resolves.toMatchObject({
+      tools: [{ name: "github__read" }],
+    });
+
+    await proxy.close();
+  });
+
   it("uses the same listTools and callTool pipeline for HTTP, stdio, and SSE exposure transports", async () => {
     const upstream = new MockTransport();
     const proxy = new McpProxy({

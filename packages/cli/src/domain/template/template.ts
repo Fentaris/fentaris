@@ -118,14 +118,14 @@ const admin = user("admin", {
 });
 
 const limitedPolicy = policy("limited-demo")
-  .server("demo-files")
+  .mcp("demo-files")
   .allow("list_allowed_directories")
-  .server("demo-files")
+  .mcp("demo-files")
   .allow("list_directory")
-  .server("specification")
+  .mcp("specification")
   .allow("*");
 
-const adminPolicy = policy("admin-full-access").server("*").allow("*");
+const adminPolicy = policy("admin-full-access").mcp("*").allow("*");
 
 const limiter = new SlidingWindowRateLimiter({
   store: new MemoryRateLimitStore(),
@@ -158,12 +158,12 @@ const app = fentaris({
 // Global middleware runs before requests are forwarded to upstream MCP servers.
 app.use(rateLimitMiddleware({ limiter }));
 
-app.server("demo-files").use((ctx, next) => {
+app.mcp("demo-files").use((ctx, next) => {
   console.log(\`demo-files -> \${ctx.operation}\`);
   return next();
 });
 
-app.server("specification").on("tool:success", ({ ctx }) => {
+app.mcp("specification").on("tool:success", ({ ctx }) => {
   console.log(\`specification -> \${ctx.tool?.name ?? ctx.operation}\`);
 });
 

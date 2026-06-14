@@ -89,7 +89,7 @@ function validateServers(servers: McpServer[], path: Array<string | number>, dia
   for (const [index, server] of servers.entries()) {
     const serverPath = [...path, index];
     if (!server || typeof server !== "object") {
-      diagnostics.push(diagnostic("error", "FENTARIS_CONFIG_SERVER_INVALID", "Server must be an MCP server object", "Use mcp(name, options) or server(name, options).", { path: serverPath }));
+      diagnostics.push(diagnostic("error", "FENTARIS_CONFIG_SERVER_INVALID", "Server must be an MCP server object", "Use mcp(name, options).", { path: serverPath }));
       continue;
     }
 

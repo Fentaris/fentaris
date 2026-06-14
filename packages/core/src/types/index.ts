@@ -1,4 +1,5 @@
 export type {
+  ApprovalDecisionController,
   ApprovalHandler,
   ApprovalMetadata,
   ApprovalResult,
@@ -32,6 +33,7 @@ export type {
   ProxyOperationResult,
   ReadResourceParams,
   ReadResourceResponse,
+  ToolApprovalRequest,
   ToolCallRequest,
 } from "./mcp-operation.js";
 export { ResponseController } from "./middleware.js";
@@ -77,15 +79,32 @@ export type {
   ProxyExposureTransport,
   ProxyOperationHandler,
   ProxyPolicyContext,
+  ProxyMcpDeclarationConfig,
+  ProxyMcpDeclarationOptions,
+  ProxyMcpHandle,
   ProxyPromptContext,
   ProxyResourceContext,
   ProxyRuntime,
   ProxyGroupHandle,
   ProxyServerContext,
-  ProxyServerHandle,
   ProxyToolContext,
   ProxyToolHandler,
   ProxyToolPattern,
   ProxyTransportContext,
 } from "./proxy.js";
 export type { FentarisTransport } from "./transport.js";
+export type {
+  HealthCheckContext,
+  HealthCheckHandler,
+  HealthCheckResult,
+  HealthConfig,
+  HealthReport,
+  HealthStatus,
+} from "../health/index.js";
+export type {
+  RuntimeLifecycle,
+  RuntimeLifecycleMetadata,
+  RuntimeLifecycleOptions,
+  RuntimeLifecycleSnapshot,
+  RuntimeLifecycleState,
+} from "../lifecycle/index.js";

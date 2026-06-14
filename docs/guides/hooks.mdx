@@ -32,7 +32,7 @@ proxy.on("tool:success", { server: "diagnostics" }, async ({ ctx }) => {
 ## Server-scoped event
 
 ```ts theme={null}
-const github = proxy.server("github");
+const github = proxy.mcp("github");
 
 github.on("tool:error", async ({ ctx, error }) => {
   ctx.log.warn("github.tool.error", { message: error?.message });

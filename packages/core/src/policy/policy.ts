@@ -1,4 +1,4 @@
-import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
+import type { CapabilityOperationRequest, ToolApprovalRequest, ToolCallRequest } from "../types/mcp-operation.js";
 import type { MiddlewareContext } from "../types/middleware.js";
 import type { CapabilityPermission, Policy as PolicyContract, PolicyDecision, ToolPermission } from "../types/policy.js";
 import type { ApprovalMetadata, ApprovalResult, UserContext } from "../types/shared.js";
@@ -172,13 +172,7 @@ export function toCapabilityPermissions(serverName: string, permissions: ToolPer
     approval: permission.approval
       ? async (request, context) =>
           permission.approval?.(
-            {
-              serverName: request.serverName,
-              toolName: request.target ?? "*",
-              proxyToolName: `${request.serverName}__${request.target ?? "*"}`,
-              arguments: {},
-              raw: { name: `${request.serverName}__${request.target ?? "*"}` },
-            },
+            toolApprovalRequest(request),
             context,
           ) ?? false
       : undefined,
@@ -195,13 +189,47 @@ export function toCapabilityRequest(request: ToolCallRequest | CapabilityOperati
     return request;
   }
 
-  return {
+  const approvalRequest: ToolApprovalRequest = {
     serverName: request.serverName,
     operation: "tool:call",
     target: request.toolName,
     targetKind: "tool",
     raw: request.raw,
+    toolName: request.toolName,
+    proxyToolName: request.proxyToolName,
+    arguments: request.arguments,
   };
+  return approvalRequest;
+}
+
+function toolApprovalRequest(request: CapabilityOperationRequest): ToolApprovalRequest {
+  if (isToolApprovalRequest(request)) {
+    return request;
+  }
+
+  const toolName = request.target ?? "*";
+  const proxyToolName = `${request.serverName}__${toolName}`;
+  return {
+    serverName: request.serverName,
+    operation: "tool:call",
+    target: toolName,
+    targetKind: "tool",
+    toolName,
+    proxyToolName,
+    arguments: {},
+    raw: { name: proxyToolName },
+  };
+}
+
+function isToolApprovalRequest(request: CapabilityOperationRequest): request is ToolApprovalRequest {
+  return (
+    request.operation === "tool:call" &&
+    request.targetKind === "tool" &&
+    "toolName" in request &&
+    "proxyToolName" in request &&
+    "arguments" in request &&
+    "raw" in request
+  );
 }
 
 /**

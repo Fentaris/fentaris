@@ -1,5 +1,6 @@
 import { ResponseController } from "../types/middleware.js";
 import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
+import { approvalDecision } from "../types/shared.js";
 import type { IdentityMetadata, ResolvedSubject, UserContext } from "../types/shared.js";
 import type { MiddlewareContext } from "../types/middleware.js";
 import type { Policy, Registry } from "../types/policy.js";
@@ -122,6 +123,7 @@ export function createProxyContext(
     user: options.user,
     subject: options.subject,
     identity: options.identity,
+    approval: approvalDecision,
     log: options.log,
     res: response,
     policy: options.policy,

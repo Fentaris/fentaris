@@ -61,19 +61,19 @@ pnpm add @fentaris/core
 Build a proxy in a few lines:
 
 ```ts
-import { fentaris, server, stdio } from "@fentaris/core";
+import { fentaris, mcp, stdio } from "@fentaris/core";
 
 const proxy = fentaris({
   port: 3000,
   path: "/mcp",
-  servers: [
-    server("filesystem", {
-      transport: stdio({
-        command: "npx",
-        args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-      }),
-    }),
-  ],
+});
+
+proxy.mcp({
+  name: "filesystem",
+  transport: stdio({
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+  }),
 });
 
 await proxy.start();
@@ -86,14 +86,14 @@ Upstream tool names are still stable and namespaced by server. A filesystem tool
 filesystem__list_directory
 ```
 
-Add another upstream without changing the client endpoint:
+Or declare upstreams config-first without changing the client endpoint:
 
 ```ts
-import { fentaris, server, streamableHttp } from "@fentaris/core";
+import { fentaris, mcp, streamableHttp } from "@fentaris/core";
 
 const proxy = fentaris({
   servers: [
-    server("docs", {
+    mcp("docs", {
       transport: streamableHttp({
         url: "https://mcp.specification.website/mcp",
       }),
@@ -107,14 +107,21 @@ const proxy = fentaris({
 Add users, groups, and policy:
 
 ```ts
-import { group, fentaris, policy, user } from "@fentaris/core";
+import { group, fentaris, mcp, policy, stdio, user } from "@fentaris/core";
 
 const readOnly = policy("read-only")
-  .server("filesystem")
+  .mcp("filesystem")
   .allow("list_directory");
 
 const proxy = fentaris({
-  servers: [filesystem],
+  servers: [
+    mcp("filesystem", {
+      transport: stdio({
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      }),
+    }),
+  ],
   groups: [
     group({
       id: "operators",
@@ -128,7 +135,7 @@ const proxy = fentaris({
 Block a sensitive tool:
 
 ```ts
-proxy.server("filesystem").tool("write_file", (ctx, next) => {
+proxy.mcp("filesystem").tool("write_file", (ctx, next) => {
   return ctx.subject?.hasGroup("admins")
     ? next()
     : ctx.deny("Admin required.");
@@ -141,7 +148,7 @@ Ask for approval before dangerous tools:
 import { approval, policy } from "@fentaris/core";
 
 const deploy = policy("deploy")
-  .server("github")
+  .mcp("github")
   .allow("deploy_production", approval.manual({
     reason: "Production deploy requires approval",
   }));
@@ -158,7 +165,7 @@ proxy.on("tools:list:after", ({ tools }) => {
 Modify a tool result:
 
 ```ts
-proxy.server("github").tool("search_issues", async (_ctx, next) => {
+proxy.mcp("github").tool("search_issues", async (_ctx, next) => {
   const result = await next();
   if ("content" in result) {
     result.content.push({ type: "text", text: "Filtered by Fentaris" });

@@ -16,7 +16,7 @@ Use middleware when you need a decision or transformation to apply to *every* re
 - Logging, metrics, and tracing tags.
 - Guardrails for destructive or high-cost tools.
 
-If the logic is only for a single tool or server, prefer `proxy.tool(...)` or `proxy.server(name).tool(...)` routes to avoid slowing the full pipeline.
+If the logic is only for a single tool or server, prefer `proxy.tool(...)` or `proxy.mcp(name).tool(...)` routes to avoid slowing the full pipeline.
 
 ## Basic middleware
 
@@ -47,7 +47,7 @@ Tool patterns use public `server.tool` names such as `github.create_issue`, `git
 ## Server-scoped middleware
 
 ```ts theme={null}
-const github = proxy.server("github");
+const github = proxy.mcp("github");
 
 github.use(async (ctx, next) => {
   if (ctx.subject?.hasGroup("support") === false) {

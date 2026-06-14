@@ -1,7 +1,7 @@
 export {
   Group,
   Policy,
-  PolicyServerBuilder,
+  PolicyMcpBuilder,
   User,
   allow,
   allowCapability,

@@ -1,7 +1,7 @@
 import { getCapabilityPermission, normalizeApprovalResult, toCapabilityPermissions, toCapabilityRequest } from "../policy/index.js";
 import type { CredentialSource, CredentialSourceMap } from "../credentials/index.js";
 import type { McpServer } from "../server/McpServer.js";
-import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
+import type { CapabilityOperationRequest, ToolApprovalRequest, ToolCallRequest } from "../types/mcp-operation.js";
 import type { MiddlewareContext } from "../types/middleware.js";
 import type { CapabilityPermission, Policy as PolicyContract, PolicyDecision, ToolPermission } from "../types/policy.js";
 import type { ApprovalHandler, ApprovalMetadata, ApprovalResult, ResolvedSubject, SubjectMetadata, UserContext } from "../types/shared.js";
@@ -116,15 +116,15 @@ export class Policy implements PolicyContract {
    * @pk
    */
   static allowAll(name = "allow-all"): Policy {
-    return new Policy({ name }).server("*").allow("*");
+    return new Policy({ name }).mcp("*").allow("*");
   }
 
   /**
-   * Select a server for fluent permission declarations.
+   * Select an upstream MCP server for fluent permission declarations.
    * @pk
    */
-  server(serverName: string): PolicyServerBuilder {
-    return new PolicyServerBuilder(this, serverName);
+  mcp(serverName: string): PolicyMcpBuilder {
+    return new PolicyMcpBuilder(this, serverName);
   }
 
   /**
@@ -286,10 +286,10 @@ export class Policy implements PolicyContract {
 }
 
 /**
- * Builder returned by `policy.server(name)`.
+ * Builder returned by `policy.mcp(name)`.
  * @pk
  */
-export class PolicyServerBuilder {
+export class PolicyMcpBuilder {
   constructor(
     private readonly policy: Policy,
     private readonly serverName: string,
@@ -416,11 +416,11 @@ type ApprovalHelper = {
  * @pk
  */
 export type ManualApprovalOptions = {
-  requestId?: string | ((request: ToolCallRequest, context: MiddlewareContext) => string);
-  url?: string | ((request: ToolCallRequest, context: MiddlewareContext) => string | undefined);
-  reason?: string | ((request: ToolCallRequest, context: MiddlewareContext) => string | undefined);
-  metadata?: Record<string, unknown> | ((request: ToolCallRequest, context: MiddlewareContext) => Record<string, unknown> | undefined);
-  resolve?: ApprovalHandler<ToolCallRequest>;
+  requestId?: string | ((request: ToolApprovalRequest, context: MiddlewareContext) => string);
+  url?: string | ((request: ToolApprovalRequest, context: MiddlewareContext) => string | undefined);
+  reason?: string | ((request: ToolApprovalRequest, context: MiddlewareContext) => string | undefined);
+  metadata?: Record<string, unknown> | ((request: ToolApprovalRequest, context: MiddlewareContext) => Record<string, unknown> | undefined);
+  resolve?: ApprovalHandler<ToolApprovalRequest>;
 };
 
 /**

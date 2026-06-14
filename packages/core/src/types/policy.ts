@@ -1,5 +1,11 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { CapabilityOperationRequest, McpOperationName, ToolCallRequest, CapabilityTargetKind } from "./mcp-operation.js";
+import type {
+  CapabilityOperationRequest,
+  McpOperationName,
+  ToolApprovalRequest,
+  ToolCallRequest,
+  CapabilityTargetKind,
+} from "./mcp-operation.js";
 import type { MiddlewareContext } from "./middleware.js";
 import type {
   ApprovalHandler,
@@ -17,7 +23,7 @@ export type ToolPermission = {
   tool: string;
   effect?: "allow" | "deny";
   limiter?: RateLimiter;
-  approval?: ApprovalHandler<ToolCallRequest>;
+  approval?: ApprovalHandler<ToolApprovalRequest>;
   metadata?: Record<string, unknown>;
 };
 

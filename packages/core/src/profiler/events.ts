@@ -3,6 +3,7 @@ import type { ProxyOperation } from "../types/mcp-operation.js";
 
 export type RuntimeEventCategory =
   | "lifecycle"
+  | "health"
   | "mcp"
   | "policy"
   | "transport"
@@ -58,6 +59,13 @@ export type RuntimeTransportEvent = RuntimeEventBase<"transport.error", "transpo
   error: RuntimeProfilerErrorPayload;
 };
 
+export type RuntimeHealthEvent =
+  | (RuntimeEventBase<"health.check.start", "health", "debug" | "info"> & { target: string; timeoutMs?: number })
+  | (RuntimeEventBase<"health.check.success", "health", "debug" | "info" | "warn"> & { target: string; status: string })
+  | (RuntimeEventBase<"health.check.error", "health", "error"> & { target: string; status: string; error: RuntimeProfilerErrorPayload })
+  | (RuntimeEventBase<"health.check.timeout", "timeouts", "warn" | "error"> & { target: string; status: string; error: RuntimeProfilerErrorPayload })
+  | (RuntimeEventBase<"health.status", "health", "info" | "warn" | "error"> & { status: string });
+
 export type RuntimeExtensionEvent = RuntimeEventBase<"extension.error", "extension" | "errors", "error"> & {
   boundary: "hook" | "middleware" | "route" | "sink" | "extension";
   error: RuntimeProfilerErrorPayload;
@@ -91,6 +99,11 @@ export type RuntimeEventMap = {
   "policy.allowed": RuntimePolicyEvent & { name: "policy.allowed" };
   "policy.denied": RuntimePolicyEvent & { name: "policy.denied" };
   "transport.error": RuntimeTransportEvent;
+  "health.check.start": Extract<RuntimeHealthEvent, { name: "health.check.start" }>;
+  "health.check.success": Extract<RuntimeHealthEvent, { name: "health.check.success" }>;
+  "health.check.error": Extract<RuntimeHealthEvent, { name: "health.check.error" }>;
+  "health.check.timeout": Extract<RuntimeHealthEvent, { name: "health.check.timeout" }>;
+  "health.status": Extract<RuntimeHealthEvent, { name: "health.status" }>;
   "extension.error": RuntimeExtensionEvent;
   "profiler.sink.error": RuntimeProfilerEvent;
 };

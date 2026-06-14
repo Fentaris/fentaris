@@ -136,6 +136,32 @@ export type ApprovalResult =
     };
 
 /**
+ * Ergonomic helpers for approval callbacks.
+ * @pk
+ */
+export type ApprovalDecisionController = {
+  approve(metadata?: Record<string, unknown>): ApprovalResult;
+  deny(reason?: string, metadata?: Record<string, unknown>): ApprovalResult;
+  pending(reason?: string, metadata?: Record<string, unknown>): ApprovalResult;
+};
+
+/**
+ * Shared approval decision helpers exposed on middleware context.
+ * @pk
+ */
+export const approvalDecision: ApprovalDecisionController = {
+  approve(metadata?: Record<string, unknown>): ApprovalResult {
+    return { status: "approved", metadata };
+  },
+  deny(reason = "Approval required but not granted", metadata?: Record<string, unknown>): ApprovalResult {
+    return { status: "denied", reason, metadata };
+  },
+  pending(reason = "Approval is pending", metadata?: Record<string, unknown>): ApprovalResult {
+    return { status: "pending", reason, metadata };
+  },
+};
+
+/**
  * Permission approval callback.
  * @pk
  */

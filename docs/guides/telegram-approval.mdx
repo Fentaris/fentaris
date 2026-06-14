@@ -19,7 +19,7 @@ const maintainers = group({
   id: "maintainers",
   users: [user("alice")],
   policy: policy("maintainers")
-    .server("github")
+    .mcp("github")
     .allow("delete_repo", telegramApproval({
       botToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
       chatId: process.env.TELEGRAM_APPROVAL_CHAT_ID ?? "",

@@ -10,6 +10,7 @@ import type {
   ReadResourceRequest,
 } from "@modelcontextprotocol/sdk/types.js";
 import type { Logger } from "../logging/index.js";
+import type { HealthCheckResult } from "../health/index.js";
 import type { RuntimeEvent } from "../profiler/index.js";
 import type {
   CompleteResult,
@@ -39,6 +40,7 @@ import type {
   ResponseController,
 } from "./middleware.js";
 import type { Policy, PolicyDecision } from "./policy.js";
+import type { McpServerOptions } from "../server/index.js";
 
 /**
  * Safe downstream transport metadata attached to a proxy operation.
@@ -237,16 +239,18 @@ export type ProxyEventHandler = (
 ) => MaybePromise<ListToolsResult["tools"] | SdkListToolsResult | void>;
 
 /**
- * Scoped server handle returned by `proxy.server(name)`.
+ * Scoped upstream MCP handle returned by `proxy.mcp(name)`.
  * @pk
  */
-export type ProxyServerHandle = {
+export type ProxyMcpHandle = {
   readonly name: string;
-  use(handler: Middleware): ProxyServerHandle;
-  tool(pattern: ProxyToolPattern, handler: ProxyToolHandler): ProxyServerHandle;
-  operation(operation: ProxyOperation, handler: ProxyOperationHandler): ProxyServerHandle;
-  on(eventName: ProxyEventName, handler: ProxyEventHandler): ProxyServerHandle;
-  on(eventName: ProxyEventName, filter: ProxyEventFilter, handler: ProxyEventHandler): ProxyServerHandle;
+  use(handler: Middleware): ProxyMcpHandle;
+  tool(pattern: ProxyToolPattern, handler: ProxyToolHandler): ProxyMcpHandle;
+  operation(operation: ProxyOperation, handler: ProxyOperationHandler): ProxyMcpHandle;
+  on(eventName: ProxyEventName, handler: ProxyEventHandler): ProxyMcpHandle;
+  on(eventName: ProxyEventName, filter: ProxyEventFilter, handler: ProxyEventHandler): ProxyMcpHandle;
+  ping(): Promise<HealthCheckResult>;
+  health(): Promise<HealthCheckResult>;
 };
 
 /**
@@ -255,7 +259,7 @@ export type ProxyServerHandle = {
  */
 export type ProxyGroupHandle = {
   readonly id: string;
-  server(name: string): ProxyServerHandle;
+  mcp(name: string): ProxyMcpHandle;
   use(handler: Middleware): ProxyGroupHandle;
   operation(operation: ProxyOperation, handler: ProxyOperationHandler): ProxyGroupHandle;
   on(eventName: ProxyEventName, handler: ProxyEventHandler): ProxyGroupHandle;
@@ -284,6 +288,18 @@ export type ProxyRuntime = {
   logger: Logger;
   identityRequired: boolean;
 };
+
+/**
+ * Options for declaring an upstream MCP server through `proxy.mcp(name, options)`.
+ * @pk
+ */
+export type ProxyMcpDeclarationOptions = Omit<McpServerOptions, "name">;
+
+/**
+ * Config object for declaring an upstream MCP server through `proxy.mcp(config)`.
+ * @pk
+ */
+export type ProxyMcpDeclarationConfig = McpServerOptions;
 
 /**
  * Transport interface for exposing the Fentaris proxy to downstream MCP clients.

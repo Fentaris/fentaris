@@ -312,16 +312,8 @@ export class McpServer {
  * Create an upstream MCP server declaration.
  * @pk
  */
-export function server(name: string, options: Omit<McpServerOptions, "name">): McpServer {
-  return new McpServer({ ...options, name });
-}
-
-/**
- * Create an upstream MCP server declaration.
- * @pk
- */
 export function mcp(name: string, options: Omit<McpServerOptions, "name">): McpServer {
-  return server(name, options);
+  return new McpServer({ ...options, name });
 }
 
 /**
