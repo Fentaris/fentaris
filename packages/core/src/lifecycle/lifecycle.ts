@@ -95,9 +95,10 @@ export class RuntimeLifecycleController {
       throw invalidTransition(this.currentState, "starting");
     }
 
-    await this.transition("starting");
+    const starting = this.transition("starting");
     const timeoutMs = normalizeRuntimeLifecycleOptions({ ...this.defaults, ...options }).startupTimeoutMs;
-    this.startPromise = timeoutAfter(operation(), timeoutMs, "Runtime startup timed out", "startup")
+    this.startPromise = starting
+      .then(() => timeoutAfter(operation(), timeoutMs, "Runtime startup timed out", "startup"))
       .then(async (result) => {
         this.metadata.startedAt = new Date();
         await this.transition("ready");
