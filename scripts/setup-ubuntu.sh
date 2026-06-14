@@ -43,6 +43,23 @@ node_major_version() {
   node --version 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/'
 }
 
+resolve_repo_root() {
+  if [ -n "${FENTARIS_REPO_ROOT:-}" ]; then
+    cd "$FENTARIS_REPO_ROOT"
+  elif [ -f package.json ] && [ -f pnpm-lock.yaml ]; then
+    cd "$(pwd)"
+  else
+    local script_dir
+    script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+    cd -- "${script_dir}/.."
+  fi
+
+  [ -f package.json ] || fail "package.json not found; run this script from the repository root or set FENTARIS_REPO_ROOT"
+  [ -f pnpm-lock.yaml ] || fail "pnpm-lock.yaml not found; run this script from the repository root or set FENTARIS_REPO_ROOT"
+
+  pwd
+}
+
 install_system_packages() {
   export DEBIAN_FRONTEND=noninteractive
 
@@ -69,6 +86,17 @@ install_node() {
   log "Installing Node.js ${NODE_MAJOR}.x from NodeSource"
   curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | run_as_root bash -
   run_as_root apt-get install -y --no-install-recommends nodejs
+
+  hash -r 2>/dev/null || true
+
+  if [ -x /usr/bin/node ] && [ "$(/usr/bin/node --version | sed -E 's/^v([0-9]+).*/\1/')" -ge "$NODE_MAJOR" ]; then
+    export PATH="/usr/bin:${PATH}"
+    hash -r 2>/dev/null || true
+  fi
+
+  installed_major="$(node_major_version || true)"
+  [ -n "$installed_major" ] && [ "$installed_major" -ge "$NODE_MAJOR" ] \
+    || fail "Node ${NODE_MAJOR}+ is required, but $(command -v node 2>/dev/null || printf node) reports $(node --version 2>/dev/null || printf unavailable)"
 }
 
 install_pnpm() {
@@ -78,9 +106,8 @@ install_pnpm() {
 }
 
 install_project_dependencies() {
-  local script_dir repo_root
-  script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-  repo_root="$(cd -- "${script_dir}/.." && pwd)"
+  local repo_root
+  repo_root="$(resolve_repo_root)"
 
   cd "$repo_root"
 
