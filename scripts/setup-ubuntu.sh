@@ -43,21 +43,94 @@ node_major_version() {
   node --version 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/'
 }
 
-resolve_repo_root() {
-  if [ -n "${FENTARIS_REPO_ROOT:-}" ]; then
-    cd "$FENTARIS_REPO_ROOT"
-  elif [ -f package.json ] && [ -f pnpm-lock.yaml ]; then
-    cd "$(pwd)"
-  else
-    local script_dir
-    script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-    cd -- "${script_dir}/.."
+is_repo_root() {
+  [ -f "$1/package.json" ] \
+    && [ -f "$1/pnpm-lock.yaml" ] \
+    && grep -q '"name": "fentaris"' "$1/package.json"
+}
+
+search_upward_for_repo() {
+  local dir
+  dir="$(cd "$1" 2>/dev/null && pwd)" || return 1
+
+  while [ "$dir" != "/" ]; do
+    if is_repo_root "$dir"; then
+      printf '%s\n' "$dir"
+      return 0
+    fi
+    dir="$(dirname "$dir")"
+  done
+
+  return 1
+}
+
+search_cloud_workspaces_for_repo() {
+  local base candidate matches
+  matches=""
+
+  for base in \
+    "$PWD" \
+    "${GITHUB_WORKSPACE:-}" \
+    "${WORKSPACE:-}" \
+    "${PROJECT_DIR:-}" \
+    "${REPO_DIR:-}" \
+    /workspace \
+    /workspaces \
+    /mnt/data \
+    /repo \
+    /app \
+    /home \
+    /root \
+    /tmp; do
+    [ -n "$base" ] && [ -d "$base" ] || continue
+    base="$(cd "$base" && pwd -P)"
+
+    while IFS= read -r candidate; do
+      candidate="$(dirname "$candidate")"
+      if is_repo_root "$candidate"; then
+        case "
+$matches
+" in
+          *"
+$candidate
+"*) ;;
+          *) matches="${matches}${candidate}
+" ;;
+        esac
+      fi
+    done < <(find "$base" -maxdepth 5 -name package.json -type f 2>/dev/null)
+  done
+
+  if [ "$(printf '%s' "$matches" | sed '/^$/d' | wc -l)" -eq 1 ]; then
+    printf '%s' "$matches" | sed '/^$/d'
+    return 0
   fi
 
-  [ -f package.json ] || fail "package.json not found; run this script from the repository root or set FENTARIS_REPO_ROOT"
-  [ -f pnpm-lock.yaml ] || fail "pnpm-lock.yaml not found; run this script from the repository root or set FENTARIS_REPO_ROOT"
+  return 1
+}
 
-  pwd
+resolve_repo_root() {
+  local script_path script_dir repo_root
+  script_path="${BASH_SOURCE[0]:-$0}"
+  script_dir="$(cd -- "$(dirname -- "$script_path")" && pwd)"
+
+  if [ -n "${FENTARIS_REPO_ROOT:-}" ]; then
+    repo_root="$(cd "$FENTARIS_REPO_ROOT" && pwd)"
+  elif repo_root="$(search_upward_for_repo "$PWD")"; then
+    :
+  elif repo_root="$(search_upward_for_repo "$script_dir")"; then
+    :
+  elif repo_root="$(search_cloud_workspaces_for_repo)"; then
+    :
+  elif command_exists git && repo_root="$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null)" && is_repo_root "$repo_root"; then
+    :
+  else
+    fail "repository root not found; set FENTARIS_REPO_ROOT or run from the cloned repository workspace"
+  fi
+
+  is_repo_root "$repo_root" || fail "invalid repository root '${repo_root}'; expected the Fentaris package.json and pnpm-lock.yaml"
+
+  printf '%s\n' "$repo_root"
 }
 
 install_system_packages() {
