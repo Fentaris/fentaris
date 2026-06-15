@@ -1,29 +1,72 @@
 ---
 title: "Proxy setup"
-description: "Production-ready proxy configuration patterns."
+description: "Configure a production-shaped Fentaris proxy with high-level declarations."
 ---
 
-This guide shows a hardened proxy setup that you can adapt for staging and production. It focuses on repeatable patterns: naming, routing, policy enforcement, and clean shutdowns. The goal is to make your proxy predictable for clients and easy to operate for your team.
+# Proxy Setup
 
-If you are new to Fentaris, start with the [Quickstart](/getting-started/quickstart) and come back here when you need to operationalize the proxy.
+> Configure a production-shaped Fentaris proxy with high-level declarations
 
-## Choose a stable endpoint
+Use `fentaris(...)` as the application boundary. Put upstream servers, identity, policy, logging, endpoint settings, and runtime hooks in one config-driven proxy.
 
-Client integrations will hard-code the MCP endpoint. Keep the `path` stable, even if ports or hosts change. If you deploy behind a reverse proxy, the public URL can stay the same while the internal proxy moves.
+## Quick Start
 
 ```ts theme={null}
-const proxy = new McpProxy({
-  servers: [filesystem],
+import { fentaris, group, mcp, policy, stdio, user } from "@fentaris/core";
+
+const supportPolicy = policy("support")
+  .mcp("github")
+  .allow("create_issue")
+  .mcp("docs")
+  .allow("search");
+
+const proxy = fentaris({
+  servers: [
+    mcp("github", {
+      displayName: "GitHub",
+      transport: stdio({ command: "github-mcp-server" }),
+    }),
+    mcp("docs", {
+      displayName: "Docs",
+      transport: stdio({ command: "node", args: ["./dist/docs-server.js"] }),
+    }),
+  ],
+  groups: [
+    group({
+      id: "support",
+      users: [user("alice")],
+      policy: supportPolicy,
+    }),
+  ],
+  port: Number(process.env.PORT ?? 3000),
+  path: "/mcp",
+  name: "fentaris-proxy",
+  version: "0.1.0",
+  autoLog: true,
+});
+
+await proxy.start();
+```
+
+## Choose a Stable Endpoint
+
+Client integrations usually store the MCP endpoint. Keep `path` stable even if ports or hosts change.
+
+```ts theme={null}
+const proxy = fentaris({
+  servers,
   port: Number(process.env.PORT ?? 3000),
   path: "/mcp",
 });
 ```
 
-## Configure proxy identity
+If you deploy behind a reverse proxy, keep the public URL stable and move only the internal service address.
+
+## Configure Proxy Identity
 
 ```ts theme={null}
-const proxy = new McpProxy({
-  servers: [filesystem, diagnostics],
+const proxy = fentaris({
+  servers,
   name: "fentaris-proxy",
   version: "0.1.0",
   port: 3000,
@@ -31,41 +74,93 @@ const proxy = new McpProxy({
 });
 ```
 
-**Why it matters:** the `name` and `version` are surfaced to MCP clients during initialization. Treat these as your control plane identity so you can trace which deployment handled a given tool call.
+`name` and `version` are surfaced to MCP clients during initialization. Treat them as control-plane identity for logs and client diagnostics.
 
-## Add consistent server metadata
+## Add Stable Server Metadata
 
-Keep names stable and use `displayName` for human-friendly labels. Stable names become the prefix for tool names, so they should remain consistent across environments.
+Server names become tool prefixes, so they should remain stable across environments.
 
 ```ts theme={null}
-const analytics = new McpServer({
-  name: "analytics",
+mcp("analytics", {
   displayName: "Analytics",
-  transport: analyticsTransport,
-});
+  transport: stdio({ command: "node", args: ["./dist/analytics-server.js"] }),
+})
 ```
 
-**Naming tip:** if you operate multiple environments, use the same server names in prod and staging. Avoid names like `analytics-staging` because that changes the tool prefix and breaks clients.
+<Tip>
+  Use the same server names in staging and production. Names such as `analytics-staging` change tool prefixes and can break clients.
+</Tip>
 
-## Harden tool discovery
+## Add Request Identity Early
 
-Use `tools:list:after` to transform the tool list before exposing it to clients.
+Resolve user, tenant, and trace metadata at the proxy edge.
 
 ```ts theme={null}
-proxy.on("tools:list:after", ({ tools }) => {
-  return tools?.filter((tool) => !tool.name.includes("diagnostics__experimental"));
+const proxy = fentaris({
+  servers,
+  user: (req) => ({
+    id: req.headers["x-user-id"] as string | undefined,
+    tenantId: req.headers["x-tenant-id"],
+    traceId: req.headers["x-trace-id"],
+    environment: req.headers["x-env"],
+  }),
 });
 ```
 
-**Tip:** Keep the allow/deny logic in one place. This makes it easier to audit which tools are visible in production versus staging.
+This makes audit, logging, policy, and upstream env injection use the same request context.
 
-## Proxy resources, prompts, and completions
+## Enforce Policy at the Edge
 
-Fentaris also proxies MCP resources, resource templates, prompts, and argument completion when at least one upstream transport supports those methods. Downstream capabilities are advertised dynamically:
+Use `policy(...)`, `group(...)`, and `user(...)` for durable authorization.
 
-- `resources` is exposed when an upstream can list, read, or template resources.
-- `prompts` is exposed when an upstream can list or get prompts.
-- `completions` is exposed when an upstream can complete prompt or resource-template arguments.
+```ts theme={null}
+const adminPolicy = policy("admin-full-access").mcp("*").allow("*");
+
+const proxy = fentaris({
+  servers,
+  groups: [
+    group({
+      id: "admins",
+      users: [user("admin")],
+      policy: adminPolicy,
+    }),
+  ],
+});
+```
+
+Use middleware for request-time validation that depends on arguments, environment, or runtime state.
+
+```ts theme={null}
+proxy.mcp("github").tool("create_issue", async (ctx, next) => {
+  if (typeof ctx.args?.title !== "string") {
+    return ctx.deny("Issue title is required.");
+  }
+
+  return next();
+});
+```
+
+## Harden Tool Discovery
+
+Filter tool lists before exposing them to clients.
+
+```ts theme={null}
+proxy.on("tools:list:after", ({ ctx, tools }) => {
+  if (ctx.user.environment !== "prod") {
+    return tools;
+  }
+
+  return tools?.filter((tool) => !tool.name.includes("__experimental"));
+});
+```
+
+<Tip>
+  Keep visibility logic in one place. It makes production and staging tool lists easier to audit.
+</Tip>
+
+## Proxy Resources, Prompts, and Completions
+
+Fentaris proxies MCP resources, resource templates, prompts, and argument completion when at least one upstream transport supports those methods.
 
 Prompts use the same namespace format as tools:
 
@@ -80,76 +175,24 @@ fentaris://resources/github/file%3A%2F%2F%2Fissues%2F123.md
 fentaris://resource-templates/github/file%3A%2F%2F%2Fissues%2F%7Bid%7D.md
 ```
 
-Clients should pass these values back unchanged to `resources/read`, `prompts/get`, and `completion/complete`. Fentaris restores the upstream prompt name, resource URI, or resource template URI before forwarding the request.
+Clients should pass these values back unchanged to `resources/read`, `prompts/get`, and `completion/complete`.
 
-## Add environment-aware tool lists
-
-If you need stricter tool lists in production, filter at discovery time. This prevents tools from even showing up in the client UI.
-
-```ts theme={null}
-proxy.on("tools:list:after", ({ ctx, tools }) => {
-  if (ctx.user.environment !== "prod") {
-    return tools;
-  }
-
-  return tools?.filter((tool) => !tool.name.includes("__experimental"));
-});
-```
-
-## Customize request logging
+## Customize Request Logging
 
 ```ts theme={null}
 proxy.use(async (ctx, next) => {
+  ctx.log.setTag("subject", ctx.subject?.id ?? "anonymous");
   ctx.log.info("proxy.request");
 
   return next();
 });
 ```
 
-**Tip:** add a stable request tag in the user resolver (for example `traceId`) and include it in each log entry so you can trace a single tool call across systems.
+Use a stable tag such as `traceId`, `user.id`, or `tenantId` so one tool call can be traced across systems.
 
-## Enforce policy at the edge
+## Close Cleanly
 
-Centralized policy is the biggest benefit of a proxy. Keep durable authorization in `Policy` and `Group` declarations, then use middleware and server-scoped tool routes for runtime validation.
-
-```ts theme={null}
-proxy.tool("filesystem.delete", async (ctx, next) => {
-  if (ctx.user.role !== "admin") {
-    return ctx.deny("Delete is disabled for this role.");
-  }
-
-  return next();
-});
-```
-
-Consider layering policies: first deny destructive calls for non-admins, then enforce plan-based access, and finally enforce per-tenant limits.
-
-Use operation routes for proxied resources, prompts, and completion:
-
-```ts theme={null}
-proxy.mcp("filesystem").operation("resource:read", async (ctx, next) => {
-  if (ctx.resource?.uri?.includes("/private/")) {
-    return ctx.fail(-32030, "Private resources are not available.");
-  }
-
-  return next();
-});
-```
-
-## Add graceful shutdowns
-
-When the proxy shuts down, it should close all active transport connections. This avoids orphaned server processes and incomplete tool calls.
-
-## Close cleanly
-
-```ts theme={null}
-process.on("SIGINT", async () => {
-  await proxy.close();
-  process.exit(0);
-});
-```
-
-Also handle `SIGTERM` in production (Kubernetes, systemd, or PaaS) to avoid orphaned MCP server processes.
+When the proxy shuts down, close upstream transports to avoid orphaned server processes.
 
 ```ts theme={null}
 process.on("SIGTERM", async () => {
@@ -158,79 +201,24 @@ process.on("SIGTERM", async () => {
 });
 ```
 
-## Add request context early
+Handle `SIGINT` in local development and `SIGTERM` in production.
 
-## Complete Express-like proxy example
+## Low-Level API
 
-```ts theme={null}
-import { McpProxy, McpServer, Policy, group, user } from "@fentaris/core";
+`new McpProxy(...)`, `new McpServer(...)`, and explicit transport constructors remain available for advanced integrations and compatibility. New applications should start with `fentaris(...)`, `mcp(...)`, and transport helpers.
 
-const github = new McpServer({
-  name: "github",
-  transport: githubTransport,
-});
+## Operational Checklist
 
-const supportPolicy = Policy.allowAll("support");
-const proxy = new McpProxy({
-  servers: [github],
-  groups: [
-    group({
-      id: "support",
-      users: [user("alice")],
-      policy: supportPolicy,
-    }),
-  ],
-  autoLog: true,
-});
+- Keep server names stable across environments.
+- Keep `path` stable for client integrations.
+- Resolve user, tenant, and trace metadata at the edge.
+- Prefer `policy(...)` for durable authorization.
+- Use middleware for argument-aware runtime checks.
+- Avoid hard-coding secrets; inject them through credential or env configuration.
+- Close the proxy on process shutdown.
 
-const githubApp = proxy.mcp("github");
+## Related Documentation
 
-proxy.use(async (ctx, next) => {
-  ctx.log.setTag("subject", ctx.subject?.id ?? "anonymous");
-  return next();
-});
-
-githubApp.tool("create_issue", async (ctx, next) => {
-  if (typeof ctx.args?.title !== "string") {
-    return ctx.deny("Issue title is required.");
-  }
-
-  return next();
-});
-
-githubApp.on("tool:success", async ({ ctx, durationMs }) => {
-  ctx.log.info("github.tool.success", { durationMs });
-});
-
-proxy.on("tools:list:after", ({ tools }) => {
-  return tools?.filter((tool) => !tool.name.endsWith("__experimental"));
-});
-```
-
-Define `user` resolution in the proxy config so every request is stamped with identity and trace metadata.
-
-```ts theme={null}
-const proxy = new McpProxy({
-  servers: [filesystem],
-  user: (req) => ({
-    id: req.headers["x-user-id"] as string | undefined,
-    tenantId: req.headers["x-tenant-id"],
-    traceId: req.headers["x-trace-id"],
-    environment: req.headers["x-env"],
-  }),
-});
-```
-
-This makes it trivial to audit or enforce policy without additional lookups.
-
-## Operational checklist
-
-- Confirm tool lists in production match what you expect.
-- Tag logs with `user.id` or `tenantId` for fast auditing.
-- Ensure each `McpServer` uses a stable `name` to avoid API drift.
-- Avoid hard-coding secrets; inject them via `env` per server.
-- Keep deployment configuration in version control.
-
-## Reference links
-
-- MCP SDK: https://github.com/modelcontextprotocol/sdk
+* [Setup](/getting-started/setup)
+* [Policies](/concepts/policies)
+* [McpProxy reference](/reference/mcp-proxy)

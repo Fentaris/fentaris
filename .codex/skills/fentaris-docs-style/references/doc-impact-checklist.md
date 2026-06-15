@@ -22,6 +22,7 @@ Run this checklist before finishing any code change.
 
 - Exported `@fentaris/core` API changed: run `pnpm docs:generate` and review `docs/reference-auto/`.
 - User-facing TypeScript example changed: update the nearest guide and reference page.
+- New docs example added: prefer high-level helpers before low-level classes.
 
 ## Behavior
 

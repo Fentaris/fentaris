@@ -63,3 +63,10 @@ Show the fix.
 - Use `theme={null}` on fenced code blocks.
 - Use `<Note>` for correctness constraints, `<Tip>` for workflow improvements, and `<Warning>` for risky operations.
 - End reference and guide pages with `## Related Documentation` when there are adjacent pages.
+
+## API Examples
+
+- Use high-level helpers first in narrative docs: `fentaris(...)`, `mcp(...)`, `stdio(...)`, `streamableHttp(...)`, `group(...)`, `user(...)`, and `policy(...)`.
+- Use class constructors only in a final `## Low-Level API` section or in a reference page dedicated to that class.
+- Do not teach `new McpProxy(...)`, `new McpServer(...)`, or `new StdioTransport(...)` as the default path for new applications.
+- When rewriting old examples, keep behavior equivalent but convert object construction to declarations.

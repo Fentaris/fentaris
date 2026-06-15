@@ -1,14 +1,20 @@
 ---
 title: "Setup"
-description: "Full Fentaris setup with TypeScript."
+description: "Configure a Fentaris proxy with the high-level TypeScript API."
 ---
+
+# Setup
+
+> Configure a Fentaris proxy with the high-level TypeScript API
+
+Use the declaration helpers for new projects. They keep server declarations, transports, identity, policy, and runtime options in one readable config object.
 
 ## Prerequisites
 
 - Node.js 20+ (LTS recommended)
 - pnpm or npm
 
-## 1. Install the package
+## Quick Start
 
 <CodeGroup>
   ```bash pnpm theme={null}
@@ -20,40 +26,19 @@ description: "Full Fentaris setup with TypeScript."
   ```
 </CodeGroup>
 
-## 2. Configure servers
-
 ```ts theme={null}
-import { McpServer, StdioTransport } from "@fentaris/core";
+import { fentaris, mcp, stdio } from "@fentaris/core";
 
-const filesystem = new McpServer({
-  name: "filesystem",
-  displayName: "Filesystem",
-  transport: new StdioTransport({
-    command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-  }),
-});
-
-const custom = new McpServer({
-  name: "custom",
-  displayName: "Custom Tools",
-  transport: new StdioTransport({
-    command: "node",
-    args: ["./dist/server.js"],
-  }),
-  env: (user) => ({
-    USER_ID: user.id ?? "anonymous",
-  }),
-});
-```
-
-## 3. Start the proxy
-
-```ts theme={null}
-import { McpProxy } from "@fentaris/core";
-
-const proxy = new McpProxy({
-  servers: [filesystem, custom],
+const proxy = fentaris({
+  servers: [
+    mcp("filesystem", {
+      displayName: "Filesystem",
+      transport: stdio({
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+      }),
+    }),
+  ],
   port: 3000,
   path: "/mcp",
   name: "fentaris-proxy",
@@ -63,29 +48,56 @@ const proxy = new McpProxy({
 await proxy.start();
 ```
 
-## 4. Add middleware (optional)
+## Add a Second Server
 
 ```ts theme={null}
-proxy.use(async (request, context, next) => {
-  context.log.info("tool-call", {
-    server: request.serverName,
-    tool: request.toolName,
-    proxyTool: request.proxyToolName,
+const proxy = fentaris({
+  servers: [
+    mcp("filesystem", {
+      displayName: "Filesystem",
+      transport: stdio({
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+      }),
+    }),
+    mcp("custom", {
+      displayName: "Custom Tools",
+      transport: stdio({
+        command: "node",
+        args: ["./dist/server.js"],
+      }),
+      env: (user) => ({
+        USER_ID: user.id ?? "anonymous",
+      }),
+    }),
+  ],
+  port: 3000,
+  path: "/mcp",
+});
+```
+
+## Add Middleware
+
+```ts theme={null}
+proxy.use(async (ctx, next) => {
+  ctx.log.info("tool-call", {
+    server: ctx.server?.name,
+    tool: ctx.tool?.name,
   });
 
   return next();
 });
 ```
 
-## 5. Connect an MCP client
+## Connect an MCP Client
 
 Point your MCP client to `http://localhost:3000/mcp`. Fentaris forwards requests to the configured servers.
 
 <Tip>
-  Change `port` and `path` in `McpProxy` to align with your environments.
+  Change `port` and `path` in the `fentaris(...)` config to align with your environments.
 </Tip>
 
-## 6. Verify available tools
+## Verify Available Tools
 
 If you are working in Node, you can list tools directly:
 
@@ -94,8 +106,18 @@ const tools = await proxy.listTools(undefined, { id: "demo-user" });
 console.log(tools.tools.map((tool) => tool.name));
 ```
 
-## Next steps
+## Low-Level API
 
-- Use `proxy.on("call", ...)` to filter specific tools.
-- Use `env` to pass user-specific secrets or settings.
-- Integrate custom logging with `Logger` and `ConsoleLoggerDriver`.
+The class constructors are still available for advanced cases that need explicit object construction:
+
+```ts theme={null}
+import { McpProxy, McpServer, StdioTransport } from "@fentaris/core";
+```
+
+For normal applications, prefer `fentaris(...)`, `mcp(...)`, and `stdio(...)`.
+
+## Related Documentation
+
+* [Quickstart](/getting-started/quickstart)
+* [Tutorial](/getting-started/tutorial)
+* [McpProxy reference](/reference/mcp-proxy)
