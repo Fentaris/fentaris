@@ -1,0 +1,77 @@
+---
+title: "Environment Variables"
+description: "Configure local credentials and runtime health checks with Fentaris environment variables."
+---
+
+# Environment Variables
+
+> Configure local credentials and runtime health checks with Fentaris environment variables
+
+Fentaris generated projects write demo values to `.env.example`. Copy it to `.env` before running local development.
+
+## Quick Start
+
+```bash theme={null}
+cp .env.example .env
+fentaris dev
+```
+
+## Variables
+
+### `FENTARIS_AUTH_KEY`
+
+Encryption key used to decrypt local credentials in `.fentaris/credentials.enc.json`.
+
+```bash theme={null}
+FENTARIS_AUTH_KEY=fentaris-auth-...
+```
+
+`fentaris doctor` checks whether this variable is present before verifying encrypted credentials.
+
+### `FENTARIS_GUEST_API_KEY`
+
+Demo API key for the generated guest user.
+
+```bash theme={null}
+FENTARIS_GUEST_API_KEY=guest-...
+```
+
+Use this key in the `x-fentaris-api-key` header when connecting a client to the generated proxy.
+
+### `FENTARIS_ADMIN_API_KEY`
+
+Demo API key for the generated admin user.
+
+```bash theme={null}
+FENTARIS_ADMIN_API_KEY=admin-...
+```
+
+The generated project grants the admin user broader policy access than the guest user.
+
+### `FENTARIS_API_KEY`
+
+Fallback API key used by runtime health checks when a guest or admin key is not present.
+
+```bash theme={null}
+FENTARIS_API_KEY=...
+```
+
+### Upstream Credential Variables
+
+Servers can also read arbitrary environment variables through credential sources.
+
+```ts theme={null}
+credentialEnv("GITHUB_TOKEN")
+```
+
+The exact variable name depends on the project code and upstream server.
+
+<Warning>
+  Do not commit `.env` or `.fentaris/credentials.enc.json`. Generated projects ignore both by default.
+</Warning>
+
+## Related Documentation
+
+* [Quickstart](/getting-started/quickstart)
+* [Config file](/reference/config-file)
+* [CLI Usage](/reference/cli)

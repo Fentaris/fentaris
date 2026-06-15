@@ -3,54 +3,141 @@ title: "Troubleshooting"
 description: "Common issues and how to resolve them."
 ---
 
-## Proxy does not start
+# Troubleshooting
 
-**Symptoms**
-- `EADDRINUSE` or `Address already in use`.
+> Diagnose common Fentaris install, config, auth, and runtime issues
 
-**Fix**
-- Change the proxy port or stop the existing process.
+Start with the CLI checks. They catch most local setup problems before you connect an MCP client.
 
-```ts theme={null}
-const proxy = new McpProxy({ servers, port: 4000 });
+## Quick Start
+
+```bash theme={null}
+fentaris check --offline
+fentaris doctor
+fentaris doctor --runtime
 ```
 
-## Tools list is empty
+Use `check` for project validation and `doctor` for environment diagnostics.
 
-**Symptoms**
-- `listTools` returns an empty list.
+## Project Issues
 
-**Fix**
-- Check that the upstream MCP server exposes tools.
-- Verify the transport command and args.
+### No Fentaris project found
+
+The CLI could not find `fentaris.json` from the current directory upward.
+
+```bash theme={null}
+fentaris init my-proxy
+cd my-proxy
+fentaris check --offline
+```
+
+If the project uses the legacy filename, rename it:
+
+```bash theme={null}
+mv fentaris.config.json fentaris.json
+```
+
+### Invalid Fentaris config
+
+`fentaris.json` is missing a required field or contains an unsupported package manager.
+
+```json
+{
+  "name": "my-proxy",
+  "packageManager": "pnpm",
+  "entrypoint": "src/index.ts",
+  "port": 4000,
+  "path": "/mcp",
+  "authDir": ".fentaris"
+}
+```
+
+<Note>
+  Allowed package managers are `pnpm`, `npm`, and `bun`.
+</Note>
+
+## Runtime Issues
+
+### Proxy does not start
+
+The configured port is already in use.
+
+```bash theme={null}
+fentaris doctor
+```
+
+Change `port` in `fentaris.json` or stop the conflicting process.
+
+```json
+{
+  "port": 4001
+}
+```
+
+### Runtime check cannot authenticate
+
+`fentaris doctor --runtime` reached the endpoint but did not have a valid API key.
+
+```bash theme={null}
+export FENTARIS_GUEST_API_KEY=<guest-key>
+fentaris doctor --runtime
+```
+
+The generated project accepts API keys through the `x-fentaris-api-key` header.
+
+### Tools list is empty
+
+The upstream server did not expose tools, or policy hides every tool for the current user.
+
+Check the upstream transport first:
 
 ```ts theme={null}
-new StdioTransport({
+stdio({
   command: "npx",
-  args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
 });
 ```
 
-## Tool call fails with unknown server
+Then check the policy assigned to the user or group.
 
-**Symptoms**
-- Error: `Unknown MCP server "..."`.
+## Auth and Secrets
 
-**Fix**
-- Ensure the tool name is prefixed correctly: `server__tool`.
+### Credentials cannot be decrypted
 
-## Middleware runs twice
+`FENTARIS_AUTH_KEY` is missing or does not match the local credential store.
 
-**Symptoms**
-- Duplicate logs per tool call.
+```bash theme={null}
+export FENTARIS_AUTH_KEY=<key-from-env-example>
+fentaris doctor
+```
 
-**Fix**
-- Avoid calling `next()` more than once. Fentaris throws if it happens.
+If the key is lost for a disposable local project, reinitialize the project or recreate the local credential store.
 
-## Unknown @pk warnings in auto docs
+### Secret command asks for a key
 
-**Symptoms**
-- TypeDoc warnings about `@pk` tags.
+`fentaris secrets set` needs the local auth key. Provide it through `FENTARIS_AUTH_KEY`, `--key`, or the interactive prompt.
 
-**Fix**
-- These tags are safe to ignore or you can remove them from JSDoc comments.
+```bash theme={null}
+FENTARIS_AUTH_KEY=<key> fentaris secrets set github.token --user admin
+```
+
+## Documentation Issues
+
+### Generated API reference is stale
+
+Run the docs generator after public API changes:
+
+```bash theme={null}
+pnpm docs:generate
+```
+
+<Tip>
+  Review `docs/reference-auto/` after generation. It is generated from TypeScript sources, but the surrounding handwritten reference pages may still need updates.
+</Tip>
+
+## Related Documentation
+
+* [Quickstart](/getting-started/quickstart)
+* [CLI Usage](/reference/cli)
+* [Config file](/reference/config-file)
+* [Environment variables](/reference/environment-variables)

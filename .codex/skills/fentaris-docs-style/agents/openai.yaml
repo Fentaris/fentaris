@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fentaris Docs Style"
+  short_description: "Write and maintain Fentaris docs consistently."
+  default_prompt: "Use $fentaris-docs-style to write or update Fentaris documentation in the project style."

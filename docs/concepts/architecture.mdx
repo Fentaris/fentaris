@@ -1,0 +1,42 @@
+---
+title: "Architecture"
+description: "Understand how Fentaris routes clients to upstream MCP servers."
+---
+
+# Architecture
+
+> Understand how Fentaris routes clients to upstream MCP servers
+
+Fentaris sits between MCP clients and upstream MCP servers. Clients connect to one Fentaris endpoint, and Fentaris routes tool calls to the correct upstream server after applying identity, policy, middleware, hooks, and logging.
+
+## Runtime Flow
+
+1. A client connects to the Fentaris MCP endpoint.
+2. Fentaris resolves the caller identity.
+3. Policy decides which upstream tools are visible.
+4. Tool calls are routed to the selected upstream MCP server.
+5. Logs, hooks, profiler events, and health checks observe the request.
+
+## Main Parts
+
+### Client Endpoint
+
+The generated project exposes one endpoint, usually `http://localhost:4000/mcp`.
+
+### Upstream MCP Servers
+
+Upstream servers provide tools, prompts, resources, or resource templates. They can run locally over stdio or remotely over HTTP transports.
+
+### Identity and Policy
+
+Identity resolves the caller. Policy controls which tools each caller or group can use.
+
+### Observability
+
+Fentaris can emit logs and profiler events around runtime lifecycle, transport calls, policy decisions, and errors.
+
+## Related Documentation
+
+* [Quickstart](/getting-started/quickstart)
+* [Servers and transports](/concepts/servers-and-transports)
+* [Policies](/concepts/policies)

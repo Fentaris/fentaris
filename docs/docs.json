@@ -45,23 +45,22 @@
         "pages": ["index"]
       },
       {
-        "group": "Get started",
+        "group": "Get Started",
         "pages": [
-          "getting-started/onboarding",
-          "getting-started/installation",
           "getting-started/quickstart",
+          "getting-started/installation",
           "getting-started/setup",
           "getting-started/tutorial"
         ]
       },
       {
-        "group": "Core concepts",
+        "group": "Concepts",
         "pages": [
-          "core/architecture",
-          "core/tool-naming",
-          "core/logger",
-          "core/transports",
-          "core/user-context"
+          "concepts/architecture",
+          "concepts/servers-and-transports",
+          "concepts/identity-and-auth",
+          "concepts/policies",
+          "concepts/observability"
         ]
       },
       {
@@ -90,6 +89,9 @@
         "group": "Reference",
         "collapsed": true,
         "pages": [
+          "reference/cli",
+          "reference/config-file",
+          "reference/environment-variables",
           "reference/mcp-proxy",
           "reference/mcp-server",
           "reference/stdio-transport",
