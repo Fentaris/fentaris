@@ -191,7 +191,7 @@ ${input.packageManager} install
 ${input.packageManager} dev
 \`\`\`
 
-The proxy listens on \`http://localhost:${input.port}${input.proxyPath}\` by default. Send requests with the \`x-fentaris-api-key\` header using one of the keys printed by \`fentaris init\`.
+\`fentaris dev\` loads \`.env\` before starting the project. The proxy listens on \`http://localhost:${input.port}${input.proxyPath}\` by default. Send requests with the \`x-fentaris-api-key\` header using one of the keys printed by \`fentaris init\`.
 
 ## Project files
 
