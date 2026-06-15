@@ -178,7 +178,7 @@ function validatePolicyVisibility(
 ): void {
   const declared = (policy as PolicyWithDeclarations | undefined)?.getDeclaredPermissions?.() ?? [];
   for (const entry of declared) {
-    if (entry.serverName !== "*" && visibleServers.size > 0 && !visibleServers.has(entry.serverName)) {
+    if (entry.serverName !== "*" && !visibleServers.has(entry.serverName)) {
       diagnostics.push(diagnostic("error", "FENTARIS_CONFIG_POLICY_SERVER_NOT_VISIBLE", "Policy references an invisible server", `Policy references server "${entry.serverName}", but that server is not visible in this scope.`, {
         path,
         hint: "Declare the server globally or in the same group as the policy.",

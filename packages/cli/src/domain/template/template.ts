@@ -88,14 +88,13 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
   };
 }
 
-export function renderEntrypoint(_input: TemplateInput): string {
+export function renderEntrypoint(input: TemplateInput): string {
   return `import {
   credentialJson,
   fentaris,
   group,
   policy,
   profiler,
-  rateLimit,
   stdio,
   streamableHttp,
   user,
@@ -133,8 +132,6 @@ const app = fentaris({
   ],
   profiler: runtimeProfiler,
 });
-
-app.use(rateLimit({ max: 30, per: 60_000 }));
 
 app.mcp("demo-files", {
   transport: stdio({

@@ -103,22 +103,6 @@ describe("config validation", () => {
     expect(createProxy(config)).toBeTruthy();
   });
 
-  it("allows policy references to be satisfied by fluent MCP declarations", () => {
-    const config = defineFentarisConfig({
-      groups: [
-        group({
-          id: "limited",
-          users: [user("u1")],
-          policy: policy("limited").mcp("demo-files").allow("*"),
-        }),
-      ],
-    });
-
-    expect(validateFentarisConfig(config).errors).toHaveLength(0);
-    const proxy = createProxy(config);
-    expect(() => proxy.mcp("demo-files", { transport: new TestTransport() })).not.toThrow();
-  });
-
   it("preserves existing valid global MCP behavior", () => {
     const proxy = createProxy({
       servers: [mcp("custom", { transport: new TestTransport() })],

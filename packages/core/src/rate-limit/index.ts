@@ -1,1 +1,1 @@
-export { MemoryRateLimitStore, SlidingWindowRateLimiter, rateLimit, rateLimitKey, rateLimitMiddleware } from "./rateLimit.js";
+export { MemoryRateLimitStore, SlidingWindowRateLimiter, rateLimitKey, rateLimitMiddleware } from "./rateLimit.js";

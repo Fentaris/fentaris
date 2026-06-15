@@ -38,13 +38,13 @@ Options:
 
 ### `fentaris dev`
 
-Run the generated project's configured entrypoint.
+Run the generated project's `dev` script.
 
 ```bash theme={null}
 fentaris dev
 ```
 
-The CLI discovers the nearest `fentaris.json` from the current directory upward, loads `.env` from the project root when it exists, prints the configured local endpoint, and runs `entrypoint` directly. TypeScript entrypoints run through the selected package manager's `tsx` executor.
+The CLI discovers the nearest `fentaris.json` from the current directory upward and prints the configured local endpoint before starting the script.
 
 ### `fentaris check`
 

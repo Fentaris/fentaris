@@ -181,7 +181,7 @@ describe("project commands", () => {
     rt.cwd = join(dir, "demo", "src");
     await expect(main(["dev"], rt)).resolves.toBe(0);
 
-    expect(rt.calls.some((call) => call.command === "pnpm" && call.args[0] === "exec" && call.args[1] === "tsx" && call.args[2]?.endsWith("src/index.ts"))).toBe(true);
+    expect(rt.calls.some((call) => call.command === "pnpm" && call.args.join(" ") === "dev")).toBe(true);
   });
 
   it("builds a deterministic local artifact", async () => {

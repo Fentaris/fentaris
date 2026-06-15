@@ -380,4 +380,4 @@ export type { RedisRegistryClient, RedisRegistryOptions } from "./registry/index
  * Rate limit store implementations.
  * @pk
  */
-export { MemoryRateLimitStore, SlidingWindowRateLimiter, rateLimit, rateLimitKey, rateLimitMiddleware } from "./rate-limit/index.js";
+export { MemoryRateLimitStore, SlidingWindowRateLimiter, rateLimitKey, rateLimitMiddleware } from "./rate-limit/index.js";

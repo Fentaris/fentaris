@@ -1,4 +1,4 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { supportedPackageManagers } from "../../shared/constants.js";
 import type { ExecProbe, PackageManager, ProcessRunner, ProjectConfig, ProjectDiscovery, Prompt } from "../../shared/types.js";
@@ -81,56 +81,6 @@ export async function runPackageScript(packageManager: PackageManager, cwd: stri
   if (result.code !== 0) {
     throw new Error(`${packageManager} ${script} failed.`);
   }
-}
-
-export async function runProjectEntrypoint(project: ProjectDiscovery, runner: ProcessRunner): Promise<void> {
-  const env = { ...process.env, ...(await readDotEnv(path.join(project.root, ".env"))) };
-  const entrypoint = path.join(project.root, project.config.entrypoint);
-  const isTypeScript = /\.(?:ts|tsx|mts|cts)$/.test(project.config.entrypoint);
-  const command = isTypeScript ? packageManagerExecCommand(project.config.packageManager) : "node";
-  const args = isTypeScript
-    ? [...packageManagerExecArgs(project.config.packageManager), "tsx", entrypoint]
-    : [entrypoint];
-  const result = await runner(command, args, { cwd: project.root, stdio: "inherit", env });
-  if (result.code !== 0) {
-    throw new Error(`${project.config.entrypoint} failed.`);
-  }
-}
-
-async function readDotEnv(filePath: string): Promise<Record<string, string>> {
-  if (!(await exists(filePath))) {
-    return {};
-  }
-  const env: Record<string, string> = {};
-  const contents = await readFile(filePath, "utf8");
-  for (const line of contents.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) {
-      continue;
-    }
-    const separator = trimmed.indexOf("=");
-    if (separator <= 0) {
-      continue;
-    }
-    const key = trimmed.slice(0, separator).trim();
-    const value = trimmed.slice(separator + 1).trim().replace(/^['"]|['"]$/g, "");
-    env[key] = value;
-  }
-  return env;
-}
-
-function packageManagerExecCommand(packageManager: PackageManager): string {
-  return packageManager === "npm" ? "npx" : packageManager;
-}
-
-function packageManagerExecArgs(packageManager: PackageManager): string[] {
-  if (packageManager === "npm") {
-    return ["--yes"];
-  }
-  if (packageManager === "pnpm") {
-    return ["exec"];
-  }
-  return ["x"];
 }
 
 function validateProjectConfig(value: unknown, configPath: string): ProjectConfig {
