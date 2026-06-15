@@ -53,5 +53,5 @@ export async function runInit(command: CliCommand, runtime: Runtime): Promise<vo
   section(runtime, "Next Steps");
   runtime.out.log(`  ${style.label("Demo guest API key")} ${template.guestApiKey}`);
   runtime.out.log(`  ${style.label("Demo admin API key")} ${template.adminApiKey}`);
-  runtime.out.log(nextSteps([`cd ${projectName}`, "cp .env.example .env", "fentaris dev"]));
+  runtime.out.log(nextSteps([`cd ${projectName}`, "fentaris dev"]));
 }
