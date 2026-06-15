@@ -38,7 +38,7 @@ Use middleware to attach correlation tags that should appear on every log entry 
 ```ts theme={null}
 proxy.use(async (ctx, next) => {
   ctx.log.setTag("traceId", ctx.transport.requestId ?? "no-trace");
-  ctx.log.setTag("tenantId", String(ctx.subject?.tenantId ?? "unknown"));
+  ctx.log.setTag("tenantId", String(ctx.subject?.tenant?.id ?? "unknown"));
   ctx.log.setTag("subject", ctx.subject?.id ?? "anonymous");
 
   return next();

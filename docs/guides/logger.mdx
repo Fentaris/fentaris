@@ -38,7 +38,7 @@ Tags are indexed fields that should stay stable across a request. Metadata is de
 ```ts theme={null}
 proxy.use(async (ctx, next) => {
   ctx.log.setTag("traceId", ctx.transport.requestId ?? "no-trace");
-  ctx.log.setTag("tenantId", String(ctx.subject?.tenantId ?? "unknown"));
+  ctx.log.setTag("tenantId", String(ctx.subject?.tenant?.id ?? "unknown"));
   ctx.log.setTag("subject", ctx.subject?.id ?? "anonymous");
 
   ctx.log.info("request.received", {

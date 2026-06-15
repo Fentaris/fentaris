@@ -201,7 +201,7 @@ const proxy = fentaris({
 
 proxy.use(async (ctx, next) => {
   ctx.log.setTag("subject", ctx.subject?.id ?? "anonymous");
-  ctx.log.setTag("tenant", String(ctx.subject?.tenantId ?? "unknown"));
+  ctx.log.setTag("tenant", String(ctx.subject?.tenant?.id ?? "unknown"));
   return next();
 });
 ```
