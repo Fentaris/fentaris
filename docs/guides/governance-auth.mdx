@@ -3,9 +3,13 @@ title: "Governance auth"
 description: "Declare users, groups, policy, API-key identity, and local upstream credentials."
 ---
 
+# Governance auth
+
+> Declare users, groups, policy, API-key identity, and upstream credentials in one Fentaris proxy.
+
 Use the governance auth DX when one proxy serves multiple callers and upstream servers need per-user or per-group credentials.
 
-## Recommended setup
+## Quick Start
 
 ```ts theme={null}
 import {
@@ -16,8 +20,8 @@ import {
   fentaris,
   group,
   mcp,
-  policy,
   approval,
+  policy,
   sensitive,
   streamableHttp,
   user,
@@ -122,7 +126,7 @@ If multiple groups provide the same credential reference, the default behavior f
 
 Middleware receives credential source metadata through `ctx.credentials.sources`, such as `{ reference: "github.token", source: "group", groupId: "support" }`, never the decrypted credential value.
 
-## Policy and runtime behavior
+## Policy And Runtime Behavior
 
 Keep durable authorization in groups and policies. Use server-scoped tool routes for runtime behavior after policy allows a call.
 
@@ -135,8 +139,12 @@ const support = group({
   policy: supportPolicy,
 });
 
-const proxy = new McpProxy({
-  servers: [githubServer],
+const proxy = fentaris({
+  servers: [
+    mcp("github", {
+      transport: streamableHttp({ url: "https://github.example/mcp" }),
+    }),
+  ],
   groups: [support],
 });
 
@@ -180,12 +188,12 @@ proxy.mcp("github").use(async (ctx, next) => {
 
 `ctx.policy.can(server, tool)` evaluates allow/deny permissions only. It does not consume rate limits, invoke manual approval callbacks, or expose raw API keys, bearer tokens, decrypted credentials, or environment secret values.
 
-## Capability permissions
+## Capability Permissions
 
 Tool permissions are still supported, but Fentaris also accepts operation-based capability permissions for proxied resources, prompts, and completion.
 
 ```ts theme={null}
-const policy = new Policy({ name: "support" })
+const supportPolicy = policy("support")
   .mcp("github")
   .allow("create_issue")
   .mcp("docs")
@@ -224,12 +232,12 @@ proxy.mcp("docs").operation("resource:read", async (ctx, next) => {
 
 Resource, prompt, and completion operations emit `resource:*`, `prompt:*`, and `completion:*` events with `start`, `success`, `error`, and `after` phases. Audit logs include operation, subject, server, target, policy outcome, and credential source metadata.
 
-## Migration from tool policies
+## Migration From Tool Policies
 
 Existing tool policy declarations continue to work:
 
 ```ts theme={null}
-const policy = new Policy({ name: "existing" })
+const existingPolicy = policy("existing")
   .mcp("github")
   .allow("search_issues")
   .mcp("github")
@@ -238,7 +246,7 @@ const policy = new Policy({ name: "existing" })
 
 Fentaris adapts those declarations internally to `tool:call` capability permissions. Existing `ToolPermission`, `SimplePolicy`, `Policy.evaluate(...)`, group policy, middleware, and `ctx.policy.can(server, tool)` behavior remain compatible for tool calls. Add `allowCapability(...)` or `denyCapability(...)` only when you need to govern resources, resource templates, prompts, or completion.
 
-## CLI helpers
+## CLI Helpers
 
 Initialize local auth files:
 
@@ -265,3 +273,26 @@ Inspect redacted local auth:
 ```bash theme={null}
 fentaris auth inspect --dir .fentaris --key "$FENTARIS_AUTH_KEY"
 ```
+
+## Low-Level API
+
+The class constructors remain available for compatibility and advanced embedding. Prefer `fentaris(...)`, `mcp(...)`, `streamableHttp(...)`, `group(...)`, `user(...)`, and `policy(...)` for new applications.
+
+```ts theme={null}
+import { McpProxy, Policy } from "@fentaris/core";
+
+const legacyPolicy = new Policy({ name: "legacy" })
+  .mcp("github")
+  .allow("search_issues");
+
+const proxy = new McpProxy({
+  policy: legacyPolicy,
+  servers: [githubServer],
+});
+```
+
+## Related Documentation
+
+* [Security](/guides/security)
+* [Multi-server routing](/guides/multi-server)
+* [Observability](/guides/observability)

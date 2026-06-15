@@ -1,0 +1,28 @@
+---
+title: "Identity and Auth"
+description: "Understand how Fentaris resolves users and protects local credentials."
+---
+
+# Identity and Auth
+
+> Understand how Fentaris resolves users and protects local credentials
+
+Fentaris can map API keys to users, load local encrypted credentials, and pass scoped credentials to upstream MCP servers.
+
+## API Key Identity
+
+Generated projects use the `x-fentaris-api-key` header. Demo guest and admin API keys are written to `.env.example` during initialization.
+
+## Local Credentials
+
+Local credentials are stored in `.fentaris/credentials.enc.json` and decrypted with `FENTARIS_AUTH_KEY`.
+
+<Note>
+  The generated `.gitignore` excludes `.fentaris/` and `.env` so local secrets do not get committed by default.
+</Note>
+
+## Related Documentation
+
+* [Environment variables](/reference/environment-variables)
+* [CLI Usage](/reference/cli)
+* [Governance auth guide](/guides/governance-auth)

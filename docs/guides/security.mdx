@@ -3,35 +3,93 @@ title: "Security"
 description: "Security practices and patterns for Fentaris proxies."
 ---
 
-Fentaris gives you centralized policy control. Use these practices to keep deployments safe, especially when your proxy is exposed publicly or serves multiple teams.
+# Security
 
-Security is most effective when it is layered: hide tools, validate identity, and observe every decision.
+> Keep Fentaris deployments safe with centralized identity, policy, secrets, and audit controls.
 
-## Guard destructive tools
+Start with allow-list policy, authenticated users, scoped upstream servers, and structured logging. Add runtime middleware only for checks that depend on request data.
+
+## Quick Start
+
+Declare the proxy with high-level helpers and keep security rules close to the upstream MCP server they govern.
 
 ```ts theme={null}
-proxy.use(async (request, context, next) => {
-  const destructive = ["filesystem__delete", "filesystem__write"];
-  if (destructive.includes(request.proxyToolName) && context.user.role !== "admin") {
-    return context.res.deny("Insufficient permissions for destructive action.");
+import { fentaris, group, mcp, policy, stdio, user } from "@fentaris/core";
+
+const productionPolicy = policy("production")
+  .mcp("filesystem")
+  .allow("read_file")
+  .mcp("filesystem")
+  .deny("write_file")
+  .mcp("filesystem")
+  .deny("delete_file");
+
+const proxy = fentaris({
+  groups: [
+    group({
+      id: "readers",
+      users: [user("alice", { tenantId: "acme" })],
+      policy: productionPolicy,
+    }),
+  ],
+  servers: [
+    mcp("filesystem", {
+      transport: stdio({
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "/srv/shared"],
+      }),
+    }),
+  ],
+  autoLog: true,
+});
+```
+
+Use allow-list policy in production. Deny rules are useful for explicit exceptions, but the baseline should be the smallest set of tools and capabilities each group needs.
+
+## Guard Destructive Tools
+
+Policy should block known destructive tools before runtime middleware runs.
+
+```ts theme={null}
+const supportPolicy = policy("support")
+  .mcp("github")
+  .allow("search_issues")
+  .mcp("github")
+  .allow("create_issue")
+  .mcp("github")
+  .deny("delete_repo");
+```
+
+Add middleware when the decision depends on request arguments, tenant state, or a live approval system.
+
+```ts theme={null}
+proxy.mcp("github").tool("create_issue", async (ctx, next) => {
+  if (typeof ctx.args?.title !== "string") {
+    return ctx.deny("Issue title is required.");
   }
+
+  ctx.log.info("github.create_issue.validated", {
+    subject: ctx.subject?.id,
+    groups: ctx.subject?.groups.map((group) => group.id),
+  });
 
   return next();
 });
 ```
 
-Make destructive policies explicit and keep them centralized. This avoids confusion when you audit production incidents.
+## Govern All MCP Capabilities
 
-## Govern all MCP capabilities
-
-Resources, prompts, resource templates, and completion can expose data or shape model behavior. Treat them as governed capabilities, not passive metadata.
+Tools are only one MCP surface. Resources, resource templates, prompts, and completion can expose data or shape model behavior.
 
 ```ts theme={null}
-const policy = new Policy({ name: "least-privilege" })
+const leastPrivilege = policy("least-privilege")
   .mcp("filesystem")
   .allow("read_file")
   .mcp("filesystem")
-  .allowCapability({ operation: "resources:list", targetKind: "resource" })
+  .allowCapability({
+    operation: "resources:list",
+    targetKind: "resource",
+  })
   .mcp("filesystem")
   .denyCapability({
     operation: "resource:read",
@@ -40,116 +98,146 @@ const policy = new Policy({ name: "least-privilege" })
   });
 ```
 
-Use list permissions to control discovery, and direct-operation permissions such as `resource:read`, `prompt:get`, and `completion:complete` to prevent use before Fentaris forwards the request upstream.
+Use list permissions for discovery and direct-operation permissions such as `resource:read`, `prompt:get`, and `completion:complete` before Fentaris forwards a request upstream.
 
-## Scope tools per environment
+## Scope Servers Per Group
+
+Use groups to make server access explicit. This keeps tool visibility, credentials, and policy tied to the caller.
 
 ```ts theme={null}
-proxy.onListTools((tools, { user }) => {
-  if (user.environment !== "prod") {
-    return tools;
-  }
-
-  return tools.filter((tool) => !tool.name.includes("__debug"));
+const proxy = fentaris({
+  groups: [
+    group({
+      id: "support",
+      users: [user("alice")],
+      servers: [
+        mcp("github", {
+          transport: stdio({ command: "github-mcp-server" }),
+        }),
+      ],
+      policy: policy("support")
+        .mcp("github")
+        .allow("search_issues")
+        .mcp("github")
+        .allow("create_issue"),
+    }),
+  ],
 });
 ```
 
-Hide debug tools in production to reduce the available attack surface.
+Server-scoped policy also reduces accidental exposure when a new upstream MCP server is added to the proxy.
 
-## Protect secrets
+## Protect Secrets
 
-- Never pass secrets via user-controlled metadata.
-- Use `env` on `McpServer` to inject secrets from trusted sources.
-- Store secrets in your infra, not in code.
-
-Consider using a secrets manager (AWS Secrets Manager, GCP Secret Manager, Vault) and inject them at deploy time.
-
-## Audit and traceability
-
-- Tag all governed operations with `context.log.setTag("trace", ...)`.
-- Export logs to a secure log store.
-- Review denied calls to detect abuse.
-
-## Validate incoming identity
-
-If your proxy is called by multiple clients, validate auth at the edge before resolving `UserContext`.
+Bind secrets through credentials or environment injection. Do not pass secrets through user-controlled metadata or tool arguments.
 
 ```ts theme={null}
-proxy.use(async (request, context, next) => {
-  if (!context.user.id) {
-    return context.res.deny("Missing identity.");
-  }
+import { bearer, credential, credentialEnv, fentaris, group, mcp, policy, streamableHttp, user } from "@fentaris/core";
+
+const proxy = fentaris({
+  groups: [
+    group({
+      id: "maintainers",
+      users: [user("bob")],
+      credentials: {
+        "github.token": credentialEnv("GITHUB_TOKEN"),
+      },
+      policy: policy("maintainers").mcp("github").allow("*"),
+    }),
+  ],
+  servers: [
+    mcp("github", {
+      transport: streamableHttp({ url: "https://github.example/mcp" }),
+      auth: bearer(credential("github.token")),
+    }),
+  ],
+});
+```
+
+<Note>
+  Store production secrets in your infrastructure secret manager and inject them at deploy time. Keep `.fentaris/credentials.enc.json` private when using local encrypted credentials.
+</Note>
+
+## Validate Identity
+
+When users declare API keys, Fentaris uses API-key identity by default with the `x-fentaris-api-key` header. Store API keys as credential sources, such as environment variables or encrypted local credentials, instead of literal strings in code.
+
+```ts theme={null}
+import { credentialEnv, fentaris, group, mcp, policy, stdio, user } from "@fentaris/core";
+
+const proxy = fentaris({
+  groups: [
+    group({
+      id: "admins",
+      users: [
+        user("alice", {
+          apiKeys: [credentialEnv("ADMIN_API_KEY")],
+        }),
+      ],
+      policy: policy("admins").mcp("*").allow("*"),
+    }),
+  ],
+  servers: [
+    mcp("admin", {
+      transport: stdio({ command: "admin-mcp-server" }),
+    }),
+  ],
+});
+```
+
+Trusted identity headers should only be used behind an internal gateway that already authenticated the caller. Do not expose direct user-id headers to untrusted clients.
+
+## Audit Decisions
+
+Enable `autoLog` and add stable tags for traceability. Logs should include metadata, not raw payloads or secret values.
+
+```ts theme={null}
+const proxy = fentaris({
+  servers: [
+    mcp("github", {
+      transport: stdio({ command: "github-mcp-server" }),
+    }),
+  ],
+  autoLog: true,
+});
+
+proxy.use(async (ctx, next) => {
+  ctx.log.setTag("subject", ctx.subject?.id ?? "anonymous");
+  ctx.log.setTag("tenant", String(ctx.subject?.tenant?.id ?? "unknown"));
   return next();
 });
 ```
 
-## Governance syntax
+Review denied calls regularly. They show missing policy, unexpected client behavior, or attempted abuse.
 
-For multi-tenant deployments, configure governance at the proxy edge and keep enforcement centralized.
+## Harden Network Exposure
+
+Run public Fentaris deployments behind a reverse proxy or cloud load balancer.
+
+- Terminate TLS at the edge and forward only HTTPS traffic.
+- Restrict inbound access with private networks or IP allow-lists.
+- Keep upstream MCP servers private when possible.
+- Rotate API keys and upstream credentials regularly.
+
+## Low-Level API
+
+The class constructors remain available for compatibility and advanced embedding. Prefer `fentaris(...)`, `mcp(...)`, `stdio(...)`, `streamableHttp(...)`, `group(...)`, `user(...)`, and `policy(...)` for new applications.
 
 ```ts theme={null}
-import {
-  McpProxy,
-  MemoryRegistry,
-  SimplePolicy,
-  SlidingWindowRateLimiter,
-  headerIdentityStrategy,
-  rateLimitMiddleware,
-} from "@fentaris/core";
+import { McpProxy, Policy } from "@fentaris/core";
 
-const registry = new MemoryRegistry({
-  users: {
-    "user-1": { id: "user-1", role: "admin" },
-  },
-  secrets: {
-    "user-1": { GITHUB_TOKEN: process.env.GITHUB_TOKEN ?? "" },
-  },
-});
-
-const policy = new SimplePolicy({
-  name: "production",
-  permissions: {
-    github: [
-      {
-        tool: "create_issue",
-        limiter: new SlidingWindowRateLimiter({
-          maxPerWindow: 20,
-          windowMs: 60_000,
-          maxDailyCalls: 500,
-        }),
-      },
-    ],
-  },
-});
+const legacyPolicy = new Policy({ name: "legacy" })
+  .mcp("filesystem")
+  .allow("read_file");
 
 const proxy = new McpProxy({
-  servers: [github],
-  registry,
-  policy,
-  identity: {
-    strategy: headerIdentityStrategy({ userIdHeader: "x-user-id" }),
-    required: true,
-  },
-  autoLog: true,
+  policy: legacyPolicy,
+  servers: [filesystemServer],
 });
-
-proxy.use(rateLimitMiddleware());
 ```
 
-## Harden network exposure
+## Related Documentation
 
-- Run Fentaris behind a reverse proxy (NGINX, Envoy, or a cloud load balancer).
-- Terminate TLS at the edge and forward only HTTPS traffic.
-- Restrict inbound access using IP allow-lists or private networks.
-
-## Best practices
-
-- Keep policy rules short and visible.
-- Avoid logging raw payloads; prefer metadata only.
-- Rotate secrets and credentials regularly.
-- Use allow-lists in production rather than deny-lists.
-- Review denied calls regularly for abuse patterns.
-
-## Reference links
-
-- MCP SDK: https://github.com/modelcontextprotocol/sdk
+* [Governance auth](/guides/governance-auth)
+* [Multi-server routing](/guides/multi-server)
+* [Observability](/guides/observability)

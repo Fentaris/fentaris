@@ -1,31 +1,71 @@
 ---
 title: "StdioTransport"
-description: "Reference for the stdio transport."
+description: "Reference for connecting to local MCP servers over stdio."
 ---
 
-`StdioTransport` connects to a local MCP server using stdio.
+# Stdio Transport
 
-## Constructor
+> Connect to local MCP servers over stdio
+
+Use `stdio(...)` for new applications. It creates a `StdioTransport` that launches a local MCP server process and communicates over stdio.
+
+## Quick Start
 
 ```ts theme={null}
-new StdioTransport({
-  command,
-  args,
-  env,
-  stderr,
-  clientName,
-  clientVersion,
+import { mcp, stdio } from "@fentaris/core";
+
+const filesystem = mcp("filesystem", {
+  transport: stdio({
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+  }),
 });
 ```
 
 ## Options
 
-- `command`: executable to spawn.
-- `args`: argument list.
-- `env`: extra environment variables.
-- `stderr`: `inherit`, `pipe`, `overlapped`, or `ignore`.
-- `clientName`: MCP client name. Defaults to `fentaris-core`.
-- `clientVersion`: MCP client version. Defaults to `0.1.0`.
+### `command`
+
+Executable to spawn.
+
+```ts theme={null}
+command: "npx"
+```
+
+### `args`
+
+Argument list passed to the spawned process.
+
+```ts theme={null}
+args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"]
+```
+
+### `env`
+
+Extra environment variables for the upstream process.
+
+### `stderr`
+
+How to handle stderr from the spawned process.
+
+Allowed values:
+
+* `inherit`
+* `pipe`
+* `overlapped`
+* `ignore`
+
+### `clientName`
+
+MCP client name.
+
+**Default:** `fentaris-core`
+
+### `clientVersion`
+
+MCP client version.
+
+**Default:** `0.1.0`
 
 ## Methods
 
@@ -40,3 +80,24 @@ Calls a tool on the MCP server.
 ### `close()`
 
 Closes the underlying client connection.
+
+## Low-Level Constructor
+
+The class constructor is available for advanced integrations:
+
+```ts theme={null}
+import { StdioTransport } from "@fentaris/core";
+
+const transport = new StdioTransport({
+  command: "npx",
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+});
+```
+
+For normal applications, prefer `stdio(options)`.
+
+## Related Documentation
+
+* [McpServer reference](/reference/mcp-server)
+* [Servers and transports](/concepts/servers-and-transports)
+* [Setup](/getting-started/setup)

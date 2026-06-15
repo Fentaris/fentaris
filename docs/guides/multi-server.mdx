@@ -3,99 +3,157 @@ title: "Multi-server routing"
 description: "Aggregate multiple MCP servers behind one proxy."
 ---
 
-Fentaris makes it straightforward to expose multiple servers through a single endpoint. This is the most common deployment pattern: one public MCP endpoint, many internal servers.
+# Multi-server routing
 
-If you have multiple teams shipping MCP servers, the proxy becomes the central control plane for tool naming, policy, and observability.
+> Expose multiple upstream MCP servers through one Fentaris endpoint.
 
-## Why multi-server matters
+Use multi-server routing when teams ship separate MCP servers but clients should connect to a single proxy. Fentaris keeps tool names, policy, credentials, and observability centralized.
 
-Multi-server routing lets you keep MCP servers small and domain-focused while exposing a unified experience to clients. You can version servers independently, deploy them separately, and still keep a single MCP endpoint.
+## Quick Start
 
-## Add servers
+Declare each upstream MCP server with `mcp(...)` and attach it to one `fentaris(...)` proxy.
 
 ```ts theme={null}
-const proxy = new McpProxy({
-  servers: [filesystem, diagnostics, analytics],
+import { fentaris, mcp, stdio, streamableHttp } from "@fentaris/core";
+
+const proxy = fentaris({
   port: 3000,
   path: "/mcp",
+  servers: [
+    mcp("filesystem", {
+      transport: stdio({
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "/srv/shared"],
+      }),
+    }),
+    mcp("diagnostics", {
+      transport: stdio({ command: "diagnostics-mcp-server" }),
+    }),
+    mcp("analytics", {
+      transport: streamableHttp({ url: "https://analytics.internal/mcp" }),
+    }),
+  ],
 });
 ```
 
-**Tip:** keep the `name` of each server stable. Tool names are derived from it, so clients rely on that prefix.
+Keep server names stable across environments. Tool names are derived from the server name, so clients may depend on prefixes such as `analytics__query`.
 
-## List tools across servers
+## List Tools Across Servers
+
+Fentaris prefixes tool names with the upstream server name to avoid collisions.
 
 ```ts theme={null}
 const tools = await proxy.listTools();
 ```
 
-Each tool name is prefixed with the server name, so collisions are avoided even when servers expose the same tool.
+This lets different teams expose similar tool names without sharing one server process. For example, `billing__create_invoice` and `support__create_ticket` can live behind the same public endpoint.
 
-This also lets you segment tools by team or domain (for example: `billing__create_invoice` vs `support__create_ticket`).
+## Add Per-server Environment
 
-## Per-server environment
-
-Use `env` on `McpServer` to inject user-aware values.
+Use `env` on `mcp(...)` to inject trusted values into a local stdio server.
 
 ```ts theme={null}
-const analytics = new McpServer({
-  name: "analytics",
-  displayName: "Analytics",
-  transport: analyticsTransport,
-  env: (user) => ({
-    TENANT_ID: user.id ?? "unknown",
-  }),
+const proxy = fentaris({
+  servers: [
+    mcp("analytics", {
+      transport: stdio({ command: "analytics-mcp-server" }),
+      env: (user) => ({
+        TENANT_ID: user.tenantId ?? "unknown",
+      }),
+    }),
+  ],
 });
 ```
 
-Use `env` to pass secrets or tenant identifiers without exposing them through user-controlled inputs.
+Use environment injection for tenant identifiers and deployment-owned secrets. Do not copy client-provided values into env without validation.
 
-## Route based on user context
+## Route By Group
 
-Sometimes you want to choose different servers based on the user. You can do this by registering multiple servers and filtering tool lists per user.
+Use `group(...)` to expose different upstream MCP servers to different callers.
 
 ```ts theme={null}
-proxy.onListTools((tools, { user }) => {
-  if (user.plan === "enterprise") {
-    return tools;
-  }
+import { fentaris, group, mcp, policy, stdio, user } from "@fentaris/core";
 
-  return tools.filter((tool) => !tool.name.startsWith("analytics__"));
+const proxy = fentaris({
+  groups: [
+    group({
+      id: "support",
+      users: [user("alice")],
+      servers: [
+        mcp("support", {
+          transport: stdio({ command: "support-mcp-server" }),
+        }),
+      ],
+      policy: policy("support").mcp("support").allow("*"),
+    }),
+    group({
+      id: "analysts",
+      users: [user("bob")],
+      servers: [
+        mcp("analytics", {
+          transport: stdio({ command: "analytics-mcp-server" }),
+        }),
+      ],
+      policy: policy("analysts").mcp("analytics").allow("query"),
+    }),
+  ],
 });
 ```
 
-## Separate concerns by server
+Group-scoped servers reduce accidental discovery. A caller only sees tools from servers available to their resolved subject.
 
-Consider grouping MCP servers by responsibility:
+## Add Server-specific Middleware
 
-- **filesystem** for file operations.
-- **analytics** for data access.
-- **support** for tickets or workflows.
-
-This makes policy decisions clearer and lets you deploy teams independently.
-
-## Example: server-specific middleware
-
-You can apply policies based on `serverName` to keep the rules readable.
+Use server handles when validation only applies to one upstream MCP server.
 
 ```ts theme={null}
-proxy.use(async (request, context, next) => {
-  if (request.serverName === "analytics" && context.user.role !== "analyst") {
-    return context.res.deny("Analytics tools require the analyst role.");
+proxy.mcp("analytics").use(async (ctx, next) => {
+  if (!ctx.subject?.hasGroup("analysts")) {
+    return ctx.deny("Analytics tools require the analysts group.");
   }
+
+  ctx.log.info("analytics.allowed", {
+    subject: ctx.subject.id,
+  });
+
   return next();
 });
 ```
 
-## Best practices
+Prefer server-scoped middleware over global middleware when the rule only applies to one domain.
 
-- Keep server names consistent across environments.
-- Use `displayName` for human-friendly UI only.
-- Filter tools at list time for better security.
-- Keep env injection per server, not in middleware.
-- Prefer small, focused servers over one large, monolithic server.
+## Separate Concerns By Server
 
-## Reference links
+Small upstream MCP servers make ownership and policy easier to reason about.
 
-- MCP SDK: https://github.com/modelcontextprotocol/sdk
-- MCP servers list: https://github.com/modelcontextprotocol/servers
+- `filesystem` for file operations.
+- `analytics` for data access.
+- `support` for tickets and workflows.
+- `diagnostics` for health checks and runtime inspection.
+
+Use `displayName` for human-friendly UI labels only. Keep the `name` stable for tool prefixes, policy, logs, and client expectations.
+
+## Low-Level API
+
+The class constructors remain available for compatibility and advanced embedding. Prefer declaration helpers for new applications.
+
+```ts theme={null}
+import { McpProxy, McpServer, StdioTransport } from "@fentaris/core";
+
+const analytics = new McpServer({
+  name: "analytics",
+  transport: new StdioTransport({
+    command: "analytics-mcp-server",
+  }),
+});
+
+const proxy = new McpProxy({
+  servers: [analytics],
+});
+```
+
+## Related Documentation
+
+* [Security](/guides/security)
+* [Governance auth](/guides/governance-auth)
+* [MCP server reference](/reference/mcp-server)

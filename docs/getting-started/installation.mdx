@@ -3,6 +3,10 @@ title: "Installation"
 description: "Install Fentaris and prepare your local environment."
 ---
 
+# Installation
+
+> Install Fentaris and prepare your local environment
+
 ## Requirements
 
 - Node.js 20+ (LTS recommended)
@@ -38,18 +42,18 @@ Use the core package directly when embedding Fentaris in an existing TypeScript 
 
 ## Verify installation
 
-Create a quick file and import a Fentaris symbol:
+Create a quick file and import the high-level Fentaris helpers:
 
 ```ts theme={null}
-import { McpProxy } from "@fentaris/core";
+import { fentaris, mcp, stdio } from "@fentaris/core";
 
-console.log(typeof McpProxy);
+console.log(typeof fentaris, typeof mcp, typeof stdio);
 ```
 
 If your build succeeds, Fentaris is installed.
 
-## Next step
+## Related Documentation
 
-<Card title="Quickstart" icon="rocket" href="/getting-started/quickstart" horizontal>
-  Build a working proxy in minutes.
-</Card>
+* [Quickstart](/getting-started/quickstart)
+* [Setup](/getting-started/setup)
+* [CLI Usage](/reference/cli)

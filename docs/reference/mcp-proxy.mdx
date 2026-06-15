@@ -1,27 +1,175 @@
 ---
 title: "McpProxy"
-description: "Reference for the core proxy class."
+description: "Reference for the Fentaris proxy API."
 ---
 
-`McpProxy` exposes a single HTTP endpoint and orchestrates multiple MCP servers.
+# McpProxy
 
-## Constructor
+> Create and operate the Fentaris proxy runtime
+
+Use `fentaris(...)` for new applications. It validates the same proxy options and returns an `McpProxy` instance that exposes one MCP endpoint and orchestrates upstream MCP servers.
+
+## Quick Start
 
 ```ts theme={null}
-new McpProxy({
-  servers,
-  port,
-  path,
-  logger,
-  user,
-  name,
-  version,
+import { fentaris, mcp, stdio } from "@fentaris/core";
+
+const proxy = fentaris({
+  servers: [
+    mcp("filesystem", {
+      transport: stdio({
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+      }),
+    }),
+  ],
+  port: 4000,
+  path: "/mcp",
+});
+
+await proxy.start();
+```
+
+## Options
+
+### `servers`
+
+Array of upstream MCP server declarations.
+
+```ts theme={null}
+servers: [
+  mcp("github", {
+    transport: stdio({ command: "github-mcp-server" }),
+  }),
+]
+```
+
+### `port`
+
+Default port for `start()`.
+
+```ts theme={null}
+port: 4000
+```
+
+### `path`
+
+HTTP path for MCP requests.
+
+```ts theme={null}
+path: "/mcp"
+```
+
+**Default:** `/mcp`
+
+### `user`
+
+Static user context or resolver function.
+
+```ts theme={null}
+user: (req) => ({
+  id: req.headers["x-user-id"] as string | undefined,
+  tenantId: req.headers["x-tenant-id"],
+})
+```
+
+### `identity`
+
+Identity strategy configuration for proxy-edge auth.
+
+### `policy` and `groups`
+
+Policy and group declarations used to decide which upstream tools, resources, prompts, and completions are visible to each subject.
+
+### `logger`, `autoLog`, and `profiler`
+
+Runtime logging and profiler configuration.
+
+### `name` and `version`
+
+MCP server identity surfaced to clients during initialization.
+
+## Methods
+
+### `start(options?, onStarted?)`
+
+Start the HTTP server. Optional values override the configured `port` and `path` for that start call.
+
+```ts theme={null}
+await proxy.start({ port: 4000, path: "/proxy" });
+```
+
+### `close()`
+
+Close the HTTP server and all configured upstream transports.
+
+### `listTools(params?, user?)`
+
+Aggregate tool lists across upstream servers and apply Fentaris naming and policy.
+
+### `callTool(params, user?)`
+
+Call a proxied tool. Fentaris dispatches middleware and hooks, then forwards to the upstream server.
+
+### `listResources(params?, user?)`
+
+Aggregate resources across upstream servers and rewrite each resource `uri` to a Fentaris proxy URI.
+
+### `readResource(params, user?)`
+
+Parse a Fentaris proxy resource URI, restore the upstream resource URI, and read it from the owning server.
+
+### `listResourceTemplates(params?, user?)`
+
+Aggregate resource templates and rewrite each `uriTemplate` to a Fentaris proxy template URI.
+
+### `listPrompts(params?, user?)`
+
+Aggregate prompts and rewrite each prompt `name` to `<server>__<prompt>`.
+
+### `getPrompt(params, user?)`
+
+Parse a proxied prompt name and retrieve the upstream prompt.
+
+### `complete(params, user?)`
+
+Route completion requests for proxied prompt references and proxied resource-template references.
+
+## Routes and Middleware
+
+Use the returned proxy instance for routes, middleware, and hooks:
+
+```ts theme={null}
+proxy.mcp("github").tool("create_issue", async (ctx, next) => {
+  if (typeof ctx.args?.title !== "string") {
+    return ctx.deny("Issue title is required.");
+  }
+
+  return next();
 });
 ```
 
-### Options
+## Low-Level Constructor
 
-- `servers`: array of `McpServer` instances.
+The class constructor is available for advanced integrations that need explicit object construction:
+
+```ts theme={null}
+import { McpProxy } from "@fentaris/core";
+
+const proxy = new McpProxy({
+  servers,
+  port: 4000,
+  path: "/mcp",
+});
+```
+
+For normal applications, prefer `fentaris(...)`.
+
+## Related Documentation
+
+* [Setup](/getting-started/setup)
+* [Proxy setup](/guides/proxy-setup)
+* [McpServer reference](/reference/mcp-server)
 - `port`: default port for `start()`.
 - `path`: HTTP path for MCP requests (default `/mcp`).
 - `logger`: custom `Logger` instance.

@@ -1,0 +1,131 @@
+---
+title: "CLI Usage"
+description: "Run, validate, build, and inspect Fentaris projects from the command line."
+---
+
+# CLI Usage
+
+> Run, validate, build, and inspect Fentaris projects from the command line
+
+The `fentaris` CLI creates project scaffolds, runs local development, checks project health, stores local secrets, and builds project output.
+
+## Quick Start
+
+```bash theme={null}
+fentaris init my-proxy
+cd my-proxy
+cp .env.example .env
+fentaris dev
+```
+
+## Commands
+
+### `fentaris init [project-name]`
+
+Create a new Fentaris project in a new or empty directory.
+
+```bash theme={null}
+fentaris init my-proxy
+```
+
+Options:
+
+* `--port <port>` - set the generated proxy port. Default: `4000`.
+* `--path <path>` - set the generated MCP endpoint path. Default: `/mcp`.
+* `--skip-install` - create files without running package installation.
+
+`init` writes `fentaris.json`, `src/index.ts`, `.env.example`, local encrypted credentials, and package scripts.
+
+### `fentaris dev`
+
+Run the generated project's `dev` script.
+
+```bash theme={null}
+fentaris dev
+```
+
+The CLI discovers the nearest `fentaris.json` from the current directory upward and prints the configured local endpoint before starting the script.
+
+### `fentaris check`
+
+Validate the project configuration and local files.
+
+```bash theme={null}
+fentaris check
+```
+
+Options:
+
+* `--offline` - skip network and runtime checks.
+* `--strict` - fail when warnings are present.
+
+<Tip>
+  Use `fentaris check --offline` in fast local workflows or CI jobs without network access.
+</Tip>
+
+### `fentaris doctor`
+
+Inspect local prerequisites, project files, credentials, ports, and optional runtime reachability.
+
+```bash theme={null}
+fentaris doctor
+```
+
+Options:
+
+* `--fix` - apply supported automatic fixes.
+* `--strict` - fail when warnings are present.
+* `--json` - print machine-readable results.
+* `--runtime` - check the running MCP endpoint.
+* `--timeout <ms>` - set runtime check timeout. Default: `10000`.
+
+### `fentaris build`
+
+Validate the project offline, run the generated project's `build` script, and write `.fentaris/build/manifest.json`.
+
+```bash theme={null}
+fentaris build
+```
+
+### `fentaris secrets set <reference>`
+
+Store a secret in the local encrypted credential store.
+
+```bash theme={null}
+fentaris secrets set github.token --user admin
+```
+
+Options:
+
+* `--user <id>` - store a user-scoped credential.
+* `--group <id>` - store a group-scoped credential.
+* `--value <secret>` - pass the value non-interactively.
+* `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
+
+<Warning>
+  Do not pass `--value` in shared shell history unless the environment is trusted.
+</Warning>
+
+### `fentaris auth ...`
+
+Manage legacy auth files directly.
+
+```bash theme={null}
+fentaris auth init --dir .fentaris/auth --key <key>
+fentaris auth set-api-key --dir .fentaris/auth --key <key> --user <id> --api-key <secret>
+fentaris auth set-credential --dir .fentaris/auth --key <key> --ref <name> --value <secret>
+fentaris auth inspect --dir .fentaris/auth --key <key>
+```
+
+Prefer `fentaris secrets set` for generated projects unless you intentionally need the legacy auth file layout.
+
+## Project Discovery
+
+Project commands search upward from the current directory for `fentaris.json`. Legacy `fentaris.config.json` is still detected, but generated projects use `fentaris.json`.
+
+## Related Documentation
+
+* [Quickstart](/getting-started/quickstart)
+* [Config file](/reference/config-file)
+* [Environment variables](/reference/environment-variables)
+* [Troubleshooting](/troubleshooting)

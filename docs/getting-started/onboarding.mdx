@@ -1,55 +1,71 @@
 ---
 title: "Onboarding"
-description: "Core concepts and architecture of Fentaris."
+description: "Learn the Fentaris mental model before building your first proxy."
 ---
 
-Fentaris is a centralized MCP proxy. It sits in front of your MCP servers and exposes a single HTTP endpoint with policy, routing, and observability built in.
+# Onboarding
 
-## When to use Fentaris
+> Learn the Fentaris mental model before building your first proxy
+
+Fentaris sits in front of upstream MCP servers and exposes one client-facing MCP endpoint with routing, policy, auth, and observability built in.
+
+## When to Use Fentaris
 
 - You run multiple MCP servers and want a single entrypoint.
 - You need per-user policy or auditing without changing existing servers.
 - You want structured logs and consistent naming across tools.
 
-## Core concepts
+## Core Concepts
 
-**McpProxy**
-- Exposes an HTTP endpoint (default `/mcp`).
-- Aggregates tools from multiple servers and forwards tool calls.
+### `fentaris(...)`
 
-**McpServer**
-- A thin wrapper around an MCP transport.
-- Supports per-user environment injection via `env`.
+Creates the proxy runtime from a high-level config object.
 
-**FentarisTransport**
-- Interface that adapts a transport to list tools, call tools, and close.
-- `StdioTransport` is the easiest way to connect local MCP servers.
+```ts theme={null}
+const proxy = fentaris({
+  servers: [mcp("filesystem", { transport: stdio({ command: "npx" }) })],
+  port: 4000,
+  path: "/mcp",
+});
+```
 
-**Middleware and hooks**
-- `proxy.use(...)` for policy, logging, and access control.
-- `proxy.on("call", ...)` to intercept tool calls with filters.
+### `mcp(...)`
+
+Declares an upstream MCP server. The server name becomes the prefix for proxied tools.
+
+### `stdio(...)` and `streamableHttp(...)`
+
+Declare how Fentaris connects to upstream MCP servers.
+
+### Middleware and Routes
+
+Use `proxy.use(...)`, `proxy.tool(...)`, and `proxy.mcp(name)` to add policy, logging, validation, and server-scoped behavior.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  Client[MCP Client] --> Proxy[McpProxy]
-  Proxy --> ServerA[McpServer: filesystem]
-  Proxy --> ServerB[McpServer: custom]
+  Client[MCP Client] --> Proxy["fentaris(...) proxy"]
+  Proxy --> ServerA["mcp(\"filesystem\")"]
+  Proxy --> ServerB["mcp(\"custom\")"]
 ```
 
-## Tool naming
+## Tool Naming
 
 Fentaris prefixes tool names to avoid collisions. Each tool becomes `server__tool`, and the displayed title includes the server `displayName`.
 
-## What you will do next
+## Low-Level API
 
-1. Configure one or more `McpServer` instances with transports.
-2. Instantiate `McpProxy` and attach middleware or hooks.
+The underlying classes `McpProxy`, `McpServer`, and transport classes remain public for advanced integrations. New applications should start with `fentaris(...)`, `mcp(...)`, and transport helpers.
+
+## What You Will Do Next
+
+1. Declare upstream servers with `mcp(...)`.
+2. Create the proxy with `fentaris(...)`.
 3. Start the HTTP endpoint and connect your MCP client.
 
-If you want to build a working setup now, jump to the quickstart.
+## Related Documentation
 
-<Card title="Quickstart" icon="rocket" href="/getting-started/quickstart" horizontal>
-  Build a proxy in minutes with a minimal setup.
-</Card>
+* [Quickstart](/getting-started/quickstart)
+* [Setup](/getting-started/setup)
+* [Architecture](/concepts/architecture)

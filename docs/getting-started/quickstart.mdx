@@ -1,11 +1,17 @@
 ---
 title: "Quickstart"
-description: "Stand up a Fentaris proxy in minutes."
+description: "Create a Fentaris project, run the local proxy, and connect an MCP client."
 ---
 
-This quickstart creates a ready-to-run Fentaris project with a local MCP proxy, demo auth, policy rules, rate limiting, one stdio upstream, and one remote HTTP MCP upstream.
+# Quickstart
 
-## 1. Install Fentaris
+> Create a Fentaris project, run the local proxy, and connect an MCP client
+
+This quickstart uses the Fentaris CLI to generate a ready-to-run project with demo auth, policy rules, a local stdio upstream, and a remote HTTP MCP upstream.
+
+## Quick Start
+
+Install the CLI and generate a project:
 
 <CodeGroup>
   ```bash pnpm theme={null}
@@ -17,36 +23,61 @@ This quickstart creates a ready-to-run Fentaris project with a local MCP proxy, 
   ```
 </CodeGroup>
 
-## 2. Create a project
-
 ```bash theme={null}
 fentaris init my-proxy
-```
-
-The generated project includes:
-
-- `src/index.ts` with the runnable proxy example.
-- `fentaris.json` for CLI project discovery.
-- Local encrypted credentials in `.fentaris/credentials.enc.json`.
-- `.env.example`, `.gitignore`, TypeScript config, and package scripts.
-
-## 3. Run locally
-
-```bash theme={null}
 cd my-proxy
+cp .env.example .env
+set -a
+. ./.env
+set +a
 fentaris dev
 ```
 
-## 4. Connect a client
+The proxy listens on `http://localhost:4000/mcp` by default.
 
-Point your MCP client to the endpoint printed by `fentaris dev`, usually `http://localhost:4000/mcp`, and send one of the generated demo API keys in the `x-fentaris-api-key` header.
+<Note>
+  Source `.env` in the same shell before running `fentaris dev`. The generated app reads `FENTARIS_AUTH_KEY` and demo API keys from `process.env` when it decrypts local credentials and validates requests.
+</Note>
+
+## Generated Project
+
+`fentaris init` creates these files:
+
+- `src/index.ts` with the runnable proxy example.
+- `fentaris.json` for CLI project discovery.
+- `.env.example` with demo keys.
+- `.fentaris/credentials.enc.json` with encrypted local credentials.
+- `.gitignore`, TypeScript config, package scripts, and demo files.
+
+<Note>
+  `.fentaris/` is intentionally ignored by git. Keep generated credentials local unless you intentionally build a secret-management flow.
+</Note>
+
+## Connect a Client
+
+Point your MCP client to the endpoint printed by `fentaris dev`, usually:
+
+```bash theme={null}
+http://localhost:4000/mcp
+```
+
+Send one of the generated demo API keys with the `x-fentaris-api-key` header.
+
+## Validate the Project
+
+Run the local checks before connecting a client:
+
+```bash theme={null}
+fentaris check --offline
+```
 
 <Tip>
-  Run `fentaris check --offline` before connecting a client when you want fast local validation without network checks.
+  Use `fentaris doctor --runtime` when you want to verify that the running endpoint responds correctly.
 </Tip>
 
-## Next step
+## Related Documentation
 
-<Card title="Tutorial" icon="map" href="/getting-started/tutorial" horizontal>
-  Customize the generated proxy with middleware and hooks.
-</Card>
+* [CLI Reference](/reference/cli)
+* [Config file](/reference/config-file)
+* [Environment variables](/reference/environment-variables)
+* [Troubleshooting](/troubleshooting)

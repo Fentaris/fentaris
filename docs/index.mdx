@@ -1,12 +1,8 @@
----
-title: ""
-description: ""
----
 
-<div className="px-4 py-8 mt-10 lg:pb-16 max-w-5xl mx-auto">
+
+<div className="fentaris-home px-4 py-8 mt-10 lg:pb-16 max-w-5xl mx-auto">
   <div className="text-center">
-    <img noZoom src="/assets/logo-light.svg" className="block dark:hidden mx-auto h-14 w-auto" alt="Fentaris" />
-    <img noZoom src="/assets/logo-dark.svg" className="hidden dark:block mx-auto h-14 w-auto" alt="Fentaris" />
+    <img noZoom src="/assets/logo-white.png" className="mx-auto h-40 w-auto" alt="Fentaris" />
   </div>
 
   <div className="max-w-2xl mx-auto px-4 mt-6 text-center">
@@ -16,8 +12,8 @@ description: ""
 
   <div className="mt-8 grid sm:grid-cols-3 gap-4 max-w-2xl mx-auto text-center text-sm">
     <div><b>Unify</b><br /><span className="text-zinc-500">heterogeneous MCP servers</span></div>
-    <div><b>Protect</b><br /><span className="text-zinc-500">middleware and hooks</span></div>
-    <div><b>Observe</b><br /><span className="text-zinc-500">structured logging</span></div>
+    <div><b>Protect</b><br /><span className="text-zinc-500">policy, auth, and middleware</span></div>
+    <div><b>Observe</b><br /><span className="text-zinc-500">logs, checks, and profiler events</span></div>
   </div>
 
   <div className="px-6 lg:px-0 mt-10">
@@ -34,14 +30,12 @@ description: ""
 
 ## Start here
 
-This homepage mirrors the structure you see in the example documentation, but tailored for Fentaris. Each block below explains *why* the code exists and where to go next.
+Fentaris exposes one MCP endpoint in front of many upstream MCP servers. Use it to route tools, enforce per-user policy, store credentials locally, and inspect runtime health from one place.
 
-1. **Install and run a tiny proxy** in [Quickstart](/getting-started/quickstart).
-2. **Understand the moving parts** in [Architecture](/core/architecture) and [Transports](/core/transports).
+1. **Install and run a proxy** in [Quickstart](/getting-started/quickstart).
+2. **Understand the moving parts** in [Architecture](/concepts/architecture) and [Servers and transports](/concepts/servers-and-transports).
 3. **Harden and scale** with [Proxy setup](/guides/proxy-setup), [Security](/guides/security), and [Observability](/guides/observability).
 4. **Ship a real workflow** using the step-by-step [Tutorial](/getting-started/tutorial) and [End-to-end examples](/guides/end-to-end).
-
-If you want to understand the MCP spec and the ecosystem of official servers, explore the MCP SDK documentation: https://github.com/modelcontextprotocol/sdk and the server list: https://github.com/modelcontextprotocol/servers
 
 ## Quickstart
 
@@ -57,66 +51,77 @@ If you want to understand the MCP spec and the ecosystem of official servers, ex
       ```
     </CodeGroup>
 
-    This gives you the Fentaris SDK and the built-in `StdioTransport`, which can spawn MCP servers like the official filesystem server.
+    This gives you the Fentaris SDK, the high-level proxy app API, transport helpers, governance helpers, and runtime APIs.
   </Step>
 
-  <Step title="Define MCP servers">
+  <Step title="Create the proxy app">
     ```ts theme={null}
-    import { McpServer, StdioTransport } from "@fentaris/core";
+    import { fentaris } from "@fentaris/core";
 
-    const filesystem = new McpServer({
-      name: "filesystem",
+    const app = fentaris({
+      port: 3000,
+      path: "/mcp",
+    });
+    ```
+
+    `fentaris(...)` returns the high-level proxy app. Configure the public endpoint once, then attach upstream MCP servers to it.
+  </Step>
+
+  <Step title="Add MCP servers with app.mcp(...)">
+    ```ts theme={null}
+    import { stdio, streamableHttp } from "@fentaris/core";
+
+    app.mcp("filesystem", {
       displayName: "Filesystem",
-      transport: new StdioTransport({
+      transport: stdio({
         command: "npx",
-        args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+      }),
+    });
+
+    app.mcp("docs", {
+      displayName: "Docs",
+      transport: streamableHttp({
+        url: "https://docs.example.com/mcp",
       }),
     });
     ```
 
-    The `McpServer` wrapper lets Fentaris enumerate tools, prefix names to avoid collisions, and inject per-user env variables.
+    `app.mcp(...)` gives Fentaris a stable server name, display label, and transport configuration. Add one call per upstream MCP server.
   </Step>
 
   <Step title="Start the proxy">
     ```ts theme={null}
-    import { McpProxy } from "@fentaris/core";
-
-    const proxy = new McpProxy({
-      servers: [filesystem],
-      port: 3000,
-      path: "/mcp",
-    });
-
-    await proxy.start();
+    await app.start();
     ```
 
-    You now expose a single MCP endpoint that routes to multiple upstream servers and enforces centralized policy.
+    You now expose a single MCP endpoint that routes to upstream servers and enforces centralized policy.
   </Step>
 </Steps>
 
 ## Explore Fentaris
 
 <CardGroup cols={3}>
-  <Card title="Architecture" icon="layers" href="/core/architecture">
+  <Card title="Architecture" icon="layers" href="/concepts/architecture">
     How Fentaris routes requests and manages sessions.
   </Card>
-  <Card title="Tool naming" icon="tag" href="/core/tool-naming">
-    Understand proxy tool names and collisions.
+  <Card title="Policies" icon="shield" href="/concepts/policies">
+    Control which tools, resources, prompts, and completions users can access.
   </Card>
-  <Card title="Transports" icon="terminal" href="/core/transports">
-    Connect MCP servers through stdio, SSE, and HTTP patterns.
+  <Card title="Transports" icon="terminal" href="/concepts/servers-and-transports">
+    Connect MCP servers through stdio and Streamable HTTP patterns.
   </Card>
 </CardGroup>
 
 <CardGroup cols={3}>
   <Card title="Proxy setup" icon="router" href="/guides/proxy-setup">
-    A production-ready proxy configuration.
+    A production-shaped proxy configuration.
   </Card>
-  <Card title="Middleware" icon="shield" href="/guides/middleware">
-    Enforce access control and validations.
+  <Card title="CLI Usage" icon="terminal" href="/reference/cli">
+    Run, validate, build, and inspect Fentaris projects.
   </Card>
   <Card title="Observability" icon="activity" href="/guides/observability">
-    Structured logs and monitoring workflows.
+    Structured logs, health checks, and runtime profiler workflows.
   </Card>
 </CardGroup>
 
@@ -124,10 +129,10 @@ If you want to understand the MCP spec and the ecosystem of official servers, ex
 
 <div className="mt-10 border-t border-zinc-800 pt-6 pb-12 text-sm text-zinc-500">
   <div className="flex flex-col gap-2">
-    <div>Fentaris is a centralized MCP proxy for routing, policy, and observability.</div>
+    <div>Fentaris is a centralized MCP proxy for routing, policy, auth, and observability.</div>
     <div>
-      Useful links: <a href="https://github.com/fentaris-io/fentaris" target="_blank" rel="noreferrer">GitHub</a>,
-      <a href="/reference-auto/index">API Reference (Auto)</a>,
+      Useful links: <a href="/reference-auto/index">API Reference (Auto)</a>,
+      <a href="/reference/cli">CLI Reference</a>,
       <a href="/getting-started/tutorial">Tutorial</a>.
     </div>
   </div>

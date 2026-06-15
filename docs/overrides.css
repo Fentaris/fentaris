@@ -16,8 +16,20 @@
 body[data-page="index"] aside,
 body[data-page="index"] #sidebar,
 body[data-page="index"] [data-testid="sidebar"] {
-  display: block !important;
-  visibility: visible !important;
+  display: none !important;
+  visibility: hidden !important;
+}
+
+body[data-page="index"] nav[aria-label="Breadcrumb"],
+body[data-page="index"] nav[aria-label="breadcrumb"],
+body[data-page="index"] h1:first-of-type,
+body[data-page="index"] h1:first-of-type + p {
+  display: none !important;
+}
+
+body[data-page="index"] #content,
+body[data-page="index"] #content-area {
+  max-width: 100% !important;
 }
 
 body[data-page="index"] #content-area {
