@@ -172,14 +172,32 @@ install_node() {
     || fail "Node ${NODE_MAJOR}+ is required, but $(command -v node 2>/dev/null || printf node) reports $(node --version 2>/dev/null || printf unavailable)"
 }
 
+run_node_tool() {
+  local tool tool_path
+  tool="$1"
+  shift
+
+  tool_path="$(command -v "$tool" 2>/dev/null)" \
+    || fail "${tool} is required after Node installation but was not found on PATH"
+
+  case "$tool_path" in
+    /usr/bin/*|/usr/local/bin/*)
+      run_as_root "$tool_path" "$@"
+      ;;
+    *)
+      "$tool_path" "$@"
+      ;;
+  esac
+}
+
 install_pnpm() {
   log "Enabling Corepack and preparing pnpm ${PNPM_VERSION}"
-  run_as_root corepack enable
+  run_node_tool corepack enable
 
-  if ! run_as_root corepack prepare "pnpm@${PNPM_VERSION}" --activate; then
+  if ! run_node_tool corepack prepare "pnpm@${PNPM_VERSION}" --activate; then
     log "Corepack could not install pnpm ${PNPM_VERSION}; falling back to npm"
-    run_as_root corepack disable || true
-    run_as_root npm install -g "pnpm@${PNPM_VERSION}" --no-audit --no-fund --force
+    run_node_tool corepack disable || true
+    run_node_tool npm install -g "pnpm@${PNPM_VERSION}" --no-audit --no-fund --force
   fi
 
   hash -r 2>/dev/null || true
