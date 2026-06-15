@@ -174,6 +174,26 @@ export function rateLimitMiddleware(options: {
   };
 }
 
+/**
+ * Create rate-limit middleware with a concise, application-level API.
+ * @pk
+ */
+export function rateLimit(options: {
+  max?: number;
+  per?: number;
+  limiter?: RateLimiter;
+  store?: RateLimitStore;
+  key?: (request: ToolCallRequest, user: UserContext) => string;
+  message?: string;
+}): Middleware {
+  const limiter = options.limiter ?? new SlidingWindowRateLimiter({
+    store: options.store,
+    maxPerWindow: options.max,
+    windowMs: options.per,
+  });
+  return rateLimitMiddleware({ limiter, key: options.key, message: options.message });
+}
+
 function isRateLimiter(value: unknown): value is RateLimiter {
   return (
     value !== null &&

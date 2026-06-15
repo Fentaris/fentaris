@@ -140,20 +140,15 @@ proxy.use(async (ctx, next) => {
 
 ## Pattern: lightweight rate limiting
 
-Fentaris does not implement rate limiting directly, but you can implement a simple per-user limit inside middleware. For production, use a shared store (Redis, KV) to coordinate across multiple instances.
+Use the high-level `rateLimit` helper for the common "N calls per window" case.
 
 ```ts theme={null}
-const calls: Record<string, number> = {};
+import { rateLimit } from "@fentaris/core";
 
-proxy.use(async (ctx, next) => {
-  const userId = ctx.subject?.id ?? ctx.auth.userId ?? "anonymous";
-  calls[userId] = (calls[userId] ?? 0) + 1;
-  if (calls[userId] > 1000) {
-    return ctx.deny("Rate limit exceeded.");
-  }
-  return next();
-});
+proxy.use(rateLimit({ max: 30, per: 60_000 }));
 ```
+
+For production, pass a shared store to coordinate limits across multiple instances.
 
 ## Migrating legacy middleware
 

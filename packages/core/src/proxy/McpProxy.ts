@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { type IncomingHttpHeaders, type IncomingMessage, type Server as HttpServer } from "node:http";
 import { compileToolPattern, matchesToolPattern, type RouteEntry } from "./routes.js";
 import { createContextualLogger, createProxyContext, createPolicyCan, createCapabilityContext } from "./context.js";
@@ -279,6 +281,28 @@ export class McpProxy {
     }
   }
 
+  private toConfig(): McpProxyOptions {
+    return {
+      servers: this.servers,
+      port: this.defaultPort,
+      path: this.defaultPath,
+      logger: this.logger,
+      user: this.userResolver,
+      identity: this.identityOptions,
+      policy: this.policy,
+      groups: this.groups,
+      defaults: { credentials: this.defaultCredentials },
+      auth: this.auth,
+      registry: this.registry,
+      autoLog: this.autoLog ?? undefined,
+      lifecycle: this.lifecycleDefaults,
+      health: this.healthConfig,
+      errorMapper: this.errorMapper,
+      name: this.name,
+      version: this.version,
+    };
+  }
+
   /**
    * Register a middleware handler.
    * @pk
@@ -464,6 +488,7 @@ export class McpProxy {
     if (this.httpServer) {
       return this.httpServer;
     }
+    assertValidFentarisConfig(this.toConfig());
 
     const startedAt = Date.now();
     const result = await this.lifecycle.start(async () => {
@@ -2233,8 +2258,49 @@ export class McpProxy {
  * @pk
  */
 export function createProxy(options: McpProxyOptions = {}): McpProxy {
-  assertValidFentarisConfig(options);
-  return new McpProxy(options);
+  const projectDefaults = loadProjectRuntimeDefaults();
+  const resolvedOptions = { ...projectDefaults, ...options };
+  assertValidFentarisConfig(resolvedOptions);
+  return new McpProxy(resolvedOptions);
+}
+
+function loadProjectRuntimeDefaults(): Pick<McpProxyOptions, "name" | "port" | "path"> {
+  const configPath = findProjectConfigPath(process.cwd());
+  if (!configPath) {
+    return {};
+  }
+  try {
+    const raw = JSON.parse(readFileSync(configPath, "utf8")) as Partial<Pick<McpProxyOptions, "name" | "port" | "path">>;
+    const defaults: Pick<McpProxyOptions, "name" | "port" | "path"> = {};
+    if (typeof raw.name === "string" && raw.name.trim()) {
+      defaults.name = raw.name;
+    }
+    if (typeof raw.port === "number") {
+      defaults.port = raw.port;
+    }
+    if (typeof raw.path === "string" && raw.path.startsWith("/")) {
+      defaults.path = raw.path;
+    }
+    return defaults;
+  } catch {
+    return {};
+  }
+}
+
+function findProjectConfigPath(fromDir: string): string | undefined {
+  let current = fromDir;
+  while (true) {
+    const configPath = join(current, "fentaris.json");
+    if (!existsSync(configPath)) {
+      const parent = join(current, "..");
+      if (parent === current) {
+        return undefined;
+      }
+      current = parent;
+      continue;
+    }
+    return configPath;
+  }
 }
 
 /**
@@ -2250,7 +2316,7 @@ class McpProxyMcpHandle implements ProxyMcpHandle {
     private readonly groupId?: string,
   ) {}
 
-  use(handler: Middleware): ProxyMcpHandle {
+  use(handler: ProxyMiddleware): ProxyMcpHandle {
     this.proxy.registerServerMiddleware(this.name, handler, this.groupId);
     return this;
   }
@@ -2300,7 +2366,7 @@ class McpProxyGroupHandle implements ProxyGroupHandle {
     return new McpProxyMcpHandle(this.proxy, name, this.id);
   }
 
-  use(handler: Middleware): ProxyGroupHandle {
+  use(handler: ProxyMiddleware): ProxyGroupHandle {
     this.proxy.registerGroupMiddleware(this.id, handler);
     return this;
   }
