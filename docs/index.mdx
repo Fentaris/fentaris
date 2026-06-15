@@ -1,12 +1,8 @@
----
-title: "Fentaris Documentation"
-description: "The centralized MCP proxy for routing, policy, auth, and observability."
----
 
-<div className="px-4 py-8 mt-10 lg:pb-16 max-w-5xl mx-auto">
+
+<div className="fentaris-home px-4 py-8 mt-10 lg:pb-16 max-w-5xl mx-auto">
   <div className="text-center">
-    <img noZoom src="/assets/logo-light.svg" className="block dark:hidden mx-auto h-14 w-auto" alt="Fentaris" />
-    <img noZoom src="/assets/logo-dark.svg" className="hidden dark:block mx-auto h-14 w-auto" alt="Fentaris" />
+    <img noZoom src="/assets/logo-white.png" className="mx-auto h-40 w-auto" alt="Fentaris" />
   </div>
 
   <div className="max-w-2xl mx-auto px-4 mt-6 text-center">
@@ -55,36 +51,48 @@ Fentaris exposes one MCP endpoint in front of many upstream MCP servers. Use it 
       ```
     </CodeGroup>
 
-    This gives you the Fentaris SDK, high-level proxy declarations, transport helpers, governance helpers, and runtime APIs.
+    This gives you the Fentaris SDK, the high-level proxy app API, transport helpers, governance helpers, and runtime APIs.
   </Step>
 
-  <Step title="Define upstream MCP servers">
+  <Step title="Create the proxy app">
     ```ts theme={null}
-    import { mcp, stdio } from "@fentaris/core";
+    import { fentaris } from "@fentaris/core";
 
-    const filesystem = mcp("filesystem", {
+    const app = fentaris({
+      port: 3000,
+      path: "/mcp",
+    });
+    ```
+
+    `fentaris(...)` returns the high-level proxy app. Configure the public endpoint once, then attach upstream MCP servers to it.
+  </Step>
+
+  <Step title="Add MCP servers with app.mcp(...)">
+    ```ts theme={null}
+    import { stdio, streamableHttp } from "@fentaris/core";
+
+    app.mcp("filesystem", {
       displayName: "Filesystem",
       transport: stdio({
         command: "npx",
         args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
       }),
     });
+
+    app.mcp("docs", {
+      displayName: "Docs",
+      transport: streamableHttp({
+        url: "https://docs.example.com/mcp",
+      }),
+    });
     ```
 
-    The `mcp(...)` declaration gives Fentaris a stable server name, display label, and transport configuration.
+    `app.mcp(...)` gives Fentaris a stable server name, display label, and transport configuration. Add one call per upstream MCP server.
   </Step>
 
   <Step title="Start the proxy">
     ```ts theme={null}
-    import { fentaris } from "@fentaris/core";
-
-    const proxy = fentaris({
-      servers: [filesystem],
-      port: 3000,
-      path: "/mcp",
-    });
-
-    await proxy.start();
+    await app.start();
     ```
 
     You now expose a single MCP endpoint that routes to upstream servers and enforces centralized policy.

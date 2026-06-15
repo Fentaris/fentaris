@@ -9,8 +9,8 @@
   },
   "description": "The centralized MCP proxy for routing tools, enforcing policy, and shipping observability.",
   "logo": {
-    "light": "/assets/logo-light.svg",
-    "dark": "/assets/logo-dark.svg",
+    "light": "/assets/logo-white.png",
+    "dark": "/assets/logo-white.png",
     "href": "/"
   },
   "favicon": "/assets/favicon.svg",
