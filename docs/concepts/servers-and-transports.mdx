@@ -1,0 +1,39 @@
+---
+title: "Servers and Transports"
+description: "Understand upstream MCP servers and the transports Fentaris can route through."
+---
+
+# Servers and Transports
+
+> Understand upstream MCP servers and the transports Fentaris can route through
+
+An upstream MCP server is any server behind the Fentaris proxy. A transport defines how Fentaris connects to that server.
+
+## Common Transports
+
+### Stdio
+
+Use stdio for local MCP servers launched as child processes.
+
+```ts theme={null}
+stdio({
+  command: "npx",
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+})
+```
+
+### Streamable HTTP
+
+Use streamable HTTP for remote MCP servers that expose an HTTP endpoint.
+
+```ts theme={null}
+streamableHttp({
+  url: "https://example.com/mcp",
+})
+```
+
+## Related Documentation
+
+* [Architecture](/concepts/architecture)
+* [Proxy setup](/guides/proxy-setup)
+* [Stdio transport](/reference/stdio-transport)

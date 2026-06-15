@@ -3,29 +3,32 @@ title: "End-to-end examples"
 description: "Full examples with multi-server routing, policy, and logging."
 ---
 
-This guide provides real-world, end-to-end examples that combine multiple Fentaris features. Each example includes the “why”, the wiring, and the operational considerations so you can apply it directly in production.
+# End-to-end Examples
 
-## Example 1: Multi-tenant tool routing
+> Combine routing, tenant identity, policy, and logging in one proxy
+
+These examples use the high-level Fentaris API. Start here when you want production-shaped wiring without dropping into low-level constructors.
+
+## Multi-Tenant Tool Routing
 
 Use `UserContext` to route requests and inject tenant-specific environment variables.
 
 ```ts theme={null}
-import { McpProxy, McpServer, StdioTransport } from "@fentaris/core";
+import { fentaris, mcp, stdio } from "@fentaris/core";
 
-const analytics = new McpServer({
-  name: "analytics",
-  displayName: "Analytics",
-  transport: new StdioTransport({
-    command: "node",
-    args: ["./dist/analytics-server.js"],
-  }),
-  env: (user) => ({
-    TENANT_ID: String(user.tenantId ?? "unknown"),
-  }),
-});
-
-const proxy = new McpProxy({
-  servers: [analytics],
+const proxy = fentaris({
+  servers: [
+    mcp("analytics", {
+      displayName: "Analytics",
+      transport: stdio({
+        command: "node",
+        args: ["./dist/analytics-server.js"],
+      }),
+      env: (user) => ({
+        TENANT_ID: String(user.tenantId ?? "unknown"),
+      }),
+    }),
+  ],
   user: (req) => ({
     id: req.headers["x-user-id"],
     tenantId: req.headers["x-tenant-id"],
@@ -40,18 +43,18 @@ await proxy.start();
 - Each tenant sees only their own data.
 - You can keep the MCP server unchanged.
 
-### Operational tips
+### Operational Tips
 
 - Use a consistent `tenantId` key across middleware, logs, and env injection.
 - Validate headers at the edge; never trust user input directly.
 
-## Example 2: Policy enforcement with middleware
+## Policy Enforcement with Middleware
 
 ```ts theme={null}
-proxy.use(async (request, context, next) => {
-  const isAdmin = context.user.role === "admin";
-  if (request.proxyToolName === "filesystem__delete" && !isAdmin) {
-    return context.res.deny("Only admins can delete files.");
+proxy.use(async (ctx, next) => {
+  const isAdmin = ctx.user.role === "admin";
+  if (ctx.tool?.proxyName === "filesystem__delete" && !isAdmin) {
+    return ctx.deny("Only admins can delete files.");
   }
 
   return next();
@@ -63,17 +66,17 @@ proxy.use(async (request, context, next) => {
 - Centralized access control.
 - A single place to audit policy changes.
 
-### Operational tips
+### Operational Tips
 
 - Log denies with the reason and `user.id`.
 - Keep policy text human-readable; it becomes part of your audit trail.
 
-## Example 3: Observability with trace tags
+## Observability with Trace Tags
 
 ```ts theme={null}
-proxy.use(async (request, context, next) => {
-  context.log.setTag("trace", context.user.traceId ?? "no-trace");
-  context.log.info("tool-call", { tool: request.proxyToolName });
+proxy.use(async (ctx, next) => {
+  ctx.log.setTag("trace", ctx.user.traceId ?? "no-trace");
+  ctx.log.info("tool-call", { tool: ctx.tool?.proxyName });
   return next();
 });
 ```
@@ -83,16 +86,19 @@ proxy.use(async (request, context, next) => {
 - Correlate tool calls across services.
 - Keep logs structured and consistent.
 
-### Operational tips
+### Operational Tips
 
 - Make sure `traceId` is propagated from your API gateway.
 - Avoid logging payloads that may contain PII.
 
-## Example 4: Custom hook for diagnostics
+## Server-Scoped Hook for Diagnostics
 
 ```ts theme={null}
-proxy.on("call", { server: "diagnostics" }, async (request, context) => {
-  context.log.info("diagnostics", { tool: request.toolName });
+proxy.mcp("diagnostics").on("tool:success", async ({ ctx, durationMs }) => {
+  ctx.log.info("diagnostics.tool.success", {
+    tool: ctx.tool?.name,
+    durationMs,
+  });
 });
 ```
 
@@ -101,12 +107,12 @@ proxy.on("call", { server: "diagnostics" }, async (request, context) => {
 - Hooks let you target a subset of tool calls.
 - Perfect for audits and analytics.
 
-### Operational tips
+### Operational Tips
 
 - Send diagnostic logs to a lower-retention index.
-- Use `proxyTool` filters to avoid ambiguity.
+- Use server-scoped handles such as `proxy.mcp("diagnostics")` to avoid ambiguity.
 
-## Putting it all together
+## Putting It All Together
 
 In a real deployment, you will combine these patterns:
 
@@ -116,13 +122,18 @@ In a real deployment, you will combine these patterns:
 
 When in doubt, start with the [Tutorial](/getting-started/tutorial) and expand from there.
 
-## Common pitfalls
+## Common Pitfalls
 
 - Forgetting to close the proxy leads to orphaned server processes.
 - Using unstable server names breaks tool prefixes for clients.
 - Logging sensitive payloads can create compliance issues.
 
-## Reference links
+## Low-Level API
 
-- MCP SDK: https://github.com/modelcontextprotocol/sdk
-- MCP servers list: https://github.com/modelcontextprotocol/servers
+Use `McpProxy`, `McpServer`, and explicit transport classes only when you need direct construction or compatibility with older examples.
+
+## Related Documentation
+
+* [Tutorial](/getting-started/tutorial)
+* [Proxy setup](/guides/proxy-setup)
+* [McpProxy reference](/reference/mcp-proxy)

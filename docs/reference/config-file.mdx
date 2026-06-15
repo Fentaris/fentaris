@@ -1,0 +1,101 @@
+---
+title: "Config File"
+description: "Configure Fentaris project discovery, runtime entrypoint, endpoint, and local auth directory."
+---
+
+# Config File
+
+> Configure Fentaris project discovery, runtime entrypoint, endpoint, and local auth directory
+
+Generated projects use `fentaris.json` at the project root. The CLI uses this file to discover the project, run scripts, validate local state, and build runtime metadata.
+
+## Quick Start
+
+```json
+{
+  "name": "my-proxy",
+  "packageManager": "pnpm",
+  "entrypoint": "src/index.ts",
+  "port": 4000,
+  "path": "/mcp",
+  "authDir": ".fentaris"
+}
+```
+
+## Fields
+
+### `name`
+
+Project name used in generated metadata and CLI output.
+
+```json
+"name": "my-proxy"
+```
+
+### `packageManager`
+
+Package manager used for generated scripts.
+
+```json
+"packageManager": "pnpm"
+```
+
+Allowed values:
+
+* `pnpm`
+* `npm`
+* `bun`
+
+### `entrypoint`
+
+Runtime entrypoint copied into build metadata.
+
+```json
+"entrypoint": "src/index.ts"
+```
+
+The file must exist for project health checks to pass.
+
+### `port`
+
+Local port printed by `fentaris dev` and used by runtime checks.
+
+```json
+"port": 4000
+```
+
+### `path`
+
+MCP endpoint path served by the generated proxy.
+
+```json
+"path": "/mcp"
+```
+
+The default local endpoint is `http://localhost:4000/mcp`.
+
+### `authDir`
+
+Directory for local encrypted credentials and CLI auth state.
+
+```json
+"authDir": ".fentaris"
+```
+
+<Note>
+  Generated projects ignore `.fentaris/` in git because it contains local credentials and build output.
+</Note>
+
+## Legacy Filename
+
+The CLI can still discover `fentaris.config.json`, but generated projects use `fentaris.json`.
+
+```bash theme={null}
+mv fentaris.config.json fentaris.json
+```
+
+## Related Documentation
+
+* [Quickstart](/getting-started/quickstart)
+* [CLI Usage](/reference/cli)
+* [Environment variables](/reference/environment-variables)

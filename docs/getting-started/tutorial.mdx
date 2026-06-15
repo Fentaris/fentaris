@@ -1,44 +1,39 @@
 ---
 title: "Tutorial"
-description: "Build a multi-server proxy with middleware and hooks."
+description: "Build a multi-server proxy with the high-level Fentaris API."
 ---
 
-This tutorial walks through a complete Fentaris setup: two servers, a proxy, middleware, and a custom hook.
+# Tutorial
 
-## 1. Create two MCP servers
+> Build a multi-server proxy with the high-level Fentaris API
 
-```ts theme={null}
-import { McpServer, StdioTransport } from "@fentaris/core";
+This tutorial walks through two upstream MCP servers, one proxy endpoint, middleware, and a server-scoped event hook.
 
-const filesystem = new McpServer({
-  name: "filesystem",
-  displayName: "Filesystem",
-  transport: new StdioTransport({
-    command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-  }),
-});
-
-const diagnostics = new McpServer({
-  name: "diagnostics",
-  displayName: "Diagnostics",
-  transport: new StdioTransport({
-    command: "node",
-    args: ["./dist/diagnostics-server.js"],
-  }),
-  env: (user) => ({
-    USER_ID: user.id ?? "anonymous",
-  }),
-});
-```
-
-## 2. Start the proxy
+## Quick Start
 
 ```ts theme={null}
-import { McpProxy } from "@fentaris/core";
+import { fentaris, mcp, stdio } from "@fentaris/core";
 
-const proxy = new McpProxy({
-  servers: [filesystem, diagnostics],
+const proxy = fentaris({
+  servers: [
+    mcp("filesystem", {
+      displayName: "Filesystem",
+      transport: stdio({
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+      }),
+    }),
+    mcp("diagnostics", {
+      displayName: "Diagnostics",
+      transport: stdio({
+        command: "node",
+        args: ["./dist/diagnostics-server.js"],
+      }),
+      env: (user) => ({
+        USER_ID: user.id ?? "anonymous",
+      }),
+    }),
+  ],
   port: 3000,
   path: "/mcp",
   name: "fentaris-proxy",
@@ -48,52 +43,53 @@ const proxy = new McpProxy({
 await proxy.start();
 ```
 
-## 3. Add middleware
+## Add Middleware
+
+Middleware runs before matching tool calls are forwarded upstream.
 
 ```ts theme={null}
-proxy.use(async (request, context, next) => {
-  context.log.info("tool-call", {
-    server: request.serverName,
-    tool: request.toolName,
+proxy.use(async (ctx, next) => {
+  ctx.log.info("tool-call", {
+    server: ctx.server?.name,
+    tool: ctx.tool?.name,
   });
 
-  if (request.serverName === "filesystem" && request.toolName === "delete") {
-    return context.res.deny("Filesystem delete is disabled in this environment.");
+  if (ctx.server?.name === "filesystem" && ctx.tool?.name === "delete") {
+    return ctx.deny("Filesystem delete is disabled in this environment.");
   }
 
   return next();
 });
 ```
 
-## 4. Add a hook
+## Add a Server Hook
 
 ```ts theme={null}
-proxy.on("call", { server: "diagnostics" }, async (request, context) => {
-  context.log.info("diagnostics-call", { tool: request.toolName });
+proxy.mcp("diagnostics").on("tool:success", async ({ ctx, durationMs }) => {
+  ctx.log.info("diagnostics.tool.success", { durationMs });
 });
 ```
 
-## 5. Call tools
+## Connect a Client
 
 From your MCP client, call the proxy at `http://localhost:3000/mcp`.
 
 <Tip>
-  Hook filters support `server`, `tool`, and `proxyTool` to target specific tool calls.
+  Server-scoped routes such as `proxy.mcp("diagnostics")` keep tool-specific logic close to the upstream server it protects.
 </Tip>
 
 ## What you built
 
 - A single HTTP endpoint for multiple MCP servers.
 - A middleware layer that enforces policy.
-- Hook-based logging for diagnostics.
+- Server-scoped logging for diagnostics calls.
 
-Next, review the core concepts and reference pages to customize the proxy further.
+## Low-Level API
 
-<CardGroup cols={2}>
-  <Card title="Architecture" icon="layers" href="/core/architecture">
-    How Fentaris routes and manages sessions.
-  </Card>
-  <Card title="Middleware" icon="shield" href="/guides/middleware">
-    Patterns for policy enforcement.
-  </Card>
-</CardGroup>
+`new McpProxy(...)`, `new McpServer(...)`, and `new StdioTransport(...)` remain available for advanced integrations. New applications should start with `fentaris(...)`, `mcp(...)`, and transport helpers.
+
+## Related Documentation
+
+* [Architecture](/concepts/architecture)
+* [Middleware](/guides/middleware)
+* [Proxy setup](/guides/proxy-setup)

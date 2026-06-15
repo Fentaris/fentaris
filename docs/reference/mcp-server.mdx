@@ -1,27 +1,70 @@
 ---
 title: "McpServer"
-description: "Reference for the server wrapper."
+description: "Reference for declaring upstream MCP servers."
 ---
 
-`McpServer` adapts an MCP transport and optionally injects per-user environment variables.
+# McpServer
 
-## Constructor
+> Declare upstream MCP servers for the Fentaris proxy
+
+Use `mcp(...)` for new applications. It creates an `McpServer` wrapper around a transport and optionally configures display metadata, credentials, env injection, and isolation.
+
+## Quick Start
 
 ```ts theme={null}
-new McpServer({
-  name,
-  displayName,
-  transport,
-  env,
+import { mcp, stdio } from "@fentaris/core";
+
+const filesystem = mcp("filesystem", {
+  displayName: "Filesystem",
+  transport: stdio({
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+  }),
 });
 ```
 
-### Options
+## Options
 
-- `name`: server identifier. Must not include `__`.
-- `displayName`: human-readable label used in tool titles.
-- `transport`: a `FentarisTransport` implementation.
-- `env`: static env map or resolver function by user.
+### `name`
+
+Server identifier. It becomes the prefix for proxied tool names.
+
+<Note>
+  Server names must be stable and must not include `__`.
+</Note>
+
+### `displayName`
+
+Human-readable label used in tool titles.
+
+### `transport`
+
+Transport implementation used to connect to the upstream MCP server.
+
+```ts theme={null}
+transport: stdio({
+  command: "npx",
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+})
+```
+
+### `env`
+
+Static env map or resolver function by user.
+
+```ts theme={null}
+env: (user) => ({
+  USER_ID: user.id ?? "anonymous",
+})
+```
+
+### `auth`
+
+Credential binding used when the server needs bearer or header auth.
+
+### `isolation`
+
+Optional isolation runtime for user-aware queueing or process isolation.
 
 ## Methods
 
@@ -64,3 +107,24 @@ Returns whether the configured transport exposes the corresponding optional meth
 ### `close()`
 
 Closes all transports, including user-specific ones.
+
+## Low-Level Constructor
+
+The class constructor is available for advanced integrations:
+
+```ts theme={null}
+import { McpServer } from "@fentaris/core";
+
+const server = new McpServer({
+  name: "filesystem",
+  transport,
+});
+```
+
+For normal applications, prefer `mcp(name, options)`.
+
+## Related Documentation
+
+* [McpProxy reference](/reference/mcp-proxy)
+* [Stdio transport](/reference/stdio-transport)
+* [Servers and transports](/concepts/servers-and-transports)

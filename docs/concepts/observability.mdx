@@ -1,0 +1,37 @@
+---
+title: "Observability"
+description: "Understand logs, health checks, doctor output, and runtime profiler events."
+---
+
+# Observability
+
+> Understand logs, health checks, doctor output, and runtime profiler events
+
+Fentaris exposes observability through CLI checks, structured logs, runtime health checks, and profiler events.
+
+## Local Checks
+
+```bash theme={null}
+fentaris check --offline
+fentaris doctor --runtime
+```
+
+Use `check` for project validation and `doctor` for environment diagnostics.
+
+## Runtime Profiler
+
+Projects can subscribe to profiler events around MCP calls, policy behavior, transport operations, and runtime lifecycle.
+
+```ts theme={null}
+const runtimeProfiler = profiler()
+  .pretty()
+  .on("mcp.call.success", (event) => {
+    console.log(event.durationMs);
+  });
+```
+
+## Related Documentation
+
+* [CLI Usage](/reference/cli)
+* [Observability guide](/guides/observability)
+* [Logger reference](/reference/logger)

@@ -3,54 +3,109 @@ title: "Logger"
 description: "Configure Fentaris logging in detail, parameter by parameter."
 ---
 
-This guide explains how Fentaris logging works and how to configure it in depth. You will learn every configurable parameter, see examples, and get practical tips for production.
+# Logger
 
-If you only need the high-level concept, see [Core logger](/core/logger).
+> Configure structured logging for Fentaris proxies and middleware.
 
-## Overview
+Use the default logger with `autoLog` first. Add a custom driver when logs need to go to a dedicated pipeline.
 
-Fentaris uses a structured `Logger` with a pluggable `LoggerDriver`. The logger is available in middleware, routes, and events as `ctx.log` and is also used internally by the proxy.
+## Quick Start
 
-At a minimum you can instantiate a default logger:
-
-```ts theme={null}
-import { Logger } from "@fentaris/core";
-
-const logger = new Logger();
-```
-
-Then pass it to the proxy:
+Pass logging options through the high-level proxy declaration.
 
 ```ts theme={null}
-const proxy = new McpProxy({
-  servers: [filesystem],
-  logger,
+import { fentaris, mcp, stdio } from "@fentaris/core";
+
+const proxy = fentaris({
+  servers: [
+    mcp("filesystem", {
+      transport: stdio({
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "/srv/shared"],
+      }),
+    }),
+  ],
+  autoLog: true,
 });
 ```
 
-## Logger parameters
+Fentaris exposes the request logger as `ctx.log` in middleware, server routes, tool routes, operation routes, and lifecycle events.
 
-The `Logger` constructor accepts an options object. The most important parameter is the `driver`.
+## Add Tags And Metadata
 
-### driver
-
-`driver` defines where log entries are written. It must implement a `write(entry)` method.
+Tags are indexed fields that should stay stable across a request. Metadata is detail for one log entry.
 
 ```ts theme={null}
+proxy.use(async (ctx, next) => {
+  ctx.log.setTag("traceId", ctx.transport.requestId ?? "no-trace");
+  ctx.log.setTag("tenantId", String(ctx.subject?.tenant?.id ?? "unknown"));
+  ctx.log.setTag("subject", ctx.subject?.id ?? "anonymous");
+
+  ctx.log.info("request.received", {
+    transport: ctx.transport?.type,
+  });
+
+  return next();
+});
+```
+
+<Tip>
+  Keep tags short and consistent. Prefer `traceId`, `tenantId`, `subject`, `server`, and `tool` over free-form labels.
+</Tip>
+
+## Logging Levels
+
+Use levels consistently so alerts and dashboards stay predictable.
+
+```ts theme={null}
+ctx.log.debug("tool.input", { tool: ctx.tool?.proxyName });
+ctx.log.info("tool.call", { tool: ctx.tool?.proxyName });
+ctx.log.warn("tool.deny", { reason: "policy" });
+ctx.log.error("tool.error", { message: "upstream failed" });
+```
+
+- `debug`: noisy diagnostics for development.
+- `info`: normal operations such as routing and successful calls.
+- `warn`: recoverable issues and policy denies.
+- `error`: failures that need attention.
+
+## Use A Custom Driver
+
+Create a `Logger` when you want to forward entries to an external logging pipeline.
+
+```ts theme={null}
+import { Logger, fentaris, mcp, stdio } from "@fentaris/core";
+
 const logger = new Logger({
   driver: {
     write(entry) {
-      console.info(entry.message, entry.metadata);
+      sendToLogPipeline({
+        level: entry.level,
+        message: entry.message,
+        tags: entry.tags,
+        metadata: entry.metadata,
+        timestamp: entry.timestamp,
+      });
     },
   },
 });
+
+const proxy = fentaris({
+  logger,
+  autoLog: true,
+  servers: [
+    mcp("github", {
+      transport: stdio({ command: "github-mcp-server" }),
+    }),
+  ],
+});
 ```
 
-**Tip:** If you already use a log aggregator, forward `entry` to it inside `write`.
+The driver must implement `write(entry)`. It can write JSON lines, forward to a vendor SDK, or fan out to logs and metrics.
 
-## Logger entry shape
+## Logger Entry Shape
 
-The logger emits structured entries with a consistent shape. Use this structure for querying and analytics.
+Drivers receive structured entries with a stable shape.
 
 ```ts theme={null}
 type LogEntry = {
@@ -62,42 +117,11 @@ type LogEntry = {
 };
 ```
 
-## Logging levels
+Use this structure for querying, retention policies, and alert rules.
 
-Use these levels consistently:
+## JSON Lines Driver
 
-- `debug`: noisy, development or diagnostics only.
-- `info`: normal operations like tool calls and routing.
-- `warn`: recoverable issues or policy denies.
-- `error`: failures that need attention.
-
-```ts theme={null}
-ctx.log.debug("tool.input", { tool: ctx.tool?.proxyName });
-ctx.log.info("tool.call", { tool: ctx.tool?.proxyName });
-ctx.log.warn("tool.deny", { reason: "policy" });
-ctx.log.error("tool.error", { message: "upstream failed" });
-```
-
-## Tags and metadata
-
-Tags are indexed keys you want on every log line, like `traceId` or `tenantId`. Metadata is per-entry detail.
-
-```ts theme={null}
-proxy.use(async (ctx, next) => {
-  ctx.log.setTag("trace", ctx.user.traceId ?? "no-trace");
-  ctx.log.setTag("tenant", String(ctx.user.tenantId ?? "unknown"));
-
-  ctx.log.info("tool.call");
-
-  return next();
-});
-```
-
-**Tip:** Keep tags short and stable. They should be consistent across all events.
-
-## Custom driver examples
-
-### JSON log lines
+Write one JSON object per line when your runtime already collects stdout.
 
 ```ts theme={null}
 const logger = new Logger({
@@ -109,30 +133,12 @@ const logger = new Logger({
 });
 ```
 
-### Forward to a logging service
-
-```ts theme={null}
-const logger = new Logger({
-  driver: {
-    write(entry) {
-      sendToLogPipeline({
-        level: entry.level,
-        message: entry.message,
-        tags: entry.tags,
-        metadata: entry.metadata,
-        ts: entry.timestamp,
-      });
-    },
-  },
-});
-```
-
-### Redis logger driver
+## Redis Driver
 
 Use `RedisLoggerDriver` when you want Fentaris to append structured log entries to a Redis list.
 
 ```ts theme={null}
-import { Logger, RedisLoggerDriver } from "@fentaris/core";
+import { Logger, RedisLoggerDriver, fentaris, mcp, stdio } from "@fentaris/core";
 
 const logger = new Logger({
   driver: new RedisLoggerDriver({
@@ -140,33 +146,30 @@ const logger = new Logger({
     key: "fentaris:logs",
   }),
 });
-```
 
-## Auto logging
-
-Enable proxy auto logging to record tool request, response timing, user context, and policy metadata.
-
-```ts theme={null}
-const proxy = new McpProxy({
-  servers: [filesystem],
+const proxy = fentaris({
   logger,
-  autoLog: true,
+  servers: [
+    mcp("github", {
+      transport: stdio({ command: "github-mcp-server" }),
+    }),
+  ],
 });
 ```
 
-## Logger in middleware and hooks
+## Lifecycle Events
 
-The same logger instance is exposed as `ctx.log`. Fentaris enriches it with safe metadata such as operation, subject id, server name, tool name, proxied tool name, resource URI, prompt name, completion target, transport type, session id, credential source, and policy outcome where available.
+Use lifecycle events for operation-specific logs that should run after Fentaris knows the outcome.
 
 ```ts theme={null}
 proxy.on("tool:success", async ({ ctx, durationMs }) => {
-  ctx.log.info("tool.success", { durationMs });
+  ctx.log.info("tool.success", {
+    server: ctx.tool?.serverName,
+    tool: ctx.tool?.proxyName,
+    durationMs,
+  });
 });
-```
 
-Resource, prompt, and completion operations also emit lifecycle events:
-
-```ts theme={null}
 proxy.on("resource:success", async ({ ctx, durationMs }) => {
   ctx.log.info("resource.success", {
     uri: ctx.resource?.uri,
@@ -175,29 +178,32 @@ proxy.on("resource:success", async ({ ctx, durationMs }) => {
 });
 ```
 
-## Error handling and logging
+Fentaris enriches logs with safe metadata such as operation, subject id, server name, tool name, proxied tool name, resource URI, prompt name, completion target, transport type, session id, credential source, and policy outcome where available.
 
-When you catch errors in middleware, log them with a stable message and include safe metadata.
+## Error Handling
+
+When middleware catches an error, log a stable message and return a safe denial message.
 
 ```ts theme={null}
 proxy.use(async (ctx, next) => {
   try {
     return await next();
   } catch (error) {
-    ctx.log.error("tool.error", { message: String(error) });
+    ctx.log.error("tool.error", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+
     return ctx.deny("Tool failed. Try again later.");
   }
 });
 ```
 
-## Best practices
+<Warning>
+  Do not log raw payloads, API keys, bearer tokens, decrypted credentials, or environment secret values.
+</Warning>
 
-- Prefer structured fields (`tool`, `server`, `userId`) over free-form strings.
-- Avoid logging secrets or raw payloads.
-- Use tags for correlation (`traceId`, `tenantId`).
-- Keep message names consistent (`tool.call`, `tool.deny`).
-- Log denies at `warn` to make policy violations visible.
+## Related Documentation
 
-## Reference links
-
-- API reference for Logger: `/reference/logger`
+* [Observability](/guides/observability)
+* [Security](/guides/security)
+* [Logger reference](/reference/logger)

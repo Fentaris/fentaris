@@ -3,277 +3,117 @@ title: "Transports"
 description: "Connect MCP servers using Fentaris transports."
 ---
 
-Fentaris uses transports to connect to MCP servers. A transport must list tools, call tools, and close the connection.
+# Transports
 
-Transports are the boundary between Fentaris and the MCP server runtime. They decide *how* bytes move and *where* the server runs (local process, remote HTTP server, or event stream).
+> Connect upstream MCP servers with high-level transport helpers
 
-## Supported transport matrix
+This page is kept for older links. The current concepts entrypoint is [Servers and transports](/concepts/servers-and-transports).
 
-Fentaris distinguishes upstream transports, which connect Fentaris to configured MCP servers, from downstream proxy exposure transports, which expose Fentaris itself to MCP clients.
+## Quick Start
 
-| Direction | Transport | Class | Notes |
-| --- | --- | --- | --- |
-| Upstream | stdio | `StdioTransport` | Native MCP SDK stdio client transport. Supports per-user env injection through `McpServer.env(user)` and registry-backed auth bindings. |
-| Upstream | Streamable HTTP/HTTPS | `StreamableHttpMcpTransport` | Native MCP SDK Streamable HTTP client transport for `http://` and `https://` MCP endpoints. Supports shared HTTP-family auth options. |
-| Upstream | SSE | `SseMcpTransport` | Native MCP SDK SSE client transport for SSE-capable MCP servers. Supports shared HTTP-family auth options. |
-| Upstream | simple REST-like HTTP | `HttpTransport` | Compatibility adapter that posts to fixed `/listTools` and `/callTool` endpoints. It is not a native MCP Streamable HTTP transport. |
-| Downstream | Streamable HTTP | `HttpProxyExposureTransport` or `McpProxy.start()` | Default proxy exposure. Preserves the existing `port` and `path` behavior. |
-| Downstream | stdio | `StdioProxyExposureTransport` | Runs Fentaris as a local MCP server process for clients that launch the proxy over stdio. |
-| Downstream | SSE | `SseProxyExposureTransport` | Exposes Fentaris through the MCP SDK SSE server transport with session cleanup. |
-
-## Transport interface
-
-All Fentaris transports implement the same interface:
+Use `stdio(...)` for local upstream MCP servers:
 
 ```ts theme={null}
-export type FentarisTransport = {
-  listTools(params?: ListToolsRequest["params"]): Promise<ListToolsResult>;
-  callTool(params: CallToolRequest["params"]): Promise<CallToolResult>;
-  close(): Promise<void>;
-};
-```
+import { fentaris, mcp, stdio } from "@fentaris/core";
 
-This means you can write your own transport and still plug it into `McpServer` with zero other changes.
-
-## Transport lifecycle
-
-1. **Connect** on first use (listTools or callTool).
-2. **Serve requests** as tool calls arrive.
-3. **Close** when the proxy shuts down or the server is removed.
-
-For long-lived transports, connection reuse is expected. For short-lived transports, you can create per-request connections, but be aware of latency and resource overhead.
-
-## StdioTransport
-
-`StdioTransport` connects to a local MCP server over stdio. It is the simplest way to integrate existing MCP servers and is built on top of the official Model Context Protocol SDK.
-
-The underlying implementation uses the MCP SDK stdio client transport, so it follows the same semantics, lifecycle, and error behavior as the official reference. See the MCP SDK documentation for the stdio transport for deeper protocol details and compatibility guidance: https://github.com/modelcontextprotocol/sdk
-
-```ts theme={null}
-import { StdioTransport } from "@fentaris/core";
-
-const transport = new StdioTransport({
-  command: "npx",
-  args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+const proxy = fentaris({
+  servers: [
+    mcp("filesystem", {
+      transport: stdio({
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+        stderr: "inherit",
+      }),
+    }),
+  ],
 });
 ```
 
-### Options
-
-- `command`: executable to spawn.
-- `args`: argument list for the MCP server.
-- `env`: environment variables to pass.
-- `stderr`: how to handle stderr (`inherit`, `pipe`, `overlapped`, `ignore`).
-- `clientName` and `clientVersion`: identify the proxy as an MCP client.
-
-### How stdio works end-to-end
-
-Stdio is a local process transport. Fentaris spawns the server process, connects the MCP SDK client over stdin/stdout, and manages request/response framing for tool calls. This is the most reliable choice for local development and for running existing MCP servers in the same host or container.
-
-Under the hood the flow is:
-
-1. Fentaris constructs a `StdioTransport` with the command + args you provide.
-2. When a tool call arrives, Fentaris ensures the client is connected.
-3. The MCP SDK client sends `listTools` and `callTool` frames through stdio.
-4. When the proxy shuts down, the transport closes the client and the spawned process exits.
-
-### When to use stdio
-
-- Local development and tests.
-- Running MCP servers in the same container.
-- When you want the official MCP SDK behavior with minimal wiring.
-
-### Common stdio pitfalls
-
-- **Missing executable:** ensure `command` resolves in the environment where Fentaris runs.
-- **Hanging process:** always handle `SIGTERM` and call `proxy.close()`.
-- **Silent stderr:** use `stderr: "inherit"` to see server logs.
-
-### Stdio auth and per-user isolation
-
-Stdio does not have HTTP headers or an OAuth protocol exchange. Configure stdio credentials as environment values:
-
-- Use `McpServer.env(user)` for per-user env values.
-- Use `FentarisAuth` upstream bindings or a registry to resolve secrets and tokens into env values before calls reach the stdio transport.
-- Use `McpServer.isolation` when a stdio server needs per-user queueing or process isolation semantics.
+Use `streamableHttp(...)` for native remote MCP HTTP endpoints:
 
 ```ts theme={null}
-import { McpServer, StdioTransport } from "@fentaris/core";
+import { fentaris, mcp, streamableHttp } from "@fentaris/core";
 
-const github = new McpServer({
-  name: "github",
-  transport: new StdioTransport({ command: "github-mcp" }),
-  env: (user) => ({
-    GITHUB_TOKEN: user.tokens?.github ?? "",
-  }),
+const proxy = fentaris({
+  servers: [
+    mcp("remote", {
+      transport: streamableHttp({
+        url: "https://mcp.example.com/mcp",
+        auth: {
+          headers: { "x-tenant": "acme" },
+          bearerToken: "service-token",
+        },
+      }),
+    }),
+  ],
 });
 ```
 
-### Recommended stdio setup
+## Transport Matrix
 
-- Prefer `npx -y` for official servers during local dev to avoid manual installs.
-- Pass env variables via `env` to avoid leaking secrets into user context.
-- Use `stderr: "inherit"` so server logs appear in your terminal.
+| Direction | Helper | Use case |
+| --- | --- | --- |
+| Upstream | `stdio(...)` | Local MCP process over stdin/stdout. |
+| Upstream | `streamableHttp(...)` | Remote native MCP Streamable HTTP endpoint. |
+| Upstream | `SseMcpTransport` | Legacy SSE-capable MCP servers. |
+| Upstream | `HttpTransport` | Compatibility adapter for REST-like `/listTools` and `/callTool` endpoints. |
+| Downstream | `proxy.start()` | Default Streamable HTTP exposure for MCP clients. |
 
-```ts theme={null}
-import { McpServer, StdioTransport } from "@fentaris/core";
+## Stdio Options
 
-const filesystem = new McpServer({
-  name: "filesystem",
-  displayName: "Filesystem",
-  transport: new StdioTransport({
-    command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-    env: { LOG_LEVEL: "info" },
-    stderr: "inherit",
-  }),
-});
-```
+### `command`
 
-## Native SSE upstream transport
+Executable to spawn.
 
-Use `SseMcpTransport` for MCP servers that still expose the SSE transport.
+### `args`
 
-```ts theme={null}
-import { McpServer, SseMcpTransport } from "@fentaris/core";
+Arguments passed to the upstream process.
 
-const server = new McpServer({
-  name: "legacy_sse",
-  transport: new SseMcpTransport({
-    url: "https://mcp.example/sse",
-    auth: {
-      bearerToken: ({ user }) => user.tokens?.mcp,
-    },
-  }),
-});
-```
+### `env`
 
-Fentaris opens or reuses the SDK SSE client connection on first use, sends tool requests through the SSE flow, and closes the active client/stream resources when the proxy closes.
+Environment variables passed to the upstream process.
 
-## Native Streamable HTTP upstream transport
+### `stderr`
 
-Use `StreamableHttpMcpTransport` for native MCP Streamable HTTP endpoints over HTTP or HTTPS.
+How to handle stderr from the upstream process. Use `inherit` during local development to see upstream logs.
+
+## HTTP-Family Auth
+
+`streamableHttp(...)` supports static headers, bearer tokens, API keys, and per-user header resolvers.
 
 ```ts theme={null}
-import { McpServer, StreamableHttpMcpTransport } from "@fentaris/core";
-
-const server = new McpServer({
-  name: "remote_mcp",
-  transport: new StreamableHttpMcpTransport({
-    url: "https://mcp.example/mcp",
-    auth: {
-      headers: { "x-tenant": "acme" },
-      bearerToken: "service-token",
-    },
-  }),
-});
-```
-
-The native transport performs MCP initialization, session reuse, `listTools`, `callTool`, and close behavior through the official MCP SDK client transport.
-
-## HTTP-family upstream auth
-
-`StreamableHttpMcpTransport` and `SseMcpTransport` share the same auth model.
-
-### Static headers
-
-```ts theme={null}
-new StreamableHttpMcpTransport({
-  url: "https://mcp.example/mcp",
-  auth: { headers: { "x-api-version": "2026-06-05" } },
-});
-```
-
-### Bearer tokens and OAuth access tokens
-
-Fentaris does not acquire or refresh OAuth tokens. If a caller already has an OAuth access token, pass it as a bearer token directly or through a resolver.
-
-```ts theme={null}
-new StreamableHttpMcpTransport({
-  url: "https://mcp.example/mcp",
-  auth: { bearerToken: ({ user }) => user.tokens?.oauthAccessToken },
-});
-```
-
-### API keys
-
-```ts theme={null}
-new SseMcpTransport({
-  url: "https://mcp.example/sse",
-  auth: {
-    apiKey: {
-      header: "x-api-key",
-      resolve: ({ user }) => user.secrets?.remoteMcpApiKey,
-    },
-  },
-});
-```
-
-### Custom per-user headers
-
-```ts theme={null}
-new StreamableHttpMcpTransport({
-  url: "https://mcp.example/mcp",
+streamableHttp({
+  url: "https://mcp.example.com/mcp",
   auth: {
     resolveHeaders: ({ user }) => ({
       "x-user-id": user.id ?? "anonymous",
       authorization: `Bearer ${user.tokens?.remote ?? ""}`,
     }),
   },
+})
+```
+
+<Note>
+  Fentaris does not acquire or refresh OAuth tokens. Pass an already-valid access token through a resolver when the upstream needs one.
+</Note>
+
+## Close Cleanly
+
+Close the proxy on shutdown so upstream transports can release processes, sockets, and sessions.
+
+```ts theme={null}
+process.on("SIGTERM", async () => {
+  await proxy.close();
+  process.exit(0);
 });
 ```
 
-Resolvers receive the resolved `UserContext`, including registry-provided `secrets` and `tokens`. If a required API key or credential resolver cannot produce credentials, Fentaris fails before sending the upstream request.
+## Low-Level API
 
-## Simple HTTP adapter compatibility
+Transport classes such as `StdioTransport`, `StreamableHttpMcpTransport`, `SseMcpTransport`, and exposure transports remain available for advanced integrations. New application docs should prefer `stdio(...)`, `streamableHttp(...)`, and `proxy.start()`.
 
-`HttpTransport` remains available for compatibility with REST-like adapters that expose fixed `/listTools` and `/callTool` endpoints. It is intentionally separate from `StreamableHttpMcpTransport`.
+## Related Documentation
 
-```ts theme={null}
-import { HttpTransport } from "@fentaris/core";
-
-const legacyAdapter = new HttpTransport({
-  baseUrl: "https://adapter.example/",
-  authToken: "service-token",
-});
-```
-
-Use `HttpTransport` only when the upstream server is not speaking native MCP Streamable HTTP.
-
-## Proxy exposure transports
-
-`McpProxy.start()` remains the backward-compatible default and starts HTTP Streamable MCP exposure on the configured `port` and `path`.
-
-```ts theme={null}
-const proxy = new McpProxy({ servers, port: 3000, path: "/mcp" });
-await proxy.start();
-```
-
-For explicit exposure, call `proxy.listen(...)` with a downstream exposure transport.
-
-```ts theme={null}
-import {
-  HttpProxyExposureTransport,
-  SseProxyExposureTransport,
-  StdioProxyExposureTransport,
-} from "@fentaris/core";
-
-await proxy.listen(new HttpProxyExposureTransport({ port: 3000, path: "/mcp" }));
-await proxy.listen(new SseProxyExposureTransport({ port: 3001 }));
-await proxy.listen(new StdioProxyExposureTransport({ user: { id: "local" } }));
-```
-
-HTTP and SSE exposure resolve downstream identity at the proxy edge from the configured identity strategy. Stdio exposure uses explicit user configuration or the proxy's non-HTTP user resolver behavior because there are no HTTP request headers.
-
-## Choosing a transport
-
-- **Stdio:** best for local and containerized servers; simplest to operate.
-- **Streamable HTTP/HTTPS:** best for native remote MCP servers and independent scaling.
-- **SSE:** useful for legacy SSE MCP deployments.
-- **Simple HTTP adapter:** only for non-native REST-like adapters.
-
-Start with stdio for local development, then move to native Streamable HTTP/HTTPS when you need horizontal scaling or separate deployment lifecycles.
-
-## Env-aware transports
-
-If a transport implements `withEnv`, Fentaris can inject user-specific environment variables per request.
+* [Servers and transports](/concepts/servers-and-transports)
+* [Stdio transport](/reference/stdio-transport)
+* [Proxy setup](/guides/proxy-setup)

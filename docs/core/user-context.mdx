@@ -3,11 +3,40 @@ title: "User context"
 description: "Pass per-user metadata through Fentaris."
 ---
 
-Fentaris threads a `UserContext` object through middleware, hooks, and transports.
+# User Context
 
-## What it contains
+> Pass per-user metadata through Fentaris
 
-`UserContext` is a free-form object with an optional `id` field. Use it to attach tenant IDs, roles, or trace IDs.
+This page is kept for older links. New guides should use `fentaris(...)` and `mcp(...)` examples.
+
+## Quick Start
+
+Resolve user metadata at the proxy edge:
+
+```ts theme={null}
+import { fentaris, mcp, stdio } from "@fentaris/core";
+
+const proxy = fentaris({
+  servers: [
+    mcp("analytics", {
+      transport: stdio({ command: "node", args: ["./dist/analytics-server.js"] }),
+      env: (user) => ({
+        TENANT_ID: String(user.tenantId ?? "unknown"),
+      }),
+    }),
+  ],
+  user: (req) => ({
+    id: req.headers["x-user-id"] as string | undefined,
+    role: req.headers["x-user-role"],
+    tenantId: req.headers["x-tenant-id"],
+    traceId: req.headers["x-trace-id"],
+  }),
+});
+```
+
+## What It Contains
+
+`UserContext` is a free-form object with an optional `id` field. Use it for metadata such as tenant IDs, roles, plans, and trace IDs.
 
 ```ts theme={null}
 type UserContext = {
@@ -16,64 +45,40 @@ type UserContext = {
 };
 ```
 
-## Where it flows
+## Where It Flows
 
-- `McpProxy` resolves user context per request.
-- Middleware and hooks receive `context.user`.
-- `McpServer` can inject env variables based on the user.
+- `fentaris(...)` resolves user context per request.
+- Middleware and hooks receive `ctx.user`.
+- `mcp(..., { env })` can inject per-user environment values into upstream transports.
 
-## How it works in practice
-
-The `UserContext` is resolved once at the edge of the proxy. From that moment on, it becomes the single source of truth for identity, tenancy, and request metadata. Fentaris never mutates the object; instead, middleware and hooks read from it to make decisions.
-
-That means:
-
-- All policy decisions should key off `context.user`.
-- All logs should attach user identifiers for observability.
-- Server-specific environment injection can use the same object without re-fetching user data.
-
-## Example: resolve user identity from headers
+## Middleware Example
 
 ```ts theme={null}
-const proxy = new McpProxy({
-  servers: [filesystem],
-  user: (req) => ({
-    id: req.headers["x-user-id"] as string | undefined,
-    role: req.headers["x-user-role"],
-  }),
-});
-```
+proxy.use(async (ctx, next) => {
+  ctx.log.setTag("trace", ctx.user.traceId ?? "no-trace");
 
-## Example: multi-tenant + tracing context
-
-```ts theme={null}
-const proxy = new McpProxy({
-  servers: [analytics, filesystem],
-  user: (req) => ({
-    id: req.headers["x-user-id"] as string | undefined,
-    tenantId: req.headers["x-tenant-id"],
-    traceId: req.headers["x-trace-id"],
-    plan: req.headers["x-plan"],
-  }),
-});
-```
-
-Then in middleware:
-
-```ts theme={null}
-proxy.use(async (request, context, next) => {
-  context.log.setTag("trace", context.user.traceId ?? "no-trace");
-  if (context.user.plan !== "enterprise" && request.proxyToolName === "analytics__export") {
-    return context.res.deny("Analytics export requires an enterprise plan.");
+  if (ctx.user.plan !== "enterprise" && ctx.tool?.proxyName === "analytics__export") {
+    return ctx.deny("Analytics export requires an enterprise plan.");
   }
+
   return next();
 });
 ```
 
-## Best practices
+## Best Practices
 
-- **Keep it stable:** avoid including request bodies or large payloads in `UserContext`.
-- **Normalize keys:** always use the same key names across your system (`tenantId`, `role`, `traceId`).
-- **Avoid secrets:** never store tokens or API keys on the user object.
-- **Log safely:** include `id`, `tenantId`, and `traceId` in log tags, not raw PII.
-- **Use env injection:** pass secrets via `McpServer.env(user)` instead of `UserContext`.
+- Keep user context small and stable.
+- Normalize keys across services, for example `tenantId`, `role`, and `traceId`.
+- Do not store secrets in `UserContext`.
+- Log stable identifiers, not raw PII.
+- Inject upstream secrets through credentials or `mcp(..., { env })`.
+
+## Low-Level API
+
+`McpProxy` and `McpServer` expose the same user context internally. New docs should prefer the high-level helpers unless documenting class behavior directly.
+
+## Related Documentation
+
+* [Identity and auth](/concepts/identity-and-auth)
+* [End-to-end examples](/guides/end-to-end)
+* [Environment variables](/reference/environment-variables)
