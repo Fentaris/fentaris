@@ -1,5 +1,16 @@
 # @fentaris/cli
 
+## 0.2.1
+
+### Patch Changes
+
+- ced04e2: Improve the generated project and runtime DX: `fentaris()` now picks up local project defaults, deferred MCP declarations can satisfy policy validation before start, scoped middleware receives contextual types, and a concise `rateLimit({ max, per })` helper is available.
+
+  `fentaris dev` now runs the configured entrypoint directly, loads `.env`, and forwards termination signals to the child process.
+
+- Updated dependencies [ced04e2]
+  - @fentaris/core@0.5.0
+
 ## 0.2.0
 
 ### Minor Changes
