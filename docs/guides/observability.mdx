@@ -3,95 +3,159 @@ title: "Observability"
 description: "Structured logging and monitoring patterns."
 ---
 
-Fentaris ships with a structured logger that you can swap or extend. Observability is not just logs: it is consistent metadata, trace correlation, and a clear strategy for where those signals live.
+# Observability
 
-Use this guide to build a logging baseline, then integrate it with your existing telemetry stack.
+> Capture consistent logs, metrics, and trace metadata for Fentaris proxy operations.
 
-## Use the default logger
+Start with `autoLog`, add stable tags in middleware, then forward structured entries to your telemetry pipeline when stdout is not enough.
+
+## Quick Start
+
+Enable automatic proxy logging on the high-level proxy declaration.
 
 ```ts theme={null}
-const proxy = new McpProxy({
-  servers: [filesystem],
-  logger: new Logger(),
+import { fentaris, mcp, stdio } from "@fentaris/core";
+
+const proxy = fentaris({
+  servers: [
+    mcp("filesystem", {
+      transport: stdio({
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "/srv/shared"],
+      }),
+    }),
+  ],
+  autoLog: true,
 });
 ```
 
-This uses the built-in console driver which prints JSON-style logs to stdout. It is ideal for local development and simple deployments.
+This records request timing, subject metadata, server name, tool name, policy outcome, credential source metadata, and lifecycle events where available.
 
-## Use a custom driver
+## Add Contextual Metadata
+
+Use middleware to attach correlation tags that should appear on every log entry for a request.
 
 ```ts theme={null}
-import { Logger } from "@fentaris/core";
+proxy.use(async (ctx, next) => {
+  ctx.log.setTag("traceId", ctx.transport.requestId ?? "no-trace");
+  ctx.log.setTag("tenantId", String(ctx.subject?.tenantId ?? "unknown"));
+  ctx.log.setTag("subject", ctx.subject?.id ?? "anonymous");
+
+  return next();
+});
+```
+
+Prefer stable tags such as `traceId`, `tenantId`, `subject`, and `server`. Avoid raw prompts, raw tool arguments, API keys, bearer tokens, and decrypted credentials.
+
+## Trace Tool Calls
+
+Use server-scoped routes when you need custom logs for one upstream MCP server.
+
+```ts theme={null}
+proxy.mcp("github").tool("create_issue", async (ctx, next) => {
+  const started = Date.now();
+  const result = await next();
+
+  ctx.log.info("github.create_issue.completed", {
+    durationMs: Date.now() - started,
+    policyAllowed: ctx.policy.allowed,
+  });
+
+  return result;
+});
+```
+
+Keep event names stable. They become query keys in log stores and dashboards.
+
+## Trace Resources And Prompts
+
+Resource, prompt, and completion operations emit lifecycle events as well as tool calls.
+
+```ts theme={null}
+proxy.mcp("docs").operation("resource:read", async (ctx, next) => {
+  ctx.log.info("docs.resource.read", {
+    uri: ctx.resource?.uri,
+    allowed: ctx.policy.allowed,
+  });
+
+  return next();
+});
+
+proxy.on("prompt:success", async ({ ctx, durationMs }) => {
+  ctx.log.info("prompt.success", {
+    prompt: ctx.prompt?.name,
+    durationMs,
+  });
+});
+```
+
+Audit logs should include operation, subject, server, target, policy outcome, and credential source metadata.
+
+## Use A Custom Driver
+
+Pass a logger to `fentaris(...)` when stdout is not the right destination.
+
+```ts theme={null}
+import { Logger, fentaris, mcp, stdio } from "@fentaris/core";
 
 const logger = new Logger({
   driver: {
     write(entry) {
-      // forward to your logging pipeline
-      console.info(entry.message, entry.metadata);
+      sendToTelemetry({
+        level: entry.level,
+        message: entry.message,
+        tags: entry.tags,
+        metadata: entry.metadata,
+        timestamp: entry.timestamp,
+      });
+    },
+  },
+});
+
+const proxy = fentaris({
+  logger,
+  autoLog: true,
+  servers: [
+    mcp("github", {
+      transport: stdio({ command: "github-mcp-server" }),
+    }),
+  ],
+});
+```
+
+If you use Datadog, Honeycomb, OpenTelemetry, or another structured telemetry system, forward the full entry and map tags to indexed fields.
+
+## Recommended Signals
+
+Track these signals for production operations:
+
+- Tool call counts by server, tool, subject, and policy outcome.
+- Denied calls and denial reasons.
+- Latency by server, tool, operation, and upstream transport.
+- Session start, session close, and transport errors.
+- Resource, prompt, and completion operations by target.
+
+## Metrics Aggregation
+
+If you prefer metrics over logs, wrap the logger driver to emit counters and histograms while still writing structured logs.
+
+```ts theme={null}
+const logger = new Logger({
+  driver: {
+    write(entry) {
+      metrics.increment(`fentaris.${entry.message}`, entry.tags);
+      logs.write(entry);
     },
   },
 });
 ```
 
-If you already use structured logging (Datadog, Honeycomb, OpenTelemetry, etc.), this is where you forward each event.
+<Note>
+  Metrics should use bounded labels. Do not use raw resource URIs, prompt text, or user input as high-cardinality metric labels.
+</Note>
 
-## Add contextual metadata
+## Related Documentation
 
-```ts theme={null}
-proxy.use(async (request, context, next) => {
-  context.log.setTag("trace", "fentaris-demo");
-  return next();
-});
-```
-
-Prefer stable tags such as `traceId`, `tenantId`, and `userId`. They make it trivial to group all tool calls for a single request across systems.
-
-## Recommended signals
-
-- Tool call counts per server.
-- Denied tool calls and reasons.
-- Latency per tool call.
-- Session start and close events.
-
-## Example: structured trace logging
-
-```ts theme={null}
-proxy.use(async (request, context, next) => {
-  context.log.setTag("tenant", context.user.tenantId ?? "unknown");
-  context.log.info("tool.call", {
-    tool: request.proxyToolName,
-    server: request.serverName,
-  });
-  return next();
-});
-```
-
-## Capture latency
-
-Latency is a first-order signal for tool health. Measure it around the `next()` call.
-
-```ts theme={null}
-proxy.use(async (request, context, next) => {
-  const started = Date.now();
-  const result = await next();
-  context.log.info("tool.latency", {
-    tool: request.proxyToolName,
-    ms: Date.now() - started,
-  });
-  return result;
-});
-```
-
-## Metrics aggregation
-
-If you prefer metrics over logs, wrap the logger driver to emit counters and histograms. You can also emit metrics from hooks for low overhead.
-
-## Tips
-
-- Log `deny` responses with the reason to simplify audits.
-- Measure tool latency with timestamps in middleware.
-- Keep logs free of secrets; use env injection for confidential data.
-
-## Reference links
-
-- MCP SDK: https://github.com/modelcontextprotocol/sdk
+* [Logger](/guides/logger)
+* [Security](/guides/security)
+* [Governance auth](/guides/governance-auth)

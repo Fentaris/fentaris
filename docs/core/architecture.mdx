@@ -3,41 +3,48 @@ title: "Architecture"
 description: "How Fentaris routes, aggregates, and serves MCP traffic."
 ---
 
-Fentaris is composed of three building blocks that keep the proxy predictable and easy to extend.
+# Architecture
 
-## Request flow
+> How Fentaris routes, aggregates, and serves MCP traffic
+
+This page is kept for older links. The current concepts entrypoint is [Architecture](/concepts/architecture).
+
+## Request Flow
 
 ```mermaid
 flowchart LR
-  Client[MCP Client] --> Proxy[McpProxy]
+  Client[MCP Client] --> Proxy["fentaris(...) proxy"]
   Proxy --> Session[Streamable HTTP Session]
-  Session --> ServerA[McpServer]
-  Session --> ServerB[McpServer]
+  Session --> ServerA["mcp(\"filesystem\")"]
+  Session --> ServerB["mcp(\"github\")"]
 ```
 
-1. An MCP client connects to `McpProxy`.
+1. An MCP client connects to the Fentaris endpoint.
 2. Fentaris initializes an MCP session over HTTP.
-3. The proxy lists tools from each `McpServer` and applies naming rules.
-4. Tool calls are dispatched through middleware and hooks before forwarding.
+3. The proxy lists tools from each `mcp(...)` server declaration.
+4. Tool calls pass through policy, middleware, hooks, and logging.
+5. The selected upstream transport forwards the call.
 
 ## Components
 
-**McpProxy**
-- Owns HTTP lifecycle, sessions, and orchestration.
-- Normalizes tool names to prevent collisions.
+### `fentaris(...)`
 
-**McpServer**
-- Adapts an MCP transport to Fentaris.
-- Supports user-based environment injection.
+Creates the proxy runtime and owns HTTP lifecycle, sessions, routing, policy, and observability.
 
-**FentarisTransport**
-- Transport abstraction used by `McpServer`.
-- Current implementation: `StdioTransport` for local MCP processes.
+### `mcp(...)`
 
-## Sessions
+Declares an upstream MCP server. The server name becomes the prefix for proxied tools, prompts, resources, and completion targets.
 
-Fentaris uses streamable HTTP sessions. Each session tracks its own MCP server instance and is closed when the client disconnects.
+### Transport Helpers
 
-## Error handling
+Use `stdio(...)` for local MCP processes and `streamableHttp(...)` for remote native MCP HTTP endpoints.
 
-Errors from middleware or upstream servers are normalized and returned as JSON-RPC errors. Middleware can also inject structured tool errors via `ResponseController`.
+## Low-Level API
+
+`McpProxy`, `McpServer`, and transport classes remain available for advanced integrations. New docs and new applications should start with `fentaris(...)`, `mcp(...)`, and transport helpers.
+
+## Related Documentation
+
+* [Architecture](/concepts/architecture)
+* [Servers and transports](/concepts/servers-and-transports)
+* [Setup](/getting-started/setup)
