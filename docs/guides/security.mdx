@@ -160,16 +160,18 @@ const proxy = fentaris({
 
 ## Validate Identity
 
-When users declare API keys, Fentaris uses API-key identity by default with the `x-fentaris-api-key` header.
+When users declare API keys, Fentaris uses API-key identity by default with the `x-fentaris-api-key` header. Store API keys as credential sources, such as environment variables or encrypted local credentials, instead of literal strings in code.
 
 ```ts theme={null}
+import { credentialEnv, fentaris, group, mcp, policy, stdio, user } from "@fentaris/core";
+
 const proxy = fentaris({
   groups: [
     group({
       id: "admins",
       users: [
         user("alice", {
-          apiKeys: ["ak_live_alice"],
+          apiKeys: [credentialEnv("ADMIN_API_KEY")],
         }),
       ],
       policy: policy("admins").mcp("*").allow("*"),

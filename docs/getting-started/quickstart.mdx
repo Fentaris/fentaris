@@ -27,10 +27,17 @@ Install the CLI and generate a project:
 fentaris init my-proxy
 cd my-proxy
 cp .env.example .env
+set -a
+. ./.env
+set +a
 fentaris dev
 ```
 
 The proxy listens on `http://localhost:4000/mcp` by default.
+
+<Note>
+  Source `.env` in the same shell before running `fentaris dev`. The generated app reads `FENTARIS_AUTH_KEY` and demo API keys from `process.env` when it decrypts local credentials and validates requests.
+</Note>
 
 ## Generated Project
 
