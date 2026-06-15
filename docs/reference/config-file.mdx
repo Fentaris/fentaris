@@ -7,7 +7,7 @@ description: "Configure Fentaris project discovery, runtime entrypoint, endpoint
 
 > Configure Fentaris project discovery, runtime entrypoint, endpoint, and local auth directory
 
-Generated projects use `fentaris.json` at the project root. The CLI uses this file to discover the project, run scripts, validate local state, and build runtime metadata.
+Generated projects use `fentaris.json` at the project root. The CLI uses this file to discover the project, run the configured entrypoint, validate local state, and build runtime metadata. `fentaris()` also reads `name`, `port`, and `path` from the nearest project root when those fields are not passed in code.
 
 ## Quick Start
 
@@ -48,17 +48,17 @@ Allowed values:
 
 ### `entrypoint`
 
-Runtime entrypoint copied into build metadata.
+Runtime entrypoint run by `fentaris dev` and copied into build metadata.
 
 ```json
 "entrypoint": "src/index.ts"
 ```
 
-The file must exist for project health checks to pass.
+The file must exist for project health checks to pass. TypeScript entrypoints run through the selected package manager's `tsx` executor.
 
 ### `port`
 
-Local port printed by `fentaris dev` and used by runtime checks.
+Local port printed by `fentaris dev`, used by runtime checks, and used by `fentaris()` when the application does not pass an explicit `port`.
 
 ```json
 "port": 4000
@@ -66,7 +66,7 @@ Local port printed by `fentaris dev` and used by runtime checks.
 
 ### `path`
 
-MCP endpoint path served by the generated proxy.
+MCP endpoint path served by the generated proxy and used by `fentaris()` when the application does not pass an explicit `path`.
 
 ```json
 "path": "/mcp"

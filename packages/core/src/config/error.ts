@@ -9,7 +9,7 @@ export class FentarisConfigError extends Error {
   readonly diagnostics: FentarisDiagnostic[];
 
   constructor(diagnostics: readonly FentarisDiagnostic[], message?: string) {
-    super(message ?? formatFentarisDiagnostics(diagnostics, { format: "plain" }));
+    super(message ?? formatFentarisDiagnostics(diagnostics, { format: "pretty" }));
     this.name = "FentarisConfigError";
     this.diagnostics = [...diagnostics];
   }

@@ -41,6 +41,17 @@ function createPrompt(): Prompt {
 function runProcess(command: string, args: string[], options: SpawnOptions = {}): Promise<CommandResult> {
   return new Promise((resolve) => {
     const child = spawn(command, args, options);
+    const forwardSignal = (signal: NodeJS.Signals) => {
+      child.kill(signal);
+    };
+    process.once("SIGINT", forwardSignal);
+    process.once("SIGTERM", forwardSignal);
+    process.once("SIGHUP", forwardSignal);
     child.on("close", (code) => resolve({ code: code ?? 1 }));
+    child.on("close", () => {
+      process.off("SIGINT", forwardSignal);
+      process.off("SIGTERM", forwardSignal);
+      process.off("SIGHUP", forwardSignal);
+    });
   });
 }
