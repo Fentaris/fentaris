@@ -1,19 +1,18 @@
 ---
 title: "Environment Variables"
-description: "Configure local credentials and runtime health checks with Fentaris environment variables."
+description: "Configure optional local credentials and runtime health checks with Fentaris environment variables."
 ---
 
 # Environment Variables
 
-> Configure local credentials and runtime health checks with Fentaris environment variables
+> Configure optional local credentials and runtime health checks with Fentaris environment variables
 
-Fentaris generated projects write demo values to `.env.example`. Copy it to `.env` before running local development.
+Generated projects do not require environment variables by default. Use these variables when you add local encrypted credentials, API-key auth, or runtime health checks that need a key.
 
 ## Quick Start
 
 ```bash theme={null}
-cp .env.example .env
-fentaris dev
+FENTARIS_API_KEY=... fentaris doctor --runtime
 ```
 
 ## Variables
@@ -26,27 +25,27 @@ Encryption key used to decrypt local credentials in `.fentaris/credentials.enc.j
 FENTARIS_AUTH_KEY=fentaris-auth-...
 ```
 
-`fentaris doctor` checks whether this variable is present before verifying encrypted credentials.
+`fentaris doctor` checks whether this variable is present before verifying encrypted credentials when a local credential store exists.
 
 ### `FENTARIS_GUEST_API_KEY`
 
-Demo API key for the generated guest user.
+API key used by runtime health checks for projects that still use a guest user convention.
 
 ```bash theme={null}
 FENTARIS_GUEST_API_KEY=guest-...
 ```
 
-Use this key in the `x-fentaris-api-key` header when connecting a client to the generated proxy.
+Use this key in the `x-fentaris-api-key` header when connecting a client to a proxy that enables API-key identity.
 
 ### `FENTARIS_ADMIN_API_KEY`
 
-Demo API key for the generated admin user.
+API key used by runtime health checks for projects that still use an admin user convention.
 
 ```bash theme={null}
 FENTARIS_ADMIN_API_KEY=admin-...
 ```
 
-The generated project grants the admin user broader policy access than the guest user.
+Use this key in the `x-fentaris-api-key` header when connecting a client to a proxy that enables API-key identity.
 
 ### `FENTARIS_API_KEY`
 

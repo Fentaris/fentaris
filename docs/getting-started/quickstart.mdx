@@ -7,7 +7,7 @@ description: "Create a Fentaris project, run the local proxy, and connect an MCP
 
 > Create a Fentaris project, run the local proxy, and connect an MCP client
 
-This quickstart uses the Fentaris CLI to generate a ready-to-run project with demo auth, policy rules, a local stdio upstream, and a remote HTTP MCP upstream.
+This quickstart uses the Fentaris CLI to generate a ready-to-run project with one local demo user and one remote HTTP MCP upstream.
 
 ## Quick Start
 
@@ -26,17 +26,13 @@ Install the CLI and generate a project:
 ```bash theme={null}
 fentaris init my-proxy
 cd my-proxy
-cp .env.example .env
-set -a
-. ./.env
-set +a
 fentaris dev
 ```
 
 The proxy listens on `http://localhost:4000/mcp` by default.
 
 <Note>
-  Source `.env` in the same shell before running `fentaris dev`. The generated app reads `FENTARIS_AUTH_KEY` and demo API keys from `process.env` when it decrypts local credentials and validates requests.
+  The generated app does not configure authentication or policy rules. Add API-key auth and policies before exposing the proxy outside a local development environment.
 </Note>
 
 ## Generated Project
@@ -45,12 +41,10 @@ The proxy listens on `http://localhost:4000/mcp` by default.
 
 - `src/index.ts` with the runnable proxy example.
 - `fentaris.json` for CLI project discovery.
-- `.env.example` with demo keys.
-- `.fentaris/credentials.enc.json` with encrypted local credentials.
-- `.gitignore`, TypeScript config, package scripts, and demo files.
+- `.gitignore`, TypeScript config, and package scripts.
 
 <Note>
-  `.fentaris/` is intentionally ignored by git. Keep generated credentials local unless you intentionally build a secret-management flow.
+  `.fentaris/` is intentionally ignored by git for local runtime artifacts such as builds and optional credentials.
 </Note>
 
 ## Connect a Client
@@ -60,8 +54,6 @@ Point your MCP client to the endpoint printed by `fentaris dev`, usually:
 ```bash theme={null}
 http://localhost:4000/mcp
 ```
-
-Send one of the generated demo API keys with the `x-fentaris-api-key` header.
 
 ## Validate the Project
 

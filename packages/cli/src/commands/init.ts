@@ -6,10 +6,9 @@ import {
   runPackageInstall,
   selectPackageManager,
 } from "../domain/project/project.js";
-import { initTemplateAuth, renderTemplate, writeTemplate } from "../domain/template/template.js";
-import { authDir } from "../shared/constants.js";
+import { renderTemplate, writeTemplate } from "../domain/template/template.js";
 import type { CliCommand, Runtime } from "../shared/types.js";
-import { numberOption, randomToken, stringOption } from "../shared/utils.js";
+import { numberOption, stringOption } from "../shared/utils.js";
 import { nextSteps, printBanner, printHealthResults, section, style } from "../ui/format.js";
 
 export async function runInit(command: CliCommand, runtime: Runtime): Promise<void> {
@@ -24,14 +23,10 @@ export async function runInit(command: CliCommand, runtime: Runtime): Promise<vo
     packageManager,
     port: numberOption(command.options, "port", 4000),
     proxyPath: stringOption(command.options, "path", "/mcp"),
-    authKey: randomToken("fentaris-auth"),
-    guestApiKey: randomToken("guest"),
-    adminApiKey: randomToken("admin"),
   });
 
   section(runtime, "Create Project");
   await writeTemplate(targetDir, template.files);
-  await initTemplateAuth(path.join(targetDir, authDir), template.authKey, template.guestApiKey, template.adminApiKey);
   runtime.out.log(`  ${style.pass(`Created ${projectName}`)}`);
 
   section(runtime, "Install");
@@ -51,7 +46,5 @@ export async function runInit(command: CliCommand, runtime: Runtime): Promise<vo
   printHealthResults(runtime, doctorResults);
 
   section(runtime, "Next Steps");
-  runtime.out.log(`  ${style.label("Demo guest API key")} ${template.guestApiKey}`);
-  runtime.out.log(`  ${style.label("Demo admin API key")} ${template.adminApiKey}`);
   runtime.out.log(nextSteps([`cd ${projectName}`, "fentaris dev"]));
 }

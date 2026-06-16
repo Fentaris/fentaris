@@ -75,7 +75,6 @@ export async function getProjectCheckResults(project: ProjectDiscovery, offline:
     ".gitignore",
     "README.md",
     project.config.entrypoint,
-    path.join(project.config.authDir, "credentials.enc.json"),
   ];
   const optionalFiles = [".env"];
   const results: HealthResult[] = [];
@@ -234,11 +233,9 @@ async function discoverProjectForDoctor(fromDir: string): Promise<{ result: Heal
 
 async function projectDiscoveryResults(project: ProjectDiscovery): Promise<HealthResult[]> {
   const entrypointPath = path.join(project.root, project.config.entrypoint);
-  const authPath = path.join(project.root, project.config.authDir);
   const generatedFiles = [
     "package.json",
     "tsconfig.json",
-    ".env",
     ".gitignore",
     "README.md",
     project.config.entrypoint,
@@ -258,16 +255,6 @@ async function projectDiscoveryResults(project: ProjectDiscovery): Promise<Healt
       status: await exists(entrypointPath) ? "pass" : "fail",
       detail: project.config.entrypoint,
       hint: await exists(entrypointPath) ? undefined : "Create the configured entrypoint or update fentaris.json.",
-    },
-    {
-      group: "Project",
-      label: "auth directory",
-      status: await exists(authPath) ? "pass" : "warn",
-      detail: project.config.authDir,
-      hint: await exists(authPath) ? undefined : "Run doctor --fix to create the configured auth directory.",
-      fix: async () => {
-        await mkdir(authPath, { recursive: true });
-      },
     },
   ];
 
@@ -411,6 +398,10 @@ async function authResults(project: ProjectDiscovery, runtime: Runtime | undefin
   const authDirectoryExists = await exists(authPath);
   const credentialsExist = await exists(credentialsPath);
   const key = runtime?.env.FENTARIS_AUTH_KEY;
+  if (!authDirectoryExists && !credentialsExist && !key?.trim()) {
+    return [await gitignoreAuthResult(project.root, project.config.authDir)];
+  }
+
   const results: HealthResult[] = [
     {
       group: "Auth",

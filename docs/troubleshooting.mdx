@@ -79,11 +79,11 @@ Change `port` in `fentaris.json` or stop the conflicting process.
 `fentaris doctor --runtime` reached the endpoint but did not have a valid API key.
 
 ```bash theme={null}
-export FENTARIS_GUEST_API_KEY=<guest-key>
+export FENTARIS_API_KEY=<api-key>
 fentaris doctor --runtime
 ```
 
-The generated project accepts API keys through the `x-fentaris-api-key` header.
+Use this only for projects that enable API-key identity through the `x-fentaris-api-key` header.
 
 ### Tools list is empty
 
