@@ -130,6 +130,7 @@ export {
 } from "./config/index.js";
 export type {
   FentarisConfigPath,
+  FentarisConfigValidationOptions,
   FentarisConfigValidationResult,
   FentarisDiagnostic,
   FentarisDiagnosticFormat,
