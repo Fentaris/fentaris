@@ -648,6 +648,7 @@ export class McpProxy {
    * @pk
    */
   async pingMcp(name: string): Promise<HealthCheckResult> {
+    this.assertRuntimeConfigValid();
     return this.checkMcpHealth(name);
   }
 
@@ -656,6 +657,7 @@ export class McpProxy {
    * @pk
    */
   async mcpHealth(name: string): Promise<HealthCheckResult> {
+    this.assertRuntimeConfigValid();
     return this.checkMcpHealth(name);
   }
 
@@ -669,6 +671,7 @@ export class McpProxy {
     identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<ListToolsResult> {
+    this.assertRuntimeConfigValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
@@ -748,6 +751,7 @@ export class McpProxy {
     identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<CallToolResult> {
+    this.assertRuntimeConfigValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const { serverName, toolName } = fromProxyToolName(params.name);
@@ -963,6 +967,7 @@ export class McpProxy {
     _identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<ListResourcesResult> {
+    this.assertRuntimeConfigValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
@@ -1028,6 +1033,7 @@ export class McpProxy {
     identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<ReadResourceResult> {
+    this.assertRuntimeConfigValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const { serverName, uri } = fromProxyResourceUri(params.uri);
@@ -1077,6 +1083,7 @@ export class McpProxy {
     _identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<ListResourceTemplatesResult> {
+    this.assertRuntimeConfigValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
@@ -1142,6 +1149,7 @@ export class McpProxy {
     _identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<ListPromptsResult> {
+    this.assertRuntimeConfigValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
@@ -1201,6 +1209,7 @@ export class McpProxy {
     identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<GetPromptResult> {
+    this.assertRuntimeConfigValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const { serverName, promptName } = fromProxyPromptName(params.name);
@@ -1242,6 +1251,7 @@ export class McpProxy {
     identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<CompleteResult> {
+    this.assertRuntimeConfigValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const routed = routeCompletion(params);

@@ -1113,6 +1113,21 @@ describe("McpProxy", () => {
     await expect(app.start({ port: 0 })).rejects.toThrow(FentarisConfigError);
   });
 
+  it("validates deferred policy server references before in-process operations", async () => {
+    const app = fentaris({
+      groups: [
+        group({
+          id: "engineering",
+          users: [user("alice")],
+          policy: policy("engineering").mcp("github").allow("*"),
+        }),
+      ],
+    });
+
+    await expect(app.listTools(undefined, { id: "alice" })).rejects.toThrow(FentarisConfigError);
+    await expect(app.callTool({ name: toProxyToolName("github", "create_issue") }, { id: "alice" })).rejects.toThrow(FentarisConfigError);
+  });
+
   it("routes matching public tool patterns in registration order", async () => {
     const transport = new MockTransport();
     const proxy = new McpProxy({
