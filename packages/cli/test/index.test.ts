@@ -60,14 +60,14 @@ async function writeHealthyProject(root: string, authDirectory = ".fentaris"): P
   );
 }
 
-function runtime(cwd: string, probes: Record<string, boolean> = {}): Runtime & { calls: Array<{ command: string; args: string[]; cwd?: string | URL }> } {
-  const calls: Array<{ command: string; args: string[]; cwd?: string | URL }> = [];
+function runtime(cwd: string, probes: Record<string, boolean> = {}): Runtime & { calls: Array<{ command: string; args: string[]; cwd?: string | URL; env?: NodeJS.ProcessEnv }> } {
+  const calls: Array<{ command: string; args: string[]; cwd?: string | URL; env?: NodeJS.ProcessEnv }> = [];
   return {
     cwd,
     env: { FENTARIS_AUTH_KEY: "test-key" },
     out: { log: vi.fn(), error: vi.fn() },
     runner: vi.fn(async (command: string, args: string[], options?: SpawnOptions) => {
-      calls.push({ command, args, cwd: options?.cwd });
+      calls.push({ command, args, cwd: options?.cwd, env: options?.env });
       return { code: 0 };
     }),
     probe: vi.fn((command: string) => probes[command] ?? false),
@@ -182,6 +182,34 @@ describe("project commands", () => {
     await expect(main(["dev"], rt)).resolves.toBe(0);
 
     expect(rt.calls.some((call) => call.command === "pnpm" && call.args.join(" ") === "dev")).toBe(true);
+  });
+
+  it("loads the discovered project .env when running dev", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(join(dir, ".env"), "FENTARIS_AUTH_KEY=from-dotenv\nFENTARIS_GUEST_API_KEY=guest-demo\n");
+    const rt = runtime(join(dir, "src"), { pnpm: true });
+    delete rt.env.FENTARIS_AUTH_KEY;
+
+    await expect(main(["dev"], rt)).resolves.toBe(0);
+
+    const devCall = rt.calls.find((call) => call.command === "pnpm" && call.args.join(" ") === "dev");
+    expect(devCall?.cwd).toBe(dir);
+    expect(devCall?.env?.FENTARIS_AUTH_KEY).toBe("from-dotenv");
+    expect(devCall?.env?.FENTARIS_GUEST_API_KEY).toBe("guest-demo");
+  });
+
+  it("keeps exported environment variables ahead of project .env values", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(join(dir, ".env"), "FENTARIS_AUTH_KEY=from-dotenv\n");
+    const rt = runtime(dir, { pnpm: true });
+    rt.env.FENTARIS_AUTH_KEY = "from-shell";
+
+    await expect(main(["dev"], rt)).resolves.toBe(0);
+
+    const devCall = rt.calls.find((call) => call.command === "pnpm" && call.args.join(" ") === "dev");
+    expect(devCall?.env?.FENTARIS_AUTH_KEY).toBe("from-shell");
   });
 
   it("builds a deterministic local artifact", async () => {
