@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { SpawnOptions } from "node:child_process";
@@ -194,6 +194,17 @@ describe("project commands", () => {
 
     const manifest = JSON.parse(await readFile(join(dir, "demo", ".fentaris", "build", "manifest.json"), "utf8")) as { entrypoint: string };
     expect(manifest.entrypoint).toBe("src/index.ts");
+    expect(rt.calls.some((call) => call.command === "pnpm" && call.args.join(" ") === "run build")).toBe(true);
+  });
+
+  it("builds when local .env is absent but runtime secrets are provided", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await rm(join(dir, ".env"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+
+    await expect(main(["build"], rt)).resolves.toBe(0);
+
     expect(rt.calls.some((call) => call.command === "pnpm" && call.args.join(" ") === "run build")).toBe(true);
   });
 
