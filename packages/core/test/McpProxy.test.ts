@@ -18,6 +18,7 @@ import { health } from "../src/health/index.js";
 import { McpProxy, fentaris } from "../src/proxy/McpProxy.js";
 import { McpServer } from "../src/server/McpServer.js";
 import { FentarisErrorCode } from "../src/errors.js";
+import { FentarisConfigError } from "../src/config/index.js";
 import { Policy, group, policy, user } from "../src/governance.js";
 import {
   fromProxyPromptName,
@@ -1079,10 +1080,9 @@ describe("McpProxy", () => {
     expect(seen).toEqual(["github:create_issue"]);
   });
 
-  it("allows policies to reference MCP servers registered after construction when configured", async () => {
+  it("allows policies to reference MCP servers registered after construction", async () => {
     const transport = new MockTransport();
     const app = fentaris({
-      validation: { allowRuntimePolicyServerReferences: true },
       groups: [
         group({
           id: "engineering",
@@ -1097,6 +1097,20 @@ describe("McpProxy", () => {
     const result = await app.callTool({ name: toProxyToolName("github", "create_issue") }, { id: "alice" });
 
     expect(result).toMatchObject({ content: [{ type: "text", text: "called:create_issue" }] });
+  });
+
+  it("validates deferred policy server references before start", async () => {
+    const app = fentaris({
+      groups: [
+        group({
+          id: "engineering",
+          users: [user("alice")],
+          policy: policy("engineering").mcp("github").allow("*"),
+        }),
+      ],
+    });
+
+    await expect(app.start({ port: 0 })).rejects.toThrow(FentarisConfigError);
   });
 
   it("routes matching public tool patterns in registration order", async () => {

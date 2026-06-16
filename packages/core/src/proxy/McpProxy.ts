@@ -159,9 +159,6 @@ export type McpProxyOptions = {
   lifecycle?: RuntimeLifecycleOptions;
   health?: HealthConfig;
   errorMapper?: ErrorMapper;
-  validation?: {
-    allowRuntimePolicyServerReferences?: boolean;
-  };
   name?: string;
   version?: string;
 };
@@ -238,6 +235,7 @@ export class McpProxy {
   private readonly version: string;
   private readonly defaultPort?: number;
   private readonly defaultPath: string;
+  private readonly runtimeValidationConfig: McpProxyOptions;
   private httpServer: HttpServer | null = null;
   private readonly exposureHandles = new Set<ProxyExposureHandle>();
 
@@ -276,6 +274,12 @@ export class McpProxy {
     });
     this.defaultPort = options.port;
     this.defaultPath = options.path ?? "/mcp";
+    this.runtimeValidationConfig = {
+      ...options,
+      servers: this.servers,
+      groups: this.groups,
+      defaults: { credentials: this.defaultCredentials },
+    };
 
     for (const server of this.serverCatalog.allServers()) {
       this.serverByName.set(server.name, server);
@@ -467,6 +471,7 @@ export class McpProxy {
     if (this.httpServer) {
       return this.httpServer;
     }
+    this.assertRuntimeConfigValid();
 
     const startedAt = Date.now();
     const result = await this.lifecycle.start(async () => {
@@ -515,6 +520,8 @@ export class McpProxy {
    * @pk
    */
   async listen<THandle extends ProxyExposureHandle>(transport: ProxyExposureTransport<THandle>): Promise<THandle> {
+    this.assertRuntimeConfigValid();
+
     const state = this.state().state;
     if (state === "ready" || state === "degraded") {
       return this.listenInternal(transport);
@@ -544,6 +551,10 @@ export class McpProxy {
       }));
       throw error;
     }
+  }
+
+  private assertRuntimeConfigValid(): void {
+    assertValidFentarisConfig(this.runtimeValidationConfig);
   }
 
   /**
@@ -2236,7 +2247,7 @@ export class McpProxy {
  * @pk
  */
 export function createProxy(options: McpProxyOptions = {}): McpProxy {
-  assertValidFentarisConfig(options);
+  assertValidFentarisConfig(options, { requirePolicyServerVisibility: false });
   return new McpProxy(options);
 }
 

@@ -103,9 +103,8 @@ describe("config validation", () => {
     expect(createProxy(config)).toBeTruthy();
   });
 
-  it("can defer policy server visibility when servers are registered at runtime", () => {
+  it("can defer policy server visibility for app composition", () => {
     const config = defineFentarisConfig({
-      validation: { allowRuntimePolicyServerReferences: true },
       groups: [
         group({
           id: "engineering",
@@ -115,11 +114,12 @@ describe("config validation", () => {
       ],
     });
 
-    const result = validateFentarisConfig(config);
+    const result = validateFentarisConfig(config, { requirePolicyServerVisibility: false });
 
     expect(result.valid).toBe(true);
     expect(result.diagnostics.map((entry) => entry.code)).not.toContain("FENTARIS_CONFIG_POLICY_SERVER_NOT_VISIBLE");
-    expect(() => assertValidFentarisConfig(config)).not.toThrow();
+    expect(() => assertValidFentarisConfig(config, { requirePolicyServerVisibility: false })).not.toThrow();
+    expect(validateFentarisConfig(config).valid).toBe(false);
   });
 
   it("preserves existing valid global MCP behavior", () => {

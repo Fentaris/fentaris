@@ -81,15 +81,12 @@ Identity strategy configuration for proxy-edge auth.
 
 Policy and group declarations used to decide which upstream tools, resources, prompts, and completions are visible to each subject.
 
-### `validation.allowRuntimePolicyServerReferences`
+### Runtime server registration
 
-Allows policies to reference upstream MCP server names that will be registered later through `proxy.mcp(...)`.
+Policies can reference upstream MCP server names that are registered later through `proxy.mcp(...)`, as long as registration happens before `start()` or `listen(...)`.
 
 ```ts theme={null}
 const proxy = fentaris({
-  validation: {
-    allowRuntimePolicyServerReferences: true,
-  },
   groups: [
     group({
       id: "limited",
@@ -104,9 +101,9 @@ proxy.mcp("github", {
 });
 ```
 
-**Default:** `false`
+At startup, Fentaris validates the final runtime configuration and fails with `FENTARIS_CONFIG_POLICY_SERVER_NOT_VISIBLE` if a policy still references a missing server.
 
-Keep this disabled when all upstream MCP servers are known in `servers` or group `servers` at construction time.
+Use `validateFentarisConfig(config)` when you want a strict static check before composing an app with runtime `proxy.mcp(...)` calls.
 
 ### `logger`, `autoLog`, and `profiler`
 

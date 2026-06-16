@@ -2585,7 +2585,7 @@ Emit a warning log entry.
 
 @fentaris/core / McpProxy
 
-Defined in: packages/core/src/proxy/McpProxy.ts:212
+Defined in: packages/core/src/proxy/McpProxy.ts:209
 
 HTTP proxy for multiple MCP servers.
 
@@ -2595,7 +2595,7 @@ HTTP proxy for multiple MCP servers.
 
 > **new McpProxy**(`options?`): `McpProxy`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:248
+Defined in: packages/core/src/proxy/McpProxy.ts:246
 
 Create a new MCP proxy instance.
 
@@ -2615,7 +2615,7 @@ Create a new MCP proxy instance.
 
 > **assertGroupHandleKnown**(`groupId`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1440
+Defined in: packages/core/src/proxy/McpProxy.ts:1451
 
 #### Parameters
 
@@ -2631,7 +2631,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1440
 
 > **assertServerHandleVisible**(`serverName`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1412
+Defined in: packages/core/src/proxy/McpProxy.ts:1423
 
 #### Parameters
 
@@ -2651,7 +2651,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1412
 
 > **callTool**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `content`: (\{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `text`: `string`; `type`: `"text"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"image"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"audio"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `description?`: `string`; `icons?`: `object`[]; `mimeType?`: `string`; `name`: `string`; `size?`: `number`; `title?`: `string`; `type`: `"resource_link"`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `resource`: \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `mimeType?`: `string`; `text`: `string`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `blob`: `string`; `mimeType?`: `string`; `uri`: `string`; \}; `type`: `"resource"`; \})[]; `isError?`: `boolean`; `structuredContent?`: \{\[`key`: `string`\]: `unknown`; \}; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:734
+Defined in: packages/core/src/proxy/McpProxy.ts:745
 
 Call a proxied tool with middleware dispatch.
 
@@ -2715,7 +2715,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **close**(): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:553
+Defined in: packages/core/src/proxy/McpProxy.ts:564
 
 Close the HTTP server and all backends.
 
@@ -2727,7 +2727,7 @@ Close the HTTP server and all backends.
 
 > **complete**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `completion`: \{\[`key`: `string`\]: `unknown`; `hasMore?`: `boolean`; `total?`: `number`; `values`: `string`[]; \}; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1228
+Defined in: packages/core/src/proxy/McpProxy.ts:1239
 
 Complete a proxied prompt or resource-template argument.
 
@@ -2799,7 +2799,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **emitSessionEnd**(`context`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1331
+Defined in: packages/core/src/proxy/McpProxy.ts:1342
 
 Emit a downstream session end lifecycle event.
 
@@ -2817,7 +2817,7 @@ Emit a downstream session end lifecycle event.
 
 > **emitSessionStart**(`context`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1293
+Defined in: packages/core/src/proxy/McpProxy.ts:1304
 
 Emit a downstream session start lifecycle event.
 
@@ -2835,7 +2835,7 @@ Emit a downstream session start lifecycle event.
 
 > **getPrompt**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `description?`: `string`; `messages`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1187
+Defined in: packages/core/src/proxy/McpProxy.ts:1198
 
 Get a proxied prompt from its owning upstream server.
 
@@ -2891,7 +2891,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **group**(`groupId`): `ProxyGroupHandle`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:361
+Defined in: packages/core/src/proxy/McpProxy.ts:365
 
 Register or retrieve a scoped group handle.
 
@@ -2909,7 +2909,7 @@ Register or retrieve a scoped group handle.
 
 > **health**(): `Promise`\<`HealthReport`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:601
+Defined in: packages/core/src/proxy/McpProxy.ts:612
 
 Run configured runtime health checks.
 
@@ -2921,7 +2921,7 @@ Run configured runtime health checks.
 
 > **listen**\<`THandle`\>(`transport`): `Promise`\<`THandle`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:517
+Defined in: packages/core/src/proxy/McpProxy.ts:522
 
 Start the proxy with an explicit downstream exposure transport.
 
@@ -2945,7 +2945,7 @@ Start the proxy with an explicit downstream exposure transport.
 
 > **listPrompts**(`params?`, `user?`, `_identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `prompts`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1128
+Defined in: packages/core/src/proxy/McpProxy.ts:1139
 
 List prompts across all configured servers.
 
@@ -2997,7 +2997,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listResources**(`params?`, `user?`, `_identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `resources`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:949
+Defined in: packages/core/src/proxy/McpProxy.ts:960
 
 List resources across all configured servers.
 
@@ -3049,7 +3049,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listResourceTemplates**(`params?`, `user?`, `_identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `resourceTemplates`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1063
+Defined in: packages/core/src/proxy/McpProxy.ts:1074
 
 List resource templates across all configured servers.
 
@@ -3101,7 +3101,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listTools**(`params?`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `tools`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:655
+Defined in: packages/core/src/proxy/McpProxy.ts:666
 
 List tools across all configured servers.
 
@@ -3155,7 +3155,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **mcp**(`name`): `ProxyMcpHandle`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:317
+Defined in: packages/core/src/proxy/McpProxy.ts:321
 
 Register or retrieve a scoped upstream MCP handle.
 
@@ -3173,7 +3173,7 @@ Register or retrieve a scoped upstream MCP handle.
 
 > **mcp**(`name`, `options`): `ProxyMcpHandle`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:318
+Defined in: packages/core/src/proxy/McpProxy.ts:322
 
 Register or retrieve a scoped upstream MCP handle.
 
@@ -3195,7 +3195,7 @@ Register or retrieve a scoped upstream MCP handle.
 
 > **mcp**(`name`, `server`): `ProxyMcpHandle`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:319
+Defined in: packages/core/src/proxy/McpProxy.ts:323
 
 Register or retrieve a scoped upstream MCP handle.
 
@@ -3217,7 +3217,7 @@ Register or retrieve a scoped upstream MCP handle.
 
 > **mcp**(`config`): `ProxyMcpHandle`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:320
+Defined in: packages/core/src/proxy/McpProxy.ts:324
 
 Register or retrieve a scoped upstream MCP handle.
 
@@ -3235,7 +3235,7 @@ Register or retrieve a scoped upstream MCP handle.
 
 > **mcpHealth**(`name`): `Promise`\<`HealthCheckResult`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:647
+Defined in: packages/core/src/proxy/McpProxy.ts:658
 
 Check a configured upstream MCP server health.
 
@@ -3255,7 +3255,7 @@ Check a configured upstream MCP server health.
 
 > **on**(`event`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:382
+Defined in: packages/core/src/proxy/McpProxy.ts:386
 
 Register an event hook.
 
@@ -3277,7 +3277,7 @@ Register an event hook.
 
 > **on**(`event`, `filter`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:387
+Defined in: packages/core/src/proxy/McpProxy.ts:391
 
 Register a filtered event hook.
 
@@ -3303,7 +3303,7 @@ Register a filtered event hook.
 
 > **on**(`event`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:392
+Defined in: packages/core/src/proxy/McpProxy.ts:396
 
 Register a unified proxy event handler.
 
@@ -3325,7 +3325,7 @@ Register a unified proxy event handler.
 
 > **on**(`event`, `filter`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:397
+Defined in: packages/core/src/proxy/McpProxy.ts:401
 
 Register a filtered unified proxy event handler.
 
@@ -3351,7 +3351,7 @@ Register a filtered unified proxy event handler.
 
 > **onLifecycle**(`event`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:431
+Defined in: packages/core/src/proxy/McpProxy.ts:435
 
 Register a lifecycle hook.
 
@@ -3373,7 +3373,7 @@ Register a lifecycle hook.
 
 > **onListTools**(`hook`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:446
+Defined in: packages/core/src/proxy/McpProxy.ts:450
 
 Register a hook that can transform listed tools.
 
@@ -3391,7 +3391,7 @@ Register a hook that can transform listed tools.
 
 > **operation**(`operation`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:308
+Defined in: packages/core/src/proxy/McpProxy.ts:312
 
 Register a global operation route for governed non-tool operations.
 
@@ -3413,7 +3413,7 @@ Register a global operation route for governed non-tool operations.
 
 > **pingMcp**(`name`): `Promise`\<`HealthCheckResult`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:639
+Defined in: packages/core/src/proxy/McpProxy.ts:650
 
 Ping a configured upstream MCP server by listing tools.
 
@@ -3431,7 +3431,7 @@ Ping a configured upstream MCP server by listing tools.
 
 > **readResource**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `contents`: (\{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `mimeType?`: `string`; `text`: `string`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `blob`: `string`; `mimeType?`: `string`; `uri`: `string`; \})[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1014
+Defined in: packages/core/src/proxy/McpProxy.ts:1025
 
 Read a proxied resource from its owning upstream server.
 
@@ -3483,7 +3483,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **ready**(`options?`): `Promise`\<`RuntimeLifecycleSnapshot`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:561
+Defined in: packages/core/src/proxy/McpProxy.ts:572
 
 Wait for the runtime to reach readiness.
 
@@ -3501,7 +3501,7 @@ Wait for the runtime to reach readiness.
 
 > **registerGroupEvent**(`groupId`, `eventName`, `filter`, `handler`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1400
+Defined in: packages/core/src/proxy/McpProxy.ts:1411
 
 #### Parameters
 
@@ -3529,7 +3529,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1400
 
 > **registerGroupMiddleware**(`groupId`, `handler`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1390
+Defined in: packages/core/src/proxy/McpProxy.ts:1401
 
 #### Parameters
 
@@ -3549,7 +3549,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1390
 
 > **registerGroupOperation**(`groupId`, `operation`, `handler`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1395
+Defined in: packages/core/src/proxy/McpProxy.ts:1406
 
 #### Parameters
 
@@ -3573,7 +3573,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1395
 
 > **registerServerEvent**(`serverName`, `eventName`, `filter`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1377
+Defined in: packages/core/src/proxy/McpProxy.ts:1388
 
 #### Parameters
 
@@ -3605,7 +3605,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1377
 
 > **registerServerMiddleware**(`serverName`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1362
+Defined in: packages/core/src/proxy/McpProxy.ts:1373
 
 #### Parameters
 
@@ -3629,7 +3629,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1362
 
 > **registerServerOperation**(`serverName`, `operation`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1372
+Defined in: packages/core/src/proxy/McpProxy.ts:1383
 
 #### Parameters
 
@@ -3657,7 +3657,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1372
 
 > **registerServerTool**(`serverName`, `pattern`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1367
+Defined in: packages/core/src/proxy/McpProxy.ts:1378
 
 #### Parameters
 
@@ -3685,7 +3685,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1367
 
 > **resolveHttpUser**(`req`): `Promise`\<\{ `identity?`: `IdentityMetadata`; `subject?`: `ResolvedSubject`; `user`: `UserContext`; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1276
+Defined in: packages/core/src/proxy/McpProxy.ts:1287
 
 Resolve user context from an HTTP downstream request.
 
@@ -3703,7 +3703,7 @@ Resolve user context from an HTTP downstream request.
 
 > **resolveStdioUser**(): `Promise`\<\{ `identity?`: `IdentityMetadata`; `subject?`: `ResolvedSubject`; `user`: `UserContext`; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1284
+Defined in: packages/core/src/proxy/McpProxy.ts:1295
 
 Resolve user context for non-HTTP stdio downstream exposure.
 
@@ -3717,7 +3717,7 @@ Resolve user context for non-HTTP stdio downstream exposure.
 
 > **start**(`onStarted?`): `Promise`\<`Server`\<*typeof* `IncomingMessage`, *typeof* `ServerResponse`\>\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:455
+Defined in: packages/core/src/proxy/McpProxy.ts:459
 
 Start the HTTP server.
 
@@ -3735,7 +3735,7 @@ Start the HTTP server.
 
 > **start**(`options?`, `onStarted?`): `Promise`\<`Server`\<*typeof* `IncomingMessage`, *typeof* `ServerResponse`\>\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:460
+Defined in: packages/core/src/proxy/McpProxy.ts:464
 
 Start the HTTP server with optional overrides.
 
@@ -3757,7 +3757,7 @@ Start the HTTP server with optional overrides.
 
 > **state**(): `RuntimeLifecycleSnapshot`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:593
+Defined in: packages/core/src/proxy/McpProxy.ts:604
 
 Inspect the current runtime lifecycle state.
 
@@ -3769,7 +3769,7 @@ Inspect the current runtime lifecycle state.
 
 > **stop**(`options?`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:569
+Defined in: packages/core/src/proxy/McpProxy.ts:580
 
 Stop the runtime and close owned resources.
 
@@ -3787,7 +3787,7 @@ Stop the runtime and close owned resources.
 
 > **tool**(`pattern`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:299
+Defined in: packages/core/src/proxy/McpProxy.ts:303
 
 Register a global tool route with a public server.tool pattern.
 
@@ -3809,7 +3809,7 @@ Register a global tool route with a public server.tool pattern.
 
 > **use**(`middleware`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:289
+Defined in: packages/core/src/proxy/McpProxy.ts:293
 
 Register a middleware handler.
 
@@ -7607,9 +7607,9 @@ API-key identity strategy backed by encrypted local auth storage.
 
 @fentaris/core / assertValidFentarisConfig
 
-> **assertValidFentarisConfig**(`config`): `FentarisConfigValidationResult`
+> **assertValidFentarisConfig**(`config`, `options?`): `FentarisConfigValidationResult`
 
-Defined in: packages/core/src/config/validation.ts:66
+Defined in: packages/core/src/config/validation.ts:81
 
 Validate Fentaris configuration and throw on error-severity diagnostics.
 
@@ -7618,6 +7618,10 @@ Validate Fentaris configuration and throw on error-severity diagnostics.
 ### config
 
 `McpProxyOptions`
+
+### options?
+
+`FentarisConfigValidationOptions` = `{}`
 
 ## Returns
 
@@ -7707,7 +7711,7 @@ First-class governance declaration APIs.
 
 > **createProxy**(`options?`): `McpProxy`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2238
+Defined in: packages/core/src/proxy/McpProxy.ts:2249
 
 Create a Fentaris proxy with the express-like routing API.
 
@@ -7827,7 +7831,7 @@ Resolve a value from the encrypted local credentials JSON.
 
 > **defineFentarisConfig**\<`TConfig`\>(`config`): `TConfig`
 
-Defined in: packages/core/src/config/validation.ts:20
+Defined in: packages/core/src/config/validation.ts:35
 
 Preserve TypeScript inference for Fentaris configuration objects.
 
@@ -8821,9 +8825,9 @@ Helper to declare a user.
 
 @fentaris/core / validateFentarisConfig
 
-> **validateFentarisConfig**(`config`): `FentarisConfigValidationResult`
+> **validateFentarisConfig**(`config`, `options?`): `FentarisConfigValidationResult`
 
-Defined in: packages/core/src/config/validation.ts:28
+Defined in: packages/core/src/config/validation.ts:43
 
 Validate Fentaris configuration and return structured diagnostics.
 
@@ -8832,6 +8836,10 @@ Validate Fentaris configuration and return structured diagnostics.
 ### config
 
 `McpProxyOptions`
+
+### options?
+
+`FentarisConfigValidationOptions` = `{}`
 
 ## Returns
 
@@ -9353,7 +9361,7 @@ Structured result for permission approval callbacks.
 
 > **AutoLogOptions** = `object`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:173
+Defined in: packages/core/src/proxy/McpProxy.ts:170
 
 Auto-log configuration for proxied tool calls.
 
@@ -9363,25 +9371,25 @@ Auto-log configuration for proxied tool calls.
 
 > `optional` **enabled?**: `boolean`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:174
+Defined in: packages/core/src/proxy/McpProxy.ts:171
 
 ### failureLevel?
 
 > `optional` **failureLevel?**: `"warn"` \| `"error"`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:177
+Defined in: packages/core/src/proxy/McpProxy.ts:174
 
 ### startLevel?
 
 > `optional` **startLevel?**: `"debug"` \| `"info"`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:175
+Defined in: packages/core/src/proxy/McpProxy.ts:172
 
 ### successLevel?
 
 > `optional` **successLevel?**: `"debug"` \| `"info"`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:176
+Defined in: packages/core/src/proxy/McpProxy.ts:173
 
   </Accordion>
 
@@ -9874,6 +9882,31 @@ Defined in: packages/core/src/types/policy.ts:138
 Defined in: packages/core/src/config/diagnostics.ts:11
 
 Semantic path into a TypeScript Fentaris config object.
+
+  </Accordion>
+
+  <Accordion title="Core exports: type-aliases/FentarisConfigValidationOptions">
+
+@fentaris/core / FentarisConfigValidationOptions
+
+> **FentarisConfigValidationOptions** = `object`
+
+Defined in: packages/core/src/config/validation.ts:20
+
+Options for explicit configuration validation.
+
+## Properties
+
+### requirePolicyServerVisibility?
+
+> `optional` **requirePolicyServerVisibility?**: `boolean`
+
+Defined in: packages/core/src/config/validation.ts:28
+
+Require policies to reference servers already visible in the config being validated.
+
+Defaults to `true`. Fentaris uses `false` internally while composing an app so `app.mcp(...)`
+can register upstream MCP servers before startup validation runs.
 
   </Accordion>
 
@@ -11159,7 +11192,7 @@ Defined in: packages/core/src/types/shared.ts:115
 
 > **IdentityResolverOptions** = `object`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:184
+Defined in: packages/core/src/proxy/McpProxy.ts:181
 
 Identity resolver configuration for proxy-edge auth.
 
@@ -11169,13 +11202,13 @@ Identity resolver configuration for proxy-edge auth.
 
 > `optional` **required?**: `boolean`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:186
+Defined in: packages/core/src/proxy/McpProxy.ts:183
 
 ### strategy
 
 > **strategy**: `IdentityStrategy`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:185
+Defined in: packages/core/src/proxy/McpProxy.ts:182
 
   </Accordion>
 
@@ -11917,7 +11950,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:147
 
 > `optional` **name?**: `string`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:165
+Defined in: packages/core/src/proxy/McpProxy.ts:162
 
 ### path?
 
@@ -11961,21 +11994,11 @@ Defined in: packages/core/src/proxy/McpProxy.ts:144
 
 Defined in: packages/core/src/proxy/McpProxy.ts:148
 
-### validation?
-
-> `optional` **validation?**: `object`
-
-Defined in: packages/core/src/proxy/McpProxy.ts:162
-
-#### allowRuntimePolicyServerReferences?
-
-> `optional` **allowRuntimePolicyServerReferences?**: `boolean`
-
 ### version?
 
 > `optional` **version?**: `string`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:166
+Defined in: packages/core/src/proxy/McpProxy.ts:163
 
   </Accordion>
 
@@ -11985,7 +12008,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:166
 
 > **McpProxyStartOptions** = `object`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:193
+Defined in: packages/core/src/proxy/McpProxy.ts:190
 
 Optional start overrides for the MCP proxy.
 
@@ -11995,19 +12018,19 @@ Optional start overrides for the MCP proxy.
 
 > `optional` **path?**: `string`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:195
+Defined in: packages/core/src/proxy/McpProxy.ts:192
 
 ### port?
 
 > `optional` **port?**: `number`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:194
+Defined in: packages/core/src/proxy/McpProxy.ts:191
 
 ### startupTimeoutMs?
 
 > `optional` **startupTimeoutMs?**: `number`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:196
+Defined in: packages/core/src/proxy/McpProxy.ts:193
 
   </Accordion>
 
@@ -12017,7 +12040,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:196
 
 > **McpProxyStopOptions** = `object`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:203
+Defined in: packages/core/src/proxy/McpProxy.ts:200
 
 Optional stop overrides for the MCP proxy.
 
@@ -12027,7 +12050,7 @@ Optional stop overrides for the MCP proxy.
 
 > `optional` **shutdownTimeoutMs?**: `number`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:204
+Defined in: packages/core/src/proxy/McpProxy.ts:201
 
   </Accordion>
 
@@ -15535,7 +15558,7 @@ Permission helper for approval callbacks.
 
 > `const` **fentaris**: (`options`) => `McpProxy` = `createProxy`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2247
+Defined in: packages/core/src/proxy/McpProxy.ts:2258
 
 Create a Fentaris proxy with the express-like routing API.
 
@@ -15591,7 +15614,7 @@ Standard Fentaris MCP-style error codes.
 
 @fentaris/core / McpProxy
 
-Defined in: packages/core/src/proxy/McpProxy.ts:212
+Defined in: packages/core/src/proxy/McpProxy.ts:209
 
 HTTP proxy for multiple MCP servers.
 
@@ -15601,7 +15624,7 @@ HTTP proxy for multiple MCP servers.
 
 > **new McpProxy**(`options?`): `McpProxy`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:248
+Defined in: packages/core/src/proxy/McpProxy.ts:246
 
 Create a new MCP proxy instance.
 
@@ -15621,7 +15644,7 @@ Create a new MCP proxy instance.
 
 > **assertGroupHandleKnown**(`groupId`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1440
+Defined in: packages/core/src/proxy/McpProxy.ts:1451
 
 #### Parameters
 
@@ -15637,7 +15660,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1440
 
 > **assertServerHandleVisible**(`serverName`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1412
+Defined in: packages/core/src/proxy/McpProxy.ts:1423
 
 #### Parameters
 
@@ -15657,7 +15680,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1412
 
 > **callTool**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `content`: (\{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `text`: `string`; `type`: `"text"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"image"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"audio"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `description?`: `string`; `icons?`: `object`[]; `mimeType?`: `string`; `name`: `string`; `size?`: `number`; `title?`: `string`; `type`: `"resource_link"`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `resource`: \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `mimeType?`: `string`; `text`: `string`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `blob`: `string`; `mimeType?`: `string`; `uri`: `string`; \}; `type`: `"resource"`; \})[]; `isError?`: `boolean`; `structuredContent?`: \{\[`key`: `string`\]: `unknown`; \}; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:734
+Defined in: packages/core/src/proxy/McpProxy.ts:745
 
 Call a proxied tool with middleware dispatch.
 
@@ -15721,7 +15744,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **close**(): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:553
+Defined in: packages/core/src/proxy/McpProxy.ts:564
 
 Close the HTTP server and all backends.
 
@@ -15733,7 +15756,7 @@ Close the HTTP server and all backends.
 
 > **complete**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `completion`: \{\[`key`: `string`\]: `unknown`; `hasMore?`: `boolean`; `total?`: `number`; `values`: `string`[]; \}; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1228
+Defined in: packages/core/src/proxy/McpProxy.ts:1239
 
 Complete a proxied prompt or resource-template argument.
 
@@ -15805,7 +15828,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **emitSessionEnd**(`context`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1331
+Defined in: packages/core/src/proxy/McpProxy.ts:1342
 
 Emit a downstream session end lifecycle event.
 
@@ -15823,7 +15846,7 @@ Emit a downstream session end lifecycle event.
 
 > **emitSessionStart**(`context`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1293
+Defined in: packages/core/src/proxy/McpProxy.ts:1304
 
 Emit a downstream session start lifecycle event.
 
@@ -15841,7 +15864,7 @@ Emit a downstream session start lifecycle event.
 
 > **getPrompt**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `description?`: `string`; `messages`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1187
+Defined in: packages/core/src/proxy/McpProxy.ts:1198
 
 Get a proxied prompt from its owning upstream server.
 
@@ -15897,7 +15920,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **group**(`groupId`): `ProxyGroupHandle`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:361
+Defined in: packages/core/src/proxy/McpProxy.ts:365
 
 Register or retrieve a scoped group handle.
 
@@ -15915,7 +15938,7 @@ Register or retrieve a scoped group handle.
 
 > **health**(): `Promise`\<`HealthReport`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:601
+Defined in: packages/core/src/proxy/McpProxy.ts:612
 
 Run configured runtime health checks.
 
@@ -15927,7 +15950,7 @@ Run configured runtime health checks.
 
 > **listen**\<`THandle`\>(`transport`): `Promise`\<`THandle`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:517
+Defined in: packages/core/src/proxy/McpProxy.ts:522
 
 Start the proxy with an explicit downstream exposure transport.
 
@@ -15951,7 +15974,7 @@ Start the proxy with an explicit downstream exposure transport.
 
 > **listPrompts**(`params?`, `user?`, `_identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `prompts`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1128
+Defined in: packages/core/src/proxy/McpProxy.ts:1139
 
 List prompts across all configured servers.
 
@@ -16003,7 +16026,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listResources**(`params?`, `user?`, `_identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `resources`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:949
+Defined in: packages/core/src/proxy/McpProxy.ts:960
 
 List resources across all configured servers.
 
@@ -16055,7 +16078,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listResourceTemplates**(`params?`, `user?`, `_identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `resourceTemplates`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1063
+Defined in: packages/core/src/proxy/McpProxy.ts:1074
 
 List resource templates across all configured servers.
 
@@ -16107,7 +16130,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listTools**(`params?`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `tools`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:655
+Defined in: packages/core/src/proxy/McpProxy.ts:666
 
 List tools across all configured servers.
 
@@ -16161,7 +16184,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **mcp**(`name`): `ProxyMcpHandle`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:317
+Defined in: packages/core/src/proxy/McpProxy.ts:321
 
 Register or retrieve a scoped upstream MCP handle.
 
@@ -16179,7 +16202,7 @@ Register or retrieve a scoped upstream MCP handle.
 
 > **mcp**(`name`, `options`): `ProxyMcpHandle`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:318
+Defined in: packages/core/src/proxy/McpProxy.ts:322
 
 Register or retrieve a scoped upstream MCP handle.
 
@@ -16201,7 +16224,7 @@ Register or retrieve a scoped upstream MCP handle.
 
 > **mcp**(`name`, `server`): `ProxyMcpHandle`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:319
+Defined in: packages/core/src/proxy/McpProxy.ts:323
 
 Register or retrieve a scoped upstream MCP handle.
 
@@ -16223,7 +16246,7 @@ Register or retrieve a scoped upstream MCP handle.
 
 > **mcp**(`config`): `ProxyMcpHandle`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:320
+Defined in: packages/core/src/proxy/McpProxy.ts:324
 
 Register or retrieve a scoped upstream MCP handle.
 
@@ -16241,7 +16264,7 @@ Register or retrieve a scoped upstream MCP handle.
 
 > **mcpHealth**(`name`): `Promise`\<`HealthCheckResult`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:647
+Defined in: packages/core/src/proxy/McpProxy.ts:658
 
 Check a configured upstream MCP server health.
 
@@ -16261,7 +16284,7 @@ Check a configured upstream MCP server health.
 
 > **on**(`event`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:382
+Defined in: packages/core/src/proxy/McpProxy.ts:386
 
 Register an event hook.
 
@@ -16283,7 +16306,7 @@ Register an event hook.
 
 > **on**(`event`, `filter`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:387
+Defined in: packages/core/src/proxy/McpProxy.ts:391
 
 Register a filtered event hook.
 
@@ -16309,7 +16332,7 @@ Register a filtered event hook.
 
 > **on**(`event`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:392
+Defined in: packages/core/src/proxy/McpProxy.ts:396
 
 Register a unified proxy event handler.
 
@@ -16331,7 +16354,7 @@ Register a unified proxy event handler.
 
 > **on**(`event`, `filter`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:397
+Defined in: packages/core/src/proxy/McpProxy.ts:401
 
 Register a filtered unified proxy event handler.
 
@@ -16357,7 +16380,7 @@ Register a filtered unified proxy event handler.
 
 > **onLifecycle**(`event`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:431
+Defined in: packages/core/src/proxy/McpProxy.ts:435
 
 Register a lifecycle hook.
 
@@ -16379,7 +16402,7 @@ Register a lifecycle hook.
 
 > **onListTools**(`hook`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:446
+Defined in: packages/core/src/proxy/McpProxy.ts:450
 
 Register a hook that can transform listed tools.
 
@@ -16397,7 +16420,7 @@ Register a hook that can transform listed tools.
 
 > **operation**(`operation`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:308
+Defined in: packages/core/src/proxy/McpProxy.ts:312
 
 Register a global operation route for governed non-tool operations.
 
@@ -16419,7 +16442,7 @@ Register a global operation route for governed non-tool operations.
 
 > **pingMcp**(`name`): `Promise`\<`HealthCheckResult`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:639
+Defined in: packages/core/src/proxy/McpProxy.ts:650
 
 Ping a configured upstream MCP server by listing tools.
 
@@ -16437,7 +16460,7 @@ Ping a configured upstream MCP server by listing tools.
 
 > **readResource**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `contents`: (\{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `mimeType?`: `string`; `text`: `string`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `blob`: `string`; `mimeType?`: `string`; `uri`: `string`; \})[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1014
+Defined in: packages/core/src/proxy/McpProxy.ts:1025
 
 Read a proxied resource from its owning upstream server.
 
@@ -16489,7 +16512,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **ready**(`options?`): `Promise`\<`RuntimeLifecycleSnapshot`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:561
+Defined in: packages/core/src/proxy/McpProxy.ts:572
 
 Wait for the runtime to reach readiness.
 
@@ -16507,7 +16530,7 @@ Wait for the runtime to reach readiness.
 
 > **registerGroupEvent**(`groupId`, `eventName`, `filter`, `handler`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1400
+Defined in: packages/core/src/proxy/McpProxy.ts:1411
 
 #### Parameters
 
@@ -16535,7 +16558,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1400
 
 > **registerGroupMiddleware**(`groupId`, `handler`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1390
+Defined in: packages/core/src/proxy/McpProxy.ts:1401
 
 #### Parameters
 
@@ -16555,7 +16578,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1390
 
 > **registerGroupOperation**(`groupId`, `operation`, `handler`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1395
+Defined in: packages/core/src/proxy/McpProxy.ts:1406
 
 #### Parameters
 
@@ -16579,7 +16602,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1395
 
 > **registerServerEvent**(`serverName`, `eventName`, `filter`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1377
+Defined in: packages/core/src/proxy/McpProxy.ts:1388
 
 #### Parameters
 
@@ -16611,7 +16634,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1377
 
 > **registerServerMiddleware**(`serverName`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1362
+Defined in: packages/core/src/proxy/McpProxy.ts:1373
 
 #### Parameters
 
@@ -16635,7 +16658,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1362
 
 > **registerServerOperation**(`serverName`, `operation`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1372
+Defined in: packages/core/src/proxy/McpProxy.ts:1383
 
 #### Parameters
 
@@ -16663,7 +16686,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1372
 
 > **registerServerTool**(`serverName`, `pattern`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1367
+Defined in: packages/core/src/proxy/McpProxy.ts:1378
 
 #### Parameters
 
@@ -16691,7 +16714,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:1367
 
 > **resolveHttpUser**(`req`): `Promise`\<\{ `identity?`: `IdentityMetadata`; `subject?`: `ResolvedSubject`; `user`: `UserContext`; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1276
+Defined in: packages/core/src/proxy/McpProxy.ts:1287
 
 Resolve user context from an HTTP downstream request.
 
@@ -16709,7 +16732,7 @@ Resolve user context from an HTTP downstream request.
 
 > **resolveStdioUser**(): `Promise`\<\{ `identity?`: `IdentityMetadata`; `subject?`: `ResolvedSubject`; `user`: `UserContext`; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1284
+Defined in: packages/core/src/proxy/McpProxy.ts:1295
 
 Resolve user context for non-HTTP stdio downstream exposure.
 
@@ -16723,7 +16746,7 @@ Resolve user context for non-HTTP stdio downstream exposure.
 
 > **start**(`onStarted?`): `Promise`\<`Server`\<*typeof* `IncomingMessage`, *typeof* `ServerResponse`\>\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:455
+Defined in: packages/core/src/proxy/McpProxy.ts:459
 
 Start the HTTP server.
 
@@ -16741,7 +16764,7 @@ Start the HTTP server.
 
 > **start**(`options?`, `onStarted?`): `Promise`\<`Server`\<*typeof* `IncomingMessage`, *typeof* `ServerResponse`\>\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:460
+Defined in: packages/core/src/proxy/McpProxy.ts:464
 
 Start the HTTP server with optional overrides.
 
@@ -16763,7 +16786,7 @@ Start the HTTP server with optional overrides.
 
 > **state**(): `RuntimeLifecycleSnapshot`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:593
+Defined in: packages/core/src/proxy/McpProxy.ts:604
 
 Inspect the current runtime lifecycle state.
 
@@ -16775,7 +16798,7 @@ Inspect the current runtime lifecycle state.
 
 > **stop**(`options?`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:569
+Defined in: packages/core/src/proxy/McpProxy.ts:580
 
 Stop the runtime and close owned resources.
 
@@ -16793,7 +16816,7 @@ Stop the runtime and close owned resources.
 
 > **tool**(`pattern`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:299
+Defined in: packages/core/src/proxy/McpProxy.ts:303
 
 Register a global tool route with a public server.tool pattern.
 
@@ -16815,7 +16838,7 @@ Register a global tool route with a public server.tool pattern.
 
 > **use**(`middleware`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:289
+Defined in: packages/core/src/proxy/McpProxy.ts:293
 
 Register a middleware handler.
 
@@ -16837,7 +16860,7 @@ Register a middleware handler.
 
 > **createProxy**(`options?`): `McpProxy`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2238
+Defined in: packages/core/src/proxy/McpProxy.ts:2249
 
 Create a Fentaris proxy with the express-like routing API.
 
@@ -16859,7 +16882,7 @@ Create a Fentaris proxy with the express-like routing API.
 
 > **AutoLogOptions** = `object`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:173
+Defined in: packages/core/src/proxy/McpProxy.ts:170
 
 Auto-log configuration for proxied tool calls.
 
@@ -16869,25 +16892,25 @@ Auto-log configuration for proxied tool calls.
 
 > `optional` **enabled?**: `boolean`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:174
+Defined in: packages/core/src/proxy/McpProxy.ts:171
 
 ### failureLevel?
 
 > `optional` **failureLevel?**: `"warn"` \| `"error"`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:177
+Defined in: packages/core/src/proxy/McpProxy.ts:174
 
 ### startLevel?
 
 > `optional` **startLevel?**: `"debug"` \| `"info"`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:175
+Defined in: packages/core/src/proxy/McpProxy.ts:172
 
 ### successLevel?
 
 > `optional` **successLevel?**: `"debug"` \| `"info"`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:176
+Defined in: packages/core/src/proxy/McpProxy.ts:173
 
   </Accordion>
 
@@ -16897,7 +16920,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:176
 
 > **IdentityResolverOptions** = `object`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:184
+Defined in: packages/core/src/proxy/McpProxy.ts:181
 
 Identity resolver configuration for proxy-edge auth.
 
@@ -16907,13 +16930,13 @@ Identity resolver configuration for proxy-edge auth.
 
 > `optional` **required?**: `boolean`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:186
+Defined in: packages/core/src/proxy/McpProxy.ts:183
 
 ### strategy
 
 > **strategy**: `IdentityStrategy`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:185
+Defined in: packages/core/src/proxy/McpProxy.ts:182
 
   </Accordion>
 
@@ -16991,7 +17014,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:147
 
 > `optional` **name?**: `string`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:165
+Defined in: packages/core/src/proxy/McpProxy.ts:162
 
 ### path?
 
@@ -17035,21 +17058,11 @@ Defined in: packages/core/src/proxy/McpProxy.ts:144
 
 Defined in: packages/core/src/proxy/McpProxy.ts:148
 
-### validation?
-
-> `optional` **validation?**: `object`
-
-Defined in: packages/core/src/proxy/McpProxy.ts:162
-
-#### allowRuntimePolicyServerReferences?
-
-> `optional` **allowRuntimePolicyServerReferences?**: `boolean`
-
 ### version?
 
 > `optional` **version?**: `string`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:166
+Defined in: packages/core/src/proxy/McpProxy.ts:163
 
   </Accordion>
 
@@ -17059,7 +17072,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:166
 
 > **McpProxyStartOptions** = `object`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:193
+Defined in: packages/core/src/proxy/McpProxy.ts:190
 
 Optional start overrides for the MCP proxy.
 
@@ -17069,19 +17082,19 @@ Optional start overrides for the MCP proxy.
 
 > `optional` **path?**: `string`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:195
+Defined in: packages/core/src/proxy/McpProxy.ts:192
 
 ### port?
 
 > `optional` **port?**: `number`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:194
+Defined in: packages/core/src/proxy/McpProxy.ts:191
 
 ### startupTimeoutMs?
 
 > `optional` **startupTimeoutMs?**: `number`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:196
+Defined in: packages/core/src/proxy/McpProxy.ts:193
 
   </Accordion>
 
@@ -17091,7 +17104,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:196
 
 > **McpProxyStopOptions** = `object`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:203
+Defined in: packages/core/src/proxy/McpProxy.ts:200
 
 Optional stop overrides for the MCP proxy.
 
@@ -17101,7 +17114,7 @@ Optional stop overrides for the MCP proxy.
 
 > `optional` **shutdownTimeoutMs?**: `number`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:204
+Defined in: packages/core/src/proxy/McpProxy.ts:201
 
   </Accordion>
 
@@ -17111,7 +17124,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:204
 
 > `const` **fentaris**: (`options`) => `McpProxy` = `createProxy`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2247
+Defined in: packages/core/src/proxy/McpProxy.ts:2258
 
 Create a Fentaris proxy with the express-like routing API.
 
