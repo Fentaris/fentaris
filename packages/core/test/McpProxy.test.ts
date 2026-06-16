@@ -18,7 +18,7 @@ import { health } from "../src/health/index.js";
 import { McpProxy, fentaris } from "../src/proxy/McpProxy.js";
 import { McpServer } from "../src/server/McpServer.js";
 import { FentarisErrorCode } from "../src/errors.js";
-import { Policy, group, user } from "../src/governance.js";
+import { Policy, group, policy, user } from "../src/governance.js";
 import {
   fromProxyPromptName,
   fromProxyResourceTemplateUri,
@@ -1077,6 +1077,26 @@ describe("McpProxy", () => {
     expect(healthReport.status).toBe("ok");
     expect(result).toMatchObject({ content: [{ type: "text", text: "called:create_issue" }] });
     expect(seen).toEqual(["github:create_issue"]);
+  });
+
+  it("allows policies to reference MCP servers registered after construction when configured", async () => {
+    const transport = new MockTransport();
+    const app = fentaris({
+      validation: { allowRuntimePolicyServerReferences: true },
+      groups: [
+        group({
+          id: "engineering",
+          users: [user("alice")],
+          policy: policy("engineering").mcp("github").allow("*"),
+        }),
+      ],
+    });
+
+    app.mcp("github", { transport });
+
+    const result = await app.callTool({ name: toProxyToolName("github", "create_issue") }, { id: "alice" });
+
+    expect(result).toMatchObject({ content: [{ type: "text", text: "called:create_issue" }] });
   });
 
   it("routes matching public tool patterns in registration order", async () => {

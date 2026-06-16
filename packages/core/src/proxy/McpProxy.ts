@@ -159,6 +159,9 @@ export type McpProxyOptions = {
   lifecycle?: RuntimeLifecycleOptions;
   health?: HealthConfig;
   errorMapper?: ErrorMapper;
+  validation?: {
+    allowRuntimePolicyServerReferences?: boolean;
+  };
   name?: string;
   version?: string;
 };

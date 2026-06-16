@@ -140,6 +140,37 @@ proxy.mcp("github").tool("create_issue", async (ctx, next) => {
 });
 ```
 
+## Register Servers After Construction
+
+By default, Fentaris validates that policy server names are visible in the initial `fentaris(...)` config. If you declare policies first and attach upstream MCP servers with `app.mcp(...)` afterward, opt in to deferred policy server validation.
+
+```ts theme={null}
+import { fentaris, group, policy, streamableHttp, user } from "@fentaris/core";
+
+const app = fentaris({
+  validation: {
+    allowRuntimePolicyServerReferences: true,
+  },
+  groups: [
+    group({
+      id: "limited",
+      users: [user("guest")],
+      policy: policy("limited").mcp("specification").allow("*"),
+    }),
+  ],
+});
+
+app.mcp("specification", {
+  transport: streamableHttp({
+    url: "https://mcp.specification.website/mcp",
+  }),
+});
+```
+
+<Note>
+  Keep the default validation unless your application intentionally registers upstream MCP servers after `fentaris(...)`. The deferred mode only skips the startup visibility error for policy references; requests still require the server to be registered before use.
+</Note>
+
 ## Harden Tool Discovery
 
 Filter tool lists before exposing them to clients.

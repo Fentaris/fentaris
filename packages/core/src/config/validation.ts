@@ -40,9 +40,10 @@ export function validateFentarisConfig(config: McpProxyOptions): FentarisConfigV
   validateServers(servers, ["servers"], diagnostics);
   validateGroups(groups, diagnostics);
   validateScopedServerAmbiguity(servers, groups, diagnostics);
-  validatePolicyVisibility(config.policy, availableGlobalServers(servers), ["policy"], diagnostics);
+  const allowRuntimePolicyServerReferences = Boolean(config.validation?.allowRuntimePolicyServerReferences);
+  validatePolicyVisibility(config.policy, availableGlobalServers(servers), ["policy"], diagnostics, allowRuntimePolicyServerReferences);
   for (const [index, group] of groups.entries()) {
-    validatePolicyVisibility(group.policy, visibleServersForGroup(group, servers), ["groups", index, "policy"], diagnostics);
+    validatePolicyVisibility(group.policy, visibleServersForGroup(group, servers), ["groups", index, "policy"], diagnostics, allowRuntimePolicyServerReferences);
   }
   validateIdentity(config, groups, diagnostics);
   validateCredentialReferences(config, groups, diagnostics);
@@ -175,13 +176,14 @@ function validatePolicyVisibility(
   visibleServers: Set<string>,
   path: Array<string | number>,
   diagnostics: FentarisDiagnostic[],
+  allowRuntimePolicyServerReferences: boolean,
 ): void {
   const declared = (policy as PolicyWithDeclarations | undefined)?.getDeclaredPermissions?.() ?? [];
   for (const entry of declared) {
-    if (entry.serverName !== "*" && !visibleServers.has(entry.serverName)) {
+    if (entry.serverName !== "*" && !visibleServers.has(entry.serverName) && !allowRuntimePolicyServerReferences) {
       diagnostics.push(diagnostic("error", "FENTARIS_CONFIG_POLICY_SERVER_NOT_VISIBLE", "Policy references an invisible server", `Policy references server "${entry.serverName}", but that server is not visible in this scope.`, {
         path,
-        hint: "Declare the server globally or in the same group as the policy.",
+        hint: "Declare the server globally, in the same group as the policy, or set validation.allowRuntimePolicyServerReferences when registering servers through app.mcp(...).",
       }));
     }
 

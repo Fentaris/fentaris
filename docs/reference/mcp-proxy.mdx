@@ -81,6 +81,33 @@ Identity strategy configuration for proxy-edge auth.
 
 Policy and group declarations used to decide which upstream tools, resources, prompts, and completions are visible to each subject.
 
+### `validation.allowRuntimePolicyServerReferences`
+
+Allows policies to reference upstream MCP server names that will be registered later through `proxy.mcp(...)`.
+
+```ts theme={null}
+const proxy = fentaris({
+  validation: {
+    allowRuntimePolicyServerReferences: true,
+  },
+  groups: [
+    group({
+      id: "limited",
+      users: [user("guest")],
+      policy: policy("limited").mcp("github").allow("*"),
+    }),
+  ],
+});
+
+proxy.mcp("github", {
+  transport: stdio({ command: "github-mcp-server" }),
+});
+```
+
+**Default:** `false`
+
+Keep this disabled when all upstream MCP servers are known in `servers` or group `servers` at construction time.
+
 ### `logger`, `autoLog`, and `profiler`
 
 Runtime logging and profiler configuration.
