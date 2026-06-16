@@ -11,11 +11,11 @@ Fentaris can map API keys to users, load local encrypted credentials, and pass s
 
 ## API Key Identity
 
-Generated projects use the `x-fentaris-api-key` header. Demo guest and admin API keys are written to `.env.example` during initialization.
+Generated projects start without API-key identity. Add API-key auth when clients need to authenticate through the `x-fentaris-api-key` header.
 
 ## Local Credentials
 
-Local credentials are stored in `.fentaris/credentials.enc.json` and decrypted with `FENTARIS_AUTH_KEY`.
+When enabled, local credentials are stored in `.fentaris/credentials.enc.json` and decrypted with `FENTARIS_AUTH_KEY`.
 
 <Note>
   The generated `.gitignore` excludes `.fentaris/` and `.env` so local secrets do not get committed by default.
