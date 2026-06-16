@@ -89,7 +89,7 @@ import {
 } from "../governance.js";
 import { HttpProxyExposureTransport } from "../transports/exposure/HttpProxyExposureTransport.js";
 import { ResponseController } from "../types/middleware.js";
-import { FentarisConfigError, assertValidFentarisConfig } from "../config/index.js";
+import { FentarisConfigError, assertValidFentarisConfig, validateFentarisConfig } from "../config/index.js";
 import { resolveFentarisConfig } from "../config/resolve.js";
 import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
 import type { CredentialSourceMetadata, IdentityMetadata, ResolvedSubject, UserContext } from "../types/shared.js";
@@ -557,6 +557,14 @@ export class McpProxy {
     assertValidFentarisConfig(this.runtimeValidationConfig);
   }
 
+  private assertDeferredPolicyServerVisibilityValid(): void {
+    const result = validateFentarisConfig(this.runtimeValidationConfig);
+    const policyServerVisibilityErrors = result.errors.filter((error) => error.code === "FENTARIS_CONFIG_POLICY_SERVER_NOT_VISIBLE");
+    if (policyServerVisibilityErrors.length > 0) {
+      throw new FentarisConfigError(policyServerVisibilityErrors);
+    }
+  }
+
   /**
    * Close the HTTP server and all backends.
    * @pk
@@ -648,7 +656,7 @@ export class McpProxy {
    * @pk
    */
   async pingMcp(name: string): Promise<HealthCheckResult> {
-    this.assertRuntimeConfigValid();
+    this.assertDeferredPolicyServerVisibilityValid();
     return this.checkMcpHealth(name);
   }
 
@@ -657,7 +665,7 @@ export class McpProxy {
    * @pk
    */
   async mcpHealth(name: string): Promise<HealthCheckResult> {
-    this.assertRuntimeConfigValid();
+    this.assertDeferredPolicyServerVisibilityValid();
     return this.checkMcpHealth(name);
   }
 
@@ -671,7 +679,7 @@ export class McpProxy {
     identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<ListToolsResult> {
-    this.assertRuntimeConfigValid();
+    this.assertDeferredPolicyServerVisibilityValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
@@ -751,7 +759,7 @@ export class McpProxy {
     identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<CallToolResult> {
-    this.assertRuntimeConfigValid();
+    this.assertDeferredPolicyServerVisibilityValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const { serverName, toolName } = fromProxyToolName(params.name);
@@ -967,7 +975,7 @@ export class McpProxy {
     _identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<ListResourcesResult> {
-    this.assertRuntimeConfigValid();
+    this.assertDeferredPolicyServerVisibilityValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
@@ -1033,7 +1041,7 @@ export class McpProxy {
     identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<ReadResourceResult> {
-    this.assertRuntimeConfigValid();
+    this.assertDeferredPolicyServerVisibilityValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const { serverName, uri } = fromProxyResourceUri(params.uri);
@@ -1083,7 +1091,7 @@ export class McpProxy {
     _identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<ListResourceTemplatesResult> {
-    this.assertRuntimeConfigValid();
+    this.assertDeferredPolicyServerVisibilityValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
@@ -1149,7 +1157,7 @@ export class McpProxy {
     _identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<ListPromptsResult> {
-    this.assertRuntimeConfigValid();
+    this.assertDeferredPolicyServerVisibilityValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
@@ -1209,7 +1217,7 @@ export class McpProxy {
     identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<GetPromptResult> {
-    this.assertRuntimeConfigValid();
+    this.assertDeferredPolicyServerVisibilityValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const { serverName, promptName } = fromProxyPromptName(params.name);
@@ -1251,7 +1259,7 @@ export class McpProxy {
     identity?: IdentityMetadata,
     subject?: ResolvedSubject,
   ): Promise<CompleteResult> {
-    this.assertRuntimeConfigValid();
+    this.assertDeferredPolicyServerVisibilityValid();
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const routed = routeCompletion(params);
