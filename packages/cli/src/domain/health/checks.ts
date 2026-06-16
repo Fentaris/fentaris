@@ -72,7 +72,7 @@ export async function getProjectCheckResults(project: ProjectDiscovery, offline:
     "package.json",
     "tsconfig.json",
     "fentaris.json",
-    ".env.example",
+    ".env",
     ".gitignore",
     "README.md",
     project.config.entrypoint,
@@ -227,7 +227,7 @@ async function projectDiscoveryResults(project: ProjectDiscovery): Promise<Healt
   const generatedFiles = [
     "package.json",
     "tsconfig.json",
-    ".env.example",
+    ".env",
     ".gitignore",
     "README.md",
     project.config.entrypoint,

@@ -31,7 +31,7 @@ async function writeHealthyProject(root: string, authDirectory = ".fentaris"): P
   await mkdir(join(root, "src"), { recursive: true });
   await mkdir(join(root, authDirectory), { recursive: true });
   await writeFile(join(root, "README.md"), "# Demo\n");
-  await writeFile(join(root, ".env.example"), "FENTARIS_AUTH_KEY=test-key\n");
+  await writeFile(join(root, ".env"), "FENTARIS_AUTH_KEY=test-key\n");
   await writeFile(join(root, ".gitignore"), `${authDirectory}/\n`);
   await writeFile(join(root, "src", "index.ts"), "console.log('demo');\n");
   await writeFile(join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
@@ -124,7 +124,7 @@ describe("project template", () => {
     });
 
     expect(Object.keys(rendered.files).sort()).toEqual([
-      ".env.example",
+      ".env",
       ".gitignore",
       "README.md",
       "demo-files/README.md",
