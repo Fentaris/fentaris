@@ -238,10 +238,29 @@ describe("project commands", () => {
     await expect(main(["init", "demo", "--skip-install"], rt)).resolves.toBe(0);
 
     rt.cwd = join(dir, "demo");
+    await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
     delete rt.env.FENTARIS_AUTH_KEY;
     await expect(main(["check", "--offline"], rt)).resolves.toBe(0);
-    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(1);
+    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
     await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
+  });
+
+  it("does not infer auth from a generated .fentaris directory", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+    await expect(main(["init", "demo", "--skip-install"], rt)).resolves.toBe(0);
+
+    rt.cwd = join(dir, "demo");
+    delete rt.env.FENTARIS_AUTH_KEY;
+    await mkdir(join(rt.cwd, ".fentaris"), { recursive: true });
+    await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+
+    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
+    await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
+
+    const output = String(vi.mocked(rt.out.log).mock.calls.at(-1)?.[0]);
+    expect(output).not.toContain('"label": "credentials.enc.json"');
+    expect(output).not.toContain('"label": "FENTARIS_AUTH_KEY"');
   });
 
   it("uses runtime auth keys for strict project checks", async () => {

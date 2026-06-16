@@ -76,7 +76,6 @@ export async function getProjectCheckResults(project: ProjectDiscovery, offline:
     "README.md",
     project.config.entrypoint,
   ];
-  const optionalFiles = [".env"];
   const results: HealthResult[] = [];
 
   for (const file of requiredFiles) {
@@ -86,17 +85,6 @@ export async function getProjectCheckResults(project: ProjectDiscovery, offline:
       label: file,
       status: fileExists ? "pass" : "fail",
       detail: fileExists ? "Found" : "Missing",
-    });
-  }
-
-  for (const file of optionalFiles) {
-    const fileExists = await exists(path.join(project.root, file));
-    results.push({
-      group: "Files",
-      label: file,
-      status: fileExists ? "pass" : "warn",
-      detail: fileExists ? "Found" : "Missing",
-      hint: fileExists ? undefined : "Create a local .env file for development, or provide secrets through the runtime environment.",
     });
   }
 
@@ -398,7 +386,7 @@ async function authResults(project: ProjectDiscovery, runtime: Runtime | undefin
   const authDirectoryExists = await exists(authPath);
   const credentialsExist = await exists(credentialsPath);
   const key = runtime?.env.FENTARIS_AUTH_KEY;
-  if (!authDirectoryExists && !credentialsExist && !key?.trim()) {
+  if (!credentialsExist && !key?.trim()) {
     return [await gitignoreAuthResult(project.root, project.config.authDir)];
   }
 
