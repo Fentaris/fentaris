@@ -1,5 +1,12 @@
 # @fentaris/cli
 
+## 0.2.2
+
+### Patch Changes
+
+- 1f53902: Allow `fentaris build` to continue when a generated project's local `.env` file is absent and secrets are supplied through the runtime environment.
+- 83b66c6: Generate a ready-to-use `.env` file during `fentaris init` instead of requiring users to copy `.env.example`.
+
 ## 0.2.1
 
 ### Patch Changes
