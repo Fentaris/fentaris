@@ -14,7 +14,6 @@ The `fentaris` CLI creates project scaffolds, runs local development, checks pro
 ```bash theme={null}
 fentaris init my-proxy
 cd my-proxy
-cp .env.example .env
 fentaris dev
 ```
 
@@ -34,7 +33,7 @@ Options:
 * `--path <path>` - set the generated MCP endpoint path. Default: `/mcp`.
 * `--skip-install` - create files without running package installation.
 
-`init` writes `fentaris.json`, `src/index.ts`, `.env.example`, local encrypted credentials, and package scripts.
+`init` writes `fentaris.json`, `src/index.ts`, package scripts, TypeScript config, `.gitignore`, and a README.
 
 ### `fentaris dev`
 

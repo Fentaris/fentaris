@@ -103,6 +103,25 @@ describe("config validation", () => {
     expect(createProxy(config)).toBeTruthy();
   });
 
+  it("can defer policy server visibility for app composition", () => {
+    const config = defineFentarisConfig({
+      groups: [
+        group({
+          id: "engineering",
+          users: [user("u1")],
+          policy: policy("engineering").mcp("runtime").allow("*"),
+        }),
+      ],
+    });
+
+    const result = validateFentarisConfig(config, { requirePolicyServerVisibility: false });
+
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics.map((entry) => entry.code)).not.toContain("FENTARIS_CONFIG_POLICY_SERVER_NOT_VISIBLE");
+    expect(() => assertValidFentarisConfig(config, { requirePolicyServerVisibility: false })).not.toThrow();
+    expect(validateFentarisConfig(config).valid).toBe(false);
+  });
+
   it("preserves existing valid global MCP behavior", () => {
     const proxy = createProxy({
       servers: [mcp("custom", { transport: new TestTransport() })],

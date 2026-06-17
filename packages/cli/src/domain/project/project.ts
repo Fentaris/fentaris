@@ -75,9 +75,9 @@ export async function runPackageInstall(packageManager: PackageManager, cwd: str
   }
 }
 
-export async function runPackageScript(packageManager: PackageManager, cwd: string, script: string, runner: ProcessRunner): Promise<void> {
+export async function runPackageScript(packageManager: PackageManager, cwd: string, script: string, runner: ProcessRunner, env?: NodeJS.ProcessEnv): Promise<void> {
   const args = packageManager === "npm" ? ["run", script] : script === "dev" ? ["dev"] : ["run", script];
-  const result = await runner(packageManager, args, { cwd, stdio: "inherit" });
+  const result = await runner(packageManager, args, { cwd, stdio: "inherit", env });
   if (result.code !== 0) {
     throw new Error(`${packageManager} ${script} failed.`);
   }

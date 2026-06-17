@@ -60,14 +60,14 @@ async function writeHealthyProject(root: string, authDirectory = ".fentaris"): P
   );
 }
 
-function runtime(cwd: string, probes: Record<string, boolean> = {}): Runtime & { calls: Array<{ command: string; args: string[]; cwd?: string | URL }> } {
-  const calls: Array<{ command: string; args: string[]; cwd?: string | URL }> = [];
+function runtime(cwd: string, probes: Record<string, boolean> = {}): Runtime & { calls: Array<{ command: string; args: string[]; cwd?: string | URL; env?: NodeJS.ProcessEnv }> } {
+  const calls: Array<{ command: string; args: string[]; cwd?: string | URL; env?: NodeJS.ProcessEnv }> = [];
   return {
     cwd,
     env: { FENTARIS_AUTH_KEY: "test-key" },
     out: { log: vi.fn(), error: vi.fn() },
     runner: vi.fn(async (command: string, args: string[], options?: SpawnOptions) => {
-      calls.push({ command, args, cwd: options?.cwd });
+      calls.push({ command, args, cwd: options?.cwd, env: options?.env });
       return { code: 0 };
     }),
     probe: vi.fn((command: string) => probes[command] ?? false),
@@ -118,16 +118,11 @@ describe("project template", () => {
       packageManager: "pnpm",
       port: 4000,
       proxyPath: "/mcp",
-      authKey: "auth-key",
-      guestApiKey: "guest-key",
-      adminApiKey: "admin-key",
     });
 
     expect(Object.keys(rendered.files).sort()).toEqual([
-      ".env",
       ".gitignore",
       "README.md",
-      "demo-files/README.md",
       "fentaris.json",
       "package.json",
       "src/index.ts",
@@ -137,9 +132,10 @@ describe("project template", () => {
     expect(rendered.files["README.md"]).toContain("Quick start");
     expect(rendered.files["src/index.ts"]).toContain("https://mcp.specification.website/mcp");
     expect(rendered.files["src/index.ts"]).toContain("app.mcp(");
-    expect(rendered.files["src/index.ts"]).toContain("credentialJson");
-    expect(rendered.files["src/index.ts"]).toContain("profiler()");
-    expect(rendered.files["src/index.ts"]).toContain("admin-full-access");
+    expect(rendered.files["src/index.ts"]).toContain('user: { id: "demo" }');
+    expect(rendered.files["src/index.ts"]).not.toContain("credentialJson");
+    expect(rendered.files["src/index.ts"]).not.toContain("policy(");
+    expect(rendered.files["src/index.ts"]).not.toContain("profiler()");
 
     const packageJson = JSON.parse(rendered.files["package.json"] ?? "{}") as { devDependencies?: Record<string, string> };
     expect(packageJson.devDependencies).toMatchObject({
@@ -184,6 +180,34 @@ describe("project commands", () => {
     expect(rt.calls.some((call) => call.command === "pnpm" && call.args.join(" ") === "dev")).toBe(true);
   });
 
+  it("loads the discovered project .env when running dev", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(join(dir, ".env"), "FENTARIS_AUTH_KEY=from-dotenv\nFENTARIS_GUEST_API_KEY=guest-demo\n");
+    const rt = runtime(join(dir, "src"), { pnpm: true });
+    delete rt.env.FENTARIS_AUTH_KEY;
+
+    await expect(main(["dev"], rt)).resolves.toBe(0);
+
+    const devCall = rt.calls.find((call) => call.command === "pnpm" && call.args.join(" ") === "dev");
+    expect(devCall?.cwd).toBe(dir);
+    expect(devCall?.env?.FENTARIS_AUTH_KEY).toBe("from-dotenv");
+    expect(devCall?.env?.FENTARIS_GUEST_API_KEY).toBe("guest-demo");
+  });
+
+  it("keeps exported environment variables ahead of project .env values", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(join(dir, ".env"), "FENTARIS_AUTH_KEY=from-dotenv\n");
+    const rt = runtime(dir, { pnpm: true });
+    rt.env.FENTARIS_AUTH_KEY = "from-shell";
+
+    await expect(main(["dev"], rt)).resolves.toBe(0);
+
+    const devCall = rt.calls.find((call) => call.command === "pnpm" && call.args.join(" ") === "dev");
+    expect(devCall?.env?.FENTARIS_AUTH_KEY).toBe("from-shell");
+  });
+
   it("builds a deterministic local artifact", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     const rt = runtime(dir, { pnpm: true, git: true, docker: true });
@@ -214,10 +238,47 @@ describe("project commands", () => {
     await expect(main(["init", "demo", "--skip-install"], rt)).resolves.toBe(0);
 
     rt.cwd = join(dir, "demo");
-    delete rt.env.FENTARIS_AUTH_KEY;
+    await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    rt.env.FENTARIS_AUTH_KEY = "ambient-shell-key";
     await expect(main(["check", "--offline"], rt)).resolves.toBe(0);
-    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(1);
+    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
     await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
+  });
+
+  it("does not infer auth from an ambient auth key", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+    await expect(main(["init", "demo", "--skip-install"], rt)).resolves.toBe(0);
+
+    rt.cwd = join(dir, "demo");
+    rt.env.FENTARIS_AUTH_KEY = "ambient-shell-key";
+    await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+
+    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
+    await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
+
+    const output = String(vi.mocked(rt.out.log).mock.calls.at(-1)?.[0]);
+    expect(output).not.toContain('"label": "local auth directory"');
+    expect(output).not.toContain('"label": "credentials.enc.json"');
+    expect(output).not.toContain('"label": "FENTARIS_AUTH_KEY"');
+  });
+
+  it("does not infer auth from a generated .fentaris directory", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+    await expect(main(["init", "demo", "--skip-install"], rt)).resolves.toBe(0);
+
+    rt.cwd = join(dir, "demo");
+    delete rt.env.FENTARIS_AUTH_KEY;
+    await mkdir(join(rt.cwd, ".fentaris"), { recursive: true });
+    await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+
+    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
+    await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
+
+    const output = String(vi.mocked(rt.out.log).mock.calls.at(-1)?.[0]);
+    expect(output).not.toContain('"label": "credentials.enc.json"');
+    expect(output).not.toContain('"label": "FENTARIS_AUTH_KEY"');
   });
 
   it("uses runtime auth keys for strict project checks", async () => {
@@ -269,13 +330,13 @@ describe("project commands", () => {
     await expect(main(["init", "demo", "--skip-install"], rt)).resolves.toBe(0);
 
     rt.cwd = join(dir, "demo");
-    await expect(main(["doctor", "--json"], rt)).resolves.toBe(1);
+    await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
 
     const output = String(vi.mocked(rt.out.log).mock.calls.at(-1)?.[0]);
     expect(output).toContain('"group": "Config"');
     expect(output).toContain('"label": "@fentaris/core"');
     expect(output).toContain('"label": "lockfile"');
-    expect(output).toContain('"label": "credential decrypt"');
+    expect(output).not.toContain('"label": "credential decrypt"');
     expect(output).not.toContain("test-key");
   });
 

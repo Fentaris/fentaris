@@ -140,6 +140,34 @@ proxy.mcp("github").tool("create_issue", async (ctx, next) => {
 });
 ```
 
+## Register Servers After Construction
+
+You can declare policies in `fentaris(...)` and attach upstream MCP servers with `app.mcp(...)` before `start()`. Fentaris validates the final server visibility when the proxy starts.
+
+```ts theme={null}
+import { fentaris, group, policy, streamableHttp, user } from "@fentaris/core";
+
+const app = fentaris({
+  groups: [
+    group({
+      id: "limited",
+      users: [user("guest")],
+      policy: policy("limited").mcp("specification").allow("*"),
+    }),
+  ],
+});
+
+app.mcp("specification", {
+  transport: streamableHttp({
+    url: "https://mcp.specification.website/mcp",
+  }),
+});
+```
+
+<Note>
+  If a policy references a server that is still missing at `app.start()`, Fentaris fails startup with `FENTARIS_CONFIG_POLICY_SERVER_NOT_VISIBLE`.
+</Note>
+
 ## Harden Tool Discovery
 
 Filter tool lists before exposing them to clients.

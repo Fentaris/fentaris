@@ -37,9 +37,6 @@ export type TemplateInput = {
   packageManager: PackageManager;
   port: number;
   proxyPath: string;
-  authKey: string;
-  guestApiKey: string;
-  adminApiKey: string;
 };
 
 export type HealthStatus = "pass" | "warn" | "fail";
