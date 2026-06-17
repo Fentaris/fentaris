@@ -1,5 +1,11 @@
 # @fentaris/core
 
+## 0.5.1
+
+### Patch Changes
+
+- 192dd8b: Allow policies to reference upstream MCP servers registered later through `app.mcp(...)`, with final policy server visibility validation deferred until startup.
+
 ## 0.5.0
 
 ### Minor Changes

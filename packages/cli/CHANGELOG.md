@@ -1,5 +1,15 @@
 # @fentaris/cli
 
+## 0.2.3
+
+### Patch Changes
+
+- 69bf7c6: Ignore ambient FENTARIS_AUTH_KEY values when checking projects without local credential stores.
+- 56b520f: Load the generated project `.env` file before running `fentaris dev` so local encrypted credentials can be decrypted from quickstart projects.
+- cb82ee3: Simplify the generated `fentaris init` project to start without demo auth, policies, profiler hooks, or extra upstream servers.
+- Updated dependencies [192dd8b]
+  - @fentaris/core@0.5.1
+
 ## 0.2.2
 
 ### Patch Changes
