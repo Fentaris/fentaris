@@ -121,6 +121,7 @@ describe("project template", () => {
     });
 
     expect(Object.keys(rendered.files).sort()).toEqual([
+      ".fentaris/secrets.manifest.json",
       ".gitignore",
       "README.md",
       "fentaris.json",
@@ -129,6 +130,7 @@ describe("project template", () => {
       "tsconfig.json",
     ]);
     expect(rendered.files[".gitignore"]).toContain(".fentaris/");
+    expect(rendered.files[".gitignore"]).toContain("!.fentaris/secrets.manifest.json");
     expect(rendered.files["README.md"]).toContain("Quick start");
     expect(rendered.files["src/index.ts"]).toContain("https://mcp.specification.website/mcp");
     expect(rendered.files["src/index.ts"]).toContain("app.mcp(");
@@ -352,5 +354,82 @@ describe("secrets", () => {
     const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(authDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
     expect(credentials.users.alice?.credentials["github.token"]).toBe("secret-value");
     expect(rt.out.log).toHaveBeenCalledWith("Value: <redacted>");
+  });
+
+  it("lists stored secret references without values", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `import { credential, fentaris, mcp } from "@fentaris/core";
+const app = fentaris({ defaults: { credentials: { "github.token": credential("github.token") } } });
+app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callTool: async () => ({}), close: async () => {} } });
+`,
+    );
+    const backendDir = join(dir, ".fentaris");
+    const credentials = FentarisAuth.decryptCredentials(
+      JSON.parse(await readFile(join(backendDir, "credentials.enc.json"), "utf8")) as unknown,
+      "test-key",
+    );
+    credentials.defaults["github.token"] = "secret";
+    await writeFile(join(backendDir, "credentials.enc.json"), JSON.stringify(FentarisAuth.encryptCredentials(credentials, "test-key")));
+
+    const rt = runtime(dir);
+    await expect(main(["secrets", "list"], rt)).resolves.toBe(0);
+    const output = rt.out.log.mock.calls.flat().join("\n");
+    expect(output).toContain("github.token");
+    expect(output).toContain("set");
+    expect(output).not.toContain("secret");
+  });
+
+  it("generates and checks the secrets manifest from the entrypoint", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `import { bearer, credential, fentaris, mcp } from "@fentaris/core";
+const app = fentaris({});
+app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callTool: async () => ({}), close: async () => {} }, auth: bearer(credential("github.token")) });
+`,
+    );
+
+    const rt = runtime(dir);
+    await expect(main(["secrets", "manifest"], rt)).resolves.toBe(0);
+    const manifest = JSON.parse(await readFile(join(dir, ".fentaris", "secrets.manifest.json"), "utf8")) as { references: Array<{ ref: string }> };
+    expect(manifest.references).toEqual([{ ref: "github.token", scope: "default" }]);
+    await expect(main(["secrets", "manifest", "--check"], rt)).resolves.toBe(0);
+  });
+
+  it("reports missing secrets via secrets doctor", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, ".fentaris", "secrets.manifest.json"),
+      JSON.stringify({ version: 1, references: [{ ref: "github.token", scope: "default" }] }),
+    );
+
+    const rt = runtime(dir);
+    await expect(main(["secrets", "doctor"], rt)).resolves.toBe(0);
+    const output = rt.out.log.mock.calls.flat().join("\n");
+    expect(output).toContain("github.token");
+    expect(output).toContain("missing");
+    expect(output).toContain("fentaris secrets set github.token");
+  });
+
+  it("unsets stored credentials", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const backendDir = join(dir, ".fentaris");
+    const credentials = FentarisAuth.decryptCredentials(
+      JSON.parse(await readFile(join(backendDir, "credentials.enc.json"), "utf8")) as unknown,
+      "test-key",
+    );
+    credentials.defaults["github.token"] = "secret";
+    await writeFile(join(backendDir, "credentials.enc.json"), JSON.stringify(FentarisAuth.encryptCredentials(credentials, "test-key")));
+
+    const rt = runtime(dir);
+    await expect(main(["secrets", "unset", "github.token"], rt)).resolves.toBe(0);
+    const updated = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(backendDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(updated.defaults["github.token"]).toBeUndefined();
   });
 });
