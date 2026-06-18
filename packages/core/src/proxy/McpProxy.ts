@@ -228,7 +228,8 @@ export class McpProxy {
   private readonly listToolsHooks: ListToolsHook[] = [];
   private readonly logger: Logger;
   private readonly userResolver?: McpProxyOptions["user"];
-  private readonly identityOptions?: IdentityResolverOptions;
+  private identityOptions?: IdentityResolverOptions;
+  private readonly usesDeclaredApiKeyIdentity: boolean;
   private readonly globalPolicy?: Policy;
   private readonly configuredGroups: Group[];
   private groups: Group[];
@@ -266,8 +267,10 @@ export class McpProxy {
     this.configuredGroups = resolved.groups;
     this.groups = resolved.groups;
     this.defaultCredentials = resolved.defaults.credentials;
+    const configuredIdentity = options.identity ?? options.auth?.identityStrategy();
+    this.usesDeclaredApiKeyIdentity = configuredIdentity === undefined;
     this.identityOptions = normalizeIdentityOptions(
-      options.identity ?? options.auth?.identityStrategy() ?? declaredApiKeyIdentityStrategy(this.groups),
+      configuredIdentity ?? declaredApiKeyIdentityStrategy(() => this.groups),
       Boolean(options.auth) || hasDeclaredApiKeys(this.groups),
     );
     this.subjectIndex = resolved.subjectIndex;
@@ -1539,12 +1542,24 @@ export class McpProxy {
     const groups = this.resolveFluentGroups(options.validate);
     this.groups = groups;
     this.subjectIndex = groups.length > 0 ? buildSubjectIndex(groups) : undefined;
+    this.refreshDeclaredApiKeyIdentityOptions();
     this.runtimeValidationConfig = {
       ...this.runtimeValidationConfig,
       servers: this.servers,
       groups,
       defaults: { credentials: this.defaultCredentials },
     };
+  }
+
+  private refreshDeclaredApiKeyIdentityOptions(): void {
+    if (!this.usesDeclaredApiKeyIdentity) {
+      return;
+    }
+
+    this.identityOptions = normalizeIdentityOptions(
+      declaredApiKeyIdentityStrategy(() => this.groups),
+      hasDeclaredApiKeys(this.groups),
+    );
   }
 
   private resolveFluentGroups(validate: boolean): Group[] {
@@ -2569,8 +2584,8 @@ function hasDeclaredApiKeys(groups: Group[]): boolean {
   return groups.some((group) => group.users.some((user) => user.apiKeys.length > 0));
 }
 
-function declaredApiKeyIdentityStrategy(groups: Group[]): IdentityStrategy | undefined {
-  if (!hasDeclaredApiKeys(groups)) {
+function declaredApiKeyIdentityStrategy(groups: () => Group[]): IdentityStrategy | undefined {
+  if (!hasDeclaredApiKeys(groups())) {
     return undefined;
   }
 
@@ -2582,7 +2597,7 @@ function declaredApiKeyIdentityStrategy(groups: Group[]): IdentityStrategy | und
         return null;
       }
 
-      for (const user of groups.flatMap((group) => group.users)) {
+      for (const user of groups().flatMap((group) => group.users)) {
         for (const source of user.apiKeys) {
           const candidate = await resolveCredentialSource(source);
           if (candidate === apiKey || candidate === FentarisAuth.hashApiKey(apiKey)) {

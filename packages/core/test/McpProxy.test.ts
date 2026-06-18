@@ -15,6 +15,7 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import { Logger } from "../src/logger.js";
 import { health } from "../src/health/index.js";
+import { credentialEnv } from "../src/credentials/index.js";
 import { McpProxy, fentaris } from "../src/proxy/McpProxy.js";
 import { McpServer } from "../src/server/McpServer.js";
 import { FentarisErrorCode } from "../src/errors.js";
@@ -33,6 +34,7 @@ import {
 import type { LogEntry, LoggerDriver } from "../src/logger.js";
 import type { FentarisTransport } from "../src/types.js";
 import type { RuntimeEvent } from "../src/profiler/index.js";
+import type { ProxyExposureHandle, ProxyExposureTransport, ProxyRuntime } from "../src/types/proxy.js";
 
 class MemoryLogDriver implements LoggerDriver {
   readonly entries: LogEntry[] = [];
@@ -152,6 +154,15 @@ class FeatureTransport extends MockTransport {
       _meta: { complete: true },
     };
   });
+}
+
+class CapturingExposureTransport implements ProxyExposureTransport {
+  runtime?: ProxyRuntime;
+
+  async listen(runtime: ProxyRuntime): Promise<ProxyExposureHandle> {
+    this.runtime = runtime;
+    return { close: async () => {} };
+  }
 }
 
 describe("proxied tool names", () => {
@@ -1152,6 +1163,36 @@ describe("McpProxy", () => {
     await expect(app.callTool({ name: toProxyToolName("github", "create_issue") }, { id: "bob" })).resolves.toMatchObject({
       content: [{ type: "text", text: "called:create_issue" }],
     });
+  });
+
+  it("authenticates fluent group users with the default declared API key identity", async () => {
+    const app = fentaris();
+    const exposure = new CapturingExposureTransport();
+    vi.stubEnv("ALICE_FLUENT_API_KEY", "alice-key");
+
+    app.policy("maintainers").mcp("github").allow("*");
+    app.group("maintainers").users(user("alice", { apiKeys: [credentialEnv("ALICE_FLUENT_API_KEY")] })).policy("maintainers");
+    app.mcp("github", { transport: new MockTransport() });
+
+    try {
+      await app.listen(exposure);
+
+      expect(exposure.runtime?.identityRequired).toBe(true);
+      await expect(
+        exposure.runtime?.resolveHttpUser({ headers: { "x-fentaris-api-key": "alice-key" } }),
+      ).resolves.toMatchObject({
+        user: { id: "alice" },
+        identity: {
+          authenticated: true,
+          strategy: "declared-api-key",
+          userId: "alice",
+        },
+        subject: { id: "alice" },
+      });
+    } finally {
+      vi.unstubAllEnvs();
+      await app.stop();
+    }
   });
 
   it("evaluates constructor groups and fluent groups together", async () => {
