@@ -180,6 +180,20 @@ const application = fentaris({
   ],
 });
 
+application.policy("readonly").mcp("github").allow("read");
+application.group("guests").users(user("guest")).policy("readonly").mcp("github").use(typedMiddleware);
+
+const configFirstApplication = fentaris({
+  groups: [
+    group({
+      id: "guests",
+      users: [user("guest")],
+      policy: policy("readonly").mcp("github").allow("read"),
+    }),
+  ],
+});
+void configFirstApplication;
+
 const typedConfig = defineFentarisConfig({
   servers: [
     mcp("typed", {

@@ -64,11 +64,13 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
         "dist/",
         ".env",
         ".env.*",
-        ".fentaris/",
+        ".fentaris/*",
+        "!.fentaris/secrets.manifest.json",
         ".fentaris/build/",
         "*.log",
         "",
       ].join("\n"),
+      ".fentaris/secrets.manifest.json": JSON.stringify({ version: 1, references: [] }, null, 2),
       "src/index.ts": renderEntrypoint(input),
     },
   };
@@ -124,6 +126,16 @@ ${input.packageManager} dev
 
 - \`src/index.ts\` configures the app user and upstream MCP server.
 - \`fentaris.json\` configures the project entrypoint, port, path, and CLI runtime defaults.
+- \`.fentaris/secrets.manifest.json\` lists required credential references (schema only, safe to commit).
+
+## Secrets workflow
+
+\`\`\`sh
+fentaris secrets set github.token
+fentaris secrets list
+fentaris secrets manifest
+fentaris doctor
+\`\`\`
 
 ## Useful commands
 

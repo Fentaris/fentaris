@@ -86,6 +86,43 @@ proxy.use((ctx, next) => {
 
 The same API is available through classes when you prefer object construction, but the helper style keeps users, groups, server bindings, and credential references close together.
 
+## App-Level Composition
+
+Use app-level governance declarations when the proxy is assembled across modules or when upstream MCP servers are registered after construction.
+
+```ts theme={null}
+import { fentaris, streamableHttp, user } from "@fentaris/core";
+
+const app = fentaris();
+
+app.policy("readonly")
+  .mcp("github")
+  .allow("search_issues");
+
+app.policy("maintainers")
+  .mcp("github")
+  .allow("*");
+
+app.group("guests")
+  .users(user("guest"))
+  .policy("readonly");
+
+app.group("maintainers")
+  .users(user("alice"))
+  .users(user("bob"))
+  .policy("maintainers");
+
+app.mcp("github", {
+  transport: streamableHttp({ url: "https://github.example/mcp" }),
+});
+```
+
+`app.policy(name)` is a named policy registry. Repeating the same name returns the same policy instance, and `app.group(id).policy(name)` resolves that name before Fentaris serves requests.
+
+<Note>
+  Fluent groups must include at least one user and a policy before startup. A named policy reference must be declared through `app.policy(name)` or Fentaris reports a configuration diagnostic.
+</Note>
+
 ## Local auth files
 
 The generated local credential store uses one encrypted file by default:
@@ -93,9 +130,12 @@ The generated local credential store uses one encrypted file by default:
 ```txt theme={null}
 .fentaris/
   credentials.enc.json
+  secrets.manifest.json
 ```
 
 `credentials.enc.json` is encrypted and stores user API keys plus user, group, and default credential values. Keep it private and rotate the encryption key using your deployment secret process.
+
+`secrets.manifest.json` lists required credential references only. Commit this file so teammates know which secrets a project needs without sharing encrypted values.
 
 Server bindings live next to the MCP server declaration in TypeScript:
 
@@ -247,6 +287,32 @@ const existingPolicy = policy("existing")
 Fentaris adapts those declarations internally to `tool:call` capability permissions. Existing `ToolPermission`, `SimplePolicy`, `Policy.evaluate(...)`, group policy, middleware, and `ctx.policy.can(server, tool)` behavior remain compatible for tool calls. Add `allowCapability(...)` or `denyCapability(...)` only when you need to govern resources, resource templates, prompts, or completion.
 
 ## CLI Helpers
+
+Preferred workflow for local encrypted credentials:
+
+```bash theme={null}
+export FENTARIS_AUTH_KEY="your-local-encryption-key"
+
+fentaris secrets set github.token
+fentaris secrets set github.token --group support
+fentaris secrets list
+fentaris secrets manifest
+fentaris secrets doctor
+fentaris doctor
+```
+
+`fentaris secrets list` shows credential reference names and scopes only. Secret values are never printed.
+
+`.fentaris/secrets.manifest.json` is the committed schema: reference names and scopes with no values. Regenerate it after adding new `credential("...")` references in your entrypoint:
+
+```bash theme={null}
+fentaris secrets manifest
+git add .fentaris/secrets.manifest.json
+```
+
+Use `fentaris secrets manifest --check` in CI to fail when the manifest is out of date.
+
+Legacy local auth helpers remain available:
 
 Initialize local auth files:
 

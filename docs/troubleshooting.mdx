@@ -100,6 +100,68 @@ stdio({
 
 Then check the policy assigned to the user or group.
 
+## App-Level Governance Diagnostics
+
+Fentaris validates fluent `app.policy(...)` and `app.group(...)` declarations before serving requests. Startup or the first governed operation fails with structured configuration diagnostics when the final proxy state is invalid.
+
+### `FENTARIS_CONFIG_GROUP_POLICY_UNKNOWN`
+
+A fluent group references a policy name that was not declared through `app.policy(name)`.
+
+```ts theme={null}
+app.group("guests").users(user("guest")).policy("readonly");
+// Missing: app.policy("readonly").mcp("github").allow("search_issues");
+```
+
+Declare the named policy before attaching it to a group, or pass a concrete `policy(...)` instance to `app.group(id).policy(...)`.
+
+### `FENTARIS_CONFIG_GROUP_EMPTY_USERS`
+
+A fluent group has a policy but no users.
+
+```ts theme={null}
+app.policy("readonly").mcp("github").allow("*");
+app.group("guests").policy("readonly");
+// Missing: app.group("guests").users(user("guest"))
+```
+
+Call `app.group(id).users(user(...))` before `start()` or `listen(...)`.
+
+### `FENTARIS_CONFIG_GROUP_POLICY_MISSING`
+
+A fluent group has users but no policy.
+
+```ts theme={null}
+app.group("guests").users(user("guest"));
+// Missing: app.group("guests").policy("readonly")
+```
+
+Attach a named or concrete policy with `app.group(id).policy(...)`.
+
+### `FENTARIS_CONFIG_DUPLICATE_GROUP`
+
+The same group id is declared in `fentaris({ groups: [...] })` and through `app.group(id)`.
+
+Use constructor groups or fluent groups for one id, not both. Prefer fluent declarations when modules register governance incrementally.
+
+### `FENTARIS_CONFIG_DUPLICATE_POLICY`
+
+The same policy name is declared in constructor groups and through `app.policy(name)`.
+
+Use constructor-time `policy(...)` objects or app-level `app.policy(name)`, not both for the same name.
+
+### `FENTARIS_CONFIG_POLICY_SERVER_NOT_VISIBLE`
+
+A policy references an upstream MCP server that is not registered before startup.
+
+```ts theme={null}
+app.policy("readonly").mcp("github").allow("*");
+app.group("guests").users(user("guest")).policy("readonly");
+// Missing: app.mcp("github", { transport })
+```
+
+Register the server with `app.mcp(...)` before `start()` or `listen(...)`.
+
 ## Auth and Secrets
 
 ### Credentials cannot be decrypted
@@ -141,3 +203,4 @@ pnpm docs:generate
 * [CLI Usage](/reference/cli)
 * [Config file](/reference/config-file)
 * [Environment variables](/reference/environment-variables)
+* [Governance auth](/guides/governance-auth)

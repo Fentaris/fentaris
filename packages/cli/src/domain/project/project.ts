@@ -104,5 +104,7 @@ function validateProjectConfig(value: unknown, configPath: string): ProjectConfi
     port: config.port,
     path: config.path,
     authDir: config.authDir,
+    ...(config.secrets ? { secrets: config.secrets } : {}),
+    ...(config.panther ? { panther: config.panther } : {}),
   };
 }

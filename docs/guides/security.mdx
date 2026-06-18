@@ -127,6 +127,40 @@ const proxy = fentaris({
 
 Server-scoped policy also reduces accidental exposure when a new upstream MCP server is added to the proxy.
 
+## Compose App-Level Policy And Groups
+
+For incremental proxy setup, declare policies and groups from the app handle before `start()`.
+
+```ts theme={null}
+import { fentaris, stdio, user } from "@fentaris/core";
+
+const app = fentaris({ autoLog: true });
+
+app.policy("readonly")
+  .mcp("github")
+  .allow("search_issues");
+
+app.policy("maintainers")
+  .mcp("github")
+  .allow("*")
+  .mcp("github")
+  .deny("delete_repo");
+
+app.group("guests")
+  .users(user("guest"))
+  .policy("readonly");
+
+app.group("maintainers")
+  .users(user("alice"), user("bob"))
+  .policy("maintainers");
+
+app.mcp("github", {
+  transport: stdio({ command: "github-mcp-server" }),
+});
+```
+
+Fentaris validates the final app before serving. Missing named policies, empty groups, duplicate declarations, and policies that still reference missing upstream MCP servers fail startup with configuration diagnostics.
+
 ## Protect Secrets
 
 Bind secrets through credentials or environment injection. Do not pass secrets through user-controlled metadata or tool arguments.

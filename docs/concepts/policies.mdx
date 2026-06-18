@@ -29,6 +29,23 @@ const limitedPolicy = policy("limited-demo")
   Use broad wildcards intentionally. Health checks warn when policy grants broad access across every server and target.
 </Warning>
 
+## App-Level Composition
+
+When a proxy is assembled across modules, declare policies and groups from the app handle before `start()`:
+
+```ts theme={null}
+import { fentaris, user } from "@fentaris/core";
+
+const app = fentaris();
+
+app.policy("readonly").mcp("github").allow("search_issues");
+app.group("guests").users(user("guest")).policy("readonly");
+```
+
+Repeated `app.policy("readonly")` calls return the same policy instance. Fentaris validates the final configuration and reports diagnostics for missing named policies, empty groups, duplicate declarations, and policies that reference servers not yet registered.
+
+See [Governance auth](/guides/governance-auth) and [Proxy setup](/guides/proxy-setup) for full examples.
+
 ## Related Documentation
 
 * [Architecture](/concepts/architecture)

@@ -62,6 +62,10 @@ export function printHelp(runtime: Runtime): void {
   ${style.command("fentaris doctor [--fix] [--strict] [--json] [--runtime] [--timeout <ms>]")}
   ${style.command("fentaris build")}
   ${style.command("fentaris secrets set <reference> [--user <id> | --group <id>]")}
+  ${style.command("fentaris secrets list [--json]")}
+  ${style.command("fentaris secrets unset <reference> [--user <id> | --group <id>]")}
+  ${style.command("fentaris secrets manifest [--check]")}
+  ${style.command("fentaris secrets doctor [--strict] [--json]")}
 
 Legacy local auth:
   ${style.command("fentaris auth init --dir .fentaris/auth --key <key>")}

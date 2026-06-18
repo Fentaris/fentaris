@@ -353,6 +353,33 @@ export type {
 export { FentarisAuth, apiKeyIdentityStrategy } from "./auth/index.js";
 export type { CredentialResolution, LocalAuthOptions, LocalCredentials, UpstreamAuthBinding, UpstreamAuthBindings } from "./auth/index.js";
 /**
+ * Secrets backend and manifest APIs.
+ * @pk
+ */
+export {
+  LocalSecretsBackend,
+  credentialsToRefs,
+  decodeSecretScope,
+  diffManifest,
+  encodeSecretScope,
+  manifestEntryKey,
+  manifestFromSecretRefs,
+  manifestsEqual,
+  parseManifest,
+  secretRefKey,
+  serializeManifest,
+} from "./secrets/index.js";
+export type {
+  LocalSecretsBackendOptions,
+  SecretRef,
+  SecretScope,
+  SecretsBackend,
+  SecretsManifest,
+  SecretsManifestDiff,
+  SecretsManifestEntry,
+  SecretsProvider,
+} from "./secrets/index.js";
+/**
  * Isolation runtime implementations.
  * @pk
  */

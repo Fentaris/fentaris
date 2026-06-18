@@ -7,11 +7,13 @@ import { FentarisAuth } from "@fentaris/core";
 import { authDir, supportedPackageManagers } from "../../shared/constants.js";
 import type { HealthResult, PackageManager, ProjectConfig, ProjectDiscovery, Runtime } from "../../shared/types.js";
 import { canAccess, exists, isNodeError, readJson } from "../../shared/utils.js";
+import { secretsDoctorHealthResults } from "../secrets/doctor.js";
 
 export type DoctorOptions = {
   fix?: boolean;
   runtime?: boolean;
   timeoutMs?: number;
+  strict?: boolean;
 };
 
 type JsonReadResult =
@@ -40,7 +42,7 @@ export async function getDoctorResults(runtime: Runtime, options: boolean | Doct
     const validation = await configResults(project.discovery);
     results.push(...validation.results);
     results.push(...await packageResults(project.discovery));
-    results.push(...await authResults(project.discovery, runtime));
+    results.push(...await authResults(project.discovery, runtime, { strict: normalized.strict }));
     results.push(await portResult(project.discovery.config.port));
 
     if (normalized.runtime) {
@@ -109,13 +111,14 @@ export function hasWarning(results: HealthResult[]): boolean {
 
 function normalizeDoctorOptions(options: boolean | DoctorOptions): Required<DoctorOptions> {
   if (typeof options === "boolean") {
-    return { fix: options, runtime: false, timeoutMs: 10_000 };
+    return { fix: options, runtime: false, timeoutMs: 10_000, strict: false };
   }
 
   return {
     fix: options.fix === true,
     runtime: options.runtime === true,
     timeoutMs: normalizeTimeout(options.timeoutMs),
+    strict: options.strict === true,
   };
 }
 
@@ -380,7 +383,7 @@ async function packageResults(project: ProjectDiscovery): Promise<HealthResult[]
   return results;
 }
 
-async function authResults(project: ProjectDiscovery, runtime: Runtime | undefined): Promise<HealthResult[]> {
+async function authResults(project: ProjectDiscovery, runtime: Runtime | undefined, options: { strict?: boolean } = {}): Promise<HealthResult[]> {
   const authPath = path.join(project.root, project.config.authDir);
   const credentialsPath = path.join(authPath, "credentials.enc.json");
   const authDirectoryExists = await exists(authPath);
@@ -428,6 +431,18 @@ async function authResults(project: ProjectDiscovery, runtime: Runtime | undefin
       detail: "Skipped because FENTARIS_AUTH_KEY is not set.",
       hint: "Set FENTARIS_AUTH_KEY to verify encrypted credentials locally.",
     });
+  }
+
+  if (runtime) {
+    const extended = await secretsDoctorHealthResults(project, runtime, { strict: options.strict });
+    for (const result of extended) {
+      if (result.label.startsWith("credentials.enc.json")) {
+        continue;
+      }
+      if (!results.some((existing) => existing.label === result.label && existing.detail === result.detail)) {
+        results.push(result);
+      }
+    }
   }
 
   return results;
@@ -608,7 +623,10 @@ async function lockfileResult(root: string, packageManager: PackageManager): Pro
 
 async function gitignoreAuthResult(root: string, configuredAuthDir: string): Promise<HealthResult> {
   const gitignorePath = path.join(root, ".gitignore");
-  const gitignoreEntry = `${configuredAuthDir.replace(/\\/g, "/").replace(/\/+$/u, "")}/`;
+  const normalizedAuthDir = configuredAuthDir.replace(/\\/g, "/").replace(/\/+$/u, "");
+  const gitignoreDirectoryEntry = `${normalizedAuthDir}/`;
+  const gitignoreContentsEntry = `${normalizedAuthDir}/*`;
+  const manifestEntry = `!${normalizedAuthDir}/secrets.manifest.json`;
   const present = await exists(gitignorePath);
   if (!present) {
     return {
@@ -616,26 +634,25 @@ async function gitignoreAuthResult(root: string, configuredAuthDir: string): Pro
       label: ".gitignore auth entry",
       status: "warn",
       detail: ".gitignore is missing.",
-      hint: `doctor --fix can create .gitignore with ${gitignoreEntry} ignored.`,
+      hint: `doctor --fix can create .gitignore with ${gitignoreContentsEntry} ignored.`,
       fix: async () => {
-        await writeFile(gitignorePath, `${gitignoreEntry}\n`);
+        await writeFile(gitignorePath, `${gitignoreContentsEntry}\n${manifestEntry}\n`);
       },
     };
   }
 
   const contents = await readFile(gitignorePath, "utf8");
-  const gitignoreEntryWithoutSlash = gitignoreEntry.slice(0, -1);
   const ignoresAuth = contents
     .split(/\r?\n/)
-    .some((line) => line.trim() === gitignoreEntry || line.trim() === gitignoreEntryWithoutSlash);
+    .some((line) => line.trim() === gitignoreDirectoryEntry || line.trim() === normalizedAuthDir || line.trim() === gitignoreContentsEntry);
   return {
     group: "Auth",
     label: ".gitignore auth entry",
     status: ignoresAuth ? "pass" : "warn",
-    detail: ignoresAuth ? `${gitignoreEntry} is ignored.` : `${gitignoreEntry} is not ignored.`,
-    hint: ignoresAuth ? undefined : `doctor --fix can add ${gitignoreEntry} to .gitignore.`,
+    detail: ignoresAuth ? `${gitignoreContentsEntry} is ignored.` : `${gitignoreContentsEntry} is not ignored.`,
+    hint: ignoresAuth ? undefined : `doctor --fix can add ${gitignoreContentsEntry} to .gitignore.`,
     fix: async () => {
-      await writeFile(gitignorePath, `${contents.trimEnd()}\n${gitignoreEntry}\n`);
+      await writeFile(gitignorePath, `${contents.trimEnd()}\n${gitignoreContentsEntry}\n${manifestEntry}\n`);
     },
   };
 }
