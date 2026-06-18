@@ -149,7 +149,7 @@ describe("config validation", () => {
       ],
     });
 
-    expect(() => proxy.group("missing")).toThrow(FentarisConfigError);
+    expect(() => proxy.group("missing").use((_ctx, next) => next())).toThrow(FentarisConfigError);
     expect(() => proxy.mcp("missing")).toThrow(FentarisConfigError);
     expect(() => proxy.group("engineering").mcp("missing").tool("*", (_ctx, next) => next())).toThrow(FentarisConfigError);
     expect(() => proxy.group("engineering").mcp("stripe").tool("*", (_ctx, next) => next())).toThrow(FentarisConfigError);

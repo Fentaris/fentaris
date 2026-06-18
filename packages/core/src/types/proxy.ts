@@ -41,6 +41,7 @@ import type {
 } from "./middleware.js";
 import type { Policy, PolicyDecision } from "./policy.js";
 import type { McpServerOptions } from "../server/index.js";
+import type { User } from "../governance/index.js";
 
 /**
  * Safe downstream transport metadata attached to a proxy operation.
@@ -260,6 +261,8 @@ export type ProxyMcpHandle = {
 export type ProxyGroupHandle = {
   readonly id: string;
   mcp(name: string): ProxyMcpHandle;
+  users(...users: User[]): ProxyGroupHandle;
+  policy(policyNameOrPolicy: string | Policy): ProxyGroupHandle;
   use(handler: Middleware): ProxyGroupHandle;
   operation(operation: ProxyOperation, handler: ProxyOperationHandler): ProxyGroupHandle;
   on(eventName: ProxyEventName, handler: ProxyEventHandler): ProxyGroupHandle;

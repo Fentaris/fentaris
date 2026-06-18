@@ -168,6 +168,36 @@ app.mcp("specification", {
   If a policy references a server that is still missing at `app.start()`, Fentaris fails startup with `FENTARIS_CONFIG_POLICY_SERVER_NOT_VISIBLE`.
 </Note>
 
+## Compose Governance After Construction
+
+Use `app.policy(...)`, `app.group(...)`, and `app.mcp(...)` together when modules need to contribute to one proxy instance.
+
+```ts theme={null}
+import { fentaris, stdio, user } from "@fentaris/core";
+
+const app = fentaris({
+  port: Number(process.env.PORT ?? 3000),
+  path: "/mcp",
+});
+
+app.policy("readonly")
+  .mcp("github")
+  .allow("search_issues");
+
+app.group("guests")
+  .users(user("guest"))
+  .policy("readonly");
+
+app.mcp("github", {
+  displayName: "GitHub",
+  transport: stdio({ command: "github-mcp-server" }),
+});
+
+await app.start();
+```
+
+Repeated `app.policy("readonly")` calls return the same named policy, so modules can add permissions to a shared declaration before the proxy starts.
+
 ## Harden Tool Discovery
 
 Filter tool lists before exposing them to clients.
