@@ -6,11 +6,6 @@
   </a>
 </div>
 
-> ⚠️ **Disclaimer / Avviso:** We are renaming the project from **Panther** to **Fentaris**. During this transition, there may be temporary issues or inconsistencies.  
-> Stiamo rinominando il progetto da **Panther** a **Fentaris**; durante questa fase potrebbero esserci problemi temporanei o incongruenze.
-
-&nbsp; 
-
 <p align="center">
   <a href="./docs/index.mdx" alt="Documentation">
     <img src="https://img.shields.io/badge/fentaris-docs-blue?labelColor=white" /></a>
