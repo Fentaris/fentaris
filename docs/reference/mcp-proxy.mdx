@@ -81,6 +81,8 @@ Identity strategy configuration for proxy-edge auth.
 
 Policy and group declarations used to decide which upstream tools, resources, prompts, and completions are visible to each subject.
 
+You can also declare policies and groups after construction with `proxy.policy(...)` and `proxy.group(...)`. See [App-level governance](#app-level-governance).
+
 ### Runtime server registration
 
 Policies can reference upstream MCP server names that are registered later through `proxy.mcp(...)`, as long as registration happens before `start()` or `listen(...)`.
@@ -159,6 +161,49 @@ Parse a proxied prompt name and retrieve the upstream prompt.
 
 Route completion requests for proxied prompt references and proxied resource-template references.
 
+## App-Level Governance
+
+Use `proxy.policy(name)` and `proxy.group(id)` when modules contribute governance to one proxy instance or when upstream MCP servers are registered after construction.
+
+```ts theme={null}
+import { fentaris, stdio, user } from "@fentaris/core";
+
+const app = fentaris();
+
+app.policy("readonly")
+  .mcp("github")
+  .allow("search_issues");
+
+app.group("guests")
+  .users(user("guest"))
+  .policy("readonly");
+
+app.mcp("github", {
+  transport: stdio({ command: "github-mcp-server" }),
+});
+```
+
+### `policy(name)`
+
+Register or retrieve a named app-level policy. Repeating the same name returns the same policy instance, so modules can extend one declaration before startup.
+
+### `group(groupId)`
+
+Return a scoped group handle. Chain `users(...)` and `policy(nameOrPolicy)` to declare the group before `start()` or `listen(...)`.
+
+```ts theme={null}
+app.group("maintainers")
+  .users(user("alice"))
+  .users(user("bob"))
+  .policy("maintainers");
+```
+
+<Note>
+  Fluent groups must include at least one user and a policy before startup. Named policy references must be declared through `app.policy(name)` or passed as a concrete policy instance.
+</Note>
+
+Fentaris validates the final configuration before serving. Common diagnostics include `FENTARIS_CONFIG_GROUP_POLICY_UNKNOWN`, `FENTARIS_CONFIG_GROUP_EMPTY_USERS`, `FENTARIS_CONFIG_DUPLICATE_GROUP`, and `FENTARIS_CONFIG_DUPLICATE_POLICY`. See [Troubleshooting](/troubleshooting#app-level-governance-diagnostics).
+
 ## Routes and Middleware
 
 Use the returned proxy instance for routes, middleware, and hooks:
@@ -193,71 +238,5 @@ For normal applications, prefer `fentaris(...)`.
 
 * [Setup](/getting-started/setup)
 * [Proxy setup](/guides/proxy-setup)
+* [Governance auth](/guides/governance-auth)
 * [McpServer reference](/reference/mcp-server)
-- `port`: default port for `start()`.
-- `path`: HTTP path for MCP requests (default `/mcp`).
-- `logger`: custom `Logger` instance.
-- `user`: static user context or resolver function.
-- `name` and `version`: MCP server identity.
-
-## Methods
-
-### `start(options?, onStarted?)`
-
-Starts the HTTP server. Accepts optional overrides:
-
-```ts theme={null}
-await proxy.start({ port: 4000, path: "/proxy" });
-```
-
-### `close()`
-
-Closes the HTTP server and all configured backends.
-
-### `listTools(params?, user?)`
-
-Aggregates tool lists across all servers and applies naming rules.
-
-### `callTool(params, user?)`
-
-Calls a proxied tool. Internally dispatches hooks and middleware, then forwards to the server.
-
-### `listResources(params?, user?)`
-
-Aggregates resources across servers and rewrites each resource `uri` to a Fentaris proxy URI.
-
-### `readResource(params, user?)`
-
-Parses a Fentaris proxy resource URI, restores the upstream resource URI, and reads it from the owning server.
-
-### `listResourceTemplates(params?, user?)`
-
-Aggregates resource templates and rewrites each `uriTemplate` to a Fentaris proxy template URI.
-
-### `listPrompts(params?, user?)`
-
-Aggregates prompts and rewrites each prompt `name` to `<server>__<prompt>`.
-
-### `getPrompt(params, user?)`
-
-Parses a proxied prompt name and retrieves the upstream prompt with the original name and arguments.
-
-### `complete(params, user?)`
-
-Routes completion requests for proxied prompt references and proxied resource-template references to the owning upstream server.
-
-## Hooks
-
-```ts theme={null}
-proxy.on("call", { server: "filesystem" }, async (request, context) => {
-  context.log.info("filesystem tool", { tool: request.toolName });
-});
-```
-
-## Middleware
-
-```ts theme={null}
-proxy.use(async (request, context, next) => {
-  return next();
-});
-```
