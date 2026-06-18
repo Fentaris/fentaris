@@ -85,6 +85,33 @@ describe("command routing helpers", () => {
     });
   });
 
+  it("parses short utility flags", () => {
+    expect(parseCommand(["-v"])).toEqual({
+      name: "help",
+      args: [],
+      options: { v: true },
+    });
+    expect(parseCommand(["-h"])).toEqual({
+      name: "help",
+      args: [],
+      options: { h: true },
+    });
+  });
+
+  it("routes root help and version flags", async () => {
+    for (const argv of [["--version"], ["-v"], ["version"]]) {
+      const rt = runtime("/tmp");
+      await expect(main(argv, rt)).resolves.toBe(0);
+      expect(rt.out.log).toHaveBeenCalledWith("0.1.3");
+    }
+
+    for (const argv of [["--help"], ["-h"], ["help"]]) {
+      const rt = runtime("/tmp");
+      await expect(main(argv, rt)).resolves.toBe(0);
+      expect(vi.mocked(rt.out.log).mock.calls.flat().join("\n")).toContain("Usage:");
+    }
+  });
+
   it("resolves provided and prompted project names", async () => {
     await expect(resolveProjectName("my-app", prompt())).resolves.toBe("my-app");
     await expect(resolveProjectName(undefined, prompt(["asked-app"]))).resolves.toBe("asked-app");
