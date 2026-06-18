@@ -1,5 +1,18 @@
 # @fentaris/core
 
+## 0.6.0
+
+### Minor Changes
+
+- 2a952cf: Add app-level fluent governance declarations with `app.policy(...)`, `app.group(...).users(...)`, and named group policy assignment.
+- c8023e5: Add cloud-ready local secrets management with a `SecretsBackend` abstraction, `fentaris secrets list`, `manifest`, `doctor`, and `unset` commands, plus a committable `.fentaris/secrets.manifest.json` schema.
+
+### Patch Changes
+
+- 8e20832: Fix secrets manifest generation and local secrets presence checks.
+
+  Generated projects now allow `.fentaris/secrets.manifest.json` to be committed while keeping local secret files ignored, and `fentaris secrets manifest` creates the auth directory before writing the manifest. The local secrets backend no longer reports arbitrary user-scoped credentials as present when a user only has API keys.
+
 ## 0.5.1
 
 ### Patch Changes
