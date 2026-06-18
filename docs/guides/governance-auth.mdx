@@ -86,6 +86,43 @@ proxy.use((ctx, next) => {
 
 The same API is available through classes when you prefer object construction, but the helper style keeps users, groups, server bindings, and credential references close together.
 
+## App-Level Composition
+
+Use app-level governance declarations when the proxy is assembled across modules or when upstream MCP servers are registered after construction.
+
+```ts theme={null}
+import { fentaris, streamableHttp, user } from "@fentaris/core";
+
+const app = fentaris();
+
+app.policy("readonly")
+  .mcp("github")
+  .allow("search_issues");
+
+app.policy("maintainers")
+  .mcp("github")
+  .allow("*");
+
+app.group("guests")
+  .users(user("guest"))
+  .policy("readonly");
+
+app.group("maintainers")
+  .users(user("alice"))
+  .users(user("bob"))
+  .policy("maintainers");
+
+app.mcp("github", {
+  transport: streamableHttp({ url: "https://github.example/mcp" }),
+});
+```
+
+`app.policy(name)` is a named policy registry. Repeating the same name returns the same policy instance, and `app.group(id).policy(name)` resolves that name before Fentaris serves requests.
+
+<Note>
+  Fluent groups must include at least one user and a policy before startup. A named policy reference must be declared through `app.policy(name)` or Fentaris reports a configuration diagnostic.
+</Note>
+
 ## Local auth files
 
 The generated local credential store uses one encrypted file by default:

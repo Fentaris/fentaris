@@ -1099,6 +1099,148 @@ describe("McpProxy", () => {
     expect(result).toMatchObject({ content: [{ type: "text", text: "called:create_issue" }] });
   });
 
+  it("evaluates app-level readonly and maintainer policies end to end", async () => {
+    const transport = new MockTransport();
+    const app = fentaris();
+
+    app.policy("readonly").mcp("github").allow("read");
+    app.policy("maintainers").mcp("github").allow("*");
+    app.group("guests").users(user("guest")).policy("readonly");
+    app.group("maintainers").users(user("alice"), user("bob")).policy("maintainers");
+    app.mcp("github", { transport });
+
+    await expect(app.callTool({ name: toProxyToolName("github", "read") }, { id: "guest" })).resolves.toMatchObject({
+      content: [{ type: "text", text: "called:read" }],
+    });
+    await expect(app.callTool({ name: toProxyToolName("github", "create_issue") }, { id: "alice" })).resolves.toMatchObject({
+      content: [{ type: "text", text: "called:create_issue" }],
+    });
+    await expect(app.callTool({ name: toProxyToolName("github", "create_issue") }, { id: "guest" })).resolves.toMatchObject({
+      isError: true,
+    });
+  });
+
+  it("composes repeated app-level policy declarations onto the same policy", async () => {
+    const transport = new MockTransport();
+    const app = fentaris();
+
+    const first = app.policy("readonly").mcp("github").allow("read");
+    const second = app.policy("readonly").mcp("github").allow("create_issue");
+    app.group("guests").users(user("guest")).policy("readonly");
+    app.mcp("github", { transport });
+
+    expect(second).toBe(first);
+    await expect(app.callTool({ name: toProxyToolName("github", "read") }, { id: "guest" })).resolves.toMatchObject({
+      content: [{ type: "text", text: "called:read" }],
+    });
+    await expect(app.callTool({ name: toProxyToolName("github", "create_issue") }, { id: "guest" })).resolves.toMatchObject({
+      content: [{ type: "text", text: "called:create_issue" }],
+    });
+  });
+
+  it("appends users across repeated fluent group declarations", async () => {
+    const transport = new MockTransport();
+    const app = fentaris();
+
+    app.policy("maintainers").mcp("github").allow("*");
+    app.group("maintainers").users(user("alice")).users(user("bob")).policy("maintainers");
+    app.mcp("github", { transport });
+
+    await expect(app.callTool({ name: toProxyToolName("github", "create_issue") }, { id: "alice" })).resolves.toMatchObject({
+      content: [{ type: "text", text: "called:create_issue" }],
+    });
+    await expect(app.callTool({ name: toProxyToolName("github", "create_issue") }, { id: "bob" })).resolves.toMatchObject({
+      content: [{ type: "text", text: "called:create_issue" }],
+    });
+  });
+
+  it("evaluates constructor groups and fluent groups together", async () => {
+    const transport = new MockTransport();
+    const app = fentaris({
+      groups: [
+        group({
+          id: "guests",
+          users: [user("guest")],
+          policy: policy("readonly").mcp("github").allow("read"),
+        }),
+      ],
+    });
+
+    app.policy("maintainers").mcp("github").allow("*");
+    app.group("maintainers").users(user("alice")).policy("maintainers");
+    app.mcp("github", { transport });
+
+    await expect(app.callTool({ name: toProxyToolName("github", "read") }, { id: "guest" })).resolves.toMatchObject({
+      content: [{ type: "text", text: "called:read" }],
+    });
+    await expect(app.callTool({ name: toProxyToolName("github", "create_issue") }, { id: "alice" })).resolves.toMatchObject({
+      content: [{ type: "text", text: "called:create_issue" }],
+    });
+  });
+
+  it("reports fluent governance diagnostics before serving", async () => {
+    const missingPolicy = fentaris();
+    missingPolicy.group("guests").users(user("guest")).policy("missing");
+    await expect(missingPolicy.listTools(undefined, { id: "guest" })).rejects.toMatchObject({
+      diagnostics: [expect.objectContaining({ code: "FENTARIS_CONFIG_GROUP_POLICY_UNKNOWN" })],
+    });
+
+    const emptyGroup = fentaris();
+    emptyGroup.policy("readonly").mcp("github").allow("*");
+    emptyGroup.group("guests").policy("readonly");
+    await expect(emptyGroup.start({ port: 0 })).rejects.toMatchObject({
+      diagnostics: [expect.objectContaining({ code: "FENTARIS_CONFIG_GROUP_EMPTY_USERS" })],
+    });
+
+    const duplicateGroup = fentaris({
+      groups: [
+        group({
+          id: "guests",
+          users: [user("guest")],
+          policy: Policy.allowAll("guests"),
+        }),
+      ],
+    });
+    duplicateGroup.policy("readonly").mcp("github").allow("*");
+    duplicateGroup.group("guests").users(user("alice")).policy("readonly");
+    await expect(duplicateGroup.start({ port: 0 })).rejects.toMatchObject({
+      diagnostics: [expect.objectContaining({ code: "FENTARIS_CONFIG_DUPLICATE_GROUP" })],
+    });
+
+    const duplicatePolicy = fentaris({
+      groups: [
+        group({
+          id: "guests",
+          users: [user("guest")],
+          policy: policy("readonly").mcp("github").allow("*"),
+        }),
+      ],
+    });
+    duplicatePolicy.policy("readonly").mcp("github").allow("*");
+    await expect(duplicatePolicy.start({ port: 0 })).rejects.toMatchObject({
+      diagnostics: [expect.objectContaining({ code: "FENTARIS_CONFIG_DUPLICATE_POLICY" })],
+    });
+  });
+
+  it("defers fluent policy MCP server validation until runtime validation", async () => {
+    const missingServer = fentaris();
+    missingServer.policy("readonly").mcp("github").allow("*");
+    missingServer.group("guests").users(user("guest")).policy("readonly");
+
+    await expect(missingServer.listTools(undefined, { id: "guest" })).rejects.toMatchObject({
+      diagnostics: [expect.objectContaining({ code: "FENTARIS_CONFIG_POLICY_SERVER_NOT_VISIBLE" })],
+    });
+
+    const registeredServer = fentaris();
+    registeredServer.policy("readonly").mcp("github").allow("*");
+    registeredServer.group("guests").users(user("guest")).policy("readonly");
+    registeredServer.mcp("github", { transport: new MockTransport() });
+
+    await expect(registeredServer.listTools(undefined, { id: "guest" })).resolves.toMatchObject({
+      tools: [expect.objectContaining({ name: toProxyToolName("github", "create_issue") })],
+    });
+  });
+
   it("validates deferred policy server references before start", async () => {
     const app = fentaris({
       groups: [

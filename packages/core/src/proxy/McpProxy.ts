@@ -82,14 +82,18 @@ import { getCapabilityPermission, toCapabilityPermissions } from "../policy.js";
 import { FentarisAuth } from "../auth.js";
 import { resolveCredentialSource, type CredentialSourceMap } from "../credentials/index.js";
 import {
+  buildSubjectIndex,
   evaluateGroupPolicies,
   filterToolsByGroupPolicies,
+  Group as GovernanceGroup,
+  Policy as GovernancePolicy,
   type Group,
   type SubjectIndex,
+  type User,
 } from "../governance.js";
 import { HttpProxyExposureTransport } from "../transports/exposure/HttpProxyExposureTransport.js";
 import { ResponseController } from "../types/middleware.js";
-import { FentarisConfigError, assertValidFentarisConfig, validateFentarisConfig } from "../config/index.js";
+import { FentarisConfigError, assertValidFentarisConfig, validateFentarisConfig, type FentarisDiagnostic } from "../config/index.js";
 import { resolveFentarisConfig } from "../config/resolve.js";
 import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
 import type { CredentialSourceMetadata, IdentityMetadata, ResolvedSubject, UserContext } from "../types/shared.js";
@@ -135,6 +139,12 @@ class PolicyDeniedError extends Error {
     this.name = "PolicyDeniedError";
   }
 }
+
+type FluentGroupDeclaration = {
+  id: string;
+  users: User[];
+  policy?: string | Policy;
+};
 
 /**
  * Options for creating an MCP proxy server.
@@ -219,10 +229,11 @@ export class McpProxy {
   private readonly logger: Logger;
   private readonly userResolver?: McpProxyOptions["user"];
   private readonly identityOptions?: IdentityResolverOptions;
-  private readonly policy?: Policy;
-  private readonly groups: Group[];
+  private readonly globalPolicy?: Policy;
+  private readonly configuredGroups: Group[];
+  private groups: Group[];
   private readonly defaultCredentials: CredentialSourceMap;
-  private readonly subjectIndex?: SubjectIndex;
+  private subjectIndex?: SubjectIndex;
   private readonly auth?: FentarisAuth;
   private readonly registry?: Registry;
   private readonly autoLog: Required<AutoLogOptions> | null;
@@ -235,7 +246,9 @@ export class McpProxy {
   private readonly version: string;
   private readonly defaultPort?: number;
   private readonly defaultPath: string;
-  private readonly runtimeValidationConfig: McpProxyOptions;
+  private runtimeValidationConfig: McpProxyOptions;
+  private readonly namedPolicies = new Map<string, GovernancePolicy>();
+  private readonly fluentGroups = new Map<string, FluentGroupDeclaration>();
   private httpServer: HttpServer | null = null;
   private readonly exposureHandles = new Set<ProxyExposureHandle>();
 
@@ -249,7 +262,8 @@ export class McpProxy {
     this.logger = options.logger ?? new Logger();
     this.userResolver = options.user;
     this.auth = options.auth;
-    this.policy = options.policy;
+    this.globalPolicy = options.policy;
+    this.configuredGroups = resolved.groups;
     this.groups = resolved.groups;
     this.defaultCredentials = resolved.defaults.credentials;
     this.identityOptions = normalizeIdentityOptions(
@@ -315,6 +329,22 @@ export class McpProxy {
   }
 
   /**
+   * Register or retrieve a named app-level policy declaration.
+   * @pk
+   */
+  policy(name: string): GovernancePolicy {
+    const existing = this.namedPolicies.get(name);
+    if (existing) {
+      return existing;
+    }
+
+    const declared = new GovernancePolicy({ name });
+    this.namedPolicies.set(name, declared);
+    this.refreshDerivedGovernanceState({ validate: false });
+    return declared;
+  }
+
+  /**
    * Register or retrieve a scoped upstream MCP handle.
    * @pk
    */
@@ -363,19 +393,7 @@ export class McpProxy {
    * @pk
    */
   group(groupId: string): ProxyGroupHandle {
-    if (!this.groups.some((group) => group.id === groupId)) {
-      throw new FentarisConfigError([
-        {
-          severity: "error",
-          code: "FENTARIS_CONFIG_HANDLE_UNKNOWN_GROUP",
-          title: "Scoped group handle references an unknown group",
-          message: `Group handle "${groupId}" does not match a configured group.`,
-          path: ["proxy", "group", groupId],
-          hint: "Declare the group in config.groups before registering scoped routes.",
-        },
-      ]);
-    }
-
+    this.fluentGroup(groupId);
     return new McpProxyGroupHandle(this, groupId);
   }
 
@@ -554,10 +572,12 @@ export class McpProxy {
   }
 
   private assertRuntimeConfigValid(): void {
+    this.refreshDerivedGovernanceState({ validate: true });
     assertValidFentarisConfig(this.runtimeValidationConfig);
   }
 
   private assertDeferredPolicyServerVisibilityValid(): void {
+    this.refreshDerivedGovernanceState({ validate: true });
     const result = validateFentarisConfig(this.runtimeValidationConfig);
     const policyServerVisibilityErrors = result.errors.filter((error) => error.code === "FENTARIS_CONFIG_POLICY_SERVER_NOT_VISIBLE");
     if (policyServerVisibilityErrors.length > 0) {
@@ -625,7 +645,7 @@ export class McpProxy {
         servers: this.serverCatalog.allServers(),
         groups: this.groups,
         exposureCount: this.exposureHandles.size,
-        policy: this.policy,
+        policy: this.globalPolicy,
         auth: this.auth,
         identityRequired: Boolean(this.identityOptions?.required),
       },
@@ -690,7 +710,7 @@ export class McpProxy {
         const result = await server.listTools(params, userForServer);
         const tools = this.groups.length > 0
           ? filterToolsByGroupPolicies(result.tools, server.name, userGroups)
-          : this.policy ? filterToolsByPolicy(result.tools, server.name, this.policy) : result.tools;
+          : this.globalPolicy ? filterToolsByPolicy(result.tools, server.name, this.globalPolicy) : result.tools;
         return tools.map((tool) => ({
           ...tool,
           name: toProxyToolName(server.name, tool.name),
@@ -707,14 +727,14 @@ export class McpProxy {
       subject: resolvedSubject,
       identity,
     });
-    const context = createProxyContext({ registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.policy }, {
+    const context = createProxyContext({ registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
       operation: "tools:list",
       user: resolvedUser,
       subject: resolvedSubject,
       identity,
       log,
       raw: params,
-      policy: this.policy,
+      policy: this.globalPolicy,
     });
 
     for (const hook of this.listToolsHooks) {
@@ -725,7 +745,7 @@ export class McpProxy {
           subject: resolvedSubject,
           identity,
           log,
-          policy: this.policy,
+          policy: this.globalPolicy,
           credentialSources: context.credentials.sources,
         });
       } catch (error) {
@@ -780,7 +800,7 @@ export class McpProxy {
       toolName,
       proxyToolName: params.name,
     });
-    const context = createProxyContext({ registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.policy }, {
+    const context = createProxyContext({ registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
       operation: "tool:call",
       user: resolvedUser,
       subject: resolvedSubject,
@@ -788,13 +808,13 @@ export class McpProxy {
       log,
       request,
       raw: params,
-      policy: this.policy,
+      policy: this.globalPolicy,
     });
     const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
     if (this.groups.length > 0) {
       context.policyDecision = await evaluateGroupPolicies(userGroups, request, resolvedUser, context);
-    } else if (this.policy) {
-      context.policyDecision = await this.policy.evaluate(request, resolvedUser, context);
+    } else if (this.globalPolicy) {
+      context.policyDecision = await this.globalPolicy.evaluate(request, resolvedUser, context);
     }
     context.policy = {
       allowed: context.policyDecision?.allowed,
@@ -802,9 +822,9 @@ export class McpProxy {
       matchedGroups: context.policyDecision?.metadata?.matchedGroups ?? userGroups.map((group) => group.id),
       matchedPermissions: context.policyDecision?.metadata?.matchedPermissions ?? [],
       metadata: context.policyDecision?.metadata,
-      policy: this.policy,
+      policy: this.globalPolicy,
       decision: context.policyDecision,
-      can: createPolicyCan({ groups: this.groups, subjectIndex: this.subjectIndex, policy: this.policy }, resolvedSubject),
+      can: createPolicyCan({ groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, resolvedSubject),
     };
     if (context.policyDecision) {
       await this.emitRuntimeEvent(createRuntimeEvent({
@@ -982,7 +1002,7 @@ export class McpProxy {
     const bindings = this.serverCatalog.resolve({ user: resolvedUser, subject: resolvedSubject, operation: "resources:list" });
     const results = await Promise.all(
       bindings.map(async ({ server }) => {
-        const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.policy }, {
+        const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
           operation: "resources:list",
           serverName: server.name,
           targetKind: "resource",
@@ -992,7 +1012,7 @@ export class McpProxy {
           identity: _identity,
         });
         if (
-          !isCapabilityAllowed({ groups: this.groups, policy: this.policy, subjectIndex: this.subjectIndex }, 
+          !isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
             { serverName: server.name, operation: "resources:list", targetKind: "resource" },
             resolvedSubject,
             userGroups,
@@ -1007,7 +1027,7 @@ export class McpProxy {
           const upstream = await server.listResources(params, userForServer);
           return {
             resources: upstream.resources.filter((resource) =>
-              isCapabilityAllowed({ groups: this.groups, policy: this.policy, subjectIndex: this.subjectIndex }, 
+              isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
                 {
                   serverName: server.name,
                   operation: "resource:read",
@@ -1098,7 +1118,7 @@ export class McpProxy {
     const bindings = this.serverCatalog.resolve({ user: resolvedUser, subject: resolvedSubject, operation: "resource-templates:list" });
     const results = await Promise.all(
       bindings.map(async ({ server }) => {
-        const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.policy }, {
+        const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
           operation: "resource-templates:list",
           serverName: server.name,
           targetKind: "resourceTemplate",
@@ -1108,7 +1128,7 @@ export class McpProxy {
           identity: _identity,
         });
         if (
-          !isCapabilityAllowed({ groups: this.groups, policy: this.policy, subjectIndex: this.subjectIndex }, 
+          !isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
             { serverName: server.name, operation: "resource-templates:list", targetKind: "resourceTemplate" },
             resolvedSubject,
             userGroups,
@@ -1123,7 +1143,7 @@ export class McpProxy {
           const upstream = await server.listResourceTemplates(params, userForServer);
           return {
             resourceTemplates: upstream.resourceTemplates.filter((template) =>
-              isCapabilityAllowed({ groups: this.groups, policy: this.policy, subjectIndex: this.subjectIndex }, 
+              isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
                 {
                   serverName: server.name,
                   operation: "resource-templates:list",
@@ -1164,7 +1184,7 @@ export class McpProxy {
     const bindings = this.serverCatalog.resolve({ user: resolvedUser, subject: resolvedSubject, operation: "prompts:list" });
     const results = await Promise.all(
       bindings.map(async ({ server }) => {
-        const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.policy }, {
+        const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
           operation: "prompts:list",
           serverName: server.name,
           targetKind: "prompt",
@@ -1173,7 +1193,7 @@ export class McpProxy {
           subject: resolvedSubject,
           identity: _identity,
         });
-        if (!isCapabilityAllowed({ groups: this.groups, policy: this.policy, subjectIndex: this.subjectIndex }, { serverName: server.name, operation: "prompts:list", targetKind: "prompt" }, resolvedSubject, userGroups)) {
+        if (!isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, { serverName: server.name, operation: "prompts:list", targetKind: "prompt" }, resolvedSubject, userGroups)) {
           return [];
         }
         const result = await this.dispatchOperationRoutes(context, async () => {
@@ -1183,7 +1203,7 @@ export class McpProxy {
           const upstream = await server.listPrompts(params, userForServer);
           return {
             prompts: upstream.prompts.filter((prompt) =>
-              isCapabilityAllowed({ groups: this.groups, policy: this.policy, subjectIndex: this.subjectIndex }, 
+              isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
                 {
                   serverName: server.name,
                   operation: "prompt:get",
@@ -1334,7 +1354,7 @@ export class McpProxy {
       metadata: { sessionId: context.sessionId },
       message: "Runtime session started",
     }));
-    const proxyContext = createProxyContext({ registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.policy }, {
+    const proxyContext = createProxyContext({ registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
       operation: "session:start",
       user: context.user,
       subject: context.subject,
@@ -1348,7 +1368,7 @@ export class McpProxy {
       }),
       request: context.request,
       transport: { sessionId: context.sessionId },
-      policy: this.policy,
+      policy: this.globalPolicy,
     });
     await emitProxyEvent(this.eventHandlers, "session:start", { ctx: proxyContext });
   }
@@ -1369,7 +1389,7 @@ export class McpProxy {
       metadata: { sessionId: context.sessionId },
       message: "Runtime session ended",
     }));
-    const proxyContext = createProxyContext({ registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.policy }, {
+    const proxyContext = createProxyContext({ registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
       operation: "session:end",
       user: context.user,
       subject: context.subject,
@@ -1383,7 +1403,7 @@ export class McpProxy {
       }),
       request: context.request,
       transport: { sessionId: context.sessionId },
-      policy: this.policy,
+      policy: this.globalPolicy,
     });
     await emitProxyEvent(this.eventHandlers, "session:end", { ctx: proxyContext });
   }
@@ -1438,6 +1458,18 @@ export class McpProxy {
     });
   }
 
+  addGroupUsers(groupId: string, users: User[]): void {
+    const declaration = this.fluentGroup(groupId);
+    declaration.users.push(...users);
+    this.refreshDerivedGovernanceState({ validate: false });
+  }
+
+  setGroupPolicy(groupId: string, policy: string | Policy): void {
+    const declaration = this.fluentGroup(groupId);
+    declaration.policy = policy;
+    this.refreshDerivedGovernanceState({ validate: false });
+  }
+
   assertServerHandleVisible(serverName: string, groupId?: string): void {
     if (!this.serverByName.has(serverName)) {
       throw new FentarisConfigError([
@@ -1467,6 +1499,7 @@ export class McpProxy {
   }
 
   assertGroupHandleKnown(groupId: string): void {
+    this.refreshDerivedGovernanceState({ validate: true });
     if (this.groups.some((group) => group.id === groupId)) {
       return;
     }
@@ -1482,12 +1515,148 @@ export class McpProxy {
   }
 
   private groupCanSeeServer(groupId: string, serverName: string): boolean {
+    this.refreshDerivedGovernanceState({ validate: true });
     const group = this.groups.find((entry) => entry.id === groupId);
     if (!group) {
       return false;
     }
 
     return this.servers.some((server) => server.name === serverName) || group.servers.some((server) => server.name === serverName);
+  }
+
+  private fluentGroup(groupId: string): FluentGroupDeclaration {
+    const existing = this.fluentGroups.get(groupId);
+    if (existing) {
+      return existing;
+    }
+
+    const declaration: FluentGroupDeclaration = { id: groupId, users: [] };
+    this.fluentGroups.set(groupId, declaration);
+    return declaration;
+  }
+
+  private refreshDerivedGovernanceState(options: { validate: boolean }): void {
+    const groups = this.resolveFluentGroups(options.validate);
+    this.groups = groups;
+    this.subjectIndex = groups.length > 0 ? buildSubjectIndex(groups) : undefined;
+    this.runtimeValidationConfig = {
+      ...this.runtimeValidationConfig,
+      servers: this.servers,
+      groups,
+      defaults: { credentials: this.defaultCredentials },
+    };
+  }
+
+  private resolveFluentGroups(validate: boolean): Group[] {
+    const diagnostics = validate ? this.validateFluentGovernance() : [];
+    if (diagnostics.length > 0) {
+      throw new FentarisConfigError(diagnostics);
+    }
+
+    const groups = [...this.configuredGroups];
+    for (const declaration of this.fluentGroups.values()) {
+      if (this.configuredGroups.some((group) => group.id === declaration.id)) {
+        continue;
+      }
+
+      if (declaration.users.length === 0 || !declaration.policy) {
+        continue;
+      }
+
+      const resolvedPolicy = typeof declaration.policy === "string"
+        ? this.namedPolicies.get(declaration.policy)
+        : declaration.policy;
+      if (!resolvedPolicy) {
+        continue;
+      }
+
+      groups.push(new GovernanceGroup({
+        id: declaration.id,
+        users: declaration.users,
+        policy: resolvedPolicy,
+      }));
+    }
+
+    return groups;
+  }
+
+  private validateFluentGovernance(): FentarisDiagnostic[] {
+    const diagnostics: FentarisDiagnostic[] = [];
+    for (const declaration of this.fluentGroups.values()) {
+      const path = ["proxy", "group", declaration.id];
+      const configuredIndex = this.configuredGroups.findIndex((group) => group.id === declaration.id);
+      if (configuredIndex >= 0 && (declaration.users.length > 0 || declaration.policy)) {
+        diagnostics.push({
+          severity: "error",
+          code: "FENTARIS_CONFIG_DUPLICATE_GROUP",
+          title: "Duplicate group id",
+          message: `Group "${declaration.id}" is declared both in constructor config and through app.group(...).`,
+          path,
+          related: [{ path: ["groups", configuredIndex, "id"], message: "Constructor-time declaration with this group id." }],
+        });
+        continue;
+      }
+
+      if (configuredIndex >= 0) {
+        continue;
+      }
+
+      if (declaration.users.length === 0) {
+        diagnostics.push({
+          severity: "error",
+          code: "FENTARIS_CONFIG_GROUP_EMPTY_USERS",
+          title: "Fluent group has no users",
+          message: `Group "${declaration.id}" must include at least one user.`,
+          path: [...path, "users"],
+          hint: "Call app.group(id).users(user(...)) before starting the proxy.",
+        });
+      }
+
+      if (!declaration.policy) {
+        diagnostics.push({
+          severity: "error",
+          code: "FENTARIS_CONFIG_GROUP_POLICY_MISSING",
+          title: "Fluent group has no policy",
+          message: `Group "${declaration.id}" must attach a policy.`,
+          path: [...path, "policy"],
+          hint: "Call app.group(id).policy(policyNameOrPolicy) before starting the proxy.",
+        });
+      }
+
+      if (typeof declaration.policy === "string" && !this.namedPolicies.has(declaration.policy)) {
+        diagnostics.push({
+          severity: "error",
+          code: "FENTARIS_CONFIG_GROUP_POLICY_UNKNOWN",
+          title: "Fluent group references an unknown policy",
+          message: `Group "${declaration.id}" references policy "${declaration.policy}", but no app-level policy with that name exists.`,
+          path: [...path, "policy"],
+          hint: "Declare the named policy with app.policy(name) or pass a concrete policy instance.",
+        });
+      }
+    }
+
+    const configuredPolicyNames = new Map<string, number>();
+    for (const [index, group] of this.configuredGroups.entries()) {
+      if (group.policy.name) {
+        configuredPolicyNames.set(group.policy.name, index);
+      }
+    }
+
+    for (const name of this.namedPolicies.keys()) {
+      const configuredGroupIndex = configuredPolicyNames.get(name);
+      if (configuredGroupIndex !== undefined) {
+        diagnostics.push({
+          severity: "error",
+          code: "FENTARIS_CONFIG_DUPLICATE_POLICY",
+          title: "Duplicate policy name",
+          message: `Policy "${name}" is declared both in constructor config and through app.policy(...).`,
+          path: ["proxy", "policy", name],
+          related: [{ path: ["groups", configuredGroupIndex, "policy"], message: "Constructor-time policy with this name." }],
+        });
+      }
+    }
+
+    return diagnostics;
   }
 
   private createRuntime(): ProxyRuntime {
@@ -1569,7 +1738,7 @@ export class McpProxy {
     subject: ResolvedSubject | undefined,
     identity: IdentityMetadata | undefined,
   ): Promise<ProxyContext> {
-    const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.policy }, {
+    const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
       ...request,
       user,
       subject,
@@ -1580,8 +1749,8 @@ export class McpProxy {
 
     if (this.groups.length > 0) {
       decision = await evaluateGroupPolicies(userGroups, request, user, context);
-    } else if (this.policy) {
-      decision = await this.policy.evaluate(request, user, context);
+    } else if (this.globalPolicy) {
+      decision = await this.globalPolicy.evaluate(request, user, context);
     }
 
     context.policyDecision = decision;
@@ -1591,9 +1760,9 @@ export class McpProxy {
       matchedGroups: decision?.metadata?.matchedGroups ?? userGroups.map((group) => group.id),
       matchedPermissions: decision?.metadata?.matchedPermissions ?? [],
       metadata: decision?.metadata,
-      policy: this.policy,
+      policy: this.globalPolicy,
       decision,
-      can: createPolicyCan({ groups: this.groups, subjectIndex: this.subjectIndex, policy: this.policy }, subject),
+      can: createPolicyCan({ groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, subject),
     };
 
     if (decision) {
@@ -2330,6 +2499,16 @@ class McpProxyGroupHandle implements ProxyGroupHandle {
 
   mcp(name: string): ProxyMcpHandle {
     return new McpProxyMcpHandle(this.proxy, name, this.id);
+  }
+
+  users(...users: User[]): ProxyGroupHandle {
+    this.proxy.addGroupUsers(this.id, users);
+    return this;
+  }
+
+  policy(policyNameOrPolicy: string | Policy): ProxyGroupHandle {
+    this.proxy.setGroupPolicy(this.id, policyNameOrPolicy);
+    return this;
   }
 
   use(handler: Middleware): ProxyGroupHandle {
