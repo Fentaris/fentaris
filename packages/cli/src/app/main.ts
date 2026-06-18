@@ -25,13 +25,13 @@ export async function main(argv: string[], runtime: Runtime): Promise<number> {
 }
 
 async function route(command: CliCommand, runtime: Runtime): Promise<void> {
-  if (command.name === "help" || command.options.help === true) {
-    printHelp(runtime);
+  if (command.name === "version" || (command.name === "help" && (command.options.version === true || command.options.v === true))) {
+    runtime.out.log(cliVersion);
     return;
   }
 
-  if (command.name === "version") {
-    runtime.out.log(cliVersion);
+  if (command.name === "help" || command.options.help === true || command.options.h === true) {
+    printHelp(runtime);
     return;
   }
 
