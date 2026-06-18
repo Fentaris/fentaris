@@ -105,6 +105,70 @@ Options:
   Do not pass `--value` in shared shell history unless the environment is trusted.
 </Warning>
 
+### `fentaris secrets list`
+
+List credential references from the committed secrets manifest and show whether each reference is set in the local store.
+
+```bash theme={null}
+fentaris secrets list
+```
+
+Options:
+
+* `--json` - print machine-readable output with reference, scope, and status fields.
+* `--user <id>` - list secrets for a user scope when opening the local store.
+* `--group <id>` - list secrets for a group scope when opening the local store.
+* `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
+
+Secret values are never printed.
+
+### `fentaris secrets unset <reference>`
+
+Remove a secret from the local encrypted credential store.
+
+```bash theme={null}
+fentaris secrets unset github.token --group support
+```
+
+Options:
+
+* `--user <id>` - remove a user-scoped credential.
+* `--group <id>` - remove a group-scoped credential.
+* `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
+
+### `fentaris secrets manifest`
+
+Generate or validate `.fentaris/secrets.manifest.json` from `credential(...)` references in the project entrypoint.
+
+```bash theme={null}
+fentaris secrets manifest
+fentaris secrets manifest --check
+```
+
+Options:
+
+* `--check` - fail when the committed manifest does not match the entrypoint scan.
+
+<Tip>
+  Commit `.fentaris/secrets.manifest.json` and run `fentaris secrets manifest --check` in CI to catch missing or stale schema updates.
+</Tip>
+
+### `fentaris secrets doctor`
+
+Inspect local secrets health: missing required credentials, extra stored secrets, tracked sensitive files, and manifest drift.
+
+```bash theme={null}
+fentaris secrets doctor
+fentaris secrets doctor --strict
+```
+
+Options:
+
+* `--strict` - treat warnings as failures.
+* `--json` - print machine-readable issue output.
+
+`fentaris doctor` also includes secrets checks in its Auth group when a secrets manifest or entrypoint credential references are present.
+
 ### `fentaris auth ...`
 
 Manage legacy auth files directly.
