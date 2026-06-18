@@ -18,6 +18,7 @@ import {
   type Prompt,
   type Runtime,
 } from "../src/index.js";
+import { cliVersion } from "../src/shared/constants.js";
 
 const execFile = promisify(execFileWithCallback);
 
@@ -105,7 +106,7 @@ describe("command routing helpers", () => {
     for (const argv of [["--version"], ["-v"], ["version"]]) {
       const rt = runtime("/tmp");
       await expect(main(argv, rt)).resolves.toBe(0);
-      expect(rt.out.log).toHaveBeenCalledWith("0.1.3");
+      expect(rt.out.log).toHaveBeenCalledWith(cliVersion);
     }
 
     for (const argv of [["--help"], ["-h"], ["help"]]) {
