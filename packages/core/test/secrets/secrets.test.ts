@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -73,6 +73,26 @@ describe("secrets", () => {
     expect(await backend.has("github.token", { kind: "default" })).toBe(true);
     await backend.unset("github.token", { kind: "default" });
     expect(await backend.has("github.token", { kind: "default" })).toBe(false);
+  });
+
+  it("does not treat user API keys as arbitrary user credentials", async () => {
+    const dir = await createDir("fentaris-secrets-api-key-");
+    const backend = await LocalSecretsBackend.open({ dir, key });
+    await writeFile(
+      join(dir, "credentials.enc.json"),
+      JSON.stringify(
+        FentarisAuth.encryptCredentials(
+          {
+            users: { alice: { apiKeys: ["api-key"], credentials: {} } },
+            groups: {},
+            defaults: {},
+          },
+          key,
+        ),
+      ),
+    );
+
+    expect(await backend.has("github.token", { kind: "user", id: "alice" })).toBe(false);
   });
 
   it("encrypts through FentarisAuth compatibility", async () => {

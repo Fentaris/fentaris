@@ -64,7 +64,7 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
         "dist/",
         ".env",
         ".env.*",
-        ".fentaris/",
+        ".fentaris/*",
         "!.fentaris/secrets.manifest.json",
         ".fentaris/build/",
         "*.log",

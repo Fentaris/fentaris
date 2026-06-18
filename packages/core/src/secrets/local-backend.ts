@@ -55,8 +55,7 @@ export class LocalSecretsBackend implements SecretsBackend {
     if (scope.kind === "group") {
       return Boolean(credentials.groups[scope.id]?.[ref]);
     }
-    const user = credentials.users[scope.id];
-    return Boolean(user?.credentials[ref]) || Boolean(user?.apiKeys.length);
+    return Boolean(credentials.users[scope.id]?.credentials[ref]);
   }
 
   async set(ref: string, value: string, scope: SecretScope): Promise<void> {

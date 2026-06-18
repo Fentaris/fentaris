@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { manifestFromSecretRefs, manifestsEqual, parseManifest, serializeManifest } from "@fentaris/core";
 import { secretScope } from "../domain/auth/local-store.js";
@@ -126,6 +126,7 @@ async function runSecretsManifest(command: CliCommand, runtime: Runtime): Promis
     return;
   }
 
+  await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, serializeManifest(manifest));
   section(runtime, "Secrets manifest");
   runtime.out.log(`  ${style.pass(`Wrote ${path.relative(project.root, target)}`)}`);

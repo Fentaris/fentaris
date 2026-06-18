@@ -1,8 +1,9 @@
 import { mkdtemp, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { SpawnOptions } from "node:child_process";
+import { execFile as execFileWithCallback, type SpawnOptions } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import { describe, expect, it, vi } from "vitest";
 import { FentarisAuth } from "@fentaris/core";
 import {
@@ -17,6 +18,8 @@ import {
   type Prompt,
   type Runtime,
 } from "../src/index.js";
+
+const execFile = promisify(execFileWithCallback);
 
 function prompt(values: string[] = []): Prompt {
   return {
@@ -144,6 +147,22 @@ describe("project template", () => {
       "@types/node": "latest",
       typescript: "latest",
     });
+  });
+
+  it("allows the generated secrets manifest to be committed", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-template-gitignore-"));
+    const rendered = renderTemplate({
+      projectName: "demo",
+      packageManager: "pnpm",
+      port: 4000,
+      proxyPath: "/mcp",
+    });
+    await mkdir(join(dir, ".fentaris"), { recursive: true });
+    await writeFile(join(dir, ".gitignore"), rendered.files[".gitignore"]);
+    await writeFile(join(dir, ".fentaris", "secrets.manifest.json"), rendered.files[".fentaris/secrets.manifest.json"]);
+
+    await execFile("git", ["init"], { cwd: dir });
+    await expect(execFile("git", ["check-ignore", ".fentaris/secrets.manifest.json"], { cwd: dir })).rejects.toMatchObject({ code: 1 });
   });
 });
 
@@ -282,7 +301,8 @@ describe("project commands", () => {
     await expect(main(["doctor", "--fix"], rt)).resolves.toBe(0);
 
     const gitignore = await readFile(join(dir, ".gitignore"), "utf8");
-    expect(gitignore).toContain("secrets/\n");
+    expect(gitignore).toContain("secrets/*\n");
+    expect(gitignore).toContain("!secrets/secrets.manifest.json\n");
     expect(rt.prompt.confirm).toHaveBeenCalledWith("Apply fix for .gitignore auth entry?");
   });
 
@@ -398,6 +418,23 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     const manifest = JSON.parse(await readFile(join(dir, ".fentaris", "secrets.manifest.json"), "utf8")) as { references: Array<{ ref: string }> };
     expect(manifest.references).toEqual([{ ref: "github.token", scope: "default" }]);
     await expect(main(["secrets", "manifest", "--check"], rt)).resolves.toBe(0);
+  });
+
+  it("creates the auth directory when generating the secrets manifest", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await rm(join(dir, ".fentaris"), { recursive: true, force: true });
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `import { bearer, credential, fentaris, mcp } from "@fentaris/core";
+const app = fentaris({});
+app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callTool: async () => ({}), close: async () => {} }, auth: bearer(credential("github.token")) });
+`,
+    );
+
+    const rt = runtime(dir);
+    await expect(main(["secrets", "manifest"], rt)).resolves.toBe(0);
+    await expect(readFile(join(dir, ".fentaris", "secrets.manifest.json"), "utf8")).resolves.toContain("github.token");
   });
 
   it("reports missing secrets via secrets doctor", async () => {

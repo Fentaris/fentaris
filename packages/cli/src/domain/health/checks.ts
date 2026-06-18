@@ -623,7 +623,10 @@ async function lockfileResult(root: string, packageManager: PackageManager): Pro
 
 async function gitignoreAuthResult(root: string, configuredAuthDir: string): Promise<HealthResult> {
   const gitignorePath = path.join(root, ".gitignore");
-  const gitignoreEntry = `${configuredAuthDir.replace(/\\/g, "/").replace(/\/+$/u, "")}/`;
+  const normalizedAuthDir = configuredAuthDir.replace(/\\/g, "/").replace(/\/+$/u, "");
+  const gitignoreDirectoryEntry = `${normalizedAuthDir}/`;
+  const gitignoreContentsEntry = `${normalizedAuthDir}/*`;
+  const manifestEntry = `!${normalizedAuthDir}/secrets.manifest.json`;
   const present = await exists(gitignorePath);
   if (!present) {
     return {
@@ -631,26 +634,25 @@ async function gitignoreAuthResult(root: string, configuredAuthDir: string): Pro
       label: ".gitignore auth entry",
       status: "warn",
       detail: ".gitignore is missing.",
-      hint: `doctor --fix can create .gitignore with ${gitignoreEntry} ignored.`,
+      hint: `doctor --fix can create .gitignore with ${gitignoreContentsEntry} ignored.`,
       fix: async () => {
-        await writeFile(gitignorePath, `${gitignoreEntry}\n`);
+        await writeFile(gitignorePath, `${gitignoreContentsEntry}\n${manifestEntry}\n`);
       },
     };
   }
 
   const contents = await readFile(gitignorePath, "utf8");
-  const gitignoreEntryWithoutSlash = gitignoreEntry.slice(0, -1);
   const ignoresAuth = contents
     .split(/\r?\n/)
-    .some((line) => line.trim() === gitignoreEntry || line.trim() === gitignoreEntryWithoutSlash);
+    .some((line) => line.trim() === gitignoreDirectoryEntry || line.trim() === normalizedAuthDir || line.trim() === gitignoreContentsEntry);
   return {
     group: "Auth",
     label: ".gitignore auth entry",
     status: ignoresAuth ? "pass" : "warn",
-    detail: ignoresAuth ? `${gitignoreEntry} is ignored.` : `${gitignoreEntry} is not ignored.`,
-    hint: ignoresAuth ? undefined : `doctor --fix can add ${gitignoreEntry} to .gitignore.`,
+    detail: ignoresAuth ? `${gitignoreContentsEntry} is ignored.` : `${gitignoreContentsEntry} is not ignored.`,
+    hint: ignoresAuth ? undefined : `doctor --fix can add ${gitignoreContentsEntry} to .gitignore.`,
     fix: async () => {
-      await writeFile(gitignorePath, `${contents.trimEnd()}\n${gitignoreEntry}\n`);
+      await writeFile(gitignorePath, `${contents.trimEnd()}\n${gitignoreContentsEntry}\n${manifestEntry}\n`);
     },
   };
 }
