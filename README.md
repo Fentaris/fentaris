@@ -6,11 +6,6 @@
   </a>
 </div>
 
-> ⚠️ **Disclaimer / Avviso:** We are renaming the project from **Panther** to **Fentaris**. During this transition, there may be temporary issues or inconsistencies.  
-> Stiamo rinominando il progetto da **Panther** a **Fentaris**; durante questa fase potrebbero esserci problemi temporanei o incongruenze.
-
-&nbsp; 
-
 <p align="center">
   <a href="./docs/index.mdx" alt="Documentation">
     <img src="https://img.shields.io/badge/fentaris-docs-blue?labelColor=white" /></a>
@@ -63,10 +58,7 @@ Build a proxy in a few lines:
 ```ts
 import { fentaris, mcp, stdio } from "@fentaris/core";
 
-const proxy = fentaris({
-  port: 3000,
-  path: "/mcp",
-});
+const proxy = fentaris();
 
 proxy.mcp({
   name: "filesystem",
@@ -77,7 +69,6 @@ proxy.mcp({
 });
 
 await proxy.start();
-// MCP endpoint: http://localhost:3000/mcp
 ```
 
 Upstream tool names are still stable and namespaced by server. A filesystem tool is exposed to clients with a proxy name such as:
@@ -86,50 +77,31 @@ Upstream tool names are still stable and namespaced by server. A filesystem tool
 filesystem__list_directory
 ```
 
-Or declare upstreams config-first without changing the client endpoint:
-
-```ts
-import { fentaris, mcp, streamableHttp } from "@fentaris/core";
-
-const proxy = fentaris({
-  servers: [
-    mcp("docs", {
-      transport: streamableHttp({
-        url: "https://mcp.specification.website/mcp",
-      }),
-    }),
-  ],
-});
-```
-
 ## Governance
 
 Add users, groups, and policy:
 
 ```ts
-import { group, fentaris, mcp, policy, stdio, user } from "@fentaris/core";
+import { fentaris, stdio, user } from "@fentaris/core";
 
-const readOnly = policy("read-only")
+const app = fentaris();
+
+app.policy("read-only")
   .mcp("filesystem")
   .allow("list_directory");
 
-const proxy = fentaris({
-  servers: [
-    mcp("filesystem", {
-      transport: stdio({
-        command: "npx",
-        args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-      }),
-    }),
-  ],
-  groups: [
-    group({
-      id: "operators",
-      users: [user("alice", { email: "alice@example.com" })],
-      policy: readOnly,
-    }),
-  ],
+app.group("operators")
+  .users(user("alice", { email: "alice@example.com" }))
+  .policy("read-only");
+
+app.mcp("filesystem", {
+  transport: stdio({
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+  }),
 });
+
+await app.start();
 ```
 
 Block a sensitive tool:
@@ -152,14 +124,6 @@ const deploy = policy("deploy")
   .allow("deploy_production", approval.manual({
     reason: "Production deploy requires approval",
   }));
-```
-
-Hide tools from clients:
-
-```ts
-proxy.on("tools:list:after", ({ tools }) => {
-  return tools?.filter((tool) => !tool.name.includes("__dangerous"));
-});
 ```
 
 Modify a tool result:
@@ -189,7 +153,8 @@ Policies can govern tool calls and MCP capabilities such as resources, prompts, 
 Create the same kind of proxy from one command:
 
 ```bash
-pnpm dlx @fentaris/cli init my-proxy
+npm install -g @fentaris/cli
+fentaris init
 ```
 
 The generated project includes a runnable proxy, demo API keys, local encrypted auth files, policy rules, rate limiting, one stdio upstream, one remote HTTP MCP upstream, TypeScript config, package scripts, and project checks.
@@ -202,18 +167,13 @@ x-fentaris-api-key: <guest-or-admin-api-key>
 
 ## Local Auth
 
-Fentaris can resolve caller identity and upstream credentials from local encrypted files:
+Fentaris can resolve caller identity and upstream credentials from local encrypted files. In a generated project, `fentaris init` creates the store; set secrets with:
 
 ```bash
-fentaris auth init --dir .fentaris --key "$FENTARIS_AUTH_KEY"
-fentaris auth set-api-key --dir .fentaris --key "$FENTARIS_AUTH_KEY" --user alice --api-key "$ALICE_API_KEY"
-fentaris auth set-credential --dir .fentaris --key "$FENTARIS_AUTH_KEY" --user alice --ref github.token --value "$GITHUB_TOKEN"
-```
+export FENTARIS_AUTH_KEY="your-local-encryption-key"
 
-Or, inside a generated Fentaris project:
-
-```bash
 fentaris secrets set github.token --user alice
+fentaris secrets list
 ```
 
 Credential values are not exposed to middleware, hooks, logs, or policy callbacks.
@@ -228,24 +188,10 @@ Credential values are not exposed to middleware, hooks, logs, or policy callback
 
 ## Development
 
-On Ubuntu, after cloning the repository, install the system and project dependencies non-interactively:
-
-```bash
-./scripts/setup-ubuntu.sh
+Run the project for development:
 ```
-
-Install dependencies:
-
-```bash
-pnpm install
+cd your-awensone-fentaris-project && fentaris dev
 ```
-
-Build all packages:
-
-```bash
-pnpm build
-```
-
 Run checks:
 
 ```bash
