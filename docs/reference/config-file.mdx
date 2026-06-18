@@ -83,8 +83,29 @@ Directory for local encrypted credentials and CLI auth state.
 ```
 
 <Note>
-  Generated projects ignore `.fentaris/` in git because it contains local credentials and build output.
+  Generated projects ignore `.fentaris/` in git because it contains local credentials and build output. The committed `.fentaris/secrets.manifest.json` schema is not ignored.
 </Note>
+
+### `secrets`
+
+Optional secrets provider settings. Generated projects default to the local encrypted store.
+
+```json
+"secrets": {
+  "provider": "local"
+}
+```
+
+### `panther`
+
+Optional Panther Cloud project metadata for forward-compatible cloud sync. Cloud sync is not available yet; keep using the local encrypted store.
+
+```json
+"panther": {
+  "projectId": "proj_123",
+  "environment": "production"
+}
+```
 
 ## Legacy Filename
 
