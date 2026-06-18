@@ -7,11 +7,13 @@ import { FentarisAuth } from "@fentaris/core";
 import { authDir, supportedPackageManagers } from "../../shared/constants.js";
 import type { HealthResult, PackageManager, ProjectConfig, ProjectDiscovery, Runtime } from "../../shared/types.js";
 import { canAccess, exists, isNodeError, readJson } from "../../shared/utils.js";
+import { secretsDoctorHealthResults } from "../secrets/doctor.js";
 
 export type DoctorOptions = {
   fix?: boolean;
   runtime?: boolean;
   timeoutMs?: number;
+  strict?: boolean;
 };
 
 type JsonReadResult =
@@ -40,7 +42,7 @@ export async function getDoctorResults(runtime: Runtime, options: boolean | Doct
     const validation = await configResults(project.discovery);
     results.push(...validation.results);
     results.push(...await packageResults(project.discovery));
-    results.push(...await authResults(project.discovery, runtime));
+    results.push(...await authResults(project.discovery, runtime, { strict: normalized.strict }));
     results.push(await portResult(project.discovery.config.port));
 
     if (normalized.runtime) {
@@ -109,13 +111,14 @@ export function hasWarning(results: HealthResult[]): boolean {
 
 function normalizeDoctorOptions(options: boolean | DoctorOptions): Required<DoctorOptions> {
   if (typeof options === "boolean") {
-    return { fix: options, runtime: false, timeoutMs: 10_000 };
+    return { fix: options, runtime: false, timeoutMs: 10_000, strict: false };
   }
 
   return {
     fix: options.fix === true,
     runtime: options.runtime === true,
     timeoutMs: normalizeTimeout(options.timeoutMs),
+    strict: options.strict === true,
   };
 }
 
@@ -380,7 +383,7 @@ async function packageResults(project: ProjectDiscovery): Promise<HealthResult[]
   return results;
 }
 
-async function authResults(project: ProjectDiscovery, runtime: Runtime | undefined): Promise<HealthResult[]> {
+async function authResults(project: ProjectDiscovery, runtime: Runtime | undefined, options: { strict?: boolean } = {}): Promise<HealthResult[]> {
   const authPath = path.join(project.root, project.config.authDir);
   const credentialsPath = path.join(authPath, "credentials.enc.json");
   const authDirectoryExists = await exists(authPath);
@@ -428,6 +431,18 @@ async function authResults(project: ProjectDiscovery, runtime: Runtime | undefin
       detail: "Skipped because FENTARIS_AUTH_KEY is not set.",
       hint: "Set FENTARIS_AUTH_KEY to verify encrypted credentials locally.",
     });
+  }
+
+  if (runtime) {
+    const extended = await secretsDoctorHealthResults(project, runtime, { strict: options.strict });
+    for (const result of extended) {
+      if (result.label.startsWith("credentials.enc.json")) {
+        continue;
+      }
+      if (!results.some((existing) => existing.label === result.label && existing.detail === result.detail)) {
+        results.push(result);
+      }
+    }
   }
 
   return results;

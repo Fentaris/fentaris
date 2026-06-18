@@ -8,6 +8,7 @@ export async function runDoctor(command: CliCommand, runtime: Runtime): Promise<
     fix: command.options.fix === true,
     runtime: command.options.runtime === true,
     timeoutMs: numberOption(command.options, "timeout", 10_000),
+    strict: command.options.strict === true,
   });
   if (command.options.json === true) {
     runtime.out.log(JSON.stringify({ results }, null, 2));

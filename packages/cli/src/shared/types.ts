@@ -58,6 +58,13 @@ export type ProjectConfig = {
   port: number;
   path: string;
   authDir: string;
+  secrets?: {
+    provider?: "local";
+  };
+  panther?: {
+    projectId?: string;
+    environment?: string;
+  };
 };
 
 export type ProjectDiscovery = { root: string; configPath: string; config: ProjectConfig };
