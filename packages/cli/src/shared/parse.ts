@@ -6,6 +6,11 @@ export function parseCommand(argv: string[]): CliCommand {
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+    if (arg.startsWith("-") && !arg.startsWith("--")) {
+      options[arg.slice(1)] = true;
+      continue;
+    }
+
     if (!arg.startsWith("--")) {
       args.push(arg);
       continue;

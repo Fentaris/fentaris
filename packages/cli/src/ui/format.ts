@@ -56,6 +56,8 @@ export function nextSteps(steps: string[]): string {
 export function printHelp(runtime: Runtime): void {
   printBanner(runtime);
   runtime.out.log(`Usage:
+  ${style.command("fentaris [--help | -h]")}
+  ${style.command("fentaris [--version | -v]")}
   ${style.command("fentaris init [project-name] [--skip-install]")}
   ${style.command("fentaris dev")}
   ${style.command("fentaris check [--offline] [--strict]")}
