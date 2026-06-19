@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   CallToolRequest,
   CallToolResult,
@@ -243,6 +246,13 @@ describe("proxied resource URIs", () => {
   });
 });
 
+const originalCwd = process.cwd();
+
+afterEach(() => {
+  process.chdir(originalCwd);
+  vi.restoreAllMocks();
+});
+
 describe("McpProxy", () => {
   it("exposes lifecycle state and idempotent stop behavior", async () => {
     const transport = new MockTransport();
@@ -257,6 +267,26 @@ describe("McpProxy", () => {
 
     expect(proxy.state().state).toBe("stopped");
     expect(transport.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses nearest project fentaris.json defaults when starting from a nested src directory", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-core-project-"));
+    const srcDir = join(dir, "src");
+    await writeFile(
+      join(dir, "fentaris.json"),
+      JSON.stringify({ name: "demo", packageManager: "pnpm", entrypoint: "src/index.ts", port: 0, path: "/configured", authDir: ".fentaris" }),
+    );
+    await mkdir(srcDir, { recursive: true });
+    process.chdir(srcDir);
+    const stderr = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const proxy = new McpProxy({
+      servers: [new McpServer({ name: "github", transport: new MockTransport() })],
+    });
+
+    await proxy.start();
+
+    expect(stderr.mock.calls.flat().join("\n")).toContain("http://localhost:0/configured");
+    await proxy.stop();
   });
 
   it("starts idempotently while startup is in progress", async () => {

@@ -1,4 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
 import { type IncomingHttpHeaders, type IncomingMessage, type Server as HttpServer } from "node:http";
+import path from "node:path";
 import { compileToolPattern, matchesToolPattern, type RouteEntry } from "./routes.js";
 import { createContextualLogger, createProxyContext, createPolicyCan, createCapabilityContext } from "./context.js";
 import { isCapabilityAllowed } from "./capabilities.js";
@@ -127,6 +129,45 @@ import type {
   ProxyToolHandler,
   ProxyToolPattern,
 } from "../types/proxy.js";
+
+type ProjectRuntimeDefaults = {
+  port?: number;
+  path?: string;
+};
+
+function readProjectRuntimeDefaults(fromDir: string = process.cwd()): ProjectRuntimeDefaults {
+  let current = path.resolve(fromDir);
+
+  while (true) {
+    const defaults = readProjectRuntimeDefaultsFile(path.join(current, "fentaris.json"))
+      ?? readProjectRuntimeDefaultsFile(path.join(current, "fentaris.config.json"));
+    if (defaults) {
+      return defaults;
+    }
+
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return {};
+    }
+    current = parent;
+  }
+}
+
+function readProjectRuntimeDefaultsFile(configPath: string): ProjectRuntimeDefaults | undefined {
+  if (!existsSync(configPath)) {
+    return undefined;
+  }
+
+  try {
+    const config = JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown>;
+    return {
+      ...(typeof config.port === "number" ? { port: config.port } : {}),
+      ...(typeof config.path === "string" ? { path: config.path } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
 
 class PolicyDeniedError extends Error {
   readonly code: number;
@@ -289,8 +330,9 @@ export class McpProxy {
       defaults: this.lifecycleDefaults,
       onTransition: (transition) => this.emitLifecycleTransition(transition),
     });
-    this.defaultPort = options.port;
-    this.defaultPath = options.path ?? "/mcp";
+    const projectDefaults = readProjectRuntimeDefaults();
+    this.defaultPort = options.port ?? projectDefaults.port;
+    this.defaultPath = options.path ?? projectDefaults.path ?? "/mcp";
     this.runtimeValidationConfig = {
       ...options,
       servers: this.servers,

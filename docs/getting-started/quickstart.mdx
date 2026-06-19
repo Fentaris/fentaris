@@ -29,7 +29,7 @@ cd my-proxy
 fentaris dev
 ```
 
-The proxy listens on `http://localhost:4000/mcp` by default.
+The proxy listens on `http://localhost:4000/mcp` by default. Generated projects read `port` and `path` from `fentaris.json`, so `fentaris dev` and `app.start()` stay aligned without hardcoding the endpoint in `src/index.ts`.
 
 <Note>
   The generated app does not configure authentication or policy rules. Add API-key auth and policies before exposing the proxy outside a local development environment.
@@ -40,7 +40,7 @@ The proxy listens on `http://localhost:4000/mcp` by default.
 `fentaris init` creates these files:
 
 - `src/index.ts` with the runnable proxy example.
-- `fentaris.json` for CLI project discovery.
+- `fentaris.json` for CLI project discovery and runtime `port`/`path` defaults.
 - `.gitignore`, TypeScript config, and package scripts.
 
 <Note>
