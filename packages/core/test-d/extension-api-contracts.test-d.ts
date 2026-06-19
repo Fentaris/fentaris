@@ -181,6 +181,8 @@ const application = fentaris({
 });
 
 application.policy("readonly").mcp("github").allow("read");
+application.usePolicy("readonly");
+application.usePolicy(policy("global").mcp("github").allow("read"));
 application.group("guests").users(user("guest")).policy("readonly").mcp("github").use(typedMiddleware);
 
 const configFirstApplication = fentaris({
