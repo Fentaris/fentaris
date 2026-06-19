@@ -22,6 +22,13 @@ fentaris dev
 * `--help`, `-h` - print CLI usage.
 * `--version`, `-v` - print the CLI version.
 
+Help is contextual. Use `fentaris <command> --help` or `fentaris secrets <command> --help` to print usage, arguments, and options for one command.
+
+```bash theme={null}
+fentaris check --help
+fentaris secrets set --help
+```
+
 ## Commands
 
 ### `fentaris init [project-name]`
@@ -109,6 +116,66 @@ Options:
 <Warning>
   Do not pass `--value` in shared shell history unless the environment is trusted.
 </Warning>
+
+### `fentaris secrets list`
+
+List credentials required by the manifest and credentials stored locally.
+
+```bash theme={null}
+fentaris secrets list
+```
+
+Options:
+
+* `--json` - print machine-readable results.
+* `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
+
+### `fentaris secrets unset <reference>`
+
+Remove a secret from the local encrypted credential store.
+
+```bash theme={null}
+fentaris secrets unset github.token --user admin
+```
+
+Options:
+
+* `--user <id>` - remove a user-scoped credential.
+* `--group <id>` - remove a group-scoped credential.
+* `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
+
+### `fentaris secrets manifest`
+
+Generate `.fentaris/secrets.manifest.json` from secret references found in the project entrypoint.
+
+```bash theme={null}
+fentaris secrets manifest
+```
+
+Options:
+
+* `--check` - fail if the manifest is missing or out of date.
+
+### `fentaris secrets doctor`
+
+Run secret-specific diagnostics.
+
+```bash theme={null}
+fentaris secrets doctor
+```
+
+Options:
+
+* `--strict` - fail when warnings are present.
+* `--json` - print machine-readable results.
+
+## Exit Codes
+
+* `0` - command completed successfully, or help/version output was printed.
+* `1` - runtime error, such as running a project command outside a Fentaris project.
+* `2` - command syntax error, such as an unknown command, unknown option, or missing required argument.
+
+Syntax errors print `error: ...`, the relevant `Usage: ...`, and a `--help` hint before exiting.
 
 ## Project Discovery
 
