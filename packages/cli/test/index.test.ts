@@ -345,6 +345,20 @@ describe("project commands", () => {
     await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
   });
 
+  it("points missing credential stores to secrets set when an auth key is configured", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await rm(join(dir, ".fentaris", "credentials.enc.json"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+
+    await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
+
+    const output = String(vi.mocked(rt.out.log).mock.calls.at(-1)?.[0]);
+    expect(output).toContain('"label": "credentials.enc.json"');
+    expect(output).toContain('Run fentaris secrets set <reference> to create local credentials.');
+    expect(output).not.toContain('Run fentaris init to create local credentials.');
+  });
+
   it("does not infer auth from a generated .fentaris directory", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     const rt = runtime(dir, { pnpm: true, git: true, docker: true });

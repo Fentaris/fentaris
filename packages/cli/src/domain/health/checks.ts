@@ -409,7 +409,7 @@ async function authResults(project: ProjectDiscovery, runtime: Runtime | undefin
       label: "credentials.enc.json",
       status: credentialsExist ? "pass" : "warn",
       detail: credentialsExist ? "Found encrypted credential store." : "Missing encrypted credential store.",
-      hint: credentialsExist ? undefined : "Run fentaris init to create local credentials.",
+      hint: credentialsExist ? undefined : "Run fentaris secrets set <reference> to create local credentials.",
     },
     {
       group: "Auth",
