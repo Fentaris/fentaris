@@ -6,7 +6,6 @@ const color = {
   yellow: "\u001b[33m",
   red: "\u001b[31m",
   cyan: "\u001b[36m",
-  blue: "\u001b[34m",
   magenta: "\u001b[35m",
   gray: "\u001b[90m",
   bold: "\u001b[1m",
@@ -18,7 +17,10 @@ export const style = {
   heading: (value: string) => `${color.bold}${color.cyan}${value}${color.reset}`,
   label: (value: string) => `${color.bold}${value}${color.reset}`,
   hint: (value: string) => `${color.gray}${value}${color.reset}`,
-  command: (value: string) => `${color.blue}${value}${color.reset}`,
+  command: (value: string) => `${color.green}${value}${color.reset}`,
+  option: (value: string) => `${color.yellow}${value}${color.reset}`,
+  argument: (value: string) => `${color.yellow}${value}${color.reset}`,
+  error: (value: string) => `${color.red}${value}${color.reset}`,
   pass: (value: string) => `${color.green}✓ ${value}${color.reset}`,
   warn: (value: string) => `${color.yellow}! ${value}${color.reset}`,
   fail: (value: string) => `${color.red}✗ ${value}${color.reset}`,
@@ -82,7 +84,7 @@ export function printCommandHelp(runtime: Runtime, path: string[]): void {
   if (spec.details?.length) {
     runtime.out.log("");
   }
-  runtime.out.log(`Usage: ${style.command(spec.usage)}`);
+  runtime.out.log(`Usage: ${spec.usage}`);
   printCommandGroups(runtime, spec);
   printArguments(runtime, spec);
   printOptions(runtime, spec.options ?? []);
@@ -95,7 +97,7 @@ export function printHelp(runtime: Runtime): void {
 
 export function printParseError(runtime: Runtime, message: string, path: string[]): void {
   const spec = findCommandSpec(path);
-  runtime.out.error(`error: ${message}`);
+  runtime.out.error(`error: ${message} ${style.error("✗")}`);
   runtime.out.error("");
   runtime.out.error(`Usage: ${spec.usage}`);
   runtime.out.error("");
@@ -103,7 +105,7 @@ export function printParseError(runtime: Runtime, message: string, path: string[
 }
 
 export function printRuntimeError(runtime: Runtime, error: unknown): void {
-  runtime.out.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+  runtime.out.error(`Error: ${error instanceof Error ? error.message : String(error)} ${style.error("✗")}`);
 }
 
 function printCommandGroups(runtime: Runtime, spec: CliCommandSpec): void {
@@ -111,7 +113,7 @@ function printCommandGroups(runtime: Runtime, spec: CliCommandSpec): void {
     runtime.out.log("");
     runtime.out.log(`${group.title}:`);
     for (const command of group.commands) {
-      runtime.out.log(`  ${command.name.padEnd(12)} ${command.summary}`);
+      runtime.out.log(`  ${style.command(command.name.padEnd(12))} ${style.hint(command.summary)}`);
     }
   }
 }
@@ -125,7 +127,7 @@ function printArguments(runtime: Runtime, spec: CliCommandSpec): void {
   runtime.out.log("Arguments:");
   for (const argument of spec.arguments) {
     const name = argument.required === true ? `<${argument.name}>` : `[${argument.name}]`;
-    runtime.out.log(`  ${name.padEnd(18)} ${argument.description}`);
+    runtime.out.log(`  ${style.argument(name.padEnd(18))} ${style.hint(argument.description)}`);
   }
 }
 
@@ -138,7 +140,7 @@ function printOptions(runtime: Runtime, options: CliOptionSpec[]): void {
   runtime.out.log("Options:");
   for (const option of options) {
     const names = formatOptionNames(option);
-    runtime.out.log(`  ${names.padEnd(28)} ${option.description}`);
+    runtime.out.log(`  ${style.option(names.padEnd(28))} ${style.hint(option.description)}`);
   }
 }
 
@@ -150,7 +152,7 @@ function printEnvironment(runtime: Runtime, spec: CliCommandSpec): void {
   runtime.out.log("");
   runtime.out.log("Environment variables:");
   for (const variable of spec.environment) {
-    runtime.out.log(`  ${variable.name.padEnd(22)} ${variable.description}`);
+    runtime.out.log(`  ${style.option(variable.name.padEnd(22))} ${style.hint(variable.description)}`);
   }
 }
 
