@@ -93,6 +93,28 @@ describe("command routing helpers", () => {
     });
   });
 
+  it("parses dash-prefixed and inline option values", () => {
+    expect(parseCommand(["secrets", "set", "github.token", "--value", "-secret-value"])).toEqual({
+      kind: "ok",
+      path: ["secrets", "set"],
+      command: {
+        name: "secrets",
+        args: ["set", "github.token"],
+        options: { value: "-secret-value" },
+      },
+    });
+
+    expect(parseCommand(["secrets", "set", "github.token", "--value=-secret-value"])).toEqual({
+      kind: "ok",
+      path: ["secrets", "set"],
+      command: {
+        name: "secrets",
+        args: ["set", "github.token"],
+        options: { value: "-secret-value" },
+      },
+    });
+  });
+
   it("parses short utility flags", () => {
     expect(parseCommand(["-v"])).toEqual({
       kind: "version",
@@ -506,10 +528,10 @@ describe("secrets", () => {
 
     const rt = runtime(project);
     delete rt.env.FENTARIS_AUTH_KEY;
-    await expect(main(["secrets", "set", "github.token", "--key", "test-key", "--value", "secret-value"], rt)).resolves.toBe(0);
+    await expect(main(["secrets", "set", "github.token", "--key", "test-key", "--value", "-secret-value"], rt)).resolves.toBe(0);
 
     const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(authDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
-    expect(credentials.defaults["github.token"]).toBe("secret-value");
+    expect(credentials.defaults["github.token"]).toBe("-secret-value");
     expect(rt.prompt.text).not.toHaveBeenCalled();
   });
 

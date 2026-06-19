@@ -113,6 +113,8 @@ Options:
 * `--value <secret>` - pass the value non-interactively.
 * `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
 
+Use `--value=<secret>` when a scripted secret value starts with `-`, for example `--value=-token`.
+
 <Warning>
   Do not pass `--value` in shared shell history unless the environment is trusted.
 </Warning>

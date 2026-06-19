@@ -147,11 +147,12 @@ function parseOptionsAndArgs(spec: CliCommandSpec, tokens: string[]):
       continue;
     }
 
-    const option = findOption(spec, token);
-    if (!option) {
+    const parsedOption = findOption(spec, token);
+    if (!parsedOption) {
       return { kind: "parse-error", message: `unexpected argument '${token}' found` };
     }
 
+    const { option, inlineValue, hasInlineValue } = parsedOption;
     if (option.name === "help") {
       help = true;
     }
@@ -160,13 +161,18 @@ function parseOptionsAndArgs(spec: CliCommandSpec, tokens: string[]):
     }
 
     if (option.valueName) {
-      const value = tokens[index + 1];
-      if (!value || value === "--" || value.startsWith("-")) {
+      const value = hasInlineValue ? inlineValue : tokens[index + 1];
+      if (value === undefined) {
         return { kind: "parse-error", message: `a value is required for '${token}' but none was supplied` };
       }
       options[option.name] = value;
-      index += 1;
+      if (!hasInlineValue) {
+        index += 1;
+      }
     } else {
+      if (hasInlineValue) {
+        return { kind: "parse-error", message: `unexpected argument '${token}' found` };
+      }
       options[option.name] = true;
     }
   }
@@ -174,16 +180,31 @@ function parseOptionsAndArgs(spec: CliCommandSpec, tokens: string[]):
   return { kind: "ok", args, options, help, version };
 }
 
-function findOption(spec: CliCommandSpec, token: string): CliOptionSpec | undefined {
+function findOption(
+  spec: CliCommandSpec,
+  token: string,
+): { option: CliOptionSpec; inlineValue: string | undefined; hasInlineValue: boolean } | undefined {
   const options = spec.options ?? [];
   if (token.startsWith("--")) {
-    const name = token.slice(2);
-    return options.find((option) => option.name === name);
+    const body = token.slice(2);
+    const separator = body.indexOf("=");
+    const name = separator === -1 ? body : body.slice(0, separator);
+    const option = options.find((candidate) => candidate.name === name);
+    if (!option) {
+      return undefined;
+    }
+
+    return {
+      option,
+      inlineValue: separator === -1 ? undefined : body.slice(separator + 1),
+      hasInlineValue: separator !== -1,
+    };
   }
 
   if (token.startsWith("-") && token.length === 2) {
     const short = token.slice(1);
-    return options.find((option) => option.short === short);
+    const option = options.find((candidate) => candidate.short === short);
+    return option ? { option, inlineValue: undefined, hasInlineValue: false } : undefined;
   }
 
   return undefined;
