@@ -43,7 +43,7 @@ export async function runInit(command: CliCommand, runtime: Runtime): Promise<vo
 
   section(runtime, "Doctor");
   const doctorResults = await getDoctorResults({ ...runtime, cwd: targetDir }, false);
-  printHealthResults(runtime, doctorResults);
+  printHealthResults(runtime, doctorResults, { verboseHint: "doctor" });
 
   section(runtime, "Next Steps");
   runtime.out.log(nextSteps([`cd ${projectName}`, "fentaris dev"]));

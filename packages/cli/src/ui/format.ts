@@ -26,6 +26,8 @@ export const style = {
 
 export type PrintHealthOptions = {
   verbose?: boolean;
+  /** Controls the rerun hint when issues are hidden. Omit to suppress the hint. */
+  verboseHint?: "self" | "doctor" | "check";
 };
 
 export function section(runtime: Runtime, title: string): void {
@@ -56,9 +58,9 @@ export function printHealthResults(runtime: Runtime, results: HealthResult[], op
     runtime.out.log("");
     runtime.out.log(`  ${style.label("Passed")}`);
     printHealthResultGroup(runtime, passes, "    ");
-  } else if (!verbose && passes.length > 0 && issues.length > 0) {
+  } else if (!verbose && passes.length > 0 && issues.length > 0 && options.verboseHint) {
     runtime.out.log("");
-    runtime.out.log(`  ${style.hint("Re-run with --verbose to list passed checks.")}`);
+    runtime.out.log(`  ${style.hint(verboseRerunHint(options.verboseHint))}`);
   }
 }
 
@@ -217,4 +219,14 @@ function healthSummary(pass: number, warn: number, fail: number): string {
   }
   parts.push(style.hint(`${pass} passed`));
   return parts.join(", ");
+}
+
+function verboseRerunHint(hint: NonNullable<PrintHealthOptions["verboseHint"]>): string {
+  if (hint === "self") {
+    return "Re-run with --verbose to list passed checks.";
+  }
+  if (hint === "doctor") {
+    return "Run fentaris doctor --verbose to list passed checks.";
+  }
+  return "Run fentaris check --verbose to list passed checks.";
 }
