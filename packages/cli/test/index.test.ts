@@ -339,7 +339,7 @@ describe("project commands", () => {
 
     rt.cwd = join(dir, "demo");
     await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
-    delete rt.env.FENTARIS_AUTH_KEY;
+    rt.env.FENTARIS_AUTH_KEY = "ambient-shell-key";
     await expect(main(["check", "--offline"], rt)).resolves.toBe(0);
     await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
     await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
@@ -349,6 +349,13 @@ describe("project commands", () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
     await rm(join(dir, ".fentaris", "credentials.enc.json"));
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `import { credential, fentaris } from "@fentaris/core";
+const app = fentaris({ defaults: { credentials: { "github.token": credential("github.token") } } });
+void app;
+`,
+    );
     const rt = runtime(dir, { pnpm: true, git: true, docker: true });
 
     await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
@@ -357,6 +364,24 @@ describe("project commands", () => {
     expect(output).toContain('"label": "credentials.enc.json"');
     expect(output).toContain('Run fentaris secrets set <reference> to create local credentials.');
     expect(output).not.toContain('Run fentaris init to create local credentials.');
+  });
+
+  it("does not infer auth from an ambient auth key", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+    await expect(main(["init", "demo", "--skip-install"], rt)).resolves.toBe(0);
+
+    rt.cwd = join(dir, "demo");
+    rt.env.FENTARIS_AUTH_KEY = "ambient-shell-key";
+    await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+
+    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
+    await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
+
+    const output = String(vi.mocked(rt.out.log).mock.calls.at(-1)?.[0]);
+    expect(output).not.toContain('"label": "local auth directory"');
+    expect(output).not.toContain('"label": "credentials.enc.json"');
+    expect(output).not.toContain('"label": "FENTARIS_AUTH_KEY"');
   });
 
   it("does not infer auth from a generated .fentaris directory", async () => {

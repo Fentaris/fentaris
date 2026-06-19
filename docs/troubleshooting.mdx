@@ -183,6 +183,38 @@ If the key is lost for a disposable local project, reinitialize the project or r
 FENTARIS_AUTH_KEY=<key> fentaris secrets set github.token --user admin
 ```
 
+### Secrets manifest is missing or out of date
+
+`fentaris secrets manifest --check` fails when `.fentaris/secrets.manifest.json` does not match credential references in the project entrypoint.
+
+```bash theme={null}
+fentaris secrets manifest
+git add .fentaris/secrets.manifest.json
+```
+
+Run `fentaris secrets doctor` to inspect missing required secrets and manifest drift before deploy or CI.
+
+### Required secret is missing locally
+
+`fentaris secrets doctor` reports required credential references that are listed in the manifest but not stored in `.fentaris/credentials.enc.json`.
+
+```bash theme={null}
+fentaris secrets set github.token --group support
+fentaris secrets doctor
+```
+
+Set each missing reference for the reported scope. Use `fentaris secrets list` to review reference names and status without printing values.
+
+### Sensitive file is tracked by git
+
+`fentaris secrets doctor` fails when encrypted credential files or other sensitive auth paths are tracked by git.
+
+```bash theme={null}
+git rm --cached .fentaris/credentials.enc.json
+```
+
+Keep `.fentaris/credentials.enc.json` private. Commit only `.fentaris/secrets.manifest.json`.
+
 ## Documentation Issues
 
 ### Generated API reference is stale

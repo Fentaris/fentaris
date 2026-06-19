@@ -7,7 +7,7 @@ import { FentarisAuth } from "@fentaris/core";
 import { authDir, supportedPackageManagers } from "../../shared/constants.js";
 import type { HealthResult, PackageManager, ProjectConfig, ProjectDiscovery, Runtime } from "../../shared/types.js";
 import { canAccess, exists, isNodeError, readJson } from "../../shared/utils.js";
-import { secretsDoctorHealthResults } from "../secrets/doctor.js";
+import { loadRequiredReferences, secretsDoctorHealthResults } from "../secrets/doctor.js";
 
 export type DoctorOptions = {
   fix?: boolean;
@@ -389,7 +389,8 @@ async function authResults(project: ProjectDiscovery, runtime: Runtime | undefin
   const authDirectoryExists = await exists(authPath);
   const credentialsExist = await exists(credentialsPath);
   const key = runtime?.env.FENTARIS_AUTH_KEY;
-  if (!credentialsExist && !key?.trim()) {
+  const requiredSecretReferences = credentialsExist ? [] : await loadRequiredReferences(project);
+  if (!credentialsExist && requiredSecretReferences.length === 0) {
     return [await gitignoreAuthResult(project.root, project.config.authDir)];
   }
 
