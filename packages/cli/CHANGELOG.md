@@ -1,5 +1,21 @@
 # @fentaris/cli
 
+## 0.4.0
+
+### Minor Changes
+
+- 7f80b34: Remove the legacy `fentaris auth` command group.
+
+  Use `fentaris init` to create local credentials and `fentaris secrets` commands to manage encrypted credentials.
+
+### Patch Changes
+
+- a2dd60f: Allow CLI option values supplied after value-taking flags or with `--option=value` to start with a dash.
+- f0ab65b: Point doctor guidance for missing encrypted credentials to `fentaris secrets set` instead of project initialization.
+- fdc7b15: Align CLI help and error output with contextual command usage, parser-style syntax errors, and distinct exit codes.
+- Updated dependencies [8a5a563]
+  - @fentaris/core@0.7.0
+
 ## 0.3.3
 
 ### Patch Changes
