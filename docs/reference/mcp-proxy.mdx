@@ -46,7 +46,7 @@ servers: [
 
 ### `port`
 
-Default port for `start()`.
+Default port for `start()`. When omitted, Fentaris reads `port` from the nearest project `fentaris.json`, searching upward from the process current working directory.
 
 ```ts theme={null}
 port: 4000
@@ -54,13 +54,13 @@ port: 4000
 
 ### `path`
 
-HTTP path for MCP requests.
+HTTP path for MCP requests. When omitted, Fentaris reads `path` from the nearest project `fentaris.json`, then falls back to `/mcp`.
 
 ```ts theme={null}
 path: "/mcp"
 ```
 
-**Default:** `/mcp`
+**Default:** `/mcp` when no project config is found
 
 ### `user`
 
