@@ -10,7 +10,7 @@ export async function runBuild(runtime: Runtime): Promise<void> {
   const project = await discoverProject(runtime.cwd);
   const results = await getProjectCheckResults(project, true);
   if (hasFailure(results)) {
-    printHealthResults(runtime, results);
+    printHealthResults(runtime, results, { verboseHint: "check" });
     throw new Error("Build requires a valid Fentaris project.");
   }
 

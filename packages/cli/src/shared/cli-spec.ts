@@ -115,6 +115,7 @@ export const cliSpec: CliCommandSpec = {
       options: [
         { name: "offline", description: "Skip checks that require local external services." },
         { name: "strict", description: "Treat warnings as failures." },
+        { name: "verbose", description: "List passed checks in addition to issues." },
         { name: "help", short: "h", description: "Print help" },
       ],
     },
@@ -127,6 +128,7 @@ export const cliSpec: CliCommandSpec = {
         { name: "fix", description: "Apply available automatic fixes." },
         { name: "strict", description: "Treat warnings as failures." },
         { name: "json", description: "Output diagnostics as JSON." },
+        { name: "verbose", description: "List passed checks in addition to issues." },
         { name: "runtime", description: "Include runtime connectivity checks." },
         { name: "timeout", valueName: "MS", description: "Runtime check timeout in milliseconds. [default: 10000]" },
         { name: "help", short: "h", description: "Print help" },
