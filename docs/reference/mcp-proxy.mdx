@@ -187,6 +187,30 @@ app.mcp("github", {
 
 Register or retrieve a named app-level policy. Repeating the same name returns the same policy instance, so modules can extend one declaration before startup.
 
+### `usePolicy(policyNameOrPolicy)`
+
+Apply a named or concrete policy as the global proxy policy after construction.
+
+```ts theme={null}
+app.policy("demo")
+  .mcp("github")
+  .allow("search_issues");
+
+app.usePolicy("demo");
+```
+
+You can also pass a concrete policy object:
+
+```ts theme={null}
+app.usePolicy(
+  policy("demo").mcp("github").allow("search_issues"),
+);
+```
+
+<Note>
+  `app.usePolicy(name)` requires the named policy to be declared with `app.policy(name)` first. When groups are configured, group policies govern matching users; the global policy is used when no groups are configured.
+</Note>
+
 ### `group(groupId)`
 
 Return a scoped group handle. Chain `users(...)` and `policy(nameOrPolicy)` to declare the group before `start()` or `listen(...)`.

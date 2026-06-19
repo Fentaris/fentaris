@@ -230,7 +230,7 @@ export class McpProxy {
   private readonly userResolver?: McpProxyOptions["user"];
   private identityOptions?: IdentityResolverOptions;
   private readonly usesDeclaredApiKeyIdentity: boolean;
-  private readonly globalPolicy?: Policy;
+  private globalPolicy?: Policy;
   private readonly configuredGroups: Group[];
   private groups: Group[];
   private readonly defaultCredentials: CredentialSourceMap;
@@ -345,6 +345,33 @@ export class McpProxy {
     this.namedPolicies.set(name, declared);
     this.refreshDerivedGovernanceState({ validate: false });
     return declared;
+  }
+
+  /**
+   * Apply a named or concrete policy as the global proxy policy.
+   * @pk
+   */
+  usePolicy(policyNameOrPolicy: string | Policy): this {
+    const resolvedPolicy = typeof policyNameOrPolicy === "string"
+      ? this.namedPolicies.get(policyNameOrPolicy)
+      : policyNameOrPolicy;
+
+    if (!resolvedPolicy) {
+      throw new FentarisConfigError([
+        {
+          severity: "error",
+          code: "FENTARIS_CONFIG_GLOBAL_POLICY_UNKNOWN",
+          title: "Global policy references an unknown policy",
+          message: `Global policy references policy "${policyNameOrPolicy}", but no app-level policy with that name exists.`,
+          path: ["proxy", "policy"],
+          hint: "Declare the named policy with app.policy(name) before calling app.usePolicy(name), or pass a concrete policy instance.",
+        },
+      ]);
+    }
+
+    this.globalPolicy = resolvedPolicy;
+    this.refreshDerivedGovernanceState({ validate: false });
+    return this;
   }
 
   /**
@@ -1545,6 +1572,7 @@ export class McpProxy {
     this.refreshDeclaredApiKeyIdentityOptions();
     this.runtimeValidationConfig = {
       ...this.runtimeValidationConfig,
+      policy: this.globalPolicy,
       servers: this.servers,
       groups,
       defaults: { credentials: this.defaultCredentials },
