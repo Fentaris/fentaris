@@ -139,6 +139,7 @@ describe("command routing helpers", () => {
       expect(output).toContain("Usage: ");
       expect(output).toContain("fentaris [OPTIONS] [COMMAND]");
       expect(output).toContain("Project:");
+      expect(output).toContain("\u001b[32minit");
     }
   });
 
