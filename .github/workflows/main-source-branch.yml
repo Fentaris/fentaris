@@ -1,0 +1,27 @@
+name: Main Source Branch
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-source-branch:
+    name: Validate source branch
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Allow only dev or release branches
+        run: |
+          case "${GITHUB_HEAD_REF}" in
+            dev|release/*)
+              exit 0
+              ;;
+            *)
+              echo "Pull requests into main must come from dev or release/* branches."
+              exit 1
+              ;;
+          esac
