@@ -40,6 +40,12 @@ const globalOptions: CliOptionSpec[] = [
   { name: "version", short: "v", description: "Print version" },
 ];
 
+const localSecretsKeyOption: CliOptionSpec = {
+  name: "key",
+  valueName: "KEY",
+  description: "Use an explicit local encryption key instead of FENTARIS_AUTH_KEY or an interactive prompt.",
+};
+
 export const cliSpec: CliCommandSpec = {
   name: "fentaris",
   path: [],
@@ -155,6 +161,7 @@ export const cliSpec: CliCommandSpec = {
             { name: "user", valueName: "ID", description: "Store the credential for a user scope." },
             { name: "group", valueName: "ID", description: "Store the credential for a group scope." },
             { name: "value", valueName: "VALUE", description: "Credential value. If omitted, an interactive prompt is used." },
+            localSecretsKeyOption,
             { name: "help", short: "h", description: "Print help" },
           ],
         },
@@ -165,6 +172,7 @@ export const cliSpec: CliCommandSpec = {
           usage: "fentaris secrets list [OPTIONS]",
           options: [
             { name: "json", description: "Output credentials as JSON." },
+            localSecretsKeyOption,
             { name: "help", short: "h", description: "Print help" },
           ],
         },
@@ -177,6 +185,7 @@ export const cliSpec: CliCommandSpec = {
           options: [
             { name: "user", valueName: "ID", description: "Remove the credential from a user scope." },
             { name: "group", valueName: "ID", description: "Remove the credential from a group scope." },
+            localSecretsKeyOption,
             { name: "help", short: "h", description: "Print help" },
           ],
         },

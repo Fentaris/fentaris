@@ -82,13 +82,13 @@ function runtime(cwd: string, probes: Record<string, boolean> = {}): Runtime & {
 
 describe("command routing helpers", () => {
   it("parses nested commands and options", () => {
-    expect(parseCommand(["secrets", "set", "github.token", "--user", "alice"])).toEqual({
+    expect(parseCommand(["secrets", "set", "github.token", "--user", "alice", "--key", "test-key"])).toEqual({
       kind: "ok",
       path: ["secrets", "set"],
       command: {
         name: "secrets",
         args: ["set", "github.token"],
-        options: { user: "alice" },
+        options: { user: "alice", key: "test-key" },
       },
     });
   });
@@ -453,6 +453,25 @@ describe("secrets", () => {
     const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(authDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
     expect(credentials.users.alice?.credentials["github.token"]).toBe("secret-value");
     expect(rt.out.log).toHaveBeenCalledWith("Value: <redacted>");
+  });
+
+  it("accepts an explicit local encryption key for secrets set", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const project = join(dir, "project");
+    const authDir = join(project, ".fentaris");
+    await mkdir(authDir, { recursive: true });
+    await writeFile(
+      join(project, "fentaris.json"),
+      JSON.stringify({ name: "demo", packageManager: "pnpm", entrypoint: "src/index.ts", port: 4000, path: "/mcp", authDir: ".fentaris" }),
+    );
+
+    const rt = runtime(project);
+    delete rt.env.FENTARIS_AUTH_KEY;
+    await expect(main(["secrets", "set", "github.token", "--key", "test-key", "--value", "secret-value"], rt)).resolves.toBe(0);
+
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(authDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(credentials.defaults["github.token"]).toBe("secret-value");
+    expect(rt.prompt.text).not.toHaveBeenCalled();
   });
 
   it("lists stored secret references without values", async () => {
