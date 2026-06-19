@@ -7,7 +7,7 @@ description: "Configure Fentaris project discovery, runtime entrypoint, endpoint
 
 > Configure Fentaris project discovery, runtime entrypoint, endpoint, and local auth directory
 
-Generated projects use `fentaris.json` at the project root. The CLI uses this file to discover the project, run scripts, validate local state, and build runtime metadata.
+Generated projects use `fentaris.json` at the project root. The CLI uses this file to discover the project, run scripts, validate local state, and build runtime metadata. When an app starts without explicit `port` or `path` options, `@fentaris/core` also searches upward from the current working directory and uses the nearest project config defaults.
 
 ## Quick Start
 
@@ -58,7 +58,7 @@ The file must exist for project health checks to pass.
 
 ### `port`
 
-Local port printed by `fentaris dev` and used by runtime checks.
+Local port printed by `fentaris dev`, used by runtime checks, and used by `app.start()` when the app does not pass an explicit port.
 
 ```json
 "port": 4000
@@ -66,7 +66,7 @@ Local port printed by `fentaris dev` and used by runtime checks.
 
 ### `path`
 
-MCP endpoint path served by the generated proxy.
+MCP endpoint path served by the generated proxy. `app.start()` uses this path when the app does not pass an explicit path.
 
 ```json
 "path": "/mcp"
@@ -85,6 +85,16 @@ Directory for local encrypted credentials and CLI auth state.
 <Note>
   Generated projects ignore `.fentaris/` in git because it contains local credentials and build output.
 </Note>
+
+## Runtime Defaults
+
+`@fentaris/core` reads `port` and `path` from the nearest `fentaris.json` when you call `app.start()` without overrides. Discovery searches upward from the process current working directory, so generated projects still work when the entrypoint is `src/index.ts` and the config file remains in the project root.
+
+Explicit code options always win:
+
+```ts theme={null}
+await app.start({ port: 5050, path: "/custom-mcp" });
+```
 
 ## Legacy Filename
 
