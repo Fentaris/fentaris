@@ -389,7 +389,7 @@ async function authResults(project: ProjectDiscovery, runtime: Runtime | undefin
   const authDirectoryExists = await exists(authPath);
   const credentialsExist = await exists(credentialsPath);
   const key = runtime?.env.FENTARIS_AUTH_KEY;
-  if (!credentialsExist && !key?.trim()) {
+  if (!credentialsExist) {
     return [await gitignoreAuthResult(project.root, project.config.authDir)];
   }
 
