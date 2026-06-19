@@ -1,5 +1,11 @@
 # @fentaris/core
 
+## 0.7.0
+
+### Minor Changes
+
+- 8a5a563: Add `app.usePolicy(...)` for applying named or concrete policies as the global proxy policy after construction.
+
 ## 0.6.2
 
 ### Patch Changes
