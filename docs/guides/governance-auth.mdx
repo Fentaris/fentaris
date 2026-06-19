@@ -312,34 +312,6 @@ git add .fentaris/secrets.manifest.json
 
 Use `fentaris secrets manifest --check` in CI to fail when the manifest is out of date.
 
-Legacy local auth helpers remain available:
-
-Initialize local auth files:
-
-```bash theme={null}
-fentaris auth init --dir .fentaris --key "$FENTARIS_AUTH_KEY"
-```
-
-Store a user API key:
-
-```bash theme={null}
-fentaris auth set-api-key --dir .fentaris --key "$FENTARIS_AUTH_KEY" --user alice --api-key "$ALICE_API_KEY"
-```
-
-Store a credential:
-
-```bash theme={null}
-fentaris auth set-credential --dir .fentaris --key "$FENTARIS_AUTH_KEY" --user alice --ref github.token --value "$GITHUB_TOKEN"
-fentaris auth set-credential --dir .fentaris --key "$FENTARIS_AUTH_KEY" --group support --ref github.token --value "$SUPPORT_GITHUB_TOKEN"
-fentaris auth set-credential --dir .fentaris --key "$FENTARIS_AUTH_KEY" --ref github.token --value "$DEFAULT_GITHUB_TOKEN"
-```
-
-Inspect redacted local auth:
-
-```bash theme={null}
-fentaris auth inspect --dir .fentaris --key "$FENTARIS_AUTH_KEY"
-```
-
 ## Low-Level API
 
 The class constructors remain available for compatibility and advanced embedding. Prefer `fentaris(...)`, `mcp(...)`, `streamableHttp(...)`, `group(...)`, `user(...)`, and `policy(...)` for new applications.

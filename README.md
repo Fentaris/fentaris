@@ -7,7 +7,7 @@
 </div>
 
 <p align="center">
-  <a href="./docs/index.mdx" alt="Documentation">
+  <a href="https://fentaris.mintlify.app" alt="Documentation">
     <img src="https://img.shields.io/badge/fentaris-docs-blue?labelColor=white" /></a>
   <a href="./packages/core" alt="Core package">
     <img src="https://img.shields.io/badge/core-%40fentaris%2Fcore-blue?labelColor=white" /></a>
@@ -31,21 +31,63 @@
 - **Unify** stdio, Streamable HTTP, SSE, and HTTP upstream MCP servers behind one proxy.
 - **Protect** tool calls, resources, prompts, and completions with policy, identity, middleware, hooks, and rate limits.
 - **Observe** every proxied operation with structured logging, lifecycle events, and per-request context.
-- **Ship** generated proxy projects with the Fentaris CLI and local encrypted auth files.
+- **Ship** generated proxy projects with the Fentaris CLI, local runtime files, and project checks.
 
 Fentaris is designed for teams that want MCP servers to behave like production infrastructure: stable names, centralized governance, auditable calls, and predictable client-facing endpoints.
 
+## Contents
+
+- [Getting Started](#getting-started)
+- [Create a Project with the CLI](#create-a-project-with-the-cli)
+- [Documentation](#documentation)
+- [Use the SDK in an Existing Project](#use-the-sdk-in-an-existing-project)
+- [Governance](#governance)
+- [Local Auth](#local-auth)
+- [Packages](#packages)
+- [Development](#development)
+
+## Getting Started
+
+Use the CLI when you want to start a new Fentaris proxy project:
+
+```bash
+npm install -g @fentaris/cli
+fentaris init my-proxy
+cd my-proxy
+fentaris dev
+```
+
+The generated proxy listens on `http://localhost:4000/mcp` by default. Point your MCP client to that endpoint.
+
+Use the SDK directly when you are embedding Fentaris into an existing TypeScript project:
+
+```bash
+pnpm add @fentaris/core
+```
+
+## Create a Project with the CLI
+
+`fentaris init` generates a runnable proxy project with a TypeScript entrypoint, `fentaris.json`, package scripts, local runtime directories, and project checks.
+
+```bash
+fentaris init my-proxy
+cd my-proxy
+fentaris dev
+```
+
+The generated project includes one remote HTTP MCP upstream, one local demo user, and no production authentication or policy rules. Add API-key auth and policies before exposing the proxy outside local development.
+
 ## Documentation
 
-Start with the [docs homepage](./docs/index.mdx), or jump directly to:
+Start with the [docs homepage](https://fentaris.mintlify.app), or jump directly to:
 
-- [Quickstart](./docs/getting-started/quickstart.mdx): create and run a Fentaris proxy project.
-- [Architecture](./docs/core/architecture.mdx): understand the runtime model.
-- [Proxy setup](./docs/guides/proxy-setup.mdx): production-ready configuration patterns.
-- [Governance auth](./docs/guides/governance-auth.mdx): users, groups, policy, API keys, and upstream credentials.
-- [API reference](./docs/reference-auto/index.mdx): generated package reference.
+- [Quickstart](https://fentaris.mintlify.app/getting-started/quickstart): create and run a Fentaris proxy project.
+- [Architecture](https://fentaris.mintlify.app/concepts/architecture): understand the runtime model.
+- [Proxy setup](https://fentaris.mintlify.app/guides/proxy-setup): production-ready configuration patterns.
+- [Governance auth](https://fentaris.mintlify.app/guides/governance-auth): users, groups, policy, API keys, and upstream credentials.
+- [API reference](https://fentaris.mintlify.app/reference-auto): generated package reference.
 
-## Express-like SDK
+## Use the SDK in an Existing Project
 
 Install the core package in an existing project:
 
@@ -56,19 +98,18 @@ pnpm add @fentaris/core
 Build a proxy in a few lines:
 
 ```ts
-import { fentaris, mcp, stdio } from "@fentaris/core";
+import { fentaris, stdio } from "@fentaris/core";
 
-const proxy = fentaris();
+const app = fentaris();
 
-proxy.mcp({
-  name: "filesystem",
+app.mcp("filesystem", {
   transport: stdio({
     command: "npx",
     args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
   }),
 });
 
-await proxy.start();
+await app.start();
 ```
 
 Upstream tool names are still stable and namespaced by server. A filesystem tool is exposed to clients with a proxy name such as:
@@ -107,7 +148,7 @@ await app.start();
 Block a sensitive tool:
 
 ```ts
-proxy.mcp("filesystem").tool("write_file", (ctx, next) => {
+app.mcp("filesystem").tool("write_file", (ctx, next) => {
   return ctx.subject?.hasGroup("admins")
     ? next()
     : ctx.deny("Admin required.");
@@ -129,7 +170,7 @@ const deploy = policy("deploy")
 Modify a tool result:
 
 ```ts
-proxy.mcp("github").tool("search_issues", async (_ctx, next) => {
+app.mcp("github").tool("search_issues", async (_ctx, next) => {
   const result = await next();
   if ("content" in result) {
     result.content.push({ type: "text", text: "Filtered by Fentaris" });
@@ -141,29 +182,12 @@ proxy.mcp("github").tool("search_issues", async (_ctx, next) => {
 Observe every tool call:
 
 ```ts
-proxy.on("tool:success", ({ ctx, durationMs }) => {
+app.on("tool:success", ({ ctx, durationMs }) => {
   ctx.log.info("tool.success", { tool: ctx.tool?.name, durationMs });
 });
 ```
 
 Policies can govern tool calls and MCP capabilities such as resources, prompts, and completion. Runtime routes can deny, approve, hide, log, or transform calls.
-
-## CLI
-
-Create the same kind of proxy from one command:
-
-```bash
-npm install -g @fentaris/cli
-fentaris init
-```
-
-The generated project includes a runnable proxy, demo API keys, local encrypted auth files, policy rules, rate limiting, one stdio upstream, one remote HTTP MCP upstream, TypeScript config, package scripts, and project checks.
-
-Connect your MCP client to the generated endpoint, usually `http://localhost:4000/mcp`, and send the generated API key in the default Fentaris auth header:
-
-```txt
-x-fentaris-api-key: <guest-or-admin-api-key>
-```
 
 ## Local Auth
 
@@ -189,9 +213,12 @@ Credential values are not exposed to middleware, hooks, logs, or policy callback
 ## Development
 
 Run the project for development:
+
 ```
-cd your-awensone-fentaris-project && fentaris dev
+cd your-fentaris-project
+fentaris dev
 ```
+
 Run checks:
 
 ```bash

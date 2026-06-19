@@ -8,6 +8,12 @@ export type CliCommand = {
   options: CliOptions;
 };
 
+export type ParseResult =
+  | { kind: "ok"; command: CliCommand; path: string[] }
+  | { kind: "help"; path: string[] }
+  | { kind: "version" }
+  | { kind: "parse-error"; message: string; path: string[] };
+
 export type PackageManager = "pnpm" | "npm" | "bun";
 
 export type CommandResult = { code: number };

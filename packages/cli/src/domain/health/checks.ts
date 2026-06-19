@@ -7,7 +7,7 @@ import { FentarisAuth } from "@fentaris/core";
 import { authDir, supportedPackageManagers } from "../../shared/constants.js";
 import type { HealthResult, PackageManager, ProjectConfig, ProjectDiscovery, Runtime } from "../../shared/types.js";
 import { canAccess, exists, isNodeError, readJson } from "../../shared/utils.js";
-import { secretsDoctorHealthResults } from "../secrets/doctor.js";
+import { loadRequiredReferences, secretsDoctorHealthResults } from "../secrets/doctor.js";
 
 export type DoctorOptions = {
   fix?: boolean;
@@ -389,7 +389,8 @@ async function authResults(project: ProjectDiscovery, runtime: Runtime | undefin
   const authDirectoryExists = await exists(authPath);
   const credentialsExist = await exists(credentialsPath);
   const key = runtime?.env.FENTARIS_AUTH_KEY;
-  if (!credentialsExist) {
+  const requiredSecretReferences = credentialsExist ? [] : await loadRequiredReferences(project);
+  if (!credentialsExist && requiredSecretReferences.length === 0) {
     return [await gitignoreAuthResult(project.root, project.config.authDir)];
   }
 
@@ -409,7 +410,7 @@ async function authResults(project: ProjectDiscovery, runtime: Runtime | undefin
       label: "credentials.enc.json",
       status: credentialsExist ? "pass" : "warn",
       detail: credentialsExist ? "Found encrypted credential store." : "Missing encrypted credential store.",
-      hint: credentialsExist ? undefined : "Run fentaris init or fentaris auth init to create local credentials.",
+      hint: credentialsExist ? undefined : "Run fentaris secrets set <reference> to create local credentials.",
     },
     {
       group: "Auth",

@@ -1179,6 +1179,43 @@ describe("McpProxy", () => {
     });
   });
 
+  it("applies named app-level policies globally", async () => {
+    const transport = new MockTransport();
+    const app = fentaris();
+
+    app.policy("demo").mcp("github").allow("read");
+    app.usePolicy("demo");
+    app.mcp("github", { transport });
+
+    await expect(app.callTool({ name: toProxyToolName("github", "read") })).resolves.toMatchObject({
+      content: [{ type: "text", text: "called:read" }],
+    });
+    await expect(app.callTool({ name: toProxyToolName("github", "create_issue") })).resolves.toMatchObject({
+      isError: true,
+    });
+  });
+
+  it("applies concrete policies globally after construction", async () => {
+    const transport = new MockTransport();
+    const app = fentaris();
+
+    app.usePolicy(policy("demo").mcp("github").allow("read"));
+    app.mcp("github", { transport });
+
+    await expect(app.callTool({ name: toProxyToolName("github", "read") })).resolves.toMatchObject({
+      content: [{ type: "text", text: "called:read" }],
+    });
+    await expect(app.callTool({ name: toProxyToolName("github", "create_issue") })).resolves.toMatchObject({
+      isError: true,
+    });
+  });
+
+  it("reports unknown named global policies", () => {
+    const app = fentaris();
+
+    expect(() => app.usePolicy("missing")).toThrow(FentarisConfigError);
+  });
+
   it("appends users across repeated fluent group declarations", async () => {
     const transport = new MockTransport();
     const app = fentaris();

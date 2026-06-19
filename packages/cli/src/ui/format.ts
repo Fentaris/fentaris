@@ -1,4 +1,5 @@
 import type { HealthResult, HealthStatus, Runtime } from "../shared/types.js";
+import { cliSpec, type CliCommandSpec, type CliOptionSpec } from "../shared/cli-spec.js";
 
 const color = {
   green: "\u001b[32m",
@@ -25,7 +26,7 @@ export const style = {
 
 export function section(runtime: Runtime, title: string): void {
   runtime.out.log("");
-  runtime.out.log(`${style.brand("◆")} ${style.heading(title)}`);
+  runtime.out.log(`${style.heading(title)}:`);
 }
 
 export function printBanner(runtime: Runtime): void {
@@ -53,27 +54,111 @@ export function nextSteps(steps: string[]): string {
   return ["Next steps:", ...steps.map((step, index) => `  ${index + 1}. ${style.command(step)}`)].join("\n");
 }
 
-export function printHelp(runtime: Runtime): void {
-  printBanner(runtime);
-  runtime.out.log(`Usage:
-  ${style.command("fentaris [--help | -h]")}
-  ${style.command("fentaris [--version | -v]")}
-  ${style.command("fentaris init [project-name] [--skip-install]")}
-  ${style.command("fentaris dev")}
-  ${style.command("fentaris check [--offline] [--strict]")}
-  ${style.command("fentaris doctor [--fix] [--strict] [--json] [--runtime] [--timeout <ms>]")}
-  ${style.command("fentaris build")}
-  ${style.command("fentaris secrets set <reference> [--user <id> | --group <id>]")}
-  ${style.command("fentaris secrets list [--json]")}
-  ${style.command("fentaris secrets unset <reference> [--user <id> | --group <id>]")}
-  ${style.command("fentaris secrets manifest [--check]")}
-  ${style.command("fentaris secrets doctor [--strict] [--json]")}
+export function printRootHelp(runtime: Runtime): void {
+  printCommandHelp(runtime, []);
+}
 
-Legacy local auth:
-  ${style.command("fentaris auth init --dir .fentaris/auth --key <key>")}
-  ${style.command("fentaris auth set-api-key --dir .fentaris/auth --key <key> --user <id> --api-key <secret>")}
-  ${style.command("fentaris auth set-credential --dir .fentaris/auth --key <key> --ref <name> --value <secret> [--user <id> | --group <id>]")}
-  ${style.command("fentaris auth inspect --dir .fentaris/auth --key <key>")}`);
+export function printCommandHelp(runtime: Runtime, path: string[]): void {
+  const spec = findCommandSpec(path);
+  runtime.out.log(spec.description);
+  runtime.out.log("");
+  for (const detail of spec.details ?? []) {
+    runtime.out.log(detail);
+  }
+  if (spec.details?.length) {
+    runtime.out.log("");
+  }
+  runtime.out.log(`Usage: ${style.command(spec.usage)}`);
+  printCommandGroups(runtime, spec);
+  printArguments(runtime, spec);
+  printOptions(runtime, spec.options ?? []);
+  printEnvironment(runtime, spec);
+}
+
+export function printHelp(runtime: Runtime): void {
+  printRootHelp(runtime);
+}
+
+export function printParseError(runtime: Runtime, message: string, path: string[]): void {
+  const spec = findCommandSpec(path);
+  runtime.out.error(`error: ${message}`);
+  runtime.out.error("");
+  runtime.out.error(`Usage: ${spec.usage}`);
+  runtime.out.error("");
+  runtime.out.error("For more information, try '--help'.");
+}
+
+export function printRuntimeError(runtime: Runtime, error: unknown): void {
+  runtime.out.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+}
+
+function printCommandGroups(runtime: Runtime, spec: CliCommandSpec): void {
+  for (const group of spec.commandGroups ?? []) {
+    runtime.out.log("");
+    runtime.out.log(`${group.title}:`);
+    for (const command of group.commands) {
+      runtime.out.log(`  ${command.name.padEnd(12)} ${command.summary}`);
+    }
+  }
+}
+
+function printArguments(runtime: Runtime, spec: CliCommandSpec): void {
+  if (!spec.arguments?.length) {
+    return;
+  }
+
+  runtime.out.log("");
+  runtime.out.log("Arguments:");
+  for (const argument of spec.arguments) {
+    const name = argument.required === true ? `<${argument.name}>` : `[${argument.name}]`;
+    runtime.out.log(`  ${name.padEnd(18)} ${argument.description}`);
+  }
+}
+
+function printOptions(runtime: Runtime, options: CliOptionSpec[]): void {
+  if (options.length === 0) {
+    return;
+  }
+
+  runtime.out.log("");
+  runtime.out.log("Options:");
+  for (const option of options) {
+    const names = formatOptionNames(option);
+    runtime.out.log(`  ${names.padEnd(28)} ${option.description}`);
+  }
+}
+
+function printEnvironment(runtime: Runtime, spec: CliCommandSpec): void {
+  if (!spec.environment?.length) {
+    return;
+  }
+
+  runtime.out.log("");
+  runtime.out.log("Environment variables:");
+  for (const variable of spec.environment) {
+    runtime.out.log(`  ${variable.name.padEnd(22)} ${variable.description}`);
+  }
+}
+
+function formatOptionNames(option: CliOptionSpec): string {
+  const value = option.valueName ? ` <${option.valueName}>` : "";
+  const long = `--${option.name}${value}`;
+  if (!option.short) {
+    return long;
+  }
+  return `-${option.short}, ${long}`;
+}
+
+function findCommandSpec(path: string[]): CliCommandSpec {
+  let spec = cliSpec;
+  for (const segment of path) {
+    const next = spec.commands?.[segment];
+    if (!next) {
+      return spec;
+    }
+    spec = next;
+  }
+  return spec;
 }
 
 function marker(status: HealthStatus): string {

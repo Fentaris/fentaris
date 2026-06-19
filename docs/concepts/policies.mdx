@@ -44,6 +44,19 @@ app.group("guests").users(user("guest")).policy("readonly");
 
 Repeated `app.policy("readonly")` calls return the same policy instance. Fentaris validates the final configuration and reports diagnostics for missing named policies, empty groups, duplicate declarations, and policies that reference servers not yet registered.
 
+Use `app.usePolicy(...)` when one policy should apply globally and you are not configuring groups:
+
+```ts theme={null}
+app.policy("demo").mcp("github").allow("search_issues");
+app.usePolicy("demo");
+```
+
+You can also apply a concrete policy directly:
+
+```ts theme={null}
+app.usePolicy(policy("demo").mcp("github").allow("search_issues"));
+```
+
 See [Governance auth](/guides/governance-auth) and [Proxy setup](/guides/proxy-setup) for full examples.
 
 ## Related Documentation
