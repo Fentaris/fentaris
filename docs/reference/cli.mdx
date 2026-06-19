@@ -110,19 +110,6 @@ Options:
   Do not pass `--value` in shared shell history unless the environment is trusted.
 </Warning>
 
-### `fentaris auth ...`
-
-Manage legacy auth files directly.
-
-```bash theme={null}
-fentaris auth init --dir .fentaris/auth --key <key>
-fentaris auth set-api-key --dir .fentaris/auth --key <key> --user <id> --api-key <secret>
-fentaris auth set-credential --dir .fentaris/auth --key <key> --ref <name> --value <secret>
-fentaris auth inspect --dir .fentaris/auth --key <key>
-```
-
-Prefer `fentaris secrets set` for generated projects unless you intentionally need the legacy auth file layout.
-
 ## Project Discovery
 
 Project commands search upward from the current directory for `fentaris.json`. Legacy `fentaris.config.json` is still detected, but generated projects use `fentaris.json`.

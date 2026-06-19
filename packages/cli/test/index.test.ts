@@ -116,6 +116,12 @@ describe("command routing helpers", () => {
     }
   });
 
+  it("rejects removed legacy auth commands", async () => {
+    const rt = runtime("/tmp");
+    await expect(main(["auth", "inspect", "--dir", ".fentaris", "--key", "test-key"], rt)).resolves.toBe(1);
+    expect(rt.out.error).toHaveBeenCalledWith(expect.stringContaining('Unknown command "auth"'));
+  });
+
   it("resolves provided and prompted project names", async () => {
     await expect(resolveProjectName("my-app", prompt())).resolves.toBe("my-app");
     await expect(resolveProjectName(undefined, prompt(["asked-app"]))).resolves.toBe("asked-app");

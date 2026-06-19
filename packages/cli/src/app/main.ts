@@ -1,4 +1,3 @@
-import { runLegacyAuth } from "../commands/auth.js";
 import { runBuild } from "../commands/build.js";
 import { runCheck } from "../commands/check.js";
 import { runDev } from "../commands/dev.js";
@@ -32,11 +31,6 @@ async function route(command: CliCommand, runtime: Runtime): Promise<void> {
 
   if (command.name === "help" || command.options.help === true || command.options.h === true) {
     printHelp(runtime);
-    return;
-  }
-
-  if (command.name === "auth") {
-    await runLegacyAuth(command, runtime);
     return;
   }
 

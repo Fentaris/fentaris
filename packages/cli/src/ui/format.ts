@@ -67,13 +67,7 @@ export function printHelp(runtime: Runtime): void {
   ${style.command("fentaris secrets list [--json]")}
   ${style.command("fentaris secrets unset <reference> [--user <id> | --group <id>]")}
   ${style.command("fentaris secrets manifest [--check]")}
-  ${style.command("fentaris secrets doctor [--strict] [--json]")}
-
-Legacy local auth:
-  ${style.command("fentaris auth init --dir .fentaris/auth --key <key>")}
-  ${style.command("fentaris auth set-api-key --dir .fentaris/auth --key <key> --user <id> --api-key <secret>")}
-  ${style.command("fentaris auth set-credential --dir .fentaris/auth --key <key> --ref <name> --value <secret> [--user <id> | --group <id>]")}
-  ${style.command("fentaris auth inspect --dir .fentaris/auth --key <key>")}`);
+  ${style.command("fentaris secrets doctor [--strict] [--json]")}`);
 }
 
 function marker(status: HealthStatus): string {
