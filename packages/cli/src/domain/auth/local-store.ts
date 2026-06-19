@@ -1,16 +1,8 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { LocalSecretsBackend } from "@fentaris/core";
 import type { CliOptions, Runtime } from "../../shared/types.js";
-import { redactRecord, required } from "../../shared/utils.js";
-
-export async function initLocalAuth(options: CliOptions): Promise<void> {
-  const dir = required(options, "dir");
-  const key = required(options, "key");
-  await LocalSecretsBackend.open({ dir, key });
-  const backend = new LocalSecretsBackend({ dir, key });
-  await backend.initEmpty();
-}
+import { readJson } from "../../shared/utils.js";
 
 export async function storeCredential(dir: string, key: string, reference: string, value: string, options: CliOptions): Promise<void> {
   const backend = await openBackend(dir, key);
@@ -47,46 +39,6 @@ export async function unsetCredential(dir: string, key: string, reference: strin
   await backend.unset(reference, { kind: "default" });
 }
 
-export async function addUserApiKey(dir: string, key: string, userId: string, apiKey: string): Promise<void> {
-  const credentials = await readCredentials(dir, key);
-  const user = credentials.users[userId] ?? { apiKeys: [], credentials: {} };
-  const { FentarisAuth } = await import("@fentaris/core");
-  const hashed = FentarisAuth.hashApiKey(apiKey);
-  credentials.users[userId] = {
-    ...user,
-    apiKeys: user.apiKeys.includes(hashed) ? user.apiKeys : [...user.apiKeys, hashed],
-  };
-  await writeCredentials(dir, key, credentials);
-}
-
-export async function inspectAuthFiles(dir: string, key: string): Promise<unknown> {
-  const backend = await openBackend(dir, key);
-  const refs = await backend.listRefs();
-  const credentials = await readCredentials(dir, key);
-
-  return {
-    credentials: {
-      users: Object.fromEntries(
-        Object.entries(credentials.users).map(([userId, userEntry]) => [
-          userId,
-          {
-            apiKeys: userEntry.apiKeys.map(() => "<redacted>"),
-            credentials: redactRecord(userEntry.credentials),
-          },
-        ]),
-      ),
-      groups: Object.fromEntries(Object.entries(credentials.groups).map(([groupId, values]) => [groupId, redactRecord(values)])),
-      defaults: redactRecord(credentials.defaults),
-    },
-    refs: refs.map((entry) => ({
-      ref: entry.ref,
-      scope: entry.scope,
-      kind: entry.kind,
-      count: entry.count,
-    })),
-  };
-}
-
 export async function authKeyFromRuntime(runtime: Runtime, options: CliOptions): Promise<string> {
   if (typeof options.key === "string") {
     return options.key;
@@ -109,7 +61,7 @@ export function secretScope(options: CliOptions): string {
 
 export async function readCredentials(dir: string, key: string) {
   const { FentarisAuth } = await import("@fentaris/core");
-  return FentarisAuth.decryptCredentials(JSON.parse(await readFile(path.join(dir, "credentials.enc.json"), "utf8")) as unknown, key);
+  return FentarisAuth.decryptCredentials(await readJson(path.join(dir, "credentials.enc.json")), key);
 }
 
 export async function writeCredentials(dir: string, key: string, credentials: Awaited<ReturnType<typeof readCredentials>>): Promise<void> {

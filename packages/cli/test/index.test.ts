@@ -82,23 +82,24 @@ function runtime(cwd: string, probes: Record<string, boolean> = {}): Runtime & {
 
 describe("command routing helpers", () => {
   it("parses nested commands and options", () => {
-    expect(parseCommand(["secrets", "set", "github.token", "--user", "alice"])).toEqual({
-      name: "secrets",
-      args: ["set", "github.token"],
-      options: { user: "alice" },
+    expect(parseCommand(["secrets", "set", "github.token", "--user", "alice", "--key", "test-key"])).toEqual({
+      kind: "ok",
+      path: ["secrets", "set"],
+      command: {
+        name: "secrets",
+        args: ["set", "github.token"],
+        options: { user: "alice", key: "test-key" },
+      },
     });
   });
 
   it("parses short utility flags", () => {
     expect(parseCommand(["-v"])).toEqual({
-      name: "help",
-      args: [],
-      options: { v: true },
+      kind: "version",
     });
     expect(parseCommand(["-h"])).toEqual({
-      name: "help",
-      args: [],
-      options: { h: true },
+      kind: "help",
+      path: [],
     });
   });
 
@@ -112,8 +113,58 @@ describe("command routing helpers", () => {
     for (const argv of [["--help"], ["-h"], ["help"]]) {
       const rt = runtime("/tmp");
       await expect(main(argv, rt)).resolves.toBe(0);
-      expect(vi.mocked(rt.out.log).mock.calls.flat().join("\n")).toContain("Usage:");
+      const output = vi.mocked(rt.out.log).mock.calls.flat().join("\n");
+      expect(output).toContain("Usage: ");
+      expect(output).toContain("fentaris [OPTIONS] [COMMAND]");
+      expect(output).toContain("Project:");
     }
+  });
+
+  it("routes contextual command help", async () => {
+    const check = runtime("/tmp");
+    await expect(main(["check", "--help"], check)).resolves.toBe(0);
+    expect(vi.mocked(check.out.log).mock.calls.flat().join("\n")).toContain("Usage: ");
+    expect(vi.mocked(check.out.log).mock.calls.flat().join("\n")).toContain("fentaris check [OPTIONS]");
+
+    const secretsSet = runtime("/tmp");
+    await expect(main(["secrets", "set", "--help"], secretsSet)).resolves.toBe(0);
+    const output = vi.mocked(secretsSet.out.log).mock.calls.flat().join("\n");
+    expect(output).toContain("Usage: ");
+    expect(output).toContain("fentaris secrets set [OPTIONS] <reference>");
+    expect(output).toContain("Arguments:");
+  });
+
+  it("reports parser errors before running commands", async () => {
+    const unknownOption = runtime("/tmp");
+    await expect(main(["check", "--unknown"], unknownOption)).resolves.toBe(2);
+    expect(vi.mocked(unknownOption.out.error).mock.calls.flat().join("\n")).toContain("error: unexpected argument '--unknown' found");
+    expect(vi.mocked(unknownOption.out.log)).not.toHaveBeenCalled();
+
+    const unknownCommand = runtime("/tmp");
+    await expect(main(["nope"], unknownCommand)).resolves.toBe(2);
+    expect(vi.mocked(unknownCommand.out.error).mock.calls.flat().join("\n")).toContain("error: unrecognized subcommand 'nope'");
+
+    const unknownSecretsCommand = runtime("/tmp");
+    await expect(main(["secrets", "nope"], unknownSecretsCommand)).resolves.toBe(2);
+    expect(vi.mocked(unknownSecretsCommand.out.error).mock.calls.flat().join("\n")).toContain("Usage: fentaris secrets [OPTIONS] [COMMAND]");
+
+    const missingReference = runtime("/tmp");
+    await expect(main(["secrets", "set"], missingReference)).resolves.toBe(2);
+    expect(vi.mocked(missingReference.out.error).mock.calls.flat().join("\n")).toContain(
+      "the following required arguments were not provided: <reference>",
+    );
+  });
+
+  it("formats runtime errors separately from parser errors", async () => {
+    const rt = runtime("/tmp");
+    await expect(main(["check"], rt)).resolves.toBe(1);
+    expect(vi.mocked(rt.out.error).mock.calls.flat().join("\n")).toContain("Error: No Fentaris project found.");
+  });
+
+  it("rejects removed legacy auth commands", async () => {
+    const rt = runtime("/tmp");
+    await expect(main(["auth", "inspect", "--dir", ".fentaris", "--key", "test-key"], rt)).resolves.toBe(2);
+    expect(rt.out.error).toHaveBeenCalledWith(expect.stringContaining("error: unrecognized subcommand 'auth'"));
   });
 
   it("resolves provided and prompted project names", async () => {
@@ -294,6 +345,27 @@ describe("project commands", () => {
     await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
   });
 
+  it("points missing credential stores to secrets set when an auth key is configured", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await rm(join(dir, ".fentaris", "credentials.enc.json"));
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `import { credential, fentaris } from "@fentaris/core";
+const app = fentaris({ defaults: { credentials: { "github.token": credential("github.token") } } });
+void app;
+`,
+    );
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+
+    await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
+
+    const output = String(vi.mocked(rt.out.log).mock.calls.at(-1)?.[0]);
+    expect(output).toContain('"label": "credentials.enc.json"');
+    expect(output).toContain('Run fentaris secrets set <reference> to create local credentials.');
+    expect(output).not.toContain('Run fentaris init to create local credentials.');
+  });
+
   it("does not infer auth from an ambient auth key", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     const rt = runtime(dir, { pnpm: true, git: true, docker: true });
@@ -393,8 +465,8 @@ describe("project commands", () => {
   it("does not expose deploy before it is implemented", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     const rt = runtime(dir);
-    await expect(main(["deploy"], rt)).resolves.toBe(1);
-    expect(rt.out.error).toHaveBeenCalledWith(expect.stringContaining('Unknown command "deploy"'));
+    await expect(main(["deploy"], rt)).resolves.toBe(2);
+    expect(rt.out.error).toHaveBeenCalledWith(expect.stringContaining("error: unrecognized subcommand 'deploy'"));
   });
 });
 
@@ -420,6 +492,25 @@ describe("secrets", () => {
     const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(authDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
     expect(credentials.users.alice?.credentials["github.token"]).toBe("secret-value");
     expect(rt.out.log).toHaveBeenCalledWith("Value: <redacted>");
+  });
+
+  it("accepts an explicit local encryption key for secrets set", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const project = join(dir, "project");
+    const authDir = join(project, ".fentaris");
+    await mkdir(authDir, { recursive: true });
+    await writeFile(
+      join(project, "fentaris.json"),
+      JSON.stringify({ name: "demo", packageManager: "pnpm", entrypoint: "src/index.ts", port: 4000, path: "/mcp", authDir: ".fentaris" }),
+    );
+
+    const rt = runtime(project);
+    delete rt.env.FENTARIS_AUTH_KEY;
+    await expect(main(["secrets", "set", "github.token", "--key", "test-key", "--value", "secret-value"], rt)).resolves.toBe(0);
+
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(authDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(credentials.defaults["github.token"]).toBe("secret-value");
+    expect(rt.prompt.text).not.toHaveBeenCalled();
   });
 
   it("lists stored secret references without values", async () => {
