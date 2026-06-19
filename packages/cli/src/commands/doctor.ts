@@ -14,7 +14,7 @@ export async function runDoctor(command: CliCommand, runtime: Runtime): Promise<
     runtime.out.log(JSON.stringify({ results }, null, 2));
   } else {
     section(runtime, "Doctor");
-    printHealthResults(runtime, results);
+    printHealthResults(runtime, results, { verbose: command.options.verbose === true });
   }
   if (hasFailure(results) || (command.options.strict === true && hasWarning(results))) {
     throw new Error("Doctor reported issues.");

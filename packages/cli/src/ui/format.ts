@@ -24,6 +24,10 @@ export const style = {
   fail: (value: string) => `${color.red}✗ ${value}${color.reset}`,
 };
 
+export type PrintHealthOptions = {
+  verbose?: boolean;
+};
+
 export function section(runtime: Runtime, title: string): void {
   runtime.out.log("");
   runtime.out.log(`${style.heading(title)}:`);
@@ -33,21 +37,29 @@ export function printBanner(runtime: Runtime): void {
   runtime.out.log(`${style.brand("Fentaris")} ${style.hint("MCP proxy toolkit")}`);
 }
 
-export function printHealthResults(runtime: Runtime, results: HealthResult[]): void {
-  const groups = Array.from(new Set(results.map((result) => result.group)));
-  for (const groupName of groups) {
-    runtime.out.log(`  ${style.label(groupName)}`);
-    for (const result of results.filter((item) => item.group === groupName)) {
-      runtime.out.log(`    ${marker(result.status)} ${result.label} ${style.hint(result.detail)}`);
-      if (result.hint) {
-        runtime.out.log(`      ${style.hint(result.hint)}`);
-      }
-    }
+export function printHealthResults(runtime: Runtime, results: HealthResult[], options: PrintHealthOptions = {}): void {
+  const verbose = options.verbose === true;
+  const passes = results.filter((result) => result.status === "pass");
+  const warnings = results.filter((result) => result.status === "warn");
+  const failures = results.filter((result) => result.status === "fail");
+  const issues = results.filter((result) => result.status !== "pass");
+
+  runtime.out.log(`  ${healthSummary(passes.length, warnings.length, failures.length)}`);
+
+  if (issues.length > 0) {
+    runtime.out.log("");
+    runtime.out.log(`  ${style.label("Issues")}`);
+    printHealthResultGroup(runtime, issues, "    ");
   }
 
-  const failCount = results.filter((result) => result.status === "fail").length;
-  const warnCount = results.filter((result) => result.status === "warn").length;
-  runtime.out.log(`  ${summary(results.length - failCount - warnCount, warnCount, failCount)}`);
+  if (verbose && passes.length > 0) {
+    runtime.out.log("");
+    runtime.out.log(`  ${style.label("Passed")}`);
+    printHealthResultGroup(runtime, passes, "    ");
+  } else if (!verbose && passes.length > 0 && issues.length > 0) {
+    runtime.out.log("");
+    runtime.out.log(`  ${style.hint("Re-run with --verbose to list passed checks.")}`);
+  }
 }
 
 export function nextSteps(steps: string[]): string {
@@ -161,23 +173,48 @@ function findCommandSpec(path: string[]): CliCommandSpec {
   return spec;
 }
 
-function marker(status: HealthStatus): string {
-  if (status === "pass") {
-    return style.pass("");
+function printHealthResultGroup(runtime: Runtime, results: HealthResult[], indent: string): void {
+  const groups = Array.from(new Set(results.map((result) => result.group)));
+  for (const groupName of groups) {
+    if (groups.length > 1) {
+      runtime.out.log(`${indent}${style.label(groupName)}`);
+    }
+    const lineIndent = groups.length > 1 ? `${indent}  ` : indent;
+    for (const result of results.filter((item) => item.group === groupName)) {
+      printHealthResultLine(runtime, result, lineIndent);
+    }
   }
-  if (status === "warn") {
-    return style.warn("");
-  }
-  return style.fail("");
 }
 
-function summary(pass: number, warn: number, fail: number): string {
-  const parts = [style.pass(`${pass} pass`)];
-  if (warn > 0) {
-    parts.push(style.warn(`${warn} warn`));
+function printHealthResultLine(runtime: Runtime, result: HealthResult, indent: string): void {
+  runtime.out.log(`${indent}${marker(result.status)} ${result.label} ${style.hint(result.detail)}`);
+  if (result.hint) {
+    runtime.out.log(`${indent}  ${style.hint(`→ ${result.hint}`)}`);
   }
+}
+
+function marker(status: HealthStatus): string {
+  if (status === "pass") {
+    return `${color.green}✓${color.reset}`;
+  }
+  if (status === "warn") {
+    return `${color.yellow}!${color.reset}`;
+  }
+  return `${color.red}✗${color.reset}`;
+}
+
+function healthSummary(pass: number, warn: number, fail: number): string {
+  if (fail === 0 && warn === 0) {
+    return style.pass(`All checks passed (${pass})`);
+  }
+
+  const parts: string[] = [];
   if (fail > 0) {
-    parts.push(style.fail(`${fail} fail`));
+    parts.push(style.fail(`${fail} failed`));
   }
-  return `Summary ${parts.join("  ")}`;
+  if (warn > 0) {
+    parts.push(style.warn(`${warn} warning${warn === 1 ? "" : "s"}`));
+  }
+  parts.push(style.hint(`${pass} passed`));
+  return parts.join(", ");
 }

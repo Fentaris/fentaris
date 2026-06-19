@@ -27,13 +27,13 @@ type ConfigValidation = {
 
 export async function getDoctorResults(runtime: Runtime, options: boolean | DoctorOptions = {}): Promise<HealthResult[]> {
   const normalized = normalizeDoctorOptions(options);
+  const project = await discoverProjectForDoctor(runtime.cwd);
   const results: HealthResult[] = [
-    ...environmentResults(runtime),
+    ...environmentResults(runtime, project.discovery?.config.packageManager),
     await writableResult(runtime.cwd),
     await cliDirectoryResult(runtime.cwd),
   ];
 
-  const project = await discoverProjectForDoctor(runtime.cwd);
   results.push(project.result);
   results.push(...(project.validationResults ?? []));
 
@@ -122,7 +122,7 @@ function normalizeDoctorOptions(options: boolean | DoctorOptions): Required<Doct
   };
 }
 
-function environmentResults(runtime: Runtime): HealthResult[] {
+function environmentResults(runtime: Runtime, configuredPackageManager?: PackageManager): HealthResult[] {
   return [
     {
       group: "Environment",
@@ -130,16 +130,7 @@ function environmentResults(runtime: Runtime): HealthResult[] {
       status: Number(process.versions.node.split(".")[0]) >= 20 ? "pass" : "fail",
       detail: `Detected ${process.versions.node}; Fentaris requires Node 20 or newer.`,
     },
-    ...supportedPackageManagers.map((manager): HealthResult => {
-      const present = runtime.probe(manager, ["--version"]);
-      return {
-        group: "Environment",
-        label: manager,
-        status: present ? "pass" : "warn",
-        detail: present ? "Available" : "Not found",
-        hint: present ? undefined : `Install ${manager} or use a package manager that is available locally.`,
-      };
-    }),
+    ...packageManagerResults(runtime, configuredPackageManager),
     {
       group: "Environment",
       label: "git",
@@ -153,6 +144,28 @@ function environmentResults(runtime: Runtime): HealthResult[] {
       detail: runtime.probe("docker", ["--version"]) ? "Available" : "Optional for future container workflows.",
     },
   ];
+}
+
+function packageManagerResults(runtime: Runtime, configuredPackageManager?: PackageManager): HealthResult[] {
+  if (configuredPackageManager) {
+    const present = runtime.probe(configuredPackageManager, ["--version"]);
+    return [{
+      group: "Environment",
+      label: configuredPackageManager,
+      status: present ? "pass" : "fail",
+      detail: present ? "Available" : `Required by fentaris.json but not found.`,
+      hint: present ? undefined : `Install ${configuredPackageManager} or update packageManager in fentaris.json.`,
+    }];
+  }
+
+  const available = supportedPackageManagers.filter((manager) => runtime.probe(manager, ["--version"]));
+  return [{
+    group: "Environment",
+    label: "package manager",
+    status: available.length > 0 ? "pass" : "fail",
+    detail: available.length > 0 ? `Available: ${available.join(", ")}` : "No supported package manager found.",
+    hint: available.length === 0 ? `Install one of: ${supportedPackageManagers.join(", ")}` : undefined,
+  }];
 }
 
 async function discoverProjectForDoctor(fromDir: string): Promise<{ result: HealthResult; discovery?: ProjectDiscovery; validationResults?: HealthResult[] }> {
@@ -224,15 +237,21 @@ async function discoverProjectForDoctor(fromDir: string): Promise<{ result: Heal
 
 async function projectDiscoveryResults(project: ProjectDiscovery): Promise<HealthResult[]> {
   const entrypointPath = path.join(project.root, project.config.entrypoint);
-  const generatedFiles = [
+  const scaffoldFiles = [
     "package.json",
     "tsconfig.json",
     ".gitignore",
     "README.md",
     project.config.entrypoint,
   ];
+  const missing: string[] = [];
+  for (const file of scaffoldFiles) {
+    if (!(await exists(path.join(project.root, file)))) {
+      missing.push(file);
+    }
+  }
 
-  const results: HealthResult[] = [
+  return [
     {
       group: "Project",
       label: "config file",
@@ -247,21 +266,14 @@ async function projectDiscoveryResults(project: ProjectDiscovery): Promise<Healt
       detail: project.config.entrypoint,
       hint: await exists(entrypointPath) ? undefined : "Create the configured entrypoint or update fentaris.json.",
     },
-  ];
-
-  for (const file of generatedFiles) {
-    const filePath = path.join(project.root, file);
-    const present = await exists(filePath);
-    results.push({
+    {
       group: "Project",
-      label: file,
-      status: present ? "pass" : "warn",
-      detail: present ? "Found" : "Missing",
-      hint: present ? undefined : "Generated projects are expected to include this file.",
-    });
-  }
-
-  return results;
+      label: "scaffold files",
+      status: missing.length === 0 ? "pass" : "warn",
+      detail: missing.length === 0 ? "All expected files present." : `Missing: ${missing.join(", ")}`,
+      hint: missing.length === 0 ? undefined : "Generated projects are expected to include these files.",
+    },
+  ];
 }
 
 async function configResults(project: ProjectDiscovery): Promise<ConfigValidation> {
