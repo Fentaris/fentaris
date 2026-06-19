@@ -1,5 +1,11 @@
 # @fentaris/core
 
+## 0.6.1
+
+### Patch Changes
+
+- 97ed1cb: Load runtime port and path defaults from the nearest project `fentaris.json` when starting an app without explicit options.
+
 ## 0.6.0
 
 ### Minor Changes
