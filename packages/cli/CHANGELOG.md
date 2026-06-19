@@ -1,5 +1,11 @@
 # @fentaris/cli
 
+## 0.3.1
+
+### Patch Changes
+
+- 4b49d11: Add root-level help and version flags.
+
 ## 0.3.0
 
 ### Minor Changes
