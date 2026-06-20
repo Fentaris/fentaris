@@ -83,11 +83,12 @@ export const cliSpec: CliCommandSpec = {
       name: "init",
       path: ["init"],
       description: "Create a new Fentaris project.",
-      details: ["Creates a project template, installs dependencies unless disabled, initializes git, and runs diagnostics."],
+      details: ["Creates a project template, installs dependencies unless disabled, optionally initializes git, and runs diagnostics."],
       usage: "fentaris init [OPTIONS] [project-name]",
       arguments: [{ name: "project-name", description: "Directory and package name for the new project." }],
       options: [
         { name: "skip-install", description: "Skip dependency installation." },
+        { name: "skip-git", description: "Skip git repository initialization." },
         { name: "port", valueName: "PORT", description: "Port written to fentaris.json. [default: 4000]" },
         { name: "path", valueName: "PATH", description: "MCP route path written to fentaris.json. [default: /mcp]" },
         { name: "help", short: "h", description: "Print help" },
