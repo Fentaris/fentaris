@@ -1,5 +1,12 @@
 # @fentaris/cli
 
+## 0.4.1
+
+### Patch Changes
+
+- 41ef29b: Add clearer ANSI coloring to CLI help, error, command, option, and diagnostic output.
+- 5579295: Show compact doctor and check output with a summary line and issues only by default, add `--verbose`, and check only the configured package manager instead of every supported manager.
+
 ## 0.4.0
 
 ### Minor Changes
