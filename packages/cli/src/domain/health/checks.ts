@@ -134,8 +134,8 @@ function environmentResults(runtime: Runtime, configuredPackageManager?: Package
     {
       group: "Environment",
       label: "git",
-      status: runtime.probe("git", ["--version"]) ? "pass" : "fail",
-      detail: runtime.probe("git", ["--version"]) ? "Available" : "Required for project initialization.",
+      status: runtime.probe("git", ["--version"]) ? "pass" : "warn",
+      detail: runtime.probe("git", ["--version"]) ? "Available" : "Optional for project initialization and repository checks.",
     },
     {
       group: "Environment",

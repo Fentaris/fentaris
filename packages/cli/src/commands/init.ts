@@ -38,8 +38,14 @@ export async function runInit(command: CliCommand, runtime: Runtime): Promise<vo
   }
 
   section(runtime, "Git");
-  await runtime.runner("git", ["init"], { cwd: targetDir, stdio: "ignore" });
-  runtime.out.log(`  ${style.pass("Initialized git repository")}`);
+  if (command.options["skip-git"] === true) {
+    runtime.out.log(`  ${style.warn("Skipped git initialization by request.")}`);
+  } else if (runtime.probe("git", ["--version"])) {
+    await runtime.runner("git", ["init"], { cwd: targetDir, stdio: "ignore" });
+    runtime.out.log(`  ${style.pass("Initialized git repository")}`);
+  } else {
+    runtime.out.log(`  ${style.warn("Skipped git initialization because git was not found.")}`);
+  }
 
   section(runtime, "Doctor");
   const doctorResults = await getDoctorResults({ ...runtime, cwd: targetDir }, false);

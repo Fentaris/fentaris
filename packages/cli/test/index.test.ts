@@ -237,9 +237,12 @@ describe("project template", () => {
     expect(rendered.files[".gitignore"]).toContain(".fentaris/");
     expect(rendered.files[".gitignore"]).toContain("!.fentaris/secrets.manifest.json");
     expect(rendered.files["README.md"]).toContain("Quick start");
+    expect(rendered.files["README.md"]).not.toContain("demo user");
+    expect(rendered.files["README.md"]).not.toContain("Secrets workflow");
     expect(rendered.files["src/index.ts"]).toContain("https://mcp.specification.website/mcp");
     expect(rendered.files["src/index.ts"]).toContain("app.mcp(");
-    expect(rendered.files["src/index.ts"]).toContain('user: { id: "demo" }');
+    expect(rendered.files["src/index.ts"]).toContain("const app = fentaris();");
+    expect(rendered.files["src/index.ts"]).not.toContain("user:");
     expect(rendered.files["src/index.ts"]).not.toContain("credentialJson");
     expect(rendered.files["src/index.ts"]).not.toContain("policy(");
     expect(rendered.files["src/index.ts"]).not.toContain("profiler()");
@@ -269,7 +272,7 @@ describe("project template", () => {
 });
 
 describe("project commands", () => {
-  it("initializes a project with dry-run install and git commands", async () => {
+  it("initializes a project with dry-run install and git when available", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     const rt = runtime(dir, { pnpm: true, git: true, docker: false });
 
@@ -278,6 +281,24 @@ describe("project commands", () => {
     const config = JSON.parse(await readFile(join(dir, "demo", "fentaris.json"), "utf8")) as { name: string };
     expect(config.name).toBe("demo");
     expect(rt.calls.some((call) => call.command === "git" && call.args[0] === "init")).toBe(true);
+  });
+
+  it("skips git initialization when requested", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: false });
+
+    await expect(main(["init", "demo", "--skip-install", "--skip-git"], rt)).resolves.toBe(0);
+
+    expect(rt.calls.some((call) => call.command === "git" && call.args[0] === "init")).toBe(false);
+  });
+
+  it("skips git initialization when git is unavailable", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, git: false, docker: false });
+
+    await expect(main(["init", "demo", "--skip-install"], rt)).resolves.toBe(0);
+
+    expect(rt.calls.some((call) => call.command === "git" && call.args[0] === "init")).toBe(false);
   });
 
   it("discovers projects from nested directories", async () => {
