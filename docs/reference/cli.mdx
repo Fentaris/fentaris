@@ -44,8 +44,9 @@ Options:
 * `--port <port>` - set the generated proxy port. Default: `4000`.
 * `--path <path>` - set the generated MCP endpoint path. Default: `/mcp`.
 * `--skip-install` - create files without running package installation.
+* `--skip-git` - create files without initializing a git repository.
 
-`init` writes `fentaris.json`, `src/index.ts`, package scripts, TypeScript config, `.gitignore`, and a README.
+`init` writes `fentaris.json`, `src/index.ts`, package scripts, TypeScript config, `.gitignore`, and a README. It initializes a git repository when git is available unless `--skip-git` is passed.
 
 ### `fentaris dev`
 
