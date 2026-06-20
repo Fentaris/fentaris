@@ -16,13 +16,12 @@ export function defaultRuntime(): Runtime {
 }
 
 function createPrompt(): Prompt {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
   return {
     async text(question, options = {}) {
       if (options.secret === true) {
-        return askSecret(rl, question, options.defaultValue);
+        return askSecret(question, options.defaultValue);
       }
-      const answer = await rl.question(formatTextQuestion(question, options));
+      const answer = await askLine(formatTextQuestion(question, options));
       return answer.trim() || options.defaultValue || "";
     },
     async select(question, choices) {
@@ -31,7 +30,7 @@ function createPrompt(): Prompt {
         const marker = index === 0 ? style.command("›") : " ";
         console.log(`  ${marker} ${style.option(String(index + 1).padStart(2))}. ${choice}`);
       });
-      const answer = await rl.question(`${style.hint("Choose by number or exact label")} ${style.command("›")} `);
+      const answer = await askLine(`${style.hint("Choose by number or exact label")} ${style.command("›")} `);
       const trimmed = answer.trim();
       const selectedByNumber = choices[Number(trimmed) - 1];
       const selected = selectedByNumber ?? choices.find((choice) => choice === trimmed);
@@ -41,12 +40,10 @@ function createPrompt(): Prompt {
       return selected;
     },
     async confirm(question) {
-      const answer = await rl.question(`${question} ${style.hint("[y/N]")} `);
+      const answer = await askLine(`${question} ${style.hint("[y/N]")} `);
       return answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes";
     },
-    close() {
-      rl.close();
-    },
+    close() {},
   };
 }
 
@@ -55,9 +52,19 @@ function formatTextQuestion(question: string, options: { secret?: boolean; defau
   return `${question}${suffix}: ${style.command("›")} `;
 }
 
-async function askSecret(rl: ReturnType<typeof createInterface>, question: string, defaultValue?: string): Promise<string> {
+async function askLine(question: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    process.stdin.resume();
+    return await rl.question(question);
+  } finally {
+    rl.close();
+  }
+}
+
+async function askSecret(question: string, defaultValue?: string): Promise<string> {
   if (!process.stdin.isTTY || !process.stdout.isTTY || typeof process.stdin.setRawMode !== "function") {
-    const answer = await rl.question(formatTextQuestion(question, { defaultValue }));
+    const answer = await askLine(formatTextQuestion(question, { defaultValue }));
     return answer.trim() || defaultValue || "";
   }
 
@@ -65,11 +72,11 @@ async function askSecret(rl: ReturnType<typeof createInterface>, question: strin
     let answer = "";
     const input = process.stdin;
     const output = process.stdout;
+    const wasRaw = input.isRaw === true;
 
     const cleanup = () => {
       input.off("keypress", onKeypress);
-      input.setRawMode(false);
-      input.pause();
+      input.setRawMode(wasRaw);
     };
     const finish = () => {
       cleanup();

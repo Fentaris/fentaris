@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile as execFileWithCallback, type SpawnOptions } from "node:child_process";
+import { PassThrough, Writable } from "node:stream";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it, vi } from "vitest";
@@ -18,6 +19,7 @@ import {
   type Prompt,
   type Runtime,
 } from "../src/index.js";
+import { defaultRuntime } from "../src/platform/runtime.js";
 import { cliVersion } from "../src/shared/constants.js";
 
 const execFile = promisify(execFileWithCallback);
@@ -29,6 +31,52 @@ function prompt(values: string[] = [], selections: string[] = []): Prompt {
     confirm: vi.fn(async () => true),
     close: vi.fn(),
   };
+}
+
+class FakeTtyInput extends PassThrough {
+  isTTY = true;
+  isRaw = false;
+  pauseCalls = 0;
+  rawModeCalls: boolean[] = [];
+
+  setRawMode(mode: boolean): this {
+    this.isRaw = mode;
+    this.rawModeCalls.push(mode);
+    return this;
+  }
+
+  override pause(): this {
+    this.pauseCalls += 1;
+    return super.pause() as this;
+  }
+}
+
+class FakeTtyOutput extends Writable {
+  isTTY = true;
+  columns = 80;
+  private readonly chunks: string[] = [];
+
+  get text(): string {
+    return this.chunks.join("");
+  }
+
+  override _write(chunk: Buffer | string, _encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
+    this.chunks.push(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : chunk);
+    callback();
+  }
+}
+
+async function withFakeProcessIo<T>(input: FakeTtyInput, output: FakeTtyOutput, run: () => Promise<T>): Promise<T> {
+  const stdin = process.stdin;
+  const stdout = process.stdout;
+  Object.defineProperty(process, "stdin", { configurable: true, value: input });
+  Object.defineProperty(process, "stdout", { configurable: true, value: output });
+  try {
+    return await run();
+  } finally {
+    Object.defineProperty(process, "stdin", { configurable: true, value: stdin });
+    Object.defineProperty(process, "stdout", { configurable: true, value: stdout });
+  }
 }
 
 async function writeHealthyProject(root: string, authDirectory = ".fentaris"): Promise<void> {
@@ -79,6 +127,34 @@ function runtime(cwd: string, probes: Record<string, boolean> = {}): Runtime & {
     calls,
   };
 }
+
+describe("default runtime prompts", () => {
+  it("masks TTY secret input and accepts a follow-up confirmation", async () => {
+    const input = new FakeTtyInput();
+    const output = new FakeTtyOutput();
+
+    await withFakeProcessIo(input, output, async () => {
+      const rt = defaultRuntime();
+
+      const secret = rt.prompt.text("Credential value", { secret: true });
+      input.write("xyz\r");
+      await expect(secret).resolves.toBe("xyz");
+
+      const secretOutput = output.text;
+      expect(secretOutput).toContain("***");
+      expect(secretOutput).not.toContain("x");
+      expect(secretOutput).not.toContain("y");
+      expect(secretOutput).not.toContain("z");
+      expect(input.pauseCalls).toBe(0);
+      expect(input.rawModeCalls).toEqual([true, false]);
+
+      const confirmed = rt.prompt.confirm("Store this credential?");
+      input.write("yes\n");
+      await expect(confirmed).resolves.toBe(true);
+      rt.prompt.close();
+    });
+  });
+});
 
 describe("command routing helpers", () => {
   it("parses nested commands and options", () => {
