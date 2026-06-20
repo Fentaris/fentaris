@@ -99,13 +99,16 @@ Validate the project offline, run the generated project's `build` script, and wr
 fentaris build
 ```
 
-### `fentaris secrets set <reference>`
+### `fentaris secrets set [reference]`
 
 Store a secret in the local encrypted credential store.
 
 ```bash theme={null}
+fentaris secrets set
 fentaris secrets set github.token --user admin
 ```
+
+When `reference` or `--value` is omitted, the command walks through an interactive setup: pick a manifest reference, choose `default`, `user`, or `group` scope, enter the hidden value, review the redacted summary, and confirm before anything is written.
 
 Options:
 

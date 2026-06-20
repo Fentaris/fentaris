@@ -560,7 +560,10 @@ describe("secrets", () => {
 
     const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(authDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
     expect(credentials.users.alice?.credentials["github.token"]).toBe("secret-value");
-    expect(rt.out.log).toHaveBeenCalledWith("Value: <redacted>");
+    const output = vi.mocked(rt.out.log).mock.calls.flat().join("\n");
+    expect(output).toContain("Review");
+    expect(output).toContain("Value: <redacted>");
+    expect(rt.prompt.confirm).toHaveBeenCalledWith("Store this credential?");
   });
 
   it("accepts an explicit local encryption key for secrets set", async () => {
@@ -602,7 +605,22 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     expect(credentials.users.alice?.credentials["github.token"]).toBe("secret-value");
     expect(rt.prompt.select).toHaveBeenCalledWith("Secret reference", ["github.token (default)", "Add another reference"]);
     expect(rt.prompt.select).toHaveBeenCalledWith("Credential scope", ["default", "user", "group"]);
+    expect(rt.prompt.confirm).toHaveBeenCalledWith("Store this credential?");
     expect(rt.out.log.mock.calls.flat().join("\n")).toContain("Stored github.token as user alice credential.");
+  });
+
+  it("does not store a prompted secret when the review is declined", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+
+    const rt = runtime(dir);
+    rt.prompt.confirm = vi.fn(async () => false);
+
+    await expect(main(["secrets", "set", "github.token"], rt)).resolves.toBe(0);
+
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(credentials.defaults["github.token"]).toBeUndefined();
+    expect(rt.out.log.mock.calls.flat().join("\n")).toContain("Secret was not stored.");
   });
 
   it("lists stored secret references without values", async () => {

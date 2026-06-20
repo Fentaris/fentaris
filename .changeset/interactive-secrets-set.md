@@ -2,4 +2,4 @@
 "@fentaris/cli": minor
 ---
 
-Add an interactive setup flow for `fentaris secrets set` when the secret reference is omitted.
+Add a guided interactive setup flow for `fentaris secrets set` with manifest reference selection, scope selection, a redacted review step, confirmation before writing, and clearer next-step output.
