@@ -22,10 +22,10 @@ import { cliVersion } from "../src/shared/constants.js";
 
 const execFile = promisify(execFileWithCallback);
 
-function prompt(values: string[] = []): Prompt {
+function prompt(values: string[] = [], selections: string[] = []): Prompt {
   return {
     text: vi.fn(async () => values.shift() ?? ""),
-    select: async <T extends string>(_question: string, choices: T[]) => choices[0],
+    select: vi.fn(async <T extends string>(_question: string, choices: T[]) => (selections.shift() as T | undefined) ?? choices[0]),
     confirm: vi.fn(async () => true),
     close: vi.fn(),
   };
@@ -153,7 +153,7 @@ describe("command routing helpers", () => {
     await expect(main(["secrets", "set", "--help"], secretsSet)).resolves.toBe(0);
     const output = vi.mocked(secretsSet.out.log).mock.calls.flat().join("\n");
     expect(output).toContain("Usage: ");
-    expect(output).toContain("fentaris secrets set [OPTIONS] <reference>");
+    expect(output).toContain("fentaris secrets set [OPTIONS] [reference]");
     expect(output).toContain("Arguments:");
   });
 
@@ -170,12 +170,6 @@ describe("command routing helpers", () => {
     const unknownSecretsCommand = runtime("/tmp");
     await expect(main(["secrets", "nope"], unknownSecretsCommand)).resolves.toBe(2);
     expect(vi.mocked(unknownSecretsCommand.out.error).mock.calls.flat().join("\n")).toContain("Usage: fentaris secrets [OPTIONS] [COMMAND]");
-
-    const missingReference = runtime("/tmp");
-    await expect(main(["secrets", "set"], missingReference)).resolves.toBe(2);
-    expect(vi.mocked(missingReference.out.error).mock.calls.flat().join("\n")).toContain(
-      "the following required arguments were not provided: <reference>",
-    );
   });
 
   it("formats runtime errors separately from parser errors", async () => {
@@ -586,6 +580,29 @@ describe("secrets", () => {
     const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(authDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
     expect(credentials.defaults["github.token"]).toBe("-secret-value");
     expect(rt.prompt.text).not.toHaveBeenCalled();
+  });
+
+  it("prompts for reference, scope, and value when secrets set omits the reference", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `import { credential, fentaris, mcp } from "@fentaris/core";
+const app = fentaris({ defaults: { credentials: { "github.token": credential("github.token") } } });
+app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callTool: async () => ({}), close: async () => {} } });
+`,
+    );
+
+    const rt = runtime(dir);
+    rt.prompt = prompt(["alice", "secret-value"], ["github.token (default)", "user"]);
+
+    await expect(main(["secrets", "set"], rt)).resolves.toBe(0);
+
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(credentials.users.alice?.credentials["github.token"]).toBe("secret-value");
+    expect(rt.prompt.select).toHaveBeenCalledWith("Secret reference", ["github.token (default)", "Add another reference"]);
+    expect(rt.prompt.select).toHaveBeenCalledWith("Credential scope", ["default", "user", "group"]);
+    expect(rt.out.log.mock.calls.flat().join("\n")).toContain("Stored github.token as user alice credential.");
   });
 
   it("lists stored secret references without values", async () => {

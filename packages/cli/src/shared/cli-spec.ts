@@ -158,8 +158,8 @@ export const cliSpec: CliCommandSpec = {
           name: "set",
           path: ["secrets", "set"],
           description: "Store a local credential value.",
-          usage: "fentaris secrets set [OPTIONS] <reference>",
-          arguments: [{ name: "reference", required: true, description: "Secret reference to store, for example github.token." }],
+          usage: "fentaris secrets set [OPTIONS] [reference]",
+          arguments: [{ name: "reference", description: "Secret reference to store, for example github.token. If omitted, an interactive prompt is used." }],
           options: [
             { name: "user", valueName: "ID", description: "Store the credential for a user scope." },
             { name: "group", valueName: "ID", description: "Store the credential for a group scope." },
