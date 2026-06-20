@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { manifestFromSecretRefs, manifestsEqual, parseManifest, serializeManifest } from "@fentaris/core";
 import { secretScope } from "../domain/auth/local-store.js";
-import { manifestPath, openLocalSecretsBackend, scopeFromOptions } from "../domain/secrets/backend.js";
+import { credentialsPath, manifestPath, openLocalSecretsBackend, scopeFromOptions } from "../domain/secrets/backend.js";
 import { buildListRows, getSecretsDoctorIssues, loadRequiredReferences } from "../domain/secrets/doctor.js";
 import { scanEntrypointForSecrets } from "../domain/secrets/manifest-scan.js";
 import { discoverProject } from "../domain/project/project.js";
@@ -43,15 +43,31 @@ export async function runSecrets(command: CliCommand, runtime: Runtime): Promise
 async function runSecretsSet(command: CliCommand, reference: string | undefined, runtime: Runtime): Promise<void> {
   const project = await discoverProject(runtime.cwd);
   const input = await resolveSecretsSetInput(command, reference, runtime, project);
+  const storagePath = path.relative(project.root, credentialsPath(project));
   const backend = await openLocalSecretsBackend(project, runtime, input.options);
   if (!(await backend.credentialsExist())) {
     await backend.initEmpty();
   }
-  const value = typeof input.options.value === "string" ? input.options.value : await runtime.prompt.text(`Secret value for ${input.reference}`, { secret: true });
+  const promptedValue = typeof input.options.value !== "string";
+  if (promptedValue) {
+    section(runtime, "Secret value");
+    runtime.out.log(`  ${style.hint(`${input.reference} will be hidden while stored and never printed back.`)}`);
+  }
+  const value = typeof input.options.value === "string" ? input.options.value : await runtime.prompt.text(input.reference, { secret: true });
+  if (promptedValue) {
+    printSecretsSetReview(runtime, input.reference, input.options, storagePath);
+    const confirmed = await runtime.prompt.confirm("Store this credential?");
+    if (!confirmed) {
+      section(runtime, "Secrets");
+      runtime.out.log(`  ${style.warn("Secret was not stored.")}`);
+      return;
+    }
+  }
   await backend.set(input.reference, value, scopeFromOptions(input.options));
   section(runtime, "Secrets");
   runtime.out.log(`  ${style.pass(`Stored ${input.reference} as ${secretScope(input.options)} credential.`)}`);
-  runtime.out.log("Value: <redacted>");
+  runtime.out.log(`  ${style.hint("Value: <redacted>")}`);
+  runtime.out.log(`  ${style.hint("Next:")} ${style.command("fentaris secrets doctor")}`);
 }
 
 async function resolveSecretsSetInput(
@@ -69,11 +85,16 @@ async function resolveSecretsSetInput(
   }
 
   section(runtime, "Secrets setup");
+  runtime.out.log(`  ${style.brand("Fentaris")} ${style.hint("local credential setup")}`);
+  runtime.out.log(`  ${style.hint("Values are encrypted locally and are never printed.")}`);
   const required = await loadRequiredReferences(project);
   const customChoice = "Add another reference";
   let selectedReference = "";
 
   if (required.length > 0) {
+    runtime.out.log("");
+    runtime.out.log(`  ${style.heading("Secret reference")}`);
+    runtime.out.log(`  ${style.hint("Detected from secrets.manifest.json")}`);
     const choices = required.map((entry) => `${entry.ref} (${entry.scope})`);
     const selected = await runtime.prompt.select("Secret reference", [...choices, customChoice]);
     if (selected !== customChoice) {
@@ -94,6 +115,8 @@ async function resolveSecretsSetInput(
   }
 
   if (!hasScopeOption(options)) {
+    runtime.out.log("");
+    runtime.out.log(`  ${style.heading("Credential scope")}`);
     const scope = await runtime.prompt.select("Credential scope", ["default", "user", "group"]);
     if (scope === "user") {
       const user = (await runtime.prompt.text("User id")).trim();
@@ -111,6 +134,19 @@ async function resolveSecretsSetInput(
   }
 
   return { reference: selectedReference, options };
+}
+
+function printSecretsSetReview(runtime: Runtime, reference: string, options: CliOptions, storagePath: string): void {
+  section(runtime, "Review");
+  const rows = [
+    ["reference", reference],
+    ["scope", secretScope(options)],
+    ["storage", storagePath],
+    ["value", "<redacted>"],
+  ] as const;
+  for (const [label, value] of rows) {
+    runtime.out.log(`  ${style.label(label.padEnd(10))} ${style.hint("│")} ${value}`);
+  }
 }
 
 function hasScopeOption(options: CliOptions): boolean {

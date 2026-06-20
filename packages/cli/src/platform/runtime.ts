@@ -1,6 +1,8 @@
 import { spawn, spawnSync, type SpawnOptions } from "node:child_process";
+import { emitKeypressEvents } from "node:readline";
 import { createInterface } from "node:readline/promises";
 import type { CommandResult, Prompt, Runtime } from "../shared/types.js";
+import { style } from "../ui/format.js";
 
 export function defaultRuntime(): Runtime {
   return {
@@ -14,28 +16,110 @@ export function defaultRuntime(): Runtime {
 }
 
 function createPrompt(): Prompt {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
   return {
     async text(question, options = {}) {
-      const answer = await rl.question(`${question}${options.defaultValue ? ` (${options.defaultValue})` : ""}: `);
+      if (options.secret === true) {
+        return askSecret(question, options.defaultValue);
+      }
+      const answer = await askLine(formatTextQuestion(question, options));
       return answer.trim() || options.defaultValue || "";
     },
     async select(question, choices) {
-      const answer = await rl.question(`${question} (${choices.join("/")}): `);
-      const selected = choices.find((choice) => choice === answer.trim());
+      console.log(style.heading(question));
+      choices.forEach((choice, index) => {
+        const marker = index === 0 ? style.command("›") : " ";
+        console.log(`  ${marker} ${style.option(String(index + 1).padStart(2))}. ${choice}`);
+      });
+      const answer = await askLine(`${style.hint("Choose by number or exact label")} ${style.command("›")} `);
+      const trimmed = answer.trim();
+      const selectedByNumber = choices[Number(trimmed) - 1];
+      const selected = selectedByNumber ?? choices.find((choice) => choice === trimmed);
       if (!selected) {
         throw new Error(`Expected one of: ${choices.join(", ")}`);
       }
       return selected;
     },
     async confirm(question) {
-      const answer = await rl.question(`${question} [y/N]: `);
+      const answer = await askLine(`${question} ${style.hint("[y/N]")} `);
       return answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes";
     },
-    close() {
-      rl.close();
-    },
+    close() {},
   };
+}
+
+function formatTextQuestion(question: string, options: { secret?: boolean; defaultValue?: string }): string {
+  const suffix = options.defaultValue ? ` ${style.hint(`(${options.defaultValue})`)}` : "";
+  return `${question}${suffix}: ${style.command("›")} `;
+}
+
+async function askLine(question: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    process.stdin.resume();
+    return await rl.question(question);
+  } finally {
+    rl.close();
+  }
+}
+
+async function askSecret(question: string, defaultValue?: string): Promise<string> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY || typeof process.stdin.setRawMode !== "function") {
+    const answer = await askLine(formatTextQuestion(question, { defaultValue }));
+    return answer.trim() || defaultValue || "";
+  }
+
+  return new Promise((resolve, reject) => {
+    let answer = "";
+    const input = process.stdin;
+    const output = process.stdout;
+    const wasRaw = input.isRaw === true;
+
+    const cleanup = () => {
+      input.off("keypress", onKeypress);
+      input.setRawMode(wasRaw);
+    };
+    const finish = () => {
+      cleanup();
+      output.write("\n");
+      resolve(answer.trim() || defaultValue || "");
+    };
+    const cancel = () => {
+      cleanup();
+      output.write("^C\n");
+      reject(new Error("Prompt cancelled."));
+    };
+    const erase = () => {
+      if (answer.length === 0) {
+        return;
+      }
+      answer = answer.slice(0, -1);
+      output.write("\b \b");
+    };
+    const onKeypress = (character: string, key: { ctrl?: boolean; meta?: boolean; name?: string }) => {
+      if (key.ctrl && key.name === "c") {
+        cancel();
+        return;
+      }
+      if (key.name === "return" || key.name === "enter") {
+        finish();
+        return;
+      }
+      if (key.name === "backspace") {
+        erase();
+        return;
+      }
+      if (character && !key.ctrl && !key.meta) {
+        answer += character;
+        output.write("*");
+      }
+    };
+
+    output.write(`${question}${defaultValue ? ` ${style.hint(`(${defaultValue})`)}` : ""}: `);
+    emitKeypressEvents(input);
+    input.setRawMode(true);
+    input.resume();
+    input.on("keypress", onKeypress);
+  });
 }
 
 function runProcess(command: string, args: string[], options: SpawnOptions = {}): Promise<CommandResult> {
