@@ -1,5 +1,11 @@
 # @fentaris/cli
 
+## 0.5.1
+
+### Patch Changes
+
+- a6cdb20: Release the interactive secrets prompt fixes shipped from dev, including isolated masked input handling, updated runtime prompt plumbing, and CLI docs/test coverage.
+
 ## 0.5.0
 
 ### Minor Changes
