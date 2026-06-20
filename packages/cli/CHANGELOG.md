@@ -1,5 +1,45 @@
 # @fentaris/cli
 
+## 0.5.0
+
+### Minor Changes
+
+- ee6cee0: Add a guided interactive setup flow for `fentaris secrets set` with manifest reference selection, scope selection, a redacted review step, confirmation before writing, and clearer next-step output.
+
+### Patch Changes
+
+- 9c3b15c: Make git initialization optional during `fentaris init` and add `--skip-git` for file-only scaffolding.
+
+## 0.4.1
+
+### Patch Changes
+
+- 41ef29b: Add clearer ANSI coloring to CLI help, error, command, option, and diagnostic output.
+- 5579295: Show compact doctor and check output with a summary line and issues only by default, add `--verbose`, and check only the configured package manager instead of every supported manager.
+
+## 0.4.0
+
+### Minor Changes
+
+- 7f80b34: Remove the legacy `fentaris auth` command group.
+
+  Use `fentaris init` to create local credentials and `fentaris secrets` commands to manage encrypted credentials.
+
+### Patch Changes
+
+- a2dd60f: Allow CLI option values supplied after value-taking flags or with `--option=value` to start with a dash.
+- f0ab65b: Point doctor guidance for missing encrypted credentials to `fentaris secrets set` instead of project initialization.
+- fdc7b15: Align CLI help and error output with contextual command usage, parser-style syntax errors, and distinct exit codes.
+- Updated dependencies [8a5a563]
+  - @fentaris/core@0.7.0
+
+## 0.3.3
+
+### Patch Changes
+
+- Updated dependencies [e308af0]
+  - @fentaris/core@0.6.2
+
 ## 0.3.2
 
 ### Patch Changes

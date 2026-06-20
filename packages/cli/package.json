@@ -1,6 +1,6 @@
 {
   "name": "@fentaris/cli",
-  "version": "0.3.2",
+  "version": "0.5.0",
   "description": "Fentaris MCP Proxy - CLI",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
