@@ -1,5 +1,15 @@
 # @fentaris/cli
 
+## 0.5.0
+
+### Minor Changes
+
+- ee6cee0: Add an interactive setup flow for `fentaris secrets set` when the secret reference is omitted.
+
+### Patch Changes
+
+- 9c3b15c: Make git initialization optional during `fentaris init` and add `--skip-git` for file-only scaffolding.
+
 ## 0.4.1
 
 ### Patch Changes
