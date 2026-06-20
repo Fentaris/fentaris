@@ -72,6 +72,7 @@ async function resolveSecretsSetInput(
   const required = await loadRequiredReferences(project);
   const customChoice = "Add another reference";
   let selectedReference = "";
+  let selectedManifestEntry = false;
 
   if (required.length > 0) {
     const choices = required.map((entry) => `${entry.ref} (${entry.scope})`);
@@ -80,6 +81,7 @@ async function resolveSecretsSetInput(
       const index = choices.indexOf(selected);
       const entry = required[index];
       selectedReference = entry?.ref ?? "";
+      selectedManifestEntry = Boolean(entry);
       if (!hasScopeOption(options) && entry) {
         applyScopeLabel(options, entry.scope);
       }
@@ -93,7 +95,7 @@ async function resolveSecretsSetInput(
     throw new Error("Secret reference is required.");
   }
 
-  if (!hasScopeOption(options)) {
+  if (!selectedManifestEntry && !hasScopeOption(options)) {
     const scope = await runtime.prompt.select("Credential scope", ["default", "user", "group"]);
     if (scope === "user") {
       const user = (await runtime.prompt.text("User id")).trim();

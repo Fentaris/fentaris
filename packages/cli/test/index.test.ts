@@ -582,7 +582,7 @@ describe("secrets", () => {
     expect(rt.prompt.text).not.toHaveBeenCalled();
   });
 
-  it("prompts for reference, scope, and value when secrets set omits the reference", async () => {
+  it("uses the selected manifest scope when secrets set omits the reference", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
     await writeFile(
@@ -594,7 +594,30 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     );
 
     const rt = runtime(dir);
-    rt.prompt = prompt(["alice", "secret-value"], ["github.token (default)", "user"]);
+    rt.prompt = prompt(["secret-value"], ["github.token (default)"]);
+
+    await expect(main(["secrets", "set"], rt)).resolves.toBe(0);
+
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(credentials.defaults["github.token"]).toBe("secret-value");
+    expect(rt.prompt.select).toHaveBeenCalledWith("Secret reference", ["github.token (default)", "Add another reference"]);
+    expect(rt.prompt.select).not.toHaveBeenCalledWith("Credential scope", ["default", "user", "group"]);
+    expect(rt.out.log.mock.calls.flat().join("\n")).toContain("Stored github.token as default credential.");
+  });
+
+  it("prompts for reference, scope, and value when adding a custom secret reference", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `import { credential, fentaris, mcp } from "@fentaris/core";
+const app = fentaris({ defaults: { credentials: { "github.token": credential("github.token") } } });
+app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callTool: async () => ({}), close: async () => {} } });
+`,
+    );
+
+    const rt = runtime(dir);
+    rt.prompt = prompt(["github.token", "alice", "secret-value"], ["Add another reference", "user"]);
 
     await expect(main(["secrets", "set"], rt)).resolves.toBe(0);
 
