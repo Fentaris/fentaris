@@ -7,7 +7,10 @@ export async function runCheck(command: CliCommand, runtime: Runtime): Promise<v
   const project = await discoverProject(runtime.cwd);
   section(runtime, "Project Check");
   const results = await getProjectCheckResults(project, command.options.offline === true, runtime);
-  printHealthResults(runtime, results);
+  printHealthResults(runtime, results, {
+    verbose: command.options.verbose === true,
+    verboseHint: "self",
+  });
   if (hasFailure(results) || (command.options.strict === true && hasWarning(results))) {
     throw new Error("Project check reported issues.");
   }

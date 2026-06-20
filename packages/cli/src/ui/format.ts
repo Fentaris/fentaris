@@ -6,7 +6,6 @@ const color = {
   yellow: "\u001b[33m",
   red: "\u001b[31m",
   cyan: "\u001b[36m",
-  blue: "\u001b[34m",
   magenta: "\u001b[35m",
   gray: "\u001b[90m",
   bold: "\u001b[1m",
@@ -18,10 +17,19 @@ export const style = {
   heading: (value: string) => `${color.bold}${color.cyan}${value}${color.reset}`,
   label: (value: string) => `${color.bold}${value}${color.reset}`,
   hint: (value: string) => `${color.gray}${value}${color.reset}`,
-  command: (value: string) => `${color.blue}${value}${color.reset}`,
+  command: (value: string) => `${color.green}${value}${color.reset}`,
+  option: (value: string) => `${color.yellow}${value}${color.reset}`,
+  argument: (value: string) => `${color.yellow}${value}${color.reset}`,
+  error: (value: string) => `${color.red}${value}${color.reset}`,
   pass: (value: string) => `${color.green}✓ ${value}${color.reset}`,
   warn: (value: string) => `${color.yellow}! ${value}${color.reset}`,
   fail: (value: string) => `${color.red}✗ ${value}${color.reset}`,
+};
+
+export type PrintHealthOptions = {
+  verbose?: boolean;
+  /** Controls the rerun hint when issues are hidden. Omit to suppress the hint. */
+  verboseHint?: "self" | "doctor" | "check";
 };
 
 export function section(runtime: Runtime, title: string): void {
@@ -33,21 +41,29 @@ export function printBanner(runtime: Runtime): void {
   runtime.out.log(`${style.brand("Fentaris")} ${style.hint("MCP proxy toolkit")}`);
 }
 
-export function printHealthResults(runtime: Runtime, results: HealthResult[]): void {
-  const groups = Array.from(new Set(results.map((result) => result.group)));
-  for (const groupName of groups) {
-    runtime.out.log(`  ${style.label(groupName)}`);
-    for (const result of results.filter((item) => item.group === groupName)) {
-      runtime.out.log(`    ${marker(result.status)} ${result.label} ${style.hint(result.detail)}`);
-      if (result.hint) {
-        runtime.out.log(`      ${style.hint(result.hint)}`);
-      }
-    }
+export function printHealthResults(runtime: Runtime, results: HealthResult[], options: PrintHealthOptions = {}): void {
+  const verbose = options.verbose === true;
+  const passes = results.filter((result) => result.status === "pass");
+  const warnings = results.filter((result) => result.status === "warn");
+  const failures = results.filter((result) => result.status === "fail");
+  const issues = results.filter((result) => result.status !== "pass");
+
+  runtime.out.log(`  ${healthSummary(passes.length, warnings.length, failures.length)}`);
+
+  if (issues.length > 0) {
+    runtime.out.log("");
+    runtime.out.log(`  ${style.label("Issues")}`);
+    printHealthResultGroup(runtime, issues, "    ");
   }
 
-  const failCount = results.filter((result) => result.status === "fail").length;
-  const warnCount = results.filter((result) => result.status === "warn").length;
-  runtime.out.log(`  ${summary(results.length - failCount - warnCount, warnCount, failCount)}`);
+  if (verbose && passes.length > 0) {
+    runtime.out.log("");
+    runtime.out.log(`  ${style.label("Passed")}`);
+    printHealthResultGroup(runtime, passes, "    ");
+  } else if (!verbose && passes.length > 0 && issues.length > 0 && options.verboseHint) {
+    runtime.out.log("");
+    runtime.out.log(`  ${style.hint(verboseRerunHint(options.verboseHint))}`);
+  }
 }
 
 export function nextSteps(steps: string[]): string {
@@ -68,7 +84,7 @@ export function printCommandHelp(runtime: Runtime, path: string[]): void {
   if (spec.details?.length) {
     runtime.out.log("");
   }
-  runtime.out.log(`Usage: ${style.command(spec.usage)}`);
+  runtime.out.log(`Usage: ${spec.usage}`);
   printCommandGroups(runtime, spec);
   printArguments(runtime, spec);
   printOptions(runtime, spec.options ?? []);
@@ -81,7 +97,7 @@ export function printHelp(runtime: Runtime): void {
 
 export function printParseError(runtime: Runtime, message: string, path: string[]): void {
   const spec = findCommandSpec(path);
-  runtime.out.error(`error: ${message}`);
+  runtime.out.error(`error: ${message} ${style.error("✗")}`);
   runtime.out.error("");
   runtime.out.error(`Usage: ${spec.usage}`);
   runtime.out.error("");
@@ -89,7 +105,7 @@ export function printParseError(runtime: Runtime, message: string, path: string[
 }
 
 export function printRuntimeError(runtime: Runtime, error: unknown): void {
-  runtime.out.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+  runtime.out.error(`Error: ${error instanceof Error ? error.message : String(error)} ${style.error("✗")}`);
 }
 
 function printCommandGroups(runtime: Runtime, spec: CliCommandSpec): void {
@@ -97,7 +113,7 @@ function printCommandGroups(runtime: Runtime, spec: CliCommandSpec): void {
     runtime.out.log("");
     runtime.out.log(`${group.title}:`);
     for (const command of group.commands) {
-      runtime.out.log(`  ${command.name.padEnd(12)} ${command.summary}`);
+      runtime.out.log(`  ${style.command(command.name.padEnd(12))} ${style.hint(command.summary)}`);
     }
   }
 }
@@ -111,7 +127,7 @@ function printArguments(runtime: Runtime, spec: CliCommandSpec): void {
   runtime.out.log("Arguments:");
   for (const argument of spec.arguments) {
     const name = argument.required === true ? `<${argument.name}>` : `[${argument.name}]`;
-    runtime.out.log(`  ${name.padEnd(18)} ${argument.description}`);
+    runtime.out.log(`  ${style.argument(name.padEnd(18))} ${style.hint(argument.description)}`);
   }
 }
 
@@ -124,7 +140,7 @@ function printOptions(runtime: Runtime, options: CliOptionSpec[]): void {
   runtime.out.log("Options:");
   for (const option of options) {
     const names = formatOptionNames(option);
-    runtime.out.log(`  ${names.padEnd(28)} ${option.description}`);
+    runtime.out.log(`  ${style.option(names.padEnd(28))} ${style.hint(option.description)}`);
   }
 }
 
@@ -136,7 +152,7 @@ function printEnvironment(runtime: Runtime, spec: CliCommandSpec): void {
   runtime.out.log("");
   runtime.out.log("Environment variables:");
   for (const variable of spec.environment) {
-    runtime.out.log(`  ${variable.name.padEnd(22)} ${variable.description}`);
+    runtime.out.log(`  ${style.option(variable.name.padEnd(22))} ${style.hint(variable.description)}`);
   }
 }
 
@@ -161,23 +177,58 @@ function findCommandSpec(path: string[]): CliCommandSpec {
   return spec;
 }
 
-function marker(status: HealthStatus): string {
-  if (status === "pass") {
-    return style.pass("");
+function printHealthResultGroup(runtime: Runtime, results: HealthResult[], indent: string): void {
+  const groups = Array.from(new Set(results.map((result) => result.group)));
+  for (const groupName of groups) {
+    if (groups.length > 1) {
+      runtime.out.log(`${indent}${style.label(groupName)}`);
+    }
+    const lineIndent = groups.length > 1 ? `${indent}  ` : indent;
+    for (const result of results.filter((item) => item.group === groupName)) {
+      printHealthResultLine(runtime, result, lineIndent);
+    }
   }
-  if (status === "warn") {
-    return style.warn("");
-  }
-  return style.fail("");
 }
 
-function summary(pass: number, warn: number, fail: number): string {
-  const parts = [style.pass(`${pass} pass`)];
-  if (warn > 0) {
-    parts.push(style.warn(`${warn} warn`));
+function printHealthResultLine(runtime: Runtime, result: HealthResult, indent: string): void {
+  runtime.out.log(`${indent}${marker(result.status)} ${result.label} ${style.hint(result.detail)}`);
+  if (result.hint) {
+    runtime.out.log(`${indent}  ${style.hint(`→ ${result.hint}`)}`);
   }
+}
+
+function marker(status: HealthStatus): string {
+  if (status === "pass") {
+    return `${color.green}✓${color.reset}`;
+  }
+  if (status === "warn") {
+    return `${color.yellow}!${color.reset}`;
+  }
+  return `${color.red}✗${color.reset}`;
+}
+
+function healthSummary(pass: number, warn: number, fail: number): string {
+  if (fail === 0 && warn === 0) {
+    return style.pass(`All checks passed (${pass})`);
+  }
+
+  const parts: string[] = [];
   if (fail > 0) {
-    parts.push(style.fail(`${fail} fail`));
+    parts.push(style.fail(`${fail} failed`));
   }
-  return `Summary ${parts.join("  ")}`;
+  if (warn > 0) {
+    parts.push(style.warn(`${warn} warning${warn === 1 ? "" : "s"}`));
+  }
+  parts.push(style.hint(`${pass} passed`));
+  return parts.join(", ");
+}
+
+function verboseRerunHint(hint: NonNullable<PrintHealthOptions["verboseHint"]>): string {
+  if (hint === "self") {
+    return "Re-run with --verbose to list passed checks.";
+  }
+  if (hint === "doctor") {
+    return "Run fentaris doctor --verbose to list passed checks.";
+  }
+  return "Run fentaris check --verbose to list passed checks.";
 }

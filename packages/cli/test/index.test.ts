@@ -139,6 +139,7 @@ describe("command routing helpers", () => {
       expect(output).toContain("Usage: ");
       expect(output).toContain("fentaris [OPTIONS] [COMMAND]");
       expect(output).toContain("Project:");
+      expect(output).toContain("\u001b[32minit");
     }
   });
 
@@ -365,6 +366,37 @@ describe("project commands", () => {
     await expect(main(["check", "--offline"], rt)).resolves.toBe(0);
     await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
     await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
+  });
+
+  it("prints compact doctor output with summary and issues only", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+    vi.mocked(rt.out.log).mockClear();
+
+    await expect(main(["doctor"], rt)).resolves.toBe(0);
+
+    const output = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
+    expect(output).toContain("All checks passed");
+    expect(output).not.toContain("Issues");
+    expect(output).not.toMatch(/\bbun\b/i);
+
+    vi.mocked(rt.out.log).mockClear();
+    rt.probe = vi.fn((command: string) => ({ pnpm: true, git: true, docker: false })[command] ?? false);
+    await expect(main(["doctor"], rt)).resolves.toBe(0);
+
+    const issueOutput = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
+    expect(issueOutput).toContain("1 warning");
+    expect(issueOutput).toContain("Issues");
+    expect(issueOutput).toContain("Docker");
+    expect(issueOutput).not.toContain("Node.js");
+
+    vi.mocked(rt.out.log).mockClear();
+    await expect(main(["doctor", "--verbose"], rt)).resolves.toBe(0);
+
+    const verboseOutput = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
+    expect(verboseOutput).toContain("Passed");
+    expect(verboseOutput).toContain("Node.js");
   });
 
   it("points missing credential stores to secrets set when an auth key is configured", async () => {
