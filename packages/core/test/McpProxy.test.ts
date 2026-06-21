@@ -169,6 +169,10 @@ class CapturingExposureTransport implements ProxyExposureTransport {
   }
 }
 
+function allowAllMcpOperations(): Policy {
+  return Policy.allowAll().mcp("*").allowCapability({ operation: "*", target: "*" });
+}
+
 describe("proxied tool names", () => {
   it("round-trips server and tool names", () => {
     const proxyName = toProxyToolName("github", "create_issue");
@@ -258,6 +262,7 @@ describe("McpProxy", () => {
   it("exposes lifecycle state and idempotent stop behavior", async () => {
     const transport = new MockTransport();
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "github", transport })],
     });
 
@@ -286,7 +291,7 @@ describe("McpProxy", () => {
 
     await proxy.start();
 
-    expect(stderr.mock.calls.flat().join("\n")).toContain("http://localhost:0/configured");
+    expect(stderr.mock.calls.flat().join("\n")).toContain("http://127.0.0.1:0/configured");
     await proxy.stop();
   });
 
@@ -436,6 +441,7 @@ describe("McpProxy", () => {
     const githubTransport = new MockTransport();
     const notionTransport = new MockTransport();
     const proxy = new McpProxy({
+      policy: allowAllMcpOperations(),
       servers: [
         new McpServer({ name: "github", transport: githubTransport }),
         new McpServer({ name: "notion", displayName: "Notion API", transport: notionTransport }),
@@ -453,6 +459,7 @@ describe("McpProxy", () => {
   it("routes namespaced tool calls to the original upstream tool name", async () => {
     const transport = new MockTransport();
     const proxy = new McpProxy({
+      policy: allowAllMcpOperations(),
       servers: [new McpServer({ name: "github", transport })],
     });
 
@@ -472,6 +479,7 @@ describe("McpProxy", () => {
     const githubTransport = new FeatureTransport();
     const notionTransport = new FeatureTransport();
     const proxy = new McpProxy({
+      policy: allowAllMcpOperations(),
       servers: [
         new McpServer({ name: "github", transport: githubTransport }),
         new McpServer({ name: "notion", transport: notionTransport }),
@@ -500,6 +508,7 @@ describe("McpProxy", () => {
   it("routes proxied resource reads and rewrites returned content URIs", async () => {
     const transport = new FeatureTransport();
     const proxy = new McpProxy({
+      policy: allowAllMcpOperations(),
       servers: [new McpServer({ name: "github", transport })],
     });
 
@@ -523,6 +532,7 @@ describe("McpProxy", () => {
 
   it("aggregates resource templates with proxied URI templates", async () => {
     const proxy = new McpProxy({
+      policy: allowAllMcpOperations(),
       servers: [new McpServer({ name: "github", transport: new FeatureTransport() })],
     });
 
@@ -543,6 +553,7 @@ describe("McpProxy", () => {
     const githubTransport = new FeatureTransport();
     const notionTransport = new FeatureTransport();
     const proxy = new McpProxy({
+      policy: allowAllMcpOperations(),
       servers: [
         new McpServer({ name: "github", transport: githubTransport }),
         new McpServer({ name: "notion", transport: notionTransport }),
@@ -568,6 +579,7 @@ describe("McpProxy", () => {
   it("routes proxied prompt get requests to the upstream prompt name", async () => {
     const transport = new FeatureTransport();
     const proxy = new McpProxy({
+      policy: allowAllMcpOperations(),
       servers: [new McpServer({ name: "github", transport })],
     });
 
@@ -589,6 +601,7 @@ describe("McpProxy", () => {
   it("routes completion for proxied prompt and resource-template references", async () => {
     const transport = new FeatureTransport();
     const proxy = new McpProxy({
+      policy: allowAllMcpOperations(),
       servers: [new McpServer({ name: "github", transport })],
     });
 
@@ -682,6 +695,7 @@ describe("McpProxy", () => {
   it("builds capability contexts and dispatches middleware for non-tool operations", async () => {
     const transport = new FeatureTransport();
     const proxy = new McpProxy({
+      policy: allowAllMcpOperations(),
       servers: [new McpServer({ name: "github", transport })],
     });
     const seen: unknown[] = [];
@@ -746,6 +760,7 @@ describe("McpProxy", () => {
   it("lets middleware and operation routes deny non-tool operations before upstream forwarding", async () => {
     const transport = new FeatureTransport();
     const proxy = new McpProxy({
+      policy: allowAllMcpOperations(),
       servers: [new McpServer({ name: "github", transport })],
     });
 
@@ -866,6 +881,7 @@ describe("McpProxy", () => {
     const driver = new MemoryLogDriver();
     const proxy = new McpProxy({
       logger: new Logger({ level: "debug", driver }),
+      policy: Policy.allowAll(),
       user: { id: "user-1" },
       servers: [new McpServer({ name: "github", transport })],
     });
@@ -899,6 +915,7 @@ describe("McpProxy", () => {
     const driver = new MemoryLogDriver();
     const proxy = new McpProxy({
       logger: new Logger({ level: "debug", driver }),
+      policy: Policy.allowAll(),
       user: { id: "user-1" },
       servers: [new McpServer({ name: "github", transport })],
     });
@@ -967,6 +984,7 @@ describe("McpProxy", () => {
     const driver = new MemoryLogDriver();
     const proxy = new McpProxy({
       logger: new Logger({ level: "debug", driver }),
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "notion", transport })],
     });
     const seen: string[] = [];
@@ -998,6 +1016,7 @@ describe("McpProxy", () => {
   it("lets call hooks short-circuit matched calls", async () => {
     const transport = new MockTransport();
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "prod-db", transport })],
     });
 
@@ -1016,6 +1035,7 @@ describe("McpProxy", () => {
 
   it("transforms listed tools with onListTools hooks", async () => {
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "github", transport: new MockTransport() })],
     });
 
@@ -1024,7 +1044,7 @@ describe("McpProxy", () => {
       return [
         ...tools,
         {
-          name: "experimental_tool",
+          name: "github__experimental_tool",
           description: "Only for testers",
           inputSchema: { type: "object" },
         },
@@ -1033,11 +1053,12 @@ describe("McpProxy", () => {
 
     const result = await proxy.listTools(undefined, { id: "beta-user" });
 
-    expect(result.tools.map((tool) => tool.name)).toEqual(["github__create_issue", "experimental_tool"]);
+    expect(result.tools.map((tool) => tool.name)).toEqual(["github__create_issue", "github__experimental_tool"]);
   });
 
   it("injects guidance into successful tool responses", async () => {
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "github", transport: new MockTransport() })],
     });
 
@@ -1063,6 +1084,7 @@ describe("McpProxy", () => {
 
     const transport = new FailingTransport();
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "github", transport })],
     });
 
@@ -1085,6 +1107,7 @@ describe("McpProxy", () => {
   it("lets middleware deny a tool call without touching the upstream", async () => {
     const transport = new MockTransport();
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "prod-db", transport })],
     });
 
@@ -1103,7 +1126,7 @@ describe("McpProxy", () => {
 
   it("registers upstream MCP servers through the non config-first API", async () => {
     const transport = new MockTransport();
-    const app = fentaris();
+    const app = fentaris({ policy: Policy.allowAll() });
     const github = app.mcp({ name: "github", transport });
     const seen: string[] = [];
 
@@ -1525,6 +1548,7 @@ describe("McpProxy", () => {
   it("routes matching public tool patterns in registration order", async () => {
     const transport = new MockTransport();
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "github", transport })],
     });
     const seen: string[] = [];
@@ -1573,6 +1597,7 @@ describe("McpProxy", () => {
     const githubTransport = new MockTransport();
     const notionTransport = new MockTransport();
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [
         new McpServer({ name: "github", transport: githubTransport }),
         new McpServer({ name: "notion", transport: notionTransport }),
@@ -1595,6 +1620,7 @@ describe("McpProxy", () => {
 
   it("emits unified tool events and filtered MCP-scoped events", async () => {
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "github", transport: new MockTransport() })],
     });
     const events: string[] = [];
@@ -1616,6 +1642,7 @@ describe("McpProxy", () => {
 
   it("lets tools:list:after transform listed tools with unified context", async () => {
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "github", transport: new MockTransport() })],
     });
 
@@ -1626,7 +1653,7 @@ describe("McpProxy", () => {
       return [
         ...(tools ?? []),
         {
-          name: "added",
+          name: "github__added",
           inputSchema: { type: "object" },
         },
       ];
@@ -1634,7 +1661,7 @@ describe("McpProxy", () => {
 
     const result = await proxy.listTools();
 
-    expect(result.tools.map((tool) => tool.name)).toEqual(["github__create_issue", "added"]);
+    expect(result.tools.map((tool) => tool.name)).toEqual(["github__create_issue", "github__added"]);
   });
 
   it("bridges session lifecycle events to unified events", async () => {
@@ -1658,6 +1685,7 @@ describe("McpProxy", () => {
 
   it("keeps legacy middleware and call hooks composed with new events", async () => {
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "github", transport: new MockTransport() })],
     });
     const seen: string[] = [];
@@ -1685,6 +1713,7 @@ describe("McpProxy", () => {
   it("continues when middleware returns nothing", async () => {
     const transport = new MockTransport();
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "github", transport })],
     });
 
@@ -1699,6 +1728,7 @@ describe("McpProxy", () => {
   it("returns a tool error for unknown upstream servers", async () => {
     const transport = new MockTransport();
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "github", transport })],
     });
 
@@ -1777,9 +1807,10 @@ describe("McpProxy", () => {
     expect(seen).toEqual(["alice"]);
   });
 
-  it("keeps global MCP servers visible and callable", async () => {
+  it("keeps global MCP servers visible and callable with explicit allow-all policy", async () => {
     const transport = new MockTransport();
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "github", transport })],
     });
 

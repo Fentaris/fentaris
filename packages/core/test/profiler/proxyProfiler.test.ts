@@ -5,6 +5,7 @@ import {
   McpServer,
   InProcessIsolation,
   Logger,
+  Policy,
   toProxyToolName,
   type FentarisTransport,
   type PolicyContract,
@@ -89,7 +90,7 @@ describe("McpProxy profiler integration", () => {
     expect(JSON.stringify(events)).not.toContain("secret-token");
   });
 
-  it("emits policy deny and MCP error events for denied calls", async () => {
+  it("emits policy deny events for terminal denied calls", async () => {
     const events: RuntimeEvent[] = [];
     const transport = new MockTransport();
     const proxy = new McpProxy({
@@ -106,7 +107,8 @@ describe("McpProxy profiler integration", () => {
     expect(result.isError).toBe(true);
     expect(transport.callTool).not.toHaveBeenCalled();
     expect(events.map((event) => event.name)).toContain("policy.denied");
-    expect(events.map((event) => event.name)).toContain("mcp.call.success");
+    expect(events.map((event) => event.name)).not.toContain("mcp.call.start");
+    expect(events.map((event) => event.name)).not.toContain("mcp.call.success");
     expect(events.find((event) => event.name === "policy.denied")).toMatchObject({
       category: "policy",
       level: "warn",
@@ -117,6 +119,7 @@ describe("McpProxy profiler integration", () => {
     const events: RuntimeEvent[] = [];
     const proxy = new McpProxy({
       servers: [new McpServer({ name: "github", transport: new MockTransport() })],
+      policy: Policy.allowAll(),
       profiler: {
         track: ["errors", "extension"],
         sink: (event) => events.push(event),
@@ -146,6 +149,7 @@ describe("McpProxy profiler integration", () => {
           isolationTimeout: 1,
         }),
       ],
+      policy: Policy.allowAll(),
       profiler: {
         track: ["mcp", "timeouts", "errors"],
         sink: (event) => events.push(event),

@@ -477,6 +477,7 @@ describe("governance auth DX", () => {
 
   it("keeps unauthenticated contexts explicit without creating an anonymous subject", async () => {
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "github", transport: new EnvTransport() })],
     });
     const seen: unknown[] = [];
@@ -521,31 +522,21 @@ describe("governance auth DX", () => {
     const result = await proxy.callTool({ name: "github__delete" }, { id: "alice" });
 
     expect(result.isError).toBe(true);
-    expect(seen).toEqual([
-      {
-        allowed: false,
-        reason: 'Tool "delete" denied by policy "blocked"',
-        matchedGroups: ["blocked"],
-        matchedPermissions: [
-          {
-            policyName: "blocked",
-            groupId: "blocked",
-            serverName: "github",
-            toolName: "delete",
-            effect: "deny",
-          },
-        ],
+    expect(seen).toEqual([]);
+    expect(result._meta?.error).toMatchObject({
+      policy: {
+        policyName: "effective-group-policy",
+        denialReason: 'Tool "delete" denied by policy "blocked"',
       },
-    ]);
+    });
   });
 
   it("checks capabilities with group policies, global policy, and no configured policy", async () => {
-    const approval = vi.fn(async () => true);
     const groupProxy = new McpProxy({
       groups: [
         group({ id: "admins", users: [user("alice")], policy: policy("admins").mcp("github").allow("delete") }),
         group({ id: "blocked", users: [user("alice")], policy: policy("blocked").mcp("github").deny("delete") }),
-        group({ id: "readers", users: [user("alice")], policy: policy("readers").mcp("github").allow("read", { approval }) }),
+        group({ id: "readers", users: [user("alice")], policy: policy("readers").mcp("github").allow("read") }),
       ],
       servers: [new McpServer({ name: "github", transport: new EnvTransport() })],
     });
@@ -559,6 +550,7 @@ describe("governance auth DX", () => {
       return next();
     });
 
+    await groupProxy.callTool({ name: "github__read" }, { id: "alice" });
     const groupResult = await groupProxy.callTool({ name: "github__delete" }, { id: "alice" });
 
     const globalProxy = new McpProxy({
@@ -577,22 +569,22 @@ describe("governance auth DX", () => {
 
     await globalProxy.callTool({ name: "github__read" });
 
-    const permissiveProxy = new McpProxy({
+    const defaultClosedProxy = new McpProxy({
       servers: [new McpServer({ name: "github", transport: new EnvTransport() })],
     });
-    const permissiveChecks: unknown[] = [];
-    permissiveProxy.use((ctx, next) => {
-      permissiveChecks.push(ctx.policy.can("github", "delete"));
+    const defaultClosedChecks: unknown[] = [];
+    defaultClosedProxy.use((ctx, next) => {
+      defaultClosedChecks.push(ctx.policy.can("github", "delete"));
       return next();
     });
 
-    await permissiveProxy.callTool({ name: "github__read" });
+    const defaultClosedResult = await defaultClosedProxy.callTool({ name: "github__read" });
 
     expect(groupChecks).toEqual([{ canRead: true, canDelete: false, canWrite: false }]);
     expect(globalChecks).toEqual([{ canRead: true, canDelete: false, canWrite: false }]);
-    expect(permissiveChecks).toEqual([true]);
+    expect(defaultClosedChecks).toEqual([]);
     expect(groupResult.isError).toBe(true);
-    expect(approval).not.toHaveBeenCalled();
+    expect(defaultClosedResult.isError).toBe(true);
   });
 
   it("does not expose raw credential values through structured context domains", async () => {
