@@ -261,6 +261,7 @@ export type ProxyMcpHandle = {
 export type ProxyGroupHandle = {
   readonly id: string;
   mcp(name: string): ProxyMcpHandle;
+  server(name: string): ProxyMcpHandle;
   users(...users: User[]): ProxyGroupHandle;
   policy(policyNameOrPolicy: string | Policy): ProxyGroupHandle;
   use(handler: Middleware): ProxyGroupHandle;

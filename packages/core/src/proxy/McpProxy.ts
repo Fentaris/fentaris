@@ -2586,6 +2586,10 @@ class McpProxyGroupHandle implements ProxyGroupHandle {
     return new McpProxyMcpHandle(this.proxy, name, this.id);
   }
 
+  server(name: string): ProxyMcpHandle {
+    return this.mcp(name);
+  }
+
   users(...users: User[]): ProxyGroupHandle {
     this.proxy.addGroupUsers(this.id, users);
     return this;
