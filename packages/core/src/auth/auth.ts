@@ -161,9 +161,21 @@ export class FentarisAuth {
     return `sha256:${hashApiKey(apiKey)}`;
   }
 
+  /**
+   * Compare a declared API key or supported API-key hash with a provided key.
+   * @pk
+   */
+  static compareApiKey(candidate: string, provided: string): boolean {
+    const normalizedCandidate = candidate.startsWith("sha256:") ? candidate.slice("sha256:".length) : hashApiKey(candidate);
+    const normalizedProvided = hashApiKey(provided);
+    const left = Buffer.from(normalizedCandidate, "hex");
+    const right = Buffer.from(normalizedProvided, "hex");
+    return left.length === right.length && timingSafeEqual(left, right);
+  }
+
   resolveApiKey(apiKey: string): string | null {
     for (const [userId, entry] of Object.entries(this.credentials.users)) {
-      if (entry.apiKeys.some((candidate) => compareApiKey(candidate, apiKey))) {
+      if (entry.apiKeys.some((candidate) => FentarisAuth.compareApiKey(candidate, apiKey))) {
         return userId;
       }
     }
@@ -262,14 +274,6 @@ function deriveLegacyKey(key: string | Buffer, salt: Buffer): Buffer {
 
 function deriveStretchedKey(key: string | Buffer, salt: Buffer, iterations: number): Buffer {
   return pbkdf2Sync(key, salt, iterations, 32, "sha256");
-}
-
-function compareApiKey(candidate: string, provided: string): boolean {
-  const normalizedCandidate = candidate.startsWith("sha256:") ? candidate.slice("sha256:".length) : hashApiKey(candidate);
-  const normalizedProvided = hashApiKey(provided);
-  const left = Buffer.from(normalizedCandidate, "hex");
-  const right = Buffer.from(normalizedProvided, "hex");
-  return left.length === right.length && timingSafeEqual(left, right);
 }
 
 function hashApiKey(value: string): string {
