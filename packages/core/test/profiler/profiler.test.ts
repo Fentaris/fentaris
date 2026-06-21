@@ -198,6 +198,11 @@ describe("runtime profiler", () => {
         private: "private-value",
         nested: { hide: "hide-me" },
         custom: "custom-value",
+        input: {
+          bearer: "Bearer abcdefghijklmnopqrstuvwxyz123456",
+          jwt: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbGljZSJ9.Gh5wqNQUs7Zk7q7g2Xf2aH9b0d1c2e3f4g5h6i",
+          github: "github_pat_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        },
       },
       error: runtimeErrorToEventPayload(new Error("boom")),
     });
@@ -207,6 +212,11 @@ describe("runtime profiler", () => {
       private: "[REDACTED]",
       nested: { hide: "[REDACTED]" },
       custom: "custom-redacted",
+      input: {
+        bearer: "[REDACTED]",
+        jwt: "[REDACTED]",
+        github: "[REDACTED]",
+      },
     });
   });
 
