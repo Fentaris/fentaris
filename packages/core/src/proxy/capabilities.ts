@@ -42,5 +42,5 @@ export function isCapabilityAllowed(
     return permission.effect !== "deny";
   }
 
-  return true;
+  return false;
 }

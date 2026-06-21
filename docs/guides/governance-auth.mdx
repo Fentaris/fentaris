@@ -170,6 +170,8 @@ Middleware receives credential source metadata through `ctx.credentials.sources`
 
 Keep durable authorization in groups and policies. Use server-scoped tool routes for runtime behavior after policy allows a call.
 
+Fentaris fails closed: a tool call or governed capability is denied unless a global policy, matching group policy, or explicit development `Policy.allowAll()` / `allowAll()` policy allows it. Deny decisions are terminal and run before call hooks, middleware, routes, or upstream dispatch. If a subject belongs to multiple groups, any explicit deny from one matching group wins over allows from another group.
+
 ```ts theme={null}
 const supportPolicy = policy("support").mcp("github").allow("create_issue");
 
@@ -227,6 +229,8 @@ proxy.mcp("github").use(async (ctx, next) => {
 ```
 
 `ctx.policy.can(server, tool)` evaluates allow/deny permissions only. It does not consume rate limits, invoke manual approval callbacks, or expose raw API keys, bearer tokens, decrypted credentials, or environment secret values.
+
+`listTools` is filtered both before and after list hooks. Synthetic tools added by `onListTools` or `tools:list:after` must use the normal `<server>__<tool>` proxy name and match policy, or they are hidden from the final response.
 
 ## Capability Permissions
 

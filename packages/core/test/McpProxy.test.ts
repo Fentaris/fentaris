@@ -17,6 +17,7 @@ import type {
   ReadResourceResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import { Logger } from "../src/logger.js";
+import { FentarisAuth } from "../src/auth.js";
 import { health } from "../src/health/index.js";
 import { credentialEnv } from "../src/credentials/index.js";
 import { McpProxy, fentaris } from "../src/proxy/McpProxy.js";
@@ -1210,6 +1211,146 @@ describe("McpProxy", () => {
     });
   });
 
+  it("denies tool calls and tool discovery by default without explicit policy", async () => {
+    const transport = new MockTransport();
+    const proxy = new McpProxy({
+      servers: [new McpServer({ name: "github", transport })],
+    });
+
+    await expect(proxy.listTools()).resolves.toEqual({ tools: [] });
+    await expect(proxy.callTool({ name: toProxyToolName("github", "create_issue") })).resolves.toMatchObject({
+      isError: true,
+      _meta: {
+        error: expect.objectContaining({
+          code: FentarisErrorCode.PolicyDenied,
+        }),
+      },
+    });
+    expect(transport.callTool).not.toHaveBeenCalled();
+  });
+
+  it("uses explicit allow-all policy as the development open-access path", async () => {
+    const transport = new MockTransport();
+    const proxy = new McpProxy({
+      policy: Policy.allowAll(),
+      servers: [new McpServer({ name: "github", transport })],
+    });
+
+    await expect(proxy.listTools()).resolves.toMatchObject({
+      tools: [expect.objectContaining({ name: toProxyToolName("github", "create_issue") })],
+    });
+    await expect(proxy.callTool({ name: toProxyToolName("github", "create_issue") })).resolves.toMatchObject({
+      content: [{ type: "text", text: "called:create_issue" }],
+    });
+  });
+
+  it("treats policy denies as terminal before hooks, routes, middleware, or upstream dispatch", async () => {
+    const transport = new MockTransport();
+    const seen: string[] = [];
+    const proxy = new McpProxy({
+      policy: policy("blocked").mcp("github").deny("create_issue"),
+      servers: [new McpServer({ name: "github", transport })],
+    });
+
+    proxy.on("call", () => {
+      seen.push("hook");
+      return { content: [{ type: "text", text: "hook success" }] };
+    });
+    proxy.use((ctx, next) => {
+      seen.push(`middleware:${ctx.tool?.name}`);
+      return next();
+    });
+    proxy.tool("github.create_issue", (ctx) => {
+      seen.push(`route:${ctx.tool?.name}`);
+      return ctx.response.deny("route success");
+    });
+
+    const result = await proxy.callTool({ name: toProxyToolName("github", "create_issue") });
+
+    expect(result).toMatchObject({
+      isError: true,
+      _meta: {
+        error: expect.objectContaining({
+          code: FentarisErrorCode.PolicyDenied,
+          policy: expect.objectContaining({
+            policyName: "blocked",
+            effect: "deny",
+          }),
+        }),
+      },
+    });
+    expect(seen).toEqual([]);
+    expect(transport.callTool).not.toHaveBeenCalled();
+  });
+
+  it("filters final listTools output after hooks and events attempt to add hidden tools", async () => {
+    const proxy = new McpProxy({
+      policy: policy("readonly").mcp("github").allow("create_issue"),
+      servers: [new McpServer({ name: "github", transport: new MockTransport() })],
+    });
+
+    proxy.onListTools((tools) => [
+      ...tools,
+      { name: toProxyToolName("github", "delete_repo"), inputSchema: { type: "object" } },
+      { name: "synthetic_unscoped", inputSchema: { type: "object" } },
+    ]);
+    proxy.on("tools:list:after", ({ tools }) => [
+      ...(tools ?? []),
+      { name: toProxyToolName("github", "admin"), inputSchema: { type: "object" } },
+    ]);
+
+    const result = await proxy.listTools();
+
+    expect(result.tools.map((tool) => tool.name)).toEqual([toProxyToolName("github", "create_issue")]);
+  });
+
+  it("applies explicit group denies over allows from another group", async () => {
+    const alice = user("alice");
+    const transport = new MockTransport();
+    const proxy = new McpProxy({
+      groups: [
+        group({ id: "maintainers", users: [alice], policy: policy("maintainers").mcp("github").allow("*") }),
+        group({ id: "suspended", users: [alice], policy: policy("suspended").mcp("github").deny("create_issue") }),
+      ],
+      servers: [new McpServer({ name: "github", transport })],
+    });
+
+    await expect(proxy.callTool({ name: toProxyToolName("github", "create_issue") }, { id: "alice" })).resolves.toMatchObject({
+      isError: true,
+    });
+    await expect(proxy.listTools(undefined, { id: "alice" })).resolves.toEqual({ tools: [] });
+    expect(transport.callTool).not.toHaveBeenCalled();
+  });
+
+  it("enforces policy-attached rate limiters without manual middleware", async () => {
+    let recordedCalls = 0;
+    const limiter = {
+      metadata: { maxPerWindow: 1, windowMs: 60_000 },
+      checkLimit: vi.fn(async () => recordedCalls < 1),
+      recordCall: vi.fn(async () => {
+        recordedCalls += 1;
+      }),
+      getRemainingCalls: vi.fn(async () => Math.max(0, 1 - recordedCalls)),
+    };
+    const transport = new MockTransport();
+    const proxy = new McpProxy({
+      policy: policy("limited").mcp("github").allow("create_issue", { limiter }),
+      servers: [new McpServer({ name: "github", transport })],
+    });
+
+    await expect(proxy.callTool({ name: toProxyToolName("github", "create_issue") })).resolves.toMatchObject({
+      content: [{ type: "text", text: "called:create_issue" }],
+    });
+    await expect(proxy.callTool({ name: toProxyToolName("github", "create_issue") })).resolves.toMatchObject({
+      isError: true,
+      content: [{ type: "text", text: "Rate limit exceeded" }],
+    });
+
+    expect(limiter.checkLimit).toHaveBeenCalledTimes(2);
+    expect(limiter.recordCall).toHaveBeenCalledTimes(1);
+    expect(transport.callTool).toHaveBeenCalledOnce();
+  });
+
   it("reports unknown named global policies", () => {
     const app = fentaris();
 
@@ -1235,6 +1376,7 @@ describe("McpProxy", () => {
   it("authenticates fluent group users with the default declared API key identity", async () => {
     const app = fentaris();
     const exposure = new CapturingExposureTransport();
+    const compare = vi.spyOn(FentarisAuth, "compareApiKey");
     vi.stubEnv("ALICE_FLUENT_API_KEY", "alice-key");
 
     app.policy("maintainers").mcp("github").allow("*");
@@ -1256,7 +1398,9 @@ describe("McpProxy", () => {
         },
         subject: { id: "alice" },
       });
+      expect(compare).toHaveBeenCalledWith("alice-key", "alice-key");
     } finally {
+      compare.mockRestore();
       vi.unstubAllEnvs();
       await app.stop();
     }
