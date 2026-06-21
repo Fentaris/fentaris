@@ -64,8 +64,7 @@ async function askLine(question: string): Promise<string> {
 
 async function askSecret(question: string, defaultValue?: string): Promise<string> {
   if (!process.stdin.isTTY || !process.stdout.isTTY || typeof process.stdin.setRawMode !== "function") {
-    const answer = await askLine(formatTextQuestion(question, { defaultValue }));
-    return answer.trim() || defaultValue || "";
+    throw new Error("Secret prompts require an interactive terminal. Use FENTARIS_AUTH_KEY, --key, or --value-stdin for automation.");
   }
 
   return new Promise((resolve, reject) => {

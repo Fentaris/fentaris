@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { text as readStreamText } from "node:stream/consumers";
 import { manifestFromSecretRefs, manifestsEqual, parseManifest, serializeManifest } from "@fentaris/core";
 import { secretScope } from "../domain/auth/local-store.js";
 import { credentialsPath, manifestPath, openLocalSecretsBackend, scopeFromOptions } from "../domain/secrets/backend.js";
@@ -48,12 +49,12 @@ async function runSecretsSet(command: CliCommand, reference: string | undefined,
   if (!(await backend.credentialsExist())) {
     await backend.initEmpty();
   }
-  const promptedValue = typeof input.options.value !== "string";
+  const promptedValue = typeof input.options.value !== "string" && input.options["value-stdin"] !== true;
   if (promptedValue) {
     section(runtime, "Secret value");
     runtime.out.log(`  ${style.hint(`${input.reference} will be hidden while stored and never printed back.`)}`);
   }
-  const value = typeof input.options.value === "string" ? input.options.value : await runtime.prompt.text(input.reference, { secret: true });
+  const value = await resolveSecretValue(input.reference, input.options, runtime);
   if (promptedValue) {
     printSecretsSetReview(runtime, input.reference, input.options, storagePath);
     const confirmed = await runtime.prompt.confirm("Store this credential?");
@@ -79,6 +80,9 @@ async function resolveSecretsSetInput(
   const options: CliOptions = { ...command.options };
   if (typeof options.user === "string" && typeof options.group === "string") {
     throw new Error("Use either --user or --group, not both.");
+  }
+  if (typeof options.value === "string" && options["value-stdin"] === true) {
+    throw new Error("Use either --value or --value-stdin, not both.");
   }
   if (reference?.trim()) {
     return { reference: reference.trim(), options };
@@ -136,6 +140,21 @@ async function resolveSecretsSetInput(
   return { reference: selectedReference, options };
 }
 
+async function resolveSecretValue(reference: string, options: CliOptions, runtime: Runtime): Promise<string> {
+  if (typeof options.value === "string") {
+    runtime.out.error("Warning: --value exposes secret values in process arguments. Prefer --value-stdin or an interactive prompt.");
+    return options.value;
+  }
+  if (options["value-stdin"] === true) {
+    const value = (await readStreamText(process.stdin)).replace(/\r?\n$/, "");
+    if (!value) {
+      throw new Error(`Secret value for ${reference} was empty on stdin.`);
+    }
+    return value;
+  }
+  return runtime.prompt.text(reference, { secret: true });
+}
+
 function printSecretsSetReview(runtime: Runtime, reference: string, options: CliOptions, storagePath: string): void {
   section(runtime, "Review");
   const rows = [
@@ -168,8 +187,12 @@ async function runSecretsUnset(command: CliCommand, reference: string | undefine
 
   const project = await discoverProject(runtime.cwd);
   const backend = await openLocalSecretsBackend(project, runtime, command.options);
-  await backend.unset(reference, scopeFromOptions(command.options));
+  const removed = await backend.unset(reference, scopeFromOptions(command.options));
   section(runtime, "Secrets");
+  if (!removed) {
+    runtime.out.log(`  ${style.warn(`No ${reference} credential found in ${secretScope(command.options)} credentials.`)}`);
+    return;
+  }
   runtime.out.log(`  ${style.pass(`Removed ${reference} from ${secretScope(command.options)} credentials.`)}`);
 }
 
@@ -221,7 +244,7 @@ async function runSecretsManifest(command: CliCommand, runtime: Runtime): Promis
     if (!(await exists(target))) {
       throw new Error("secrets.manifest.json is missing. Run fentaris secrets manifest.");
     }
-    const current = parseManifest(JSON.parse(await readFile(target, "utf8")) as unknown);
+    const current = parseManifest(parseManifestJson(await readFile(target, "utf8"), target));
     if (!manifestsEqual(current, manifest)) {
       throw new Error("secrets.manifest.json is out of date. Run fentaris secrets manifest.");
     }
@@ -237,9 +260,19 @@ async function runSecretsManifest(command: CliCommand, runtime: Runtime): Promis
   runtime.out.log(`  ${style.hint(`${manifest.references.length} credential reference(s)${manifest.envVars?.length ? `, ${manifest.envVars.length} env var(s)` : ""}.`)}`);
 }
 
+function parseManifestJson(source: string, filePath: string): unknown {
+  try {
+    return JSON.parse(source) as unknown;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Invalid JSON";
+    throw new Error(`Unable to parse secrets manifest at ${filePath}: ${detail}`);
+  }
+}
+
 async function runSecretsDoctor(command: CliCommand, runtime: Runtime): Promise<void> {
   const project = await discoverProject(runtime.cwd);
-  const issues = await getSecretsDoctorIssues(project, runtime, { strict: command.options.strict === true });
+  const key = typeof command.options.key === "string" ? command.options.key : undefined;
+  const issues = await getSecretsDoctorIssues(project, runtime, { strict: command.options.strict === true, key });
 
   if (command.options.json === true) {
     runtime.out.log(JSON.stringify({ issues }, null, 2));

@@ -16,6 +16,7 @@ import { scanEntrypointForSecrets } from "./manifest-scan.js";
 
 export type SecretsDoctorOptions = {
   strict?: boolean;
+  key?: string;
 };
 
 export type SecretsDoctorIssue = {
@@ -29,7 +30,7 @@ export type SecretsDoctorIssue = {
 export async function getSecretsDoctorIssues(project: ProjectDiscovery, runtime: Runtime, options: SecretsDoctorOptions = {}): Promise<SecretsDoctorIssue[]> {
   const issues: SecretsDoctorIssue[] = [];
   const required = await loadRequiredReferences(project);
-  const key = runtime.env.FENTARIS_AUTH_KEY;
+  const key = options.key ?? runtime.env.FENTARIS_AUTH_KEY;
   const storeExists = await exists(credentialsPath(project));
 
   let stored: SecretRef[] = [];
@@ -148,7 +149,7 @@ export async function secretsDoctorHealthResults(project: ProjectDiscovery, runt
 export async function loadRequiredReferences(project: ProjectDiscovery): Promise<SecretsManifestEntry[]> {
   const manifestFile = manifestPath(project);
   if (await exists(manifestFile)) {
-    const manifest = parseManifest(JSON.parse(await readFile(manifestFile, "utf8")) as unknown);
+    const manifest = parseManifest(parseManifestJson(await readFile(manifestFile, "utf8"), manifestFile));
     return manifest.references;
   }
 
@@ -158,6 +159,15 @@ export async function loadRequiredReferences(project: ProjectDiscovery): Promise
   }
 
   return [];
+}
+
+function parseManifestJson(source: string, filePath: string): unknown {
+  try {
+    return JSON.parse(source) as unknown;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Invalid JSON";
+    throw new Error(`Unable to parse secrets manifest at ${filePath}: ${detail}`);
+  }
 }
 
 export function buildListRows(required: SecretsManifestEntry[], stored: SecretRef[]): Array<{ ref: string; scope: string; kind: string; status: string }> {

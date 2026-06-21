@@ -133,7 +133,16 @@ The generated local credential store uses one encrypted file by default:
   secrets.manifest.json
 ```
 
-`credentials.enc.json` is encrypted and stores user API keys plus user, group, and default credential values. Keep it private and rotate the encryption key using your deployment secret process.
+`credentials.enc.json` is encrypted and stores user API keys plus user, group, and default credential values. New writes use a versioned AES-256-GCM envelope with PBKDF2 key derivation metadata, while legacy SHA-256-derived files are still readable and migrate on the next successful write. On Unix, the file is written with owner-only permissions (`0600`). Keep it private and rotate the encryption key using your deployment secret process.
+
+For automation, prefer environment and stdin inputs so secrets do not appear in process arguments:
+
+```bash theme={null}
+export FENTARIS_AUTH_KEY="local-encryption-key"
+printf '%s' "$GITHUB_TOKEN" | fentaris secrets set github.token --value-stdin
+```
+
+`--key` and `--value` remain available for compatibility, but Fentaris warns because those values can be visible through process inspection.
 
 `secrets.manifest.json` lists required credential references only. Commit this file so teammates know which secrets a project needs without sharing encrypted values.
 
