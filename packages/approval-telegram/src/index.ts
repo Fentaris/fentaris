@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type {
   ApprovalResult,
   MiddlewareContext,
@@ -26,24 +26,40 @@ export type TelegramApprovalOptions = {
   includeArguments?: boolean;
   maxArgumentLength?: number;
   failOpen?: boolean;
+  webhookSecretToken?: string;
 };
 
 export type TelegramCallbackHandlerOptions = {
   botToken: string;
+  chatId: string | number;
   store: TelegramApprovalStore;
   apiBaseUrl?: string | URL;
   fetch?: typeof fetch;
+  webhookSecretToken?: string;
+  headers?: TelegramWebhookHeaders;
 };
 
 type TelegramCallbackUpdate = {
   callback_query?: {
     id?: string;
     data?: string;
+    message?: {
+      chat?: {
+        id?: string | number;
+      };
+    };
   };
 };
 
-const approvePrefix = "fentaris:a:";
-const denyPrefix = "fentaris:d:";
+type TelegramWebhookHeaders =
+  | Headers
+  | Record<string, string | string[] | undefined>
+  | Array<[string, string]>;
+
+type CallbackAction = "a" | "d";
+
+const callbackPrefix = "ft";
+const telegramWebhookSecretHeader = "x-telegram-bot-api-secret-token";
 const defaultApiBaseUrl = "https://api.telegram.org";
 
 /**
@@ -52,6 +68,7 @@ const defaultApiBaseUrl = "https://api.telegram.org";
  */
 export function telegramApproval(options: TelegramApprovalOptions): Pick<ToolPermissionOptions, "approval"> {
   validateOptions(options);
+  warnIfFailOpen(options);
   const store = options.store ?? createInMemoryTelegramApprovalStore();
   const fetchImpl = options.fetch ?? fetch;
   const apiBaseUrl = options.apiBaseUrl ?? defaultApiBaseUrl;
@@ -75,6 +92,7 @@ export function telegramApproval(options: TelegramApprovalOptions): Pick<ToolPer
           apiBaseUrl,
           fetch: fetchImpl,
           requestId,
+          signingSecret: options.botToken,
           text: formatApprovalMessage(requestId, request, context, options),
         });
       } catch (error) {
@@ -131,8 +149,16 @@ export async function handleTelegramApprovalCallback(
   options: TelegramCallbackHandlerOptions,
 ): Promise<{ handled: boolean; requestId?: string; decision?: TelegramApprovalDecision }> {
   validateCallbackOptions(options);
+  if (!isValidWebhookSecret(options)) {
+    return { handled: false };
+  }
+
   const callback = (update as TelegramCallbackUpdate | undefined)?.callback_query;
-  const parsed = parseCallbackData(callback?.data);
+  if (!isConfiguredChat(callback, options.chatId)) {
+    return { handled: false };
+  }
+
+  const parsed = parseCallbackData(callback?.data, options.botToken);
   if (!parsed) {
     return { handled: false };
   }
@@ -161,9 +187,20 @@ function validateOptions(options: TelegramApprovalOptions): void {
   }
 }
 
+function warnIfFailOpen(options: TelegramApprovalOptions): void {
+  if (options.failOpen === true) {
+    console.warn(
+      "Telegram approval failOpen is enabled; approval delivery failures will allow protected calls. Use only for development or emergency break-glass operation.",
+    );
+  }
+}
+
 function validateCallbackOptions(options: TelegramCallbackHandlerOptions): void {
   if (!options.botToken.trim()) {
     throw new Error("Telegram callback botToken is required");
+  }
+  if (String(options.chatId).trim() === "") {
+    throw new Error("Telegram callback chatId is required");
   }
 }
 
@@ -173,7 +210,7 @@ function resolveRequestId(
   context: MiddlewareContext,
 ): string {
   const requestId = typeof configured === "function" ? configured(request, context) : configured ?? randomUUID();
-  return requestId.length <= 54 ? requestId : createHash("sha256").update(requestId).digest("hex").slice(0, 32);
+  return requestId.length <= 40 ? requestId : createHash("sha256").update(requestId).digest("hex").slice(0, 32);
 }
 
 function resolveApprovalUrl(
@@ -191,6 +228,7 @@ async function sendApprovalMessage(options: {
   apiBaseUrl: string | URL;
   fetch: typeof fetch;
   requestId: string;
+  signingSecret: string;
   text: string;
 }): Promise<void> {
   const response = await options.fetch(telegramUrl(options.apiBaseUrl, options.botToken, "sendMessage"), {
@@ -203,8 +241,8 @@ async function sendApprovalMessage(options: {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: "Approve", callback_data: `${approvePrefix}${options.requestId}` },
-            { text: "Deny", callback_data: `${denyPrefix}${options.requestId}` },
+            { text: "Approve", callback_data: createCallbackData("a", options.requestId, options.signingSecret) },
+            { text: "Deny", callback_data: createCallbackData("d", options.requestId, options.signingSecret) },
           ],
         ],
       },
@@ -270,17 +308,79 @@ function formatApprovalMessage(
   return lines.join("\n");
 }
 
-function parseCallbackData(data: string | undefined): { requestId: string; decision: TelegramApprovalDecision } | null {
+function createCallbackData(action: CallbackAction, requestId: string, signingSecret: string): string {
+  return `${callbackPrefix}:${action}:${requestId}:${signCallback(action, requestId, signingSecret)}`;
+}
+
+function parseCallbackData(data: string | undefined, signingSecret: string): { requestId: string; decision: TelegramApprovalDecision } | null {
   if (!data) {
     return null;
   }
-  if (data.startsWith(approvePrefix)) {
-    return { decision: "approved", requestId: data.slice(approvePrefix.length) };
+
+  const [prefix, action, requestId, signature, ...extra] = data.split(":");
+  if (
+    prefix !== callbackPrefix ||
+    extra.length > 0 ||
+    (action !== "a" && action !== "d") ||
+    !requestId ||
+    !signature ||
+    !isValidSignature(action, requestId, signature, signingSecret)
+  ) {
+    return null;
   }
-  if (data.startsWith(denyPrefix)) {
-    return { decision: "denied", requestId: data.slice(denyPrefix.length) };
+
+  return { decision: action === "a" ? "approved" : "denied", requestId };
+}
+
+function signCallback(action: CallbackAction, requestId: string, signingSecret: string): string {
+  return createHmac("sha256", signingSecret)
+    .update(`${action}:${requestId}`)
+    .digest("base64url")
+    .slice(0, 16);
+}
+
+function isValidSignature(action: CallbackAction, requestId: string, signature: string, signingSecret: string): boolean {
+  return timingSafeEqualString(signature, signCallback(action, requestId, signingSecret));
+}
+
+function isConfiguredChat(
+  callback: TelegramCallbackUpdate["callback_query"] | undefined,
+  configuredChatId: string | number,
+): boolean {
+  const callbackChatId = callback?.message?.chat?.id;
+  return callbackChatId !== undefined && String(callbackChatId) === String(configuredChatId);
+}
+
+function isValidWebhookSecret(options: TelegramCallbackHandlerOptions): boolean {
+  if (!options.webhookSecretToken) {
+    return true;
   }
-  return null;
+
+  const provided = readHeader(options.headers, telegramWebhookSecretHeader);
+  return provided !== undefined && timingSafeEqualString(provided, options.webhookSecretToken);
+}
+
+function readHeader(headers: TelegramWebhookHeaders | undefined, name: string): string | undefined {
+  if (!headers) {
+    return undefined;
+  }
+  if (headers instanceof Headers) {
+    return headers.get(name) ?? undefined;
+  }
+  if (Array.isArray(headers)) {
+    const match = headers.find(([key]) => key.toLowerCase() === name);
+    return match?.[1];
+  }
+
+  const found = Object.entries(headers).find(([key]) => key.toLowerCase() === name);
+  const value = found?.[1];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function timingSafeEqualString(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function redactSensitive(value: unknown): unknown {
