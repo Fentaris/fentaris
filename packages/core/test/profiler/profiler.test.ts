@@ -128,6 +128,55 @@ describe("runtime profiler", () => {
     expect(seen).toEqual(["custom", "FENTARIS_EXTENSION_ERROR"]);
   });
 
+  it("emits structured profiler sink error events after isolated sink failures", async () => {
+    const seen: RuntimeEvent[] = [];
+    const handled: RuntimeEvent[] = [];
+    const runtime = new RuntimeProfiler(normalizeRuntimeProfiler({
+      level: "debug",
+      track: ["lifecycle", "profiler"],
+      sinks: [
+        {
+          name: "broken",
+          write() {
+            throw new Error("sink down");
+          },
+        },
+        (event) => seen.push(event),
+      ],
+      handlers: [
+        {
+          eventName: "profiler.sink.error",
+          handler: (event) => handled.push(event),
+        },
+      ],
+    }));
+
+    await runtime.emit({
+      name: "runtime.ready",
+      category: "lifecycle",
+      level: "info",
+      timestamp: new Date(),
+      runtime: "test",
+      version: "0.0.0",
+      startupMs: 3,
+    });
+
+    expect(seen.map((event) => event.name)).toEqual(["profiler.sink.error", "runtime.ready"]);
+    expect(handled).toHaveLength(1);
+    expect(handled[0]).toMatchObject({
+      name: "profiler.sink.error",
+      category: "profiler",
+      level: "error",
+      sink: "broken",
+      error: {
+        code: "FENTARIS_EXTENSION_ERROR",
+      },
+      metadata: {
+        sourceEvent: "runtime.ready",
+      },
+    });
+  });
+
   it("redacts default and custom sensitive values before dispatch", async () => {
     const seen: RuntimeEvent[] = [];
     const runtime = new RuntimeProfiler(normalizeRuntimeProfiler({
