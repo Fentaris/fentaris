@@ -41,6 +41,53 @@ describe("HttpTransport", () => {
       body: JSON.stringify({ params: { name: "search", arguments: { q: "fentaris" } } }),
     });
   });
+
+  it("maps only explicit env headers and known auth env values", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ tools: [] }));
+    const transport = new HttpTransport({
+      baseUrl: "https://mcp.example/api",
+      envHeaderMap: {
+        "x-tenant-id": "TENANT_ID",
+      },
+      fetch: fetchMock as unknown as typeof fetch,
+    }).withEnv({
+      AUTH_TOKEN: "auth-token",
+      GITHUB_TOKEN: "github-token",
+      TENANT_ID: "tenant-1",
+    });
+
+    await transport.listTools();
+
+    expect(fetchMock).toHaveBeenCalledWith(new URL("https://mcp.example/api/listTools"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer auth-token",
+        "x-tenant-id": "tenant-1",
+      },
+      body: JSON.stringify({}),
+    });
+  });
+
+  it("blocks private upstream URLs unless explicitly allowed", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ tools: [] }));
+    const blocked = new HttpTransport({
+      baseUrl: "http://169.254.169.254/latest",
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+
+    await expect(blocked.listTools()).rejects.toThrow(/Blocked upstream URL/);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const allowed = new HttpTransport({
+      baseUrl: "http://169.254.169.254/latest",
+      network: { allowedPrivateHosts: ["169.254.169.254"] },
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+
+    await expect(allowed.listTools()).resolves.toEqual({ tools: [] });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
 });
 
 function jsonResponse(value: unknown): Response {

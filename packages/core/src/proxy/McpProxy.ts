@@ -338,7 +338,7 @@ export class McpProxy {
     });
     const projectDefaults = readProjectRuntimeDefaults();
     this.defaultPort = options.port ?? projectDefaults.port;
-    this.defaultHost = options.host;
+    this.defaultHost = options.host ?? projectDefaults.host;
     this.defaultPath = options.path ?? projectDefaults.path ?? "/mcp";
     this.runtimeValidationConfig = {
       ...options,

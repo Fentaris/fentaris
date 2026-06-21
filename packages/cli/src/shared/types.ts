@@ -62,6 +62,7 @@ export type ProjectConfig = {
   packageManager: PackageManager;
   entrypoint: string;
   port: number;
+  host?: string;
   path: string;
   authDir: string;
   secrets?: {
