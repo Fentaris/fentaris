@@ -27,6 +27,26 @@ export class MemoryRateLimitStore implements RateLimitStore {
     return bucket.count;
   }
 
+  async consume(key: string, window: number, limit: number): Promise<boolean> {
+    if (limit <= 0) {
+      return false;
+    }
+
+    const now = Date.now();
+    const bucket = this.activeBucket(key, now);
+    if (!bucket) {
+      this.buckets.set(key, { count: 1, expiresAt: now + window });
+      return true;
+    }
+
+    if (bucket.count >= limit) {
+      return false;
+    }
+
+    bucket.count += 1;
+    return true;
+  }
+
   async get(key: string): Promise<number> {
     return this.activeBucket(key, Date.now())?.count ?? 0;
   }
@@ -94,6 +114,26 @@ export class SlidingWindowRateLimiter implements RateLimiter {
     }
 
     return true;
+  }
+
+  async consume(key: string): Promise<boolean> {
+    const limits: Array<Promise<boolean>> = [];
+
+    if (this.metadata?.maxPerWindow !== undefined) {
+      limits.push(Promise.resolve(this.store.consume(this.windowKey(key), this.metadata.windowMs ?? 60_000, this.metadata.maxPerWindow)));
+    }
+
+    if (this.metadata?.maxDailyCalls !== undefined) {
+      limits.push(Promise.resolve(this.store.consume(this.dailyKey(key), this.dailyWindowMs(), this.metadata.maxDailyCalls)));
+    }
+
+    if (limits.length === 0) {
+      await this.recordCall(key);
+      return true;
+    }
+
+    const results = await Promise.all(limits);
+    return results.every(Boolean);
   }
 
   async recordCall(key: string): Promise<void> {
@@ -165,11 +205,10 @@ export function rateLimitMiddleware(options: {
     }
 
     const key = options.key?.(request, context.user) ?? rateLimitKey(request, context.user);
-    if (!(await limiter.checkLimit(key))) {
+    if (!(await limiter.consume(key))) {
       return context.res.deny(options.message ?? "Rate limit exceeded");
     }
 
-    await limiter.recordCall(key);
     return next();
   };
 }
@@ -178,6 +217,7 @@ function isRateLimiter(value: unknown): value is RateLimiter {
   return (
     value !== null &&
     typeof value === "object" &&
+    "consume" in value &&
     "checkLimit" in value &&
     "recordCall" in value &&
     "getRemainingCalls" in value

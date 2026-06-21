@@ -100,6 +100,36 @@ describe("governance primitives", () => {
     });
   });
 
+  it("enforces the concurrent rate limit boundary atomically", async () => {
+    const limiter = new SlidingWindowRateLimiter({
+      store: new MemoryRateLimitStore(),
+      maxPerWindow: 2,
+      windowMs: 60_000,
+    });
+    const middleware = rateLimitMiddleware({ limiter });
+    const request = {
+      serverName: "github",
+      toolName: "create_issue",
+      proxyToolName: "github__create_issue",
+      arguments: {},
+      raw: { name: "github__create_issue" },
+    };
+    const context = {
+      user: { id: "user-1" },
+      log: { info: vi.fn() },
+      res: new ResponseController(),
+    } as unknown as MiddlewareContext;
+
+    const results = await Promise.all([
+      middleware(request, context, async () => ({ content: [{ type: "text", text: "ok" }] })),
+      middleware(request, context, async () => ({ content: [{ type: "text", text: "ok" }] })),
+      middleware(request, context, async () => ({ content: [{ type: "text", text: "ok" }] })),
+    ]);
+
+    expect(results.filter((result) => !result.isError)).toHaveLength(2);
+    expect(results.filter((result) => result.isError)).toHaveLength(1);
+  });
+
   it("resolves identity from configured headers", async () => {
     const strategy = headerIdentityStrategy({
       userIdHeader: "x-user-id",

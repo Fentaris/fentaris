@@ -27,6 +27,12 @@ const defaultSensitiveKeys = [
   /api[-_]?key/i,
   /credential/i,
 ];
+const defaultSensitiveValuePatterns = [
+  /\bBearer\s+[A-Za-z0-9._~+/=-]{16,}\b/,
+  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
+  /\bgh[opsur]_[A-Za-z0-9_]{20,}\b/,
+  /\bgithub_pat_[A-Za-z0-9_]{40,}\b/,
+];
 
 export function normalizeProfilerRedaction(options: boolean | ProfilerRedactionOptions | undefined): NormalizedProfilerRedaction {
   if (options === false) {
@@ -74,6 +80,10 @@ function redactValue(
     return options.replacement;
   }
 
+  if (typeof value === "string" && matchesSensitiveValue(value)) {
+    return options.replacement;
+  }
+
   if (!value || typeof value !== "object" || value instanceof Date) {
     return value;
   }
@@ -101,6 +111,10 @@ function matchesKey(key: string, keys: Array<string | RegExp>): boolean {
 
 function matchesPath(path: string[], paths: string[][]): boolean {
   return paths.some((candidate) => candidate.length === path.length && candidate.every((segment, index) => segment === path[index]));
+}
+
+function matchesSensitiveValue(value: string): boolean {
+  return defaultSensitiveValuePatterns.some((pattern) => pattern.test(value));
 }
 
 function normalizePath(path: string | string[]): string[] {

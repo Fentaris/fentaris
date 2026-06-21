@@ -89,6 +89,7 @@ export interface Registry {
  */
 export interface RateLimitStore {
   increment(key: string, window: number): MaybePromise<number>;
+  consume(key: string, window: number, limit: number): MaybePromise<boolean>;
   get(key: string): MaybePromise<number>;
   reset(key: string): MaybePromise<void>;
 }
@@ -98,6 +99,7 @@ export interface RateLimitStore {
  * @pk
  */
 export interface RateLimiter {
+  consume(key: string): MaybePromise<boolean>;
   checkLimit(key: string): MaybePromise<boolean>;
   recordCall(key: string): MaybePromise<void>;
   getRemainingCalls(key: string): MaybePromise<number>;
