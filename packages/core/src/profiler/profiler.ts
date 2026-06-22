@@ -201,7 +201,7 @@ export class RuntimeProfiler {
           throw sinkError;
         }
         await this.config.onSinkError?.(sinkError, safeEvent);
-        await this.emitSinkFailure(sink, sinkError, safeEvent, index + 1);
+        await this.emitSinkFailure(sink, sinkError, safeEvent, index);
       }
     }
   }
@@ -210,7 +210,7 @@ export class RuntimeProfiler {
     failedSink: ProfilerSink,
     error: FentarisExtensionError,
     sourceEvent: RuntimeEvent,
-    nextSinkIndex: number,
+    failedSinkIndex: number,
   ): Promise<void> {
     if (!this.config) {
       return;
@@ -246,7 +246,11 @@ export class RuntimeProfiler {
       await handler.handler(failureEvent as never);
     }
 
-    for (const sink of this.config.sinks.slice(nextSinkIndex)) {
+    for (let sinkIndex = 0; sinkIndex < this.config.sinks.length; sinkIndex += 1) {
+      if (sinkIndex === failedSinkIndex) {
+        continue;
+      }
+      const sink = this.config.sinks[sinkIndex]!;
       try {
         await sink.write(failureEvent);
       } catch (notificationError) {

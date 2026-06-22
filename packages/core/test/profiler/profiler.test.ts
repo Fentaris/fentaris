@@ -177,6 +177,40 @@ describe("runtime profiler", () => {
     });
   });
 
+  it("reports sink failures to all non-failing sinks", async () => {
+    const firstSeen: RuntimeEvent[] = [];
+    const lastSeen: RuntimeEvent[] = [];
+    const runtime = new RuntimeProfiler(normalizeRuntimeProfiler({
+      level: "debug",
+      track: ["lifecycle", "profiler"],
+      sinks: [
+        (event) => firstSeen.push(event),
+        {
+          name: "broken",
+          write() {
+            throw new Error("sink down");
+          },
+        },
+        (event) => lastSeen.push(event),
+      ],
+    }));
+
+    await runtime.emit({
+      name: "runtime.ready",
+      category: "lifecycle",
+      level: "info",
+      timestamp: new Date(),
+      runtime: "test",
+      version: "0.0.0",
+      startupMs: 3,
+    });
+
+    expect(firstSeen.map((event) => event.name)).toEqual(["runtime.ready", "profiler.sink.error"]);
+    expect(lastSeen.map((event) => event.name)).toEqual(["profiler.sink.error", "runtime.ready"]);
+    expect(firstSeen[1]).toMatchObject({ name: "profiler.sink.error", sink: "broken" });
+    expect(lastSeen[0]).toMatchObject({ name: "profiler.sink.error", sink: "broken" });
+  });
+
   it("redacts default and custom sensitive values before dispatch", async () => {
     const seen: RuntimeEvent[] = [];
     const runtime = new RuntimeProfiler(normalizeRuntimeProfiler({
@@ -251,7 +285,14 @@ describe("runtime profiler", () => {
 
   it("exposes direct redaction for pre-rendered structured payloads", () => {
     const redacted = redactProfilerValue(
-      { error: { context: { authorization: "Bearer token" } } },
+      {
+        error: {
+          context: {
+            authorization: "Bearer token",
+            rawHeader: "Bearer abcdefghijklmnopqrstuvwxyz123456",
+          },
+        },
+      },
       {
         enabled: true,
         replacement: "[X]",
@@ -262,5 +303,6 @@ describe("runtime profiler", () => {
     );
 
     expect(redacted.error.context.authorization).toBe("[X]");
+    expect(redacted.error.context.rawHeader).toBe("[X]");
   });
 });
