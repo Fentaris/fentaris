@@ -155,13 +155,14 @@ describe("default runtime prompts", () => {
       expect(secretOutput).not.toContain("x");
       expect(secretOutput).not.toContain("y");
       expect(secretOutput).not.toContain("z");
-      expect(input.pauseCalls).toBe(0);
+      expect(input.pauseCalls).toBe(1);
       expect(input.rawModeCalls).toEqual([true, false]);
 
       const confirmed = rt.prompt.confirm("Store this credential?");
       input.write("yes\n");
       await expect(confirmed).resolves.toBe(true);
       rt.prompt.close();
+      expect(input.pauseCalls).toBeGreaterThanOrEqual(2);
     });
   });
 
@@ -278,6 +279,38 @@ describe("command routing helpers", () => {
         name: "secrets",
         args: ["set", "github.token"],
         options: { "value-stdin": true },
+      },
+    });
+  });
+
+  it("parses non-interactive on commands and nested commands", () => {
+    expect(parseCommand(["--non-interactive", "check"])).toEqual({
+      kind: "ok",
+      path: ["check"],
+      command: {
+        name: "check",
+        args: [],
+        options: { "non-interactive": true },
+      },
+    });
+
+    expect(parseCommand(["check", "--non-interactive"])).toEqual({
+      kind: "ok",
+      path: ["check"],
+      command: {
+        name: "check",
+        args: [],
+        options: { "non-interactive": true },
+      },
+    });
+
+    expect(parseCommand(["secrets", "set", "github.token", "--value-stdin", "--non-interactive"])).toEqual({
+      kind: "ok",
+      path: ["secrets", "set"],
+      command: {
+        name: "secrets",
+        args: ["set", "github.token"],
+        options: { "value-stdin": true, "non-interactive": true },
       },
     });
   });
@@ -804,6 +837,37 @@ describe("secrets", () => {
     const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
     expect(credentials.defaults["github.token"]).toBe("stdin-secret");
     expect(rt.prompt.text).not.toHaveBeenCalled();
+    expect(rt.prompt.confirm).not.toHaveBeenCalled();
+  });
+
+  it("supports non-interactive secrets set when all input is explicit", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const input = new PassThrough();
+    input.end("stdin-secret\n");
+
+    const rt = runtime(dir);
+    await withFakeStdin(input, async () => {
+      await expect(main(["secrets", "set", "github.token", "--value-stdin", "--non-interactive"], rt)).resolves.toBe(0);
+    });
+
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(credentials.defaults["github.token"]).toBe("stdin-secret");
+    expect(rt.prompt.text).not.toHaveBeenCalled();
+    expect(rt.prompt.select).not.toHaveBeenCalled();
+    expect(rt.prompt.confirm).not.toHaveBeenCalled();
+  });
+
+  it("fails non-interactive secrets set instead of prompting for missing input", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const rt = runtime(dir);
+
+    await expect(main(["secrets", "set", "--non-interactive"], rt)).resolves.toBe(1);
+
+    expect(rt.out.error).toHaveBeenCalledWith(expect.stringContaining("Command requires interactive input"));
+    expect(rt.prompt.text).not.toHaveBeenCalled();
+    expect(rt.prompt.select).not.toHaveBeenCalled();
     expect(rt.prompt.confirm).not.toHaveBeenCalled();
   });
 

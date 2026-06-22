@@ -36,6 +36,7 @@ export type Runtime = {
   runner: ProcessRunner;
   probe: ExecProbe;
   prompt: Prompt;
+  nonInteractive?: boolean;
 };
 
 export type TemplateInput = {
