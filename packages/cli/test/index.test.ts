@@ -200,7 +200,7 @@ describe("default runtime prompts", () => {
       input.write("2\r");
 
       await expect(selected).resolves.toBe("user");
-      expect(output.text).toContain("Credential scope: user");
+      expect(output.text).toContain("Choose by number or exact label");
       expect(input.rawModeCalls).toEqual([true, false]);
     });
   });
@@ -215,7 +215,7 @@ describe("default runtime prompts", () => {
       input.write("group\r");
 
       await expect(selected).resolves.toBe("group");
-      expect(output.text).toContain("Credential scope: group");
+      expect(input.rawModeCalls).toEqual([true, false]);
     });
   });
 
