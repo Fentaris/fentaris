@@ -1357,6 +1357,13 @@ describe("McpProxy", () => {
     let recordedCalls = 0;
     const limiter = {
       metadata: { maxPerWindow: 1, windowMs: 60_000 },
+      consume: vi.fn(async () => {
+        if (recordedCalls >= 1) {
+          return false;
+        }
+        recordedCalls += 1;
+        return true;
+      }),
       checkLimit: vi.fn(async () => recordedCalls < 1),
       recordCall: vi.fn(async () => {
         recordedCalls += 1;
@@ -1377,8 +1384,9 @@ describe("McpProxy", () => {
       content: [{ type: "text", text: "Rate limit exceeded" }],
     });
 
-    expect(limiter.checkLimit).toHaveBeenCalledTimes(2);
-    expect(limiter.recordCall).toHaveBeenCalledTimes(1);
+    expect(limiter.consume).toHaveBeenCalledTimes(2);
+    expect(limiter.checkLimit).not.toHaveBeenCalled();
+    expect(limiter.recordCall).not.toHaveBeenCalled();
     expect(transport.callTool).toHaveBeenCalledOnce();
   });
 

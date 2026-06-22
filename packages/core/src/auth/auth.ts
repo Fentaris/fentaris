@@ -137,6 +137,10 @@ export class FentarisAuth {
     return `sha256:${hashApiKey(apiKey)}`;
   }
 
+  static compareApiKey(candidate: string, provided: string): boolean {
+    return compareApiKey(candidate, provided);
+  }
+
   resolveApiKey(apiKey: string): string | null {
     for (const [userId, entry] of Object.entries(this.credentials.users)) {
       if (entry.apiKeys.some((candidate) => compareApiKey(candidate, apiKey))) {
@@ -229,7 +233,7 @@ function deriveKey(key: string | Buffer, salt: Buffer): Buffer {
   return createHash("sha256").update(key).update(salt).digest();
 }
 
-export function compareApiKey(candidate: string, provided: string): boolean {
+function compareApiKey(candidate: string, provided: string): boolean {
   const normalizedCandidate = candidate.startsWith("sha256:") ? candidate.slice("sha256:".length) : hashApiKey(candidate);
   const normalizedProvided = hashApiKey(provided);
   const left = Buffer.from(normalizedCandidate, "hex");

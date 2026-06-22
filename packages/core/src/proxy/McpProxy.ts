@@ -82,7 +82,7 @@ import {
 import { filterToolsByPolicy, getToolPermission } from "../policy.js";
 import { getCapabilityPermission, toCapabilityPermissions, toCapabilityRequest } from "../policy.js";
 import { rateLimitKey } from "../rate-limit/index.js";
-import { compareApiKey, type FentarisAuth } from "../auth/auth.js";
+import { FentarisAuth } from "../auth.js";
 import { resolveCredentialSource, type CredentialSourceMap } from "../credentials/index.js";
 import {
   buildSubjectIndex,
@@ -2743,7 +2743,7 @@ function declaredApiKeyIdentityStrategy(groups: () => Group[]): IdentityStrategy
       for (const user of groups().flatMap((group) => group.users)) {
         for (const source of user.apiKeys) {
           const candidate = await resolveCredentialSource(source);
-          if (compareApiKey(candidate, apiKey)) {
+          if (FentarisAuth.compareApiKey(candidate, apiKey)) {
             return { id: user.id };
           }
         }
