@@ -88,6 +88,25 @@ describe("HttpTransport", () => {
     await expect(allowed.listTools()).resolves.toEqual({ tools: [] });
     expect(fetchMock).toHaveBeenCalledOnce();
   });
+
+  it("blocks private IPv4 addresses encoded as IPv4-mapped IPv6 literals", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ tools: [] }));
+
+    for (const baseUrl of [
+      "http://[::ffff:7f00:1]/latest",
+      "http://[::ffff:a9fe:a9fe]/latest",
+      "http://[::ffff:c0a8:101]/latest",
+    ]) {
+      const transport = new HttpTransport({
+        baseUrl,
+        fetch: fetchMock as unknown as typeof fetch,
+      });
+
+      await expect(transport.listTools()).rejects.toThrow(/Blocked upstream URL/);
+    }
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 function jsonResponse(value: unknown): Response {

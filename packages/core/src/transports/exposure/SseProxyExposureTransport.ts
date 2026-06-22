@@ -204,16 +204,21 @@ function isBoundSessionRequest(
   identity: IdentityMetadata | undefined,
   subject: ResolvedSubject | undefined,
 ): boolean {
-  if (!identity?.authenticated) {
-    return false;
-  }
-
   const requestBinding = createSessionBinding(user, identity, subject);
-  if (!requestBinding.authenticated) {
-    return false;
+  if (session.binding.authenticated) {
+    return (
+      requestBinding.authenticated &&
+      Boolean(requestBinding.userId) &&
+      requestBinding.userId === session.binding.userId &&
+      requestBinding.strategy === session.binding.strategy
+    );
   }
 
-  return Boolean(requestBinding.userId) && requestBinding.userId === session.binding.userId && requestBinding.strategy === session.binding.strategy;
+  return (
+    !requestBinding.authenticated &&
+    requestBinding.userId === session.binding.userId &&
+    requestBinding.strategy === session.binding.strategy
+  );
 }
 
 function sendJsonRpcError(res: ServerResponse, httpStatus: number, code: number, message: string): void {

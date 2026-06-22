@@ -130,6 +130,24 @@ describe("governance primitives", () => {
     expect(results.filter((result) => result.isError)).toHaveLength(1);
   });
 
+  it("does not spend daily quota when the shorter window is exhausted", async () => {
+    const store = new MemoryRateLimitStore();
+    const limiter = new SlidingWindowRateLimiter({
+      store,
+      maxPerWindow: 1,
+      windowMs: 60_000,
+      maxDailyCalls: 2,
+      keyPrefix: "test",
+    });
+    const key = "user-1:github:create_issue";
+
+    await expect(limiter.consume(key)).resolves.toBe(true);
+    await expect(limiter.consume(key)).resolves.toBe(false);
+
+    await store.reset(`test:window:${key}`);
+    await expect(limiter.consume(key)).resolves.toBe(true);
+  });
+
   it("resolves identity from configured headers", async () => {
     const strategy = headerIdentityStrategy({
       userIdHeader: "x-user-id",

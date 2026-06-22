@@ -1323,14 +1323,16 @@ describe("McpProxy", () => {
   });
 
   it("enforces policy-attached rate limiters without manual middleware", async () => {
-    let recordedCalls = 0;
+    let consumedCalls = 0;
     const limiter = {
       metadata: { maxPerWindow: 1, windowMs: 60_000 },
-      checkLimit: vi.fn(async () => recordedCalls < 1),
-      recordCall: vi.fn(async () => {
-        recordedCalls += 1;
+      consume: vi.fn(async () => {
+        consumedCalls += 1;
+        return consumedCalls <= 1;
       }),
-      getRemainingCalls: vi.fn(async () => Math.max(0, 1 - recordedCalls)),
+      checkLimit: vi.fn(async () => true),
+      recordCall: vi.fn(async () => undefined),
+      getRemainingCalls: vi.fn(async () => Math.max(0, 1 - consumedCalls)),
     };
     const transport = new MockTransport();
     const proxy = new McpProxy({
@@ -1346,8 +1348,9 @@ describe("McpProxy", () => {
       content: [{ type: "text", text: "Rate limit exceeded" }],
     });
 
-    expect(limiter.checkLimit).toHaveBeenCalledTimes(2);
-    expect(limiter.recordCall).toHaveBeenCalledTimes(1);
+    expect(limiter.consume).toHaveBeenCalledTimes(2);
+    expect(limiter.checkLimit).not.toHaveBeenCalled();
+    expect(limiter.recordCall).not.toHaveBeenCalled();
     expect(transport.callTool).toHaveBeenCalledOnce();
   });
 

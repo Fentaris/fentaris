@@ -111,6 +111,11 @@ function classifyIpv4(address: string): string | undefined {
 
 function classifyIpv6(address: string): string | undefined {
   const normalized = address.toLowerCase();
+  const mappedIpv4 = ipv4MappedAddress(normalized);
+  if (mappedIpv4) {
+    return classifyIpv4(mappedIpv4);
+  }
+
   if (normalized === "::1") {
     return "loopback";
   }
@@ -124,4 +129,31 @@ function classifyIpv6(address: string): string | undefined {
     return "link-local";
   }
   return undefined;
+}
+
+function ipv4MappedAddress(address: string): string | undefined {
+  if (!address.startsWith("::ffff:")) {
+    return undefined;
+  }
+
+  const suffix = address.slice("::ffff:".length);
+  if (isIP(suffix) === 4) {
+    return suffix;
+  }
+
+  const groups = suffix.split(":");
+  if (groups.length !== 2) {
+    return undefined;
+  }
+
+  if (!groups.every((group) => /^[0-9a-f]{1,4}$/u.test(group))) {
+    return undefined;
+  }
+
+  const [high, low] = groups.map((group) => Number.parseInt(group, 16));
+  if (!Number.isInteger(high) || !Number.isInteger(low) || high < 0 || high > 0xffff || low < 0 || low > 0xffff) {
+    return undefined;
+  }
+
+  return `${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`;
 }

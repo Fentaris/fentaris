@@ -194,6 +194,37 @@ describe("proxy exposure transports", () => {
     await handle.close();
   });
 
+  it("continues unauthenticated HTTP sessions when identity is optional", async () => {
+    const runtime = createRuntime({ identityRequired: false });
+    const handle = await new HttpProxyExposureTransport({ port: 0 }).listen(runtime);
+    const server = fakes.httpServers[0];
+
+    const initialized = await request(server, {
+      method: "POST",
+      url: "/mcp",
+      headers: {},
+    });
+    const sessionId = initialized.headers["mcp-session-id"];
+    expect(initialized.status).toBe(200);
+    expect(sessionId).toBeTruthy();
+
+    const continued = await request(server, {
+      method: "POST",
+      url: "/mcp",
+      headers: { "mcp-session-id": sessionId ?? "" },
+    });
+    expect(continued.status).toBe(200);
+
+    const upgraded = await request(server, {
+      method: "POST",
+      url: "/mcp",
+      headers: { "mcp-session-id": sessionId ?? "", authorization: "Bearer alice" },
+    });
+    expect(upgraded.status).toBe(401);
+
+    await handle.close();
+  });
+
   it("requires authenticated SSE /messages requests for the bound session", async () => {
     const runtime = createRuntime({ identityRequired: true });
     const handle = await new SseProxyExposureTransport({ port: 0 }).listen(runtime);
@@ -228,6 +259,35 @@ describe("proxy exposure transports", () => {
       headers: { authorization: "Bearer alice" },
     });
     expect(matched.status).toBe(200);
+
+    await handle.close();
+  });
+
+  it("continues unauthenticated SSE sessions when identity is optional", async () => {
+    const runtime = createRuntime({ identityRequired: false });
+    const handle = await new SseProxyExposureTransport({ port: 0 }).listen(runtime);
+    const server = fakes.httpServers[0];
+
+    await request(server, {
+      method: "GET",
+      url: "/sse",
+      headers: {},
+    });
+    const sessionId = fakes.sseTransports[0]?.sessionId;
+
+    const continued = await request(server, {
+      method: "POST",
+      url: `/messages?sessionId=${sessionId}`,
+      headers: {},
+    });
+    expect(continued.status).toBe(200);
+
+    const upgraded = await request(server, {
+      method: "POST",
+      url: `/messages?sessionId=${sessionId}`,
+      headers: { authorization: "Bearer alice" },
+    });
+    expect(upgraded.status).toBe(401);
 
     await handle.close();
   });

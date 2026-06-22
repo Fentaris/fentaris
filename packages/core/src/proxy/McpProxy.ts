@@ -6,20 +6,11 @@ import { createContextualLogger, createProxyContext, createPolicyCan, createCapa
 import { isCapabilityAllowed } from "./capabilities.js";
 import { dispatchRouteHandler } from "./middleware.js";
 import { routeCompletion, completionTarget, capabilityToolRequest, isStructuredPolicyErrorResult, toStructuredError } from "./operations.js";
-import { operationEventName, matchesCallHook, matchesEventFilter, dispatchCallHooks, emitProxyEvent, type EventEntry } from "./events.js";
+import { operationEventName, matchesCallHook, dispatchCallHooks, emitProxyEvent, type EventEntry } from "./events.js";
 import { emitLifecycle } from "./lifecycle.js";
 import { createSdkServer } from "./sdkServer.js";
 import { ServerCatalog } from "./serverCatalog.js";
-import { Server as McpSdkServer } from "@modelcontextprotocol/sdk/server/index.js";
 import {
-  CallToolRequestSchema,
-  CompleteRequestSchema,
-  GetPromptRequestSchema,
-  ListPromptsRequestSchema,
-  ListResourcesRequestSchema,
-  ListResourceTemplatesRequestSchema,
-  ListToolsRequestSchema,
-  ReadResourceRequestSchema,
   type CallToolRequest,
   type CallToolResult,
   type CompleteRequest,
@@ -1940,11 +1931,10 @@ export class McpProxy {
     }
 
     const key = rateLimitKey(request, context.user);
-    if (!(await limiter.checkLimit(key))) {
+    if (!(await limiter.consume(key))) {
       return context.res.deny("Rate limit exceeded");
     }
 
-    await limiter.recordCall(key);
     return undefined;
   }
 
@@ -2783,8 +2773,7 @@ function isRateLimiter(value: unknown): value is RateLimiter {
   return (
     value !== null &&
     typeof value === "object" &&
-    "checkLimit" in value &&
-    "recordCall" in value &&
+    "consume" in value &&
     "getRemainingCalls" in value
   );
 }
