@@ -43,7 +43,7 @@ const globalOptions: CliOptionSpec[] = [
 const localSecretsKeyOption: CliOptionSpec = {
   name: "key",
   valueName: "KEY",
-  description: "Use an explicit local encryption key instead of FENTARIS_AUTH_KEY or an interactive prompt.",
+  description: "Use an explicit local encryption key instead of FENTARIS_AUTH_KEY or an interactive prompt. Prefer FENTARIS_AUTH_KEY for automation.",
 };
 
 export const cliSpec: CliCommandSpec = {
@@ -166,7 +166,8 @@ export const cliSpec: CliCommandSpec = {
           options: [
             { name: "user", valueName: "ID", description: "Store the credential for a user scope." },
             { name: "group", valueName: "ID", description: "Store the credential for a group scope." },
-            { name: "value", valueName: "VALUE", description: "Credential value. If omitted, an interactive prompt is used." },
+            { name: "value", valueName: "VALUE", description: "Credential value. Prefer --value-stdin to avoid exposing secrets in process arguments." },
+            { name: "value-stdin", description: "Read the credential value from stdin instead of process arguments or an interactive prompt." },
             localSecretsKeyOption,
             { name: "help", short: "h", description: "Print help" },
           ],
@@ -213,6 +214,7 @@ export const cliSpec: CliCommandSpec = {
           options: [
             { name: "strict", description: "Treat warnings as failures." },
             { name: "json", description: "Output diagnostics as JSON." },
+            localSecretsKeyOption,
             { name: "help", short: "h", description: "Print help" },
           ],
         },

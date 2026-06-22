@@ -63,7 +63,7 @@ export interface SecretsBackend {
   listRefs(): Promise<SecretRef[]>;
   has(ref: string, scope: SecretScope): Promise<boolean>;
   set(ref: string, value: string, scope: SecretScope): Promise<void>;
-  unset(ref: string, scope: SecretScope): Promise<void>;
+  unset(ref: string, scope: SecretScope): Promise<boolean>;
 }
 
 /**
