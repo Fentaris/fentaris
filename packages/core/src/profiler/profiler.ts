@@ -184,7 +184,8 @@ export class RuntimeProfiler {
       await handler.handler(safeEvent as never);
     }
 
-    for (const sink of this.config.sinks) {
+    for (let index = 0; index < this.config.sinks.length; index += 1) {
+      const sink = this.config.sinks[index]!;
       try {
         await sink.write(safeEvent);
       } catch (error) {
@@ -200,6 +201,67 @@ export class RuntimeProfiler {
           throw sinkError;
         }
         await this.config.onSinkError?.(sinkError, safeEvent);
+        await this.emitSinkFailure(sink, sinkError, safeEvent, index);
+      }
+    }
+  }
+
+  private async emitSinkFailure(
+    failedSink: ProfilerSink,
+    error: FentarisExtensionError,
+    sourceEvent: RuntimeEvent,
+    failedSinkIndex: number,
+  ): Promise<void> {
+    if (!this.config) {
+      return;
+    }
+
+    // Sink failure events are observability only: they report the isolated sink
+    // error without recursively re-entering the sink that just failed.
+    const failureEvent = redactProfilerValue(createRuntimeEvent({
+      name: "profiler.sink.error",
+      category: "profiler",
+      level: "error",
+      sink: failedSink.name,
+      server: sourceEvent.server,
+      group: sourceEvent.group,
+      user: sourceEvent.user,
+      operation: sourceEvent.operation ?? "profiler:sink",
+      error: toRuntimeErrorPayload(error),
+      metadata: { sourceEvent: sourceEvent.name },
+      message: "Profiler sink failed",
+    }), this.config.redaction);
+
+    if (!matchesProfilerConfig(this.config, failureEvent)) {
+      return;
+    }
+
+    for (const handler of this.config.handlers) {
+      if (handler.eventName && handler.eventName !== failureEvent.name) {
+        continue;
+      }
+      if (handler.where && !matchesFilter(handler.where, failureEvent)) {
+        continue;
+      }
+      await handler.handler(failureEvent as never);
+    }
+
+    for (let sinkIndex = 0; sinkIndex < this.config.sinks.length; sinkIndex += 1) {
+      if (sinkIndex === failedSinkIndex) {
+        continue;
+      }
+      const sink = this.config.sinks[sinkIndex]!;
+      try {
+        await sink.write(failureEvent);
+      } catch (notificationError) {
+        await this.config.onSinkError?.(new FentarisExtensionError("Profiler sink failed while reporting sink failure", {
+          cause: notificationError,
+          context: {
+            boundary: "sink",
+            sink: sink.name,
+            eventName: failureEvent.name,
+          },
+        }), failureEvent);
       }
     }
   }

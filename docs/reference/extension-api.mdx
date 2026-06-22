@@ -208,6 +208,10 @@ class CustomRegistry implements Registry {
 import type { RateLimiter } from "@fentaris/core/extensions";
 
 class CustomRateLimiter implements RateLimiter {
+  async consume() {
+    return true;
+  }
+
   async checkLimit() {
     return true;
   }
@@ -219,6 +223,8 @@ class CustomRateLimiter implements RateLimiter {
   }
 }
 ```
+
+`consume(key)` is the enforcement path used by middleware. Custom limiters and custom `RateLimitStore` implementations should perform the check and increment atomically for each limiter key, for example with a Redis Lua script, transaction, or native atomic counter operation. `checkLimit()` and `recordCall()` remain useful for diagnostics and compatibility, but they are not used for middleware enforcement.
 
 ### Logger driver
 

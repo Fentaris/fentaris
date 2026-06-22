@@ -25,7 +25,7 @@ new Logger({
 - `onWrite`: callback for side effects.
 - `redact`: `true` by default for sensitive keys, `false` to disable, or an object with `keys`, `paths`, `replacement`, and a custom `redact(value, path, key)` callback.
 
-Redaction runs before entries reach the configured driver or `onWrite`. Fentaris redacts common credential fields such as tokens, secrets, passwords, authorization headers, API keys, and credential values by default.
+Redaction runs before entries reach the configured driver or `onWrite`. Fentaris redacts common credential fields such as tokens, secrets, passwords, authorization headers, API keys, and credential values by default. It also masks high-confidence token-like values, including bearer tokens, JWT-like strings, and GitHub-style tokens, even when they appear under generic fields such as `input`, `body`, or `query`.
 
 ### Methods
 

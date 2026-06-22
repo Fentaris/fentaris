@@ -6,20 +6,11 @@ import { createContextualLogger, createProxyContext, createPolicyCan, createCapa
 import { isCapabilityAllowed } from "./capabilities.js";
 import { dispatchRouteHandler } from "./middleware.js";
 import { routeCompletion, completionTarget, capabilityToolRequest, isStructuredPolicyErrorResult, toStructuredError } from "./operations.js";
-import { operationEventName, matchesCallHook, matchesEventFilter, dispatchCallHooks, emitProxyEvent, type EventEntry } from "./events.js";
+import { operationEventName, matchesCallHook, dispatchCallHooks, emitProxyEvent, type EventEntry } from "./events.js";
 import { emitLifecycle } from "./lifecycle.js";
 import { createSdkServer } from "./sdkServer.js";
 import { ServerCatalog } from "./serverCatalog.js";
-import { Server as McpSdkServer } from "@modelcontextprotocol/sdk/server/index.js";
 import {
-  CallToolRequestSchema,
-  CompleteRequestSchema,
-  GetPromptRequestSchema,
-  ListPromptsRequestSchema,
-  ListResourcesRequestSchema,
-  ListResourceTemplatesRequestSchema,
-  ListToolsRequestSchema,
-  ReadResourceRequestSchema,
   type CallToolRequest,
   type CallToolResult,
   type CompleteRequest,
@@ -80,7 +71,8 @@ import {
   toProxyToolName,
 } from "../nameMapping.js";
 import { filterToolsByPolicy, getToolPermission } from "../policy.js";
-import { getCapabilityPermission, toCapabilityPermissions } from "../policy.js";
+import { getCapabilityPermission, toCapabilityPermissions, toCapabilityRequest } from "../policy.js";
+import { rateLimitKey } from "../rate-limit/index.js";
 import { FentarisAuth } from "../auth.js";
 import { resolveCredentialSource, type CredentialSourceMap } from "../credentials/index.js";
 import {
@@ -112,7 +104,7 @@ import type {
   ToolCallHookFilter,
 } from "../types/middleware.js";
 import type { ProxyOperationResult } from "../types/mcp-operation.js";
-import type { CapabilityPermission, ErrorMapper, IdentityStrategy, Policy, Registry } from "../types/policy.js";
+import type { CapabilityPermission, ErrorMapper, IdentityStrategy, Policy, PolicyDecision, RateLimiter, Registry } from "../types/policy.js";
 import type {
   ProxyContext,
   ProxyEventFilter,
@@ -132,6 +124,7 @@ import type {
 
 type ProjectRuntimeDefaults = {
   port?: number;
+  host?: string;
   path?: string;
 };
 
@@ -162,6 +155,7 @@ function readProjectRuntimeDefaultsFile(configPath: string): ProjectRuntimeDefau
     const config = JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown>;
     return {
       ...(typeof config.port === "number" ? { port: config.port } : {}),
+      ...(typeof config.host === "string" ? { host: config.host } : {}),
       ...(typeof config.path === "string" ? { path: config.path } : {}),
     };
   } catch {
@@ -194,6 +188,7 @@ type FluentGroupDeclaration = {
 export type McpProxyOptions = {
   servers?: McpServer[];
   port?: number;
+  host?: string;
   path?: string;
   logger?: Logger;
   user?: UserContext | ((request: IncomingMessage) => UserContext | Promise<UserContext>);
@@ -240,6 +235,7 @@ export type IdentityResolverOptions = {
  */
 export type McpProxyStartOptions = {
   port?: number;
+  host?: string;
   path?: string;
   startupTimeoutMs?: number;
 };
@@ -287,6 +283,7 @@ export class McpProxy {
   private readonly name: string;
   private readonly version: string;
   private readonly defaultPort?: number;
+  private readonly defaultHost?: string;
   private readonly defaultPath: string;
   private runtimeValidationConfig: McpProxyOptions;
   private readonly namedPolicies = new Map<string, GovernancePolicy>();
@@ -332,6 +329,7 @@ export class McpProxy {
     });
     const projectDefaults = readProjectRuntimeDefaults();
     this.defaultPort = options.port ?? projectDefaults.port;
+    this.defaultHost = options.host ?? projectDefaults.host;
     this.defaultPath = options.path ?? projectDefaults.path ?? "/mcp";
     this.runtimeValidationConfig = {
       ...options,
@@ -566,13 +564,15 @@ export class McpProxy {
     const startedAt = Date.now();
     const result = await this.lifecycle.start(async () => {
       const port = options.port ?? this.defaultPort ?? 3000;
+      const host = options.host ?? this.defaultHost;
       const path = options.path ?? this.defaultPath;
       const handle = await this.listenInternal(
         new HttpProxyExposureTransport({
           port,
+          host,
           path,
           onStarted: () => {
-            this.printStartupBanner(port, path);
+            this.printStartupBanner(port, path, host);
             callback?.();
           },
         }),
@@ -838,7 +838,7 @@ export class McpProxy {
       tools = eventResult.tools;
     }
 
-    return { tools };
+    return { tools: this.filterVisibleProxyTools(tools, userGroups) };
   }
 
   /**
@@ -887,6 +887,8 @@ export class McpProxy {
       context.policyDecision = await evaluateGroupPolicies(userGroups, request, resolvedUser, context);
     } else if (this.globalPolicy) {
       context.policyDecision = await this.globalPolicy.evaluate(request, resolvedUser, context);
+    } else {
+      context.policyDecision = this.defaultAllowDecision(request, resolvedUser);
     }
     context.policy = {
       allowed: context.policyDecision?.allowed,
@@ -918,50 +920,56 @@ export class McpProxy {
     const startedAt = Date.now();
     this.writeAutoLog("start", log, request, context, startedAt);
     try {
+      if (!context.policyDecision.allowed) {
+        const denied = this.policyDeniedResult(context);
+        this.writeAutoLog("failure", log, request, context, startedAt, denied);
+        await this.emitRuntimeEvent(createRuntimeEvent({
+          name: "mcp.call.success",
+          category: "mcp",
+          level: "warn",
+          server: serverName,
+          group: context.policy.matchedGroups[0],
+          user: resolvedUser.id,
+          operation: "tool:call",
+          target: toolName,
+          result: denied,
+          durationMs: Date.now() - startedAt,
+          message: "MCP tool call completed",
+        }));
+        return denied;
+      }
+
+      const rateLimited = await this.enforcePolicyLimiter(request, context);
+      if (rateLimited) {
+        this.writeAutoLog("failure", log, request, context, startedAt, rateLimited);
+        return rateLimited;
+      }
+
       let upstreamUser = resolvedUser;
-      if (server && (!context.policyDecision || context.policyDecision.allowed)) {
+      if (server) {
         const upstream = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
         upstreamUser = upstream.user;
         context.credentialSources = upstream.credentialSource ? [upstream.credentialSource] : undefined;
         context.credentials.sources = context.credentialSources ?? [];
       }
 
-      if (!context.policyDecision || context.policyDecision.allowed) {
-        await emitProxyEvent(this.eventHandlers, "tool:start", { ctx: context, durationMs: 0 });
-        await this.emitRuntimeEvent(createRuntimeEvent({
-          name: "mcp.call.start",
-          category: "mcp",
-          level: "info",
-          server: serverName,
-          group: context.policy.matchedGroups[0],
-          user: resolvedUser.id,
-          operation: "tool:call",
-          target: toolName,
-          arguments: params.arguments,
-          message: "MCP tool call started",
-        }));
-      }
+      await emitProxyEvent(this.eventHandlers, "tool:start", { ctx: context, durationMs: 0 });
+      await this.emitRuntimeEvent(createRuntimeEvent({
+        name: "mcp.call.start",
+        category: "mcp",
+        level: "info",
+        server: serverName,
+        group: context.policy.matchedGroups[0],
+        user: resolvedUser.id,
+        operation: "tool:call",
+        target: toolName,
+        arguments: params.arguments,
+        message: "MCP tool call started",
+      }));
       const hookResult = await dispatchCallHooks(this.callHooks, request, context);
       const result =
         hookResult ??
         (await this.dispatchRoutes(0, request, context, () => {
-          if (context.policyDecision && !context.policyDecision.allowed) {
-            const denied = context.res.fail(
-              FentarisErrorCode.PolicyDenied,
-              context.policyDecision.reason ?? "Tool call denied by policy",
-            );
-            return Promise.resolve({
-              ...denied,
-              _meta: {
-                ...denied._meta,
-                error: {
-                  ...(isRecord(denied._meta?.error) ? denied._meta.error : {}),
-                  policy: context.policyDecision.metadata,
-                },
-              },
-            });
-          }
-
           if (!server) {
             return Promise.resolve(new ResponseController().deny(`Unknown MCP server "${serverName}"`));
           }
@@ -1836,6 +1844,8 @@ export class McpProxy {
       decision = await evaluateGroupPolicies(userGroups, request, user, context);
     } else if (this.globalPolicy) {
       decision = await this.globalPolicy.evaluate(request, user, context);
+    } else {
+      decision = this.defaultAllowDecision(request, user);
     }
 
     context.policyDecision = decision;
@@ -1872,6 +1882,68 @@ export class McpProxy {
     }
 
     return context;
+  }
+
+  private defaultAllowDecision(request: ToolCallRequest | CapabilityOperationRequest, user: UserContext): PolicyDecision {
+    const capability = toCapabilityRequest(request);
+    return {
+      allowed: true,
+      metadata: {
+        policyName: "default-allow",
+        matchedPermissions: [],
+        serverName: capability.serverName,
+        operation: capability.operation,
+        target: capability.target,
+        targetKind: capability.targetKind,
+        toolName: capability.targetKind === "tool" ? capability.target : undefined,
+        userId: user.id,
+        effect: "allow",
+      },
+    };
+  }
+
+  private filterVisibleProxyTools(tools: ListToolsResult["tools"], groups: Group[]): ListToolsResult["tools"] {
+    return tools.filter((tool) => {
+      const serverName = serverNameFromProxyTool(tool.name);
+      if (this.groups.length > 0) {
+        return filterToolsByGroupPolicies([tool], serverName, groups).length > 0;
+      }
+      if (this.globalPolicy) {
+        return filterToolsByPolicy([tool], serverName, this.globalPolicy).length > 0;
+      }
+      return true;
+    });
+  }
+
+  private policyDeniedResult(context: ProxyContext): CallToolResult {
+    const denied = context.res.fail(
+      FentarisErrorCode.PolicyDenied,
+      context.policyDecision?.reason ?? "Tool call denied by policy",
+    );
+    return {
+      ...denied,
+      _meta: {
+        ...denied._meta,
+        error: {
+          ...(isRecord(denied._meta?.error) ? denied._meta.error : {}),
+          policy: context.policyDecision?.metadata,
+        },
+      },
+    };
+  }
+
+  private async enforcePolicyLimiter(request: ToolCallRequest, context: ProxyContext): Promise<CallToolResult | undefined> {
+    const limiter = context.policyDecision?.metadata?.limiter;
+    if (!isRateLimiter(limiter)) {
+      return undefined;
+    }
+
+    const key = rateLimitKey(request, context.user);
+    if (!(await limiter.consume(key))) {
+      return context.res.deny("Rate limit exceeded");
+    }
+
+    return undefined;
   }
 
   /**
@@ -2188,7 +2260,7 @@ export class McpProxy {
    * Print the startup banner to stderr.
    * @pk
    */
-  private printStartupBanner(port: number, path: string): void {
+  private printStartupBanner(port: number, path: string, host = "127.0.0.1"): void {
     const art = [
       "███████╗███████╗███╗   ██╗████████╗ █████╗ ██████╗ ██╗███████╗",
       "██╔════╝██╔════╝████╗  ██║╚══██╔══╝██╔══██╗██╔══██╗██║██╔════╝",
@@ -2234,7 +2306,7 @@ export class McpProxy {
     console.error();
     console.error(" \x1b[38;2;6;182;212m🐾 Fentaris Proxy\x1b[0m \x1b[90mv0.1.0\x1b[0m");
     console.error(" \x1b[32m\x1b[1m🚀 Proxy ready\x1b[0m");
-    console.error(` \x1b[36m⚡ Listening on:\x1b[0m  http://localhost:${port}${path}`);
+    console.error(` \x1b[36m⚡ Listening on:\x1b[0m  http://${host}:${port}${path}`);
     console.error();
   }
 
@@ -2586,6 +2658,10 @@ class McpProxyGroupHandle implements ProxyGroupHandle {
     return new McpProxyMcpHandle(this.proxy, name, this.id);
   }
 
+  server(name: string): ProxyMcpHandle {
+    return this.mcp(name);
+  }
+
   users(...users: User[]): ProxyGroupHandle {
     this.proxy.addGroupUsers(this.id, users);
     return this;
@@ -2670,7 +2746,7 @@ function declaredApiKeyIdentityStrategy(groups: () => Group[]): IdentityStrategy
       for (const user of groups().flatMap((group) => group.users)) {
         for (const source of user.apiKeys) {
           const candidate = await resolveCredentialSource(source);
-          if (candidate === apiKey || candidate === FentarisAuth.hashApiKey(apiKey)) {
+          if (FentarisAuth.compareApiKey(candidate, apiKey)) {
             return { id: user.id };
           }
         }
@@ -2695,6 +2771,23 @@ function toUpstreamEnv(binding: ServerCredentialBinding, credential: string): Re
 
 function isRecord(value: unknown): value is Record<string, string> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function serverNameFromProxyTool(toolName: string): string {
+  try {
+    return fromProxyToolName(toolName).serverName;
+  } catch {
+    return "*";
+  }
+}
+
+function isRateLimiter(value: unknown): value is RateLimiter {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "consume" in value &&
+    "getRemainingCalls" in value
+  );
 }
 
 function stringMetadata(metadata: Record<string, unknown> | undefined, key: string): string | undefined {

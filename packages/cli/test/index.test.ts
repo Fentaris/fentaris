@@ -95,7 +95,7 @@ async function writeHealthyProject(root: string, authDirectory = ".fentaris"): P
   await writeFile(join(root, "README.md"), "# Demo\n");
   await writeFile(join(root, ".env"), "FENTARIS_AUTH_KEY=test-key\n");
   await writeFile(join(root, ".gitignore"), `${authDirectory}/\n`);
-  await writeFile(join(root, "src", "index.ts"), "console.log('demo');\n");
+  await writeFile(join(root, "src", "index.ts"), "import { Policy } from '@fentaris/core';\nPolicy.allowAll();\n");
   await writeFile(join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
   await writeFile(
     join(root, "package.json"),
@@ -342,7 +342,7 @@ describe("project template", () => {
     expect(rendered.files["README.md"]).not.toContain("Secrets workflow");
     expect(rendered.files["src/index.ts"]).toContain("https://mcp.specification.website/mcp");
     expect(rendered.files["src/index.ts"]).toContain("app.mcp(");
-    expect(rendered.files["src/index.ts"]).toContain("const app = fentaris();");
+    expect(rendered.files["src/index.ts"]).toContain("policy: Policy.allowAll()");
     expect(rendered.files["src/index.ts"]).not.toContain("user:");
     expect(rendered.files["src/index.ts"]).not.toContain("credentialJson");
     expect(rendered.files["src/index.ts"]).not.toContain("policy(");
@@ -488,6 +488,42 @@ describe("project commands", () => {
     await expect(main(["check", "--offline"], rt)).resolves.toBe(0);
     await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
     await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
+  });
+
+  it("warns during check when the entrypoint has no explicit proxy policy controls", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(join(dir, "src", "index.ts"), "console.log('open proxy');\n");
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+
+    await expect(main(["check", "--offline"], rt)).resolves.toBe(0);
+    const output = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
+
+    expect(output).toContain("proxy policy");
+    expect(output).toContain("No global policy, group policy, or explicit allow-all development policy detected.");
+    expect(output).toContain("Fentaris denies proxy calls by default.");
+
+    vi.mocked(rt.out.log).mockClear();
+    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(1);
+  });
+
+  it("accepts an explicit allow-all development policy during doctor", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `import { Policy, fentaris } from "@fentaris/core";
+const app = fentaris({ policy: Policy.allowAll() });
+void app;
+`,
+    );
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+
+    await expect(main(["doctor"], rt)).resolves.toBe(0);
+    const output = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
+
+    expect(output).toContain("Doctor");
+    expect(output).not.toContain("No global policy, group policy, or explicit allow-all development policy detected.");
   });
 
   it("prints compact doctor output with summary and issues only", async () => {
@@ -800,7 +836,7 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
       join(dir, "src", "index.ts"),
       `import { bearer, credential, credentialEnv, fentaris, group, mcp, user } from "@fentaris/core";
 const app = fentaris({
-  users: [user({ id: "alice", credentials: { "linear.token": credential("linear.token") } })],
+  users: [user("alice", { credentials: { "linear.env": credentialEnv("LINEAR_TOKEN"), "linear.token": credential("linear.token") } })],
   groups: [group({ id: "support", credentials: { "github.token": credentialEnv("SUPPORT_GITHUB_TOKEN") } })],
 });
 app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callTool: async () => ({}), close: async () => {} }, auth: bearer(credential("default.token")) });
@@ -816,9 +852,10 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     expect(manifest.references).toEqual([
       { ref: "default.token", scope: "default" },
       { ref: "github.token", scope: "group:support" },
+      { ref: "linear.env", scope: "user:alice" },
       { ref: "linear.token", scope: "user:alice" },
     ]);
-    expect(manifest.envVars).toEqual(["SUPPORT_GITHUB_TOKEN"]);
+    expect(manifest.envVars).toEqual(["LINEAR_TOKEN", "SUPPORT_GITHUB_TOKEN"]);
   });
 
   it("wraps invalid secrets manifest JSON errors", async () => {

@@ -164,9 +164,9 @@ export async function loadRequiredReferences(project: ProjectDiscovery): Promise
 function parseManifestJson(source: string, filePath: string): unknown {
   try {
     return JSON.parse(source) as unknown;
-  } catch (error) {
+  } catch (error: unknown) {
     const detail = error instanceof Error ? error.message : "Invalid JSON";
-    throw new Error(`Unable to parse secrets manifest at ${filePath}: ${detail}`);
+    throw new Error(`Unable to parse secrets manifest at ${filePath}: ${detail}`, { cause: error });
   }
 }
 
