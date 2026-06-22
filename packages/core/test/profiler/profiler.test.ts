@@ -125,7 +125,7 @@ describe("runtime profiler", () => {
     });
 
     expect(driver.entries[0]?.message).toBe("runtime.ready");
-    expect(seen).toEqual(["custom", "FENTARIS_EXTENSION_ERROR"]);
+    expect(seen).toEqual(["custom", "FENTARIS_EXTENSION_ERROR", "custom"]);
   });
 
   it("emits structured profiler sink error events after isolated sink failures", async () => {
