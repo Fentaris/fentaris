@@ -39,6 +39,7 @@ Fentaris is designed for teams that want MCP servers to behave like production i
 
 - [Getting Started](#getting-started)
 - [Create a Project with the CLI](#create-a-project-with-the-cli)
+- [Use Agent Skills](#use-agent-skills)
 - [Documentation](#documentation)
 - [Use the SDK in an Existing Project](#use-the-sdk-in-an-existing-project)
 - [Governance](#governance)
@@ -77,11 +78,26 @@ fentaris dev
 
 The generated project includes one remote HTTP MCP upstream, one local demo user, and no production authentication or policy rules. Add API-key auth and policies before exposing the proxy outside local development.
 
+## Use Agent Skills
+
+Fentaris provides optional agent skills for assisted setup and project development. Install them from the separate skills repository with `npx skills`:
+
+```bash
+npx skills add Fentaris/fentaris-skills --skill '*'
+```
+
+Use `-g -a codex`, `-g -a claude-code`, or `-g --all` when you want to install the skills globally for Codex, Claude Code, or every supported agent.
+
+After installation, ask your agent to use `$fentaris-project-setup` for a guided proxy setup or `$fentaris-app-development` for changes inside an existing Fentaris app.
+
+See the [Agent skills guide](https://fentaris.mintlify.app/getting-started/codex-skills) for install options and example prompts.
+
 ## Documentation
 
 Start with the [docs homepage](https://fentaris.mintlify.app), or jump directly to:
 
 - [Quickstart](https://fentaris.mintlify.app/getting-started/quickstart): create and run a Fentaris proxy project.
+- [Agent skills](https://fentaris.mintlify.app/getting-started/codex-skills): install optional setup and development skills for Codex, Claude Code, and other agents.
 - [Architecture](https://fentaris.mintlify.app/concepts/architecture): understand the runtime model.
 - [Proxy setup](https://fentaris.mintlify.app/guides/proxy-setup): production-ready configuration patterns.
 - [Governance auth](https://fentaris.mintlify.app/guides/governance-auth): users, groups, policy, API keys, and upstream credentials.
