@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fentaris App Development"
+  short_description: "Modify existing apps built with Fentaris"
+  default_prompt: "Use $fentaris-app-development to modify an existing Fentaris application safely."

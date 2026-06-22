@@ -1,0 +1,42 @@
+{
+  "name": "@fentaris/codex-skills",
+  "version": "0.1.0",
+  "description": "Codex skills for Fentaris setup and app development",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "fentaris-codex-skills": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "skills"
+  ],
+  "scripts": {
+    "build": "pnpm run clean && tsc",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "fentaris",
+    "codex",
+    "skills",
+    "mcp"
+  ],
+  "author": "Gabriele Cipriani",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fentaris/fentaris.git",
+    "directory": "packages/codex-skills"
+  },
+  "homepage": "https://github.com/Fentaris/fentaris#readme",
+  "bugs": {
+    "url": "https://github.com/Fentaris/fentaris/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1"
+  }
+}

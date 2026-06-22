@@ -1,0 +1,83 @@
+---
+title: "Codex Skills"
+description: "Install the optional Fentaris skills for Codex-assisted setup and development."
+---
+
+# Codex Skills
+
+> Install the optional Fentaris skills for Codex-assisted setup and development
+
+Fentaris ships Codex skills that help an agent ask the right setup questions, create a proxy project, configure upstream MCP servers, and explain the resulting workflow. They are optional; use them when you want Codex to guide the setup instead of following the docs manually.
+
+## Quick Start
+
+Install the skills into your Codex profile:
+
+```bash theme={null}
+npx @fentaris/codex-skills install
+```
+
+Then restart Codex so the new skills are loaded.
+
+## Included Skills
+
+### `fentaris-project-setup`
+
+Use this when starting from an empty project or when you want Codex to help decide the right proxy workflow.
+
+The skill guides discovery around:
+
+* users and groups
+* local, team, and cloud-shaped runtime choices
+* upstream MCP servers and credentials
+* policy, logging, and operational checks
+* current limits, including OAuth 2.1 and deploy support
+
+### `fentaris-app-development`
+
+Use this when you already have a Fentaris app and want Codex to modify it.
+
+The skill keeps changes aligned with the high-level Fentaris API first, validates the project after edits, and uses the low-level API only when an existing project or explicit user request requires it.
+
+## Install Options
+
+### Custom Codex Home
+
+By default, the installer writes to `~/.codex/skills`. Set `CODEX_HOME` when your Codex profile lives somewhere else:
+
+```bash theme={null}
+CODEX_HOME=/path/to/codex npx @fentaris/codex-skills install
+```
+
+### Custom Skills Directory
+
+You can also pass an explicit skills directory:
+
+```bash theme={null}
+npx @fentaris/codex-skills install -- --dest ~/.codex/skills
+```
+
+### Replace Existing Skills
+
+The installer skips existing skill folders by default. Use `--force` when you intentionally want to replace installed Fentaris skills:
+
+```bash theme={null}
+npx @fentaris/codex-skills install -- --force
+```
+
+## Use With Setup
+
+After installation, ask Codex to use the setup skill:
+
+```txt theme={null}
+Use $fentaris-project-setup to help me create a Fentaris proxy for my team.
+```
+
+Codex should first explain the Fentaris workflow, ask about users, machines, cloud/local needs, MCP servers, credentials, and policy, then create and validate the project.
+
+## Related Documentation
+
+* [Installation](/getting-started/installation)
+* [Quickstart](/getting-started/quickstart)
+* [Proxy setup](/guides/proxy-setup)
+* [CLI Usage](/reference/cli)
