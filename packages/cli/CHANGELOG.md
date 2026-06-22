@@ -1,5 +1,28 @@
 # @fentaris/cli
 
+## 0.6.0
+
+### Minor Changes
+
+- 05425ab: Harden proxy policy enforcement by denying unconfigured proxy access by default, making policy denies terminal before hooks or middleware, re-filtering tool discovery after hooks, enforcing policy-attached rate limiters automatically, and reporting open-policy CLI diagnostics.
+
+### Patch Changes
+
+- e81b53e: Harden local secrets handling with stdin secret input, truthful unset reporting, versioned PBKDF2 credential storage, owner-only credential file permissions, and improved manifest diagnostics.
+- bb4b69c: Harden downstream transport authentication and upstream HTTP networking defaults.
+
+  HTTP Streamable and SSE exposure transports now bind session continuations to the authenticated identity, SSE `/messages` requests resolve identity before accepting posts, stdio exposure fails when identity is required but unavailable, and HTTP/SSE listeners bind to `127.0.0.1` unless a host is configured. Upstream HTTP transports now avoid arbitrary env-to-header forwarding and block loopback, link-local, private, and metadata URLs unless explicitly allowed.
+
+- 703c43f: Improve the interactive `fentaris secrets set` flow with arrow-key select menus, scoped subject id selection, and no duplicated credential scope heading.
+- Updated dependencies [05425ab]
+- Updated dependencies [f4af3c4]
+- Updated dependencies [e81b53e]
+- Updated dependencies [bb4b69c]
+- Updated dependencies [190f600]
+- Updated dependencies [0ee5a94]
+- Updated dependencies [06c68bf]
+  - @fentaris/core@1.0.0
+
 ## 0.5.1
 
 ### Patch Changes

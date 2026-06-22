@@ -1,5 +1,26 @@
 # @fentaris/core
 
+## 1.0.0
+
+### Major Changes
+
+- 05425ab: Harden proxy policy enforcement by denying unconfigured proxy access by default, making policy denies terminal before hooks or middleware, re-filtering tool discovery after hooks, enforcing policy-attached rate limiters automatically, and reporting open-policy CLI diagnostics.
+
+### Minor Changes
+
+- f4af3c4: Harden runtime security primitives by routing declared API key checks through the shared timing-safe comparison helper, enforcing rate limits through atomic consume operations, and redacting token-like values before logger and profiler sink dispatch.
+- 190f600: Add native MCP Streamable HTTP and SSE upstream transports, configurable HTTP/stdio/SSE proxy exposure transports, and shared HTTP-family upstream auth helpers.
+- 06c68bf: Add the group-scoped `server(name)` proxy handle alias for scoped MCP server middleware, routes, and events.
+
+### Patch Changes
+
+- e81b53e: Harden local secrets handling with stdin secret input, truthful unset reporting, versioned PBKDF2 credential storage, owner-only credential file permissions, and improved manifest diagnostics.
+- bb4b69c: Harden downstream transport authentication and upstream HTTP networking defaults.
+
+  HTTP Streamable and SSE exposure transports now bind session continuations to the authenticated identity, SSE `/messages` requests resolve identity before accepting posts, stdio exposure fails when identity is required but unavailable, and HTTP/SSE listeners bind to `127.0.0.1` unless a host is configured. Upstream HTTP transports now avoid arbitrary env-to-header forwarding and block loopback, link-local, private, and metadata URLs unless explicitly allowed.
+
+- 0ee5a94: Emit structured `profiler.sink.error` events when profiler sink failures are isolated and redact token-shaped profiler values by default.
+
 ## 0.7.0
 
 ### Minor Changes
