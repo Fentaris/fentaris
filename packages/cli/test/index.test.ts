@@ -173,6 +173,37 @@ describe("default runtime prompts", () => {
       await expect(rt.prompt.text("Credential value", { secret: true })).rejects.toThrow("Secret prompts require an interactive terminal");
     });
   });
+
+  it("selects TTY menu items with arrow keys", async () => {
+    const input = new FakeTtyInput();
+    const output = new FakeTtyOutput();
+
+    await withFakeProcessIo(input, output, async () => {
+      const rt = defaultRuntime();
+      const selected = rt.prompt.select("Credential scope", ["default", "user", "group"]);
+      input.write("\u001b[B\r");
+
+      await expect(selected).resolves.toBe("user");
+      expect(output.text).toContain("Credential scope");
+      expect(output.text).toContain("Choose by number or exact label");
+      expect(input.rawModeCalls).toEqual([true, false]);
+    });
+  });
+
+  it("scrolls long TTY select menus", async () => {
+    const input = new FakeTtyInput();
+    const output = new FakeTtyOutput();
+
+    await withFakeProcessIo(input, output, async () => {
+      const rt = defaultRuntime();
+      const selected = rt.prompt.select("Group id", ["one", "two", "three", "four", "five"], { visibleItems: 3 });
+      input.write("\u001b[B\u001b[B\u001b[B\u001b[B\r");
+
+      await expect(selected).resolves.toBe("five");
+      expect(output.text).toContain("↓ more");
+      expect(output.text).toContain("↑ more");
+    });
+  });
 });
 
 describe("command routing helpers", () => {
@@ -768,7 +799,66 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     expect(rt.prompt.select).toHaveBeenCalledWith("Secret reference", ["github.token (default)", "Add another reference"]);
     expect(rt.prompt.select).toHaveBeenCalledWith("Credential scope", ["default", "user", "group"]);
     expect(rt.prompt.confirm).toHaveBeenCalledWith("Store this credential?");
-    expect(rt.out.log.mock.calls.flat().join("\n")).toContain("Stored github.token as user alice credential.");
+    const output = rt.out.log.mock.calls.flat().join("\n");
+    expect(output).toContain("Stored github.token as user alice credential.");
+    expect(output.match(/Credential scope/g) ?? []).toHaveLength(0);
+  });
+
+  it("selects known user ids from the project entrypoint", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `import { credential, fentaris, group, Policy, user } from "@fentaris/core";
+const app = fentaris({
+  defaults: { credentials: { "github.token": credential("github.token") } },
+  groups: [group({ id: "support", users: [user("bob")], policy: Policy.allowAll() })],
+});
+void app;
+`,
+    );
+
+    const rt = runtime(dir);
+    rt.prompt = prompt(["secret-value"], ["github.token (default)", "user", "bob"]);
+
+    await expect(main(["secrets", "set"], rt)).resolves.toBe(0);
+
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(credentials.users.bob?.credentials["github.token"]).toBe("secret-value");
+    expect(rt.prompt.select).toHaveBeenCalledWith("User id", ["bob", "Add another user id"], { visibleItems: 8 });
+    expect(rt.prompt.text).toHaveBeenCalledTimes(1);
+  });
+
+  it("selects known group ids and supports manual group id entry", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `import { credential, fentaris, group, Policy, user } from "@fentaris/core";
+const app = fentaris({
+  defaults: { credentials: { "github.token": credential("github.token") } },
+  groups: [group({ id: "support", users: [user("bob")], policy: Policy.allowAll() })],
+});
+void app;
+`,
+    );
+
+    const knownGroup = runtime(dir);
+    knownGroup.prompt = prompt(["secret-value"], ["github.token (default)", "group", "support"]);
+
+    await expect(main(["secrets", "set"], knownGroup)).resolves.toBe(0);
+
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(credentials.groups.support?.["github.token"]).toBe("secret-value");
+    expect(knownGroup.prompt.select).toHaveBeenCalledWith("Group id", ["support", "Add another group id"], { visibleItems: 8 });
+
+    const manualGroup = runtime(dir);
+    manualGroup.prompt = prompt(["custom", "secret-value"], ["github.token (default)", "group", "Add another group id"]);
+
+    await expect(main(["secrets", "set"], manualGroup)).resolves.toBe(0);
+
+    const updatedCredentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(updatedCredentials.groups.custom?.["github.token"]).toBe("secret-value");
   });
 
   it("does not store a prompted secret when the review is declined", async () => {

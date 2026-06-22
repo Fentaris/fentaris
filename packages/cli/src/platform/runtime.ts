@@ -24,20 +24,14 @@ function createPrompt(): Prompt {
       const answer = await askLine(formatTextQuestion(question, options));
       return answer.trim() || options.defaultValue || "";
     },
-    async select(question, choices) {
-      console.log(style.heading(question));
-      choices.forEach((choice, index) => {
-        const marker = index === 0 ? style.command("›") : " ";
-        console.log(`  ${marker} ${style.option(String(index + 1).padStart(2))}. ${choice}`);
-      });
-      const answer = await askLine(`${style.hint("Choose by number or exact label")} ${style.command("›")} `);
-      const trimmed = answer.trim();
-      const selectedByNumber = choices[Number(trimmed) - 1];
-      const selected = selectedByNumber ?? choices.find((choice) => choice === trimmed);
-      if (!selected) {
-        throw new Error(`Expected one of: ${choices.join(", ")}`);
+    async select(question, choices, options = {}) {
+      if (choices.length === 0) {
+        throw new Error(`No choices available for ${question}.`);
       }
-      return selected;
+      if (isInteractiveSelectAvailable()) {
+        return askSelect(question, choices, options.visibleItems);
+      }
+      return askSelectLine(question, choices);
     },
     async confirm(question) {
       const answer = await askLine(`${question} ${style.hint("[y/N]")} `);
@@ -60,6 +54,117 @@ async function askLine(question: string): Promise<string> {
   } finally {
     rl.close();
   }
+}
+
+async function askSelectLine<T extends string>(question: string, choices: T[]): Promise<T> {
+  console.log(style.heading(question));
+  choices.forEach((choice, index) => {
+    const marker = index === 0 ? style.command("›") : " ";
+    console.log(`  ${marker} ${style.option(String(index + 1).padStart(2))}. ${choice}`);
+  });
+  const answer = await askLine(`${style.hint("Choose by number or exact label")} ${style.command("›")} `);
+  const trimmed = answer.trim();
+  const selectedByNumber = choices[Number(trimmed) - 1];
+  const selected = selectedByNumber ?? choices.find((choice) => choice === trimmed);
+  if (!selected) {
+    throw new Error(`Expected one of: ${choices.join(", ")}`);
+  }
+  return selected;
+}
+
+function isInteractiveSelectAvailable(): boolean {
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY && typeof process.stdin.setRawMode === "function");
+}
+
+async function askSelect<T extends string>(question: string, choices: T[], visibleItems = 8): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const input = process.stdin;
+    const output = process.stdout;
+    const wasRaw = input.isRaw === true;
+    const limit = Math.max(1, Math.min(choices.length, visibleItems));
+    let selectedIndex = 0;
+    let topIndex = 0;
+    let renderedLines = 0;
+
+    const cleanup = () => {
+      input.off("keypress", onKeypress);
+      input.setRawMode(wasRaw);
+      output.write("\u001b[?25h");
+    };
+    const finish = () => {
+      cleanup();
+      clearRenderedLines();
+      output.write(`${style.heading(question)}: ${choices[selectedIndex]}\n`);
+      resolve(choices[selectedIndex]);
+    };
+    const cancel = () => {
+      cleanup();
+      clearRenderedLines();
+      output.write("^C\n");
+      reject(new Error("Prompt cancelled."));
+    };
+    const move = (delta: number) => {
+      selectedIndex = (selectedIndex + delta + choices.length) % choices.length;
+      if (selectedIndex < topIndex) {
+        topIndex = selectedIndex;
+      } else if (selectedIndex >= topIndex + limit) {
+        topIndex = selectedIndex - limit + 1;
+      }
+      render();
+    };
+    const onKeypress = (_character: string, key: { ctrl?: boolean; name?: string }) => {
+      if (key.ctrl && key.name === "c") {
+        cancel();
+        return;
+      }
+      if (key.name === "return" || key.name === "enter") {
+        finish();
+        return;
+      }
+      if (key.name === "up") {
+        move(-1);
+        return;
+      }
+      if (key.name === "down") {
+        move(1);
+      }
+    };
+    const clearRenderedLines = () => {
+      if (renderedLines === 0) {
+        return;
+      }
+      output.write(`\u001b[${renderedLines}A\u001b[J`);
+      renderedLines = 0;
+    };
+    const render = () => {
+      clearRenderedLines();
+      const visible = choices.slice(topIndex, topIndex + limit);
+      const lines = [
+        `${style.heading(question)}`,
+        ...visible.map((choice, index) => {
+          const choiceIndex = topIndex + index;
+          const marker = choiceIndex === selectedIndex ? style.command("›") : " ";
+          return `  ${marker} ${style.option(String(choiceIndex + 1).padStart(2))}. ${choice}`;
+        }),
+        `${style.hint("Choose by number or exact label")} ${style.command("›")} ${choices[selectedIndex]}`,
+      ];
+      if (topIndex > 0) {
+        lines.splice(1, 0, `  ${style.hint("↑ more")}`);
+      }
+      if (topIndex + limit < choices.length) {
+        lines.splice(lines.length - 1, 0, `  ${style.hint("↓ more")}`);
+      }
+      output.write(`${lines.join("\n")}\n`);
+      renderedLines = lines.length;
+    };
+
+    output.write("\u001b[?25l");
+    emitKeypressEvents(input);
+    input.setRawMode(true);
+    input.resume();
+    input.on("keypress", onKeypress);
+    render();
+  });
 }
 
 async function askSecret(question: string, defaultValue?: string): Promise<string> {
