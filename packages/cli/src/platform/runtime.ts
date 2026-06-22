@@ -72,6 +72,18 @@ async function askSelectLine<T extends string>(question: string, choices: T[]): 
   return selected;
 }
 
+function indexForChoiceAnswer<T extends string>(answer: string, choices: T[]): number | undefined {
+  if (/^[1-9]\d*$/.test(answer)) {
+    const choiceIndex = Number(answer) - 1;
+    if (choiceIndex >= 0 && choiceIndex < choices.length) {
+      return choiceIndex;
+    }
+  }
+
+  const exactIndex = choices.findIndex((choice) => choice === answer);
+  return exactIndex === -1 ? undefined : exactIndex;
+}
+
 function isInteractiveSelectAvailable(): boolean {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY && typeof process.stdin.setRawMode === "function");
 }
@@ -85,6 +97,7 @@ async function askSelect<T extends string>(question: string, choices: T[], visib
     let selectedIndex = 0;
     let topIndex = 0;
     let renderedLines = 0;
+    let answer = "";
 
     const cleanup = () => {
       input.off("keypress", onKeypress);
@@ -92,6 +105,15 @@ async function askSelect<T extends string>(question: string, choices: T[], visib
       output.write("\u001b[?25h");
     };
     const finish = () => {
+      const requestedIndex = answer.trim() ? indexForChoiceAnswer(answer.trim(), choices) : selectedIndex;
+      if (requestedIndex === undefined) {
+        cleanup();
+        clearRenderedLines();
+        reject(new Error(`Expected one of: ${choices.join(", ")}`));
+        return;
+      }
+
+      selectedIndex = requestedIndex;
       cleanup();
       clearRenderedLines();
       output.write(`${style.heading(question)}: ${choices[selectedIndex]}\n`);
@@ -103,16 +125,29 @@ async function askSelect<T extends string>(question: string, choices: T[], visib
       output.write("^C\n");
       reject(new Error("Prompt cancelled."));
     };
-    const move = (delta: number) => {
-      selectedIndex = (selectedIndex + delta + choices.length) % choices.length;
+    const keepSelectedVisible = () => {
       if (selectedIndex < topIndex) {
         topIndex = selectedIndex;
       } else if (selectedIndex >= topIndex + limit) {
         topIndex = selectedIndex - limit + 1;
       }
+    };
+    const move = (delta: number) => {
+      answer = "";
+      selectedIndex = (selectedIndex + delta + choices.length) % choices.length;
+      keepSelectedVisible();
       render();
     };
-    const onKeypress = (_character: string, key: { ctrl?: boolean; name?: string }) => {
+    const updateAnswer = (nextAnswer: string) => {
+      answer = nextAnswer;
+      const requestedIndex = indexForChoiceAnswer(answer.trim(), choices);
+      if (requestedIndex !== undefined) {
+        selectedIndex = requestedIndex;
+        keepSelectedVisible();
+      }
+      render();
+    };
+    const onKeypress = (character: string, key: { ctrl?: boolean; meta?: boolean; name?: string }) => {
       if (key.ctrl && key.name === "c") {
         cancel();
         return;
@@ -127,6 +162,14 @@ async function askSelect<T extends string>(question: string, choices: T[], visib
       }
       if (key.name === "down") {
         move(1);
+        return;
+      }
+      if (key.name === "backspace") {
+        updateAnswer(answer.slice(0, -1));
+        return;
+      }
+      if (character && !key.ctrl && !key.meta) {
+        updateAnswer(`${answer}${character}`);
       }
     };
     const clearRenderedLines = () => {
@@ -146,7 +189,7 @@ async function askSelect<T extends string>(question: string, choices: T[], visib
           const marker = choiceIndex === selectedIndex ? style.command("›") : " ";
           return `  ${marker} ${style.option(String(choiceIndex + 1).padStart(2))}. ${choice}`;
         }),
-        `${style.hint("Choose by number or exact label")} ${style.command("›")} ${choices[selectedIndex]}`,
+        `${style.hint("Choose by number or exact label")} ${style.command("›")} ${answer || choices[selectedIndex]}`,
       ];
       if (topIndex > 0) {
         lines.splice(1, 0, `  ${style.hint("↑ more")}`);

@@ -190,6 +190,35 @@ describe("default runtime prompts", () => {
     });
   });
 
+  it("selects TTY menu items by number", async () => {
+    const input = new FakeTtyInput();
+    const output = new FakeTtyOutput();
+
+    await withFakeProcessIo(input, output, async () => {
+      const rt = defaultRuntime();
+      const selected = rt.prompt.select("Credential scope", ["default", "user", "group"]);
+      input.write("2\r");
+
+      await expect(selected).resolves.toBe("user");
+      expect(output.text).toContain("Credential scope: user");
+      expect(input.rawModeCalls).toEqual([true, false]);
+    });
+  });
+
+  it("selects TTY menu items by exact label", async () => {
+    const input = new FakeTtyInput();
+    const output = new FakeTtyOutput();
+
+    await withFakeProcessIo(input, output, async () => {
+      const rt = defaultRuntime();
+      const selected = rt.prompt.select("Credential scope", ["default", "user", "group"]);
+      input.write("group\r");
+
+      await expect(selected).resolves.toBe("group");
+      expect(output.text).toContain("Credential scope: group");
+    });
+  });
+
   it("scrolls long TTY select menus", async () => {
     const input = new FakeTtyInput();
     const output = new FakeTtyOutput();
