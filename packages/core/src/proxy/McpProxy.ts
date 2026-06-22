@@ -923,19 +923,6 @@ export class McpProxy {
       if (!context.policyDecision.allowed) {
         const denied = this.policyDeniedResult(context);
         this.writeAutoLog("failure", log, request, context, startedAt, denied);
-        await this.emitRuntimeEvent(createRuntimeEvent({
-          name: "mcp.call.success",
-          category: "mcp",
-          level: "warn",
-          server: serverName,
-          group: context.policy.matchedGroups[0],
-          user: resolvedUser.id,
-          operation: "tool:call",
-          target: toolName,
-          result: denied,
-          durationMs: Date.now() - startedAt,
-          message: "MCP tool call completed",
-        }));
         return denied;
       }
 

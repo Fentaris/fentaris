@@ -563,22 +563,22 @@ describe("governance auth DX", () => {
 
     await globalProxy.callTool({ name: "github__read" });
 
-    const defaultClosedProxy = new McpProxy({
+    const permissiveProxy = new McpProxy({
       servers: [new McpServer({ name: "github", transport: new EnvTransport() })],
     });
-    const defaultClosedChecks: unknown[] = [];
-    defaultClosedProxy.use((ctx, next) => {
-      defaultClosedChecks.push(ctx.policy.can("github", "delete"));
+    const permissiveChecks: unknown[] = [];
+    permissiveProxy.use((ctx, next) => {
+      permissiveChecks.push(ctx.policy.can("github", "delete"));
       return next();
     });
 
-    const defaultClosedResult = await defaultClosedProxy.callTool({ name: "github__read" });
+    const permissiveResult = await permissiveProxy.callTool({ name: "github__read" });
 
     expect(groupChecks).toEqual([{ canRead: true, canDelete: false, canWrite: false }]);
     expect(globalChecks).toEqual([{ canRead: true, canDelete: false, canWrite: false }]);
-    expect(defaultClosedChecks).toEqual([]);
+    expect(permissiveChecks).toEqual([true]);
     expect(groupResult.isError).toBe(true);
-    expect(defaultClosedResult.isError).toBe(true);
+    expect(permissiveResult.isError).toBeUndefined();
   });
 
   it("does not expose raw credential values through structured context domains", async () => {

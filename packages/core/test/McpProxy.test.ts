@@ -299,7 +299,7 @@ describe("McpProxy", () => {
 
     await proxy.start();
 
-    expect(stderr.mock.calls.flat().join("\n")).toContain("http://127.0.0.1:0/configured");
+    expect(stderr.mock.calls.flat().join("\n")).toContain("http://localhost:0/configured");
     await proxy.stop();
   });
 
