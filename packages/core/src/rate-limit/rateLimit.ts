@@ -117,8 +117,9 @@ export class SlidingWindowRateLimiter implements RateLimiter {
   }
 
   async consume(key: string): Promise<boolean> {
-    const windowLimit = this.metadata.maxPerWindow;
-    const dailyLimit = this.metadata.maxDailyCalls;
+    const metadata = this.metadata ?? {};
+    const windowLimit = metadata.maxPerWindow;
+    const dailyLimit = metadata.maxDailyCalls;
 
     if (windowLimit === undefined && dailyLimit === undefined) {
       await this.recordCall(key);
@@ -129,7 +130,7 @@ export class SlidingWindowRateLimiter implements RateLimiter {
       return false;
     }
 
-    if (windowLimit !== undefined && !(await this.store.consume(this.windowKey(key), this.metadata.windowMs ?? 60_000, windowLimit))) {
+    if (windowLimit !== undefined && !(await this.store.consume(this.windowKey(key), metadata.windowMs ?? 60_000, windowLimit))) {
       return false;
     }
 
