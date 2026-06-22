@@ -21,8 +21,11 @@ fentaris dev
 
 * `--help`, `-h` - print CLI usage.
 * `--version`, `-v` - print the CLI version.
+* `--non-interactive` - fail instead of prompting for input. Use this in automation and agent-driven runs.
 
 Help is contextual. Use `fentaris <command> --help` or `fentaris secrets <command> --help` to print usage, arguments, and options for one command.
+
+`--non-interactive` is accepted on every command. Commands that already have all required values continue normally; commands that would need a prompt return a runtime error instead of waiting for input.
 
 ```bash theme={null}
 fentaris check --help
@@ -106,6 +109,7 @@ Store a secret in the local encrypted credential store.
 ```bash theme={null}
 fentaris secrets set
 fentaris secrets set github.token --user admin
+fentaris secrets set github.token --value-stdin --non-interactive
 ```
 
 When `reference` or `--value` is omitted, the command walks through an interactive setup: pick a manifest reference, choose `default`, `user`, or `group` scope, enter the hidden value, review the redacted summary, and confirm before anything is written.
@@ -115,6 +119,7 @@ Options:
 * `--user <id>` - store a user-scoped credential.
 * `--group <id>` - store a group-scoped credential.
 * `--value <secret>` - pass the value non-interactively.
+* `--value-stdin` - read the value from standard input.
 * `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
 
 Use `--value=<secret>` when a scripted secret value starts with `-`, for example `--value=-token`.

@@ -37,7 +37,9 @@ function createPrompt(): Prompt {
       const answer = await askLine(`${question} ${style.hint("[y/N]")} `);
       return answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes";
     },
-    close() {},
+    close() {
+      process.stdin.pause();
+    },
   };
 }
 
@@ -53,6 +55,7 @@ async function askLine(question: string): Promise<string> {
     return await rl.question(question);
   } finally {
     rl.close();
+    process.stdin.pause();
   }
 }
 
@@ -102,6 +105,7 @@ async function askSelect<T extends string>(question: string, choices: T[], visib
     const cleanup = () => {
       input.off("keypress", onKeypress);
       input.setRawMode(wasRaw);
+      input.pause();
       output.write("\u001b[?25h");
     };
     const finish = () => {
@@ -224,6 +228,7 @@ async function askSecret(question: string, defaultValue?: string): Promise<strin
     const cleanup = () => {
       input.off("keypress", onKeypress);
       input.setRawMode(wasRaw);
+      input.pause();
     };
     const finish = () => {
       cleanup();
