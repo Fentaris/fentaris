@@ -27,8 +27,9 @@ const defaultSensitiveKeys = [
   /api[-_]?key/i,
   /credential/i,
 ];
-const defaultSensitiveValuePatterns = [
-  /(?:^|[^A-Za-z0-9._~+/=-])Bearer\s+[A-Za-z0-9._~+/=-]{16,}(?=$|[^A-Za-z0-9._~+/=-])/,
+
+const DEFAULT_PROFILER_SENSITIVE_VALUE_PATTERNS = [
+  /(?:^|[^A-Za-z0-9._~+/=-])Bearer\s+[A-Za-z0-9._~+/=-]{16,}(?=$|[^A-Za-z0-9._~+/=-])/i,
   /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
   /\bgh[opsur]_[A-Za-z0-9_]{20,}\b/,
   /\bgithub_pat_[A-Za-z0-9_]{40,}\b/,
@@ -114,7 +115,7 @@ function matchesPath(path: string[], paths: string[][]): boolean {
 }
 
 function matchesSensitiveValue(value: string): boolean {
-  return defaultSensitiveValuePatterns.some((pattern) => pattern.test(value));
+  return DEFAULT_PROFILER_SENSITIVE_VALUE_PATTERNS.some((pattern) => pattern.test(value));
 }
 
 function normalizePath(path: string | string[]): string[] {

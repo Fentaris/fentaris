@@ -125,7 +125,90 @@ describe("runtime profiler", () => {
     });
 
     expect(driver.entries[0]?.message).toBe("runtime.ready");
-    expect(seen).toEqual(["custom", "FENTARIS_EXTENSION_ERROR"]);
+    expect(seen).toEqual(["custom", "FENTARIS_EXTENSION_ERROR", "custom"]);
+  });
+
+  it("emits structured profiler sink error events after isolated sink failures", async () => {
+    const seen: RuntimeEvent[] = [];
+    const handled: RuntimeEvent[] = [];
+    const runtime = new RuntimeProfiler(normalizeRuntimeProfiler({
+      level: "debug",
+      track: ["lifecycle", "profiler"],
+      sinks: [
+        {
+          name: "broken",
+          write() {
+            throw new Error("sink down");
+          },
+        },
+        (event) => seen.push(event),
+      ],
+      handlers: [
+        {
+          eventName: "profiler.sink.error",
+          handler: (event) => handled.push(event),
+        },
+      ],
+    }));
+
+    await runtime.emit({
+      name: "runtime.ready",
+      category: "lifecycle",
+      level: "info",
+      timestamp: new Date(),
+      runtime: "test",
+      version: "0.0.0",
+      startupMs: 3,
+    });
+
+    expect(seen.map((event) => event.name)).toEqual(["profiler.sink.error", "runtime.ready"]);
+    expect(handled).toHaveLength(1);
+    expect(handled[0]).toMatchObject({
+      name: "profiler.sink.error",
+      category: "profiler",
+      level: "error",
+      sink: "broken",
+      error: {
+        code: "FENTARIS_EXTENSION_ERROR",
+      },
+      metadata: {
+        sourceEvent: "runtime.ready",
+      },
+    });
+  });
+
+  it("reports sink failures to all non-failing sinks", async () => {
+    const firstSeen: RuntimeEvent[] = [];
+    const lastSeen: RuntimeEvent[] = [];
+    const runtime = new RuntimeProfiler(normalizeRuntimeProfiler({
+      level: "debug",
+      track: ["lifecycle", "profiler"],
+      sinks: [
+        (event) => firstSeen.push(event),
+        {
+          name: "broken",
+          write() {
+            throw new Error("sink down");
+          },
+        },
+        (event) => lastSeen.push(event),
+      ],
+    }));
+
+    await runtime.emit({
+      name: "runtime.ready",
+      category: "lifecycle",
+      level: "info",
+      timestamp: new Date(),
+      runtime: "test",
+      version: "0.0.0",
+      startupMs: 3,
+    });
+
+    expect(firstSeen.map((event) => event.name)).toEqual(["runtime.ready", "profiler.sink.error"]);
+    expect(lastSeen.map((event) => event.name)).toEqual(["profiler.sink.error", "runtime.ready"]);
+    expect(firstSeen[1]).toMatchObject({ name: "profiler.sink.error", sink: "broken" });
+    expect(lastSeen[0]).toMatchObject({ name: "profiler.sink.error", sink: "broken" });
   });
 
   it("redacts default and custom sensitive values before dispatch", async () => {
@@ -151,6 +234,11 @@ describe("runtime profiler", () => {
         private: "private-value",
         nested: { hide: "hide-me" },
         custom: "custom-value",
+        input: {
+          bearer: "Bearer abcdefghijklmnopqrstuvwxyz123456",
+          jwt: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbGljZSJ9.Gh5wqNQUs7Zk7q7g2Xf2aH9b0d1c2e3f4g5h6i",
+          github: "github_pat_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+        },
       },
       error: runtimeErrorToEventPayload(new Error("boom")),
     });
@@ -162,6 +250,11 @@ describe("runtime profiler", () => {
       private: "[REDACTED]",
       nested: { hide: "[REDACTED]" },
       custom: "custom-redacted",
+      input: {
+        bearer: "[REDACTED]",
+        jwt: "[REDACTED]",
+        github: "[REDACTED]",
+      },
     });
   });
 
@@ -196,7 +289,14 @@ describe("runtime profiler", () => {
 
   it("exposes direct redaction for pre-rendered structured payloads", () => {
     const redacted = redactProfilerValue(
-      { error: { context: { authorization: "Bearer token" } } },
+      {
+        error: {
+          context: {
+            authorization: "Bearer token",
+            rawHeader: "Bearer abcdefghijklmnopqrstuvwxyz123456",
+          },
+        },
+      },
       {
         enabled: true,
         replacement: "[X]",
@@ -207,5 +307,6 @@ describe("runtime profiler", () => {
     );
 
     expect(redacted.error.context.authorization).toBe("[X]");
+    expect(redacted.error.context.rawHeader).toBe("[X]");
   });
 });
