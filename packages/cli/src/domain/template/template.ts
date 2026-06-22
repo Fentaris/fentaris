@@ -53,6 +53,7 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
           packageManager: input.packageManager,
           entrypoint: "src/index.ts",
           port: input.port,
+          host: "127.0.0.1",
           path: input.proxyPath,
           authDir,
         },
@@ -77,9 +78,11 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
 }
 
 export function renderEntrypoint(input: TemplateInput): string {
-  return `import { fentaris, streamableHttp } from "@fentaris/core";
+  return `import { Policy, fentaris, streamableHttp } from "@fentaris/core";
 
-const app = fentaris();
+const app = fentaris({
+  policy: Policy.allowAll(),
+});
 
 app.mcp("specification", {
   transport: streamableHttp({
@@ -115,7 +118,7 @@ ${input.packageManager} install
 ${input.packageManager} dev
 \`\`\`
 
-\`fentaris dev\` starts the project. The proxy listens on \`http://localhost:${input.port}${input.proxyPath}\` by default.
+\`fentaris dev\` starts the project. The proxy listens on \`http://127.0.0.1:${input.port}${input.proxyPath}\` by default.
 
 ## Project files
 

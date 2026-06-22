@@ -20,6 +20,10 @@ type JsonReadResult =
   | { ok: true; value: unknown }
   | { ok: false; message: string };
 
+type TextReadResult =
+  | { ok: true; value: string }
+  | { ok: false; message: string };
+
 type ConfigValidation = {
   config?: ProjectConfig;
   results: HealthResult[];
@@ -41,6 +45,7 @@ export async function getDoctorResults(runtime: Runtime, options: boolean | Doct
     results.push(...await projectDiscoveryResults(project.discovery));
     const validation = await configResults(project.discovery);
     results.push(...validation.results);
+    results.push(...await proxyPolicyResults(project.discovery));
     results.push(...await packageResults(project.discovery));
     results.push(...await authResults(project.discovery, runtime, { strict: normalized.strict }));
     results.push(await portResult(project.discovery.config.port));
@@ -91,6 +96,7 @@ export async function getProjectCheckResults(project: ProjectDiscovery, offline:
   }
 
   results.push(...(await configResults(project)).results);
+  results.push(...await proxyPolicyResults(project));
   results.push(...await packageResults(project));
   results.push(...await authResults(project, runtime));
 
@@ -393,6 +399,48 @@ async function packageResults(project: ProjectDiscovery): Promise<HealthResult[]
   ];
 
   return results;
+}
+
+async function proxyPolicyResults(project: ProjectDiscovery): Promise<HealthResult[]> {
+  const entrypointPath = path.join(project.root, project.config.entrypoint);
+  const source = await readEntrypoint(entrypointPath);
+  if (!source.ok) {
+    return [{
+      group: "Security",
+      label: "proxy policy",
+      status: "warn",
+      detail: "Skipped because the configured entrypoint could not be read.",
+      hint: "Fix the entrypoint path so check and doctor can verify deny-by-default proxy policy controls.",
+    }];
+  }
+
+  const hasGlobalPolicy = /\busePolicy\s*\(/.test(source.value) || /\bpolicy\s*:/.test(source.value);
+  const hasGroupPolicy = /\bgroups\s*:/.test(source.value) || /\.group\s*\(/.test(source.value) || /\bgroup\s*\(/.test(source.value);
+  const hasAllowAll = /\b(?:Policy\.)?allowAll\s*\(/.test(source.value);
+  const controlled = hasGlobalPolicy || hasGroupPolicy || hasAllowAll;
+
+  return [{
+    group: "Security",
+    label: "proxy policy",
+    status: controlled ? "pass" : "warn",
+    detail: controlled
+      ? "Entrypoint declares proxy policy controls."
+      : "No global policy, group policy, or explicit allow-all development policy detected.",
+    hint: controlled
+      ? undefined
+      : "Fentaris denies proxy calls by default. Add a least-privilege policy or an explicit Policy.allowAll()/allowAll() policy for development-only open access.",
+  }];
+}
+
+async function readEntrypoint(entrypointPath: string): Promise<TextReadResult> {
+  try {
+    return { ok: true, value: await readFile(entrypointPath, "utf8") };
+  } catch (error) {
+    if (isNodeError(error, "ENOENT")) {
+      return { ok: false, message: "Missing" };
+    }
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 async function authResults(project: ProjectDiscovery, runtime: Runtime | undefined, options: { strict?: boolean } = {}): Promise<HealthResult[]> {

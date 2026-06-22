@@ -12,9 +12,10 @@ Use `fentaris(...)` for new applications. It validates the same proxy options an
 ## Quick Start
 
 ```ts theme={null}
-import { fentaris, mcp, stdio } from "@fentaris/core";
+import { Policy, fentaris, mcp, stdio } from "@fentaris/core";
 
 const proxy = fentaris({
+  policy: Policy.allowAll(),
   servers: [
     mcp("filesystem", {
       transport: stdio({
@@ -29,6 +30,8 @@ const proxy = fentaris({
 
 await proxy.start();
 ```
+
+`Policy.allowAll()` is intended for local development and examples. Production proxies should declare least-privilege `policy(...)` or `groups` rules because Fentaris denies tool and capability access by default when no explicit allow matches.
 
 ## Options
 
@@ -83,6 +86,8 @@ Policy and group declarations used to decide which upstream tools, resources, pr
 
 You can also declare policies and groups after construction with `proxy.policy(...)` and `proxy.group(...)`. See [App-level governance](#app-level-governance).
 
+When no global policy, group policy, or explicit allow-all development policy is configured, tool calls and policy-governed capabilities are denied. Explicit deny rules win over allows from other matching groups.
+
 ### Runtime server registration
 
 Policies can reference upstream MCP server names that are registered later through `proxy.mcp(...)`, as long as registration happens before `start()` or `listen(...)`.
@@ -133,9 +138,13 @@ Close the HTTP server and all configured upstream transports.
 
 Aggregate tool lists across upstream servers and apply Fentaris naming and policy.
 
+Fentaris applies policy filtering before hooks see the upstream list and again after `onListTools` and `tools:list:after` handlers run. Hook-created synthetic tools must use the normal `<server>__<tool>` name and be covered by policy, or they are removed from the final response.
+
 ### `callTool(params, user?)`
 
 Call a proxied tool. Fentaris dispatches middleware and hooks, then forwards to the upstream server.
+
+Policy deny decisions are terminal: denied calls return a policy error before call hooks, middleware, routes, or upstream dispatch run. Rate limiters attached to the matching policy permission are enforced automatically before forwarding; manual rate-limit middleware is only needed for custom limits outside policy.
 
 ### `listResources(params?, user?)`
 

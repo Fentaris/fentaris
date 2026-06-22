@@ -102,6 +102,7 @@ function validateProjectConfig(value: unknown, configPath: string): ProjectConfi
     packageManager: config.packageManager,
     entrypoint: config.entrypoint,
     port: config.port,
+    ...(config.host ? { host: config.host } : {}),
     path: config.path,
     authDir: config.authDir,
     ...(config.secrets ? { secrets: config.secrets } : {}),

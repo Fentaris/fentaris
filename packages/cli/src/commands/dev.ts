@@ -6,6 +6,6 @@ import { section, style } from "../ui/format.js";
 export async function runDev(runtime: Runtime): Promise<void> {
   const project = await discoverProject(runtime.cwd);
   section(runtime, "Dev");
-  runtime.out.log(`  ${style.pass(`Starting Fentaris at http://localhost:${project.config.port}${project.config.path}`)}`);
+  runtime.out.log(`  ${style.pass(`Starting Fentaris at http://${project.config.host ?? "127.0.0.1"}:${project.config.port}${project.config.path}`)}`);
   await runPackageScript(project.config.packageManager, project.root, "dev", runtime.runner, await loadProjectEnv(project.root, runtime.env));
 }

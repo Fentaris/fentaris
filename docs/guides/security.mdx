@@ -192,6 +192,8 @@ const proxy = fentaris({
   Store production secrets in your infrastructure secret manager and inject them at deploy time. Keep `.fentaris/credentials.enc.json` private when using local encrypted credentials.
 </Note>
 
+Do not forward whole environment maps into HTTP headers. Use `auth`, `resolveHeaders`, or an explicit `envHeaderMap` so token-like variables such as `GITHUB_TOKEN` are not sent upstream unless you map them deliberately.
+
 ## Validate Identity
 
 When users declare API keys, Fentaris uses API-key identity by default with the `x-fentaris-api-key` header. Store API keys as credential sources, such as environment variables or encrypted local credentials, instead of literal strings in code.

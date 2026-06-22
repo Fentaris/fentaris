@@ -33,6 +33,10 @@ export class StdioProxyExposureTransport implements ProxyExposureTransport {
 
   async listen(runtime: ProxyRuntime): Promise<ProxyExposureHandle> {
     const resolved = await this.resolveUser(runtime);
+    if (runtime.identityRequired && !resolved.identity?.authenticated) {
+      throw new Error("Stdio proxy exposure requires an authenticated identity when identityRequired is enabled");
+    }
+
     const sdkServer = runtime.createSdkServer(resolved.user, resolved.identity, resolved.subject) as McpSdkServer;
     const transport = new StdioServerTransport();
 
