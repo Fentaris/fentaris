@@ -126,7 +126,7 @@ export class SlidingWindowRateLimiter implements RateLimiter {
     }
 
     if (maxPerWindow !== undefined) {
-      return Promise.resolve(this.store.consume(this.windowKey(key), this.metadata.windowMs ?? 60_000, maxPerWindow));
+      return Promise.resolve(this.store.consume(this.windowKey(key), this.metadata?.windowMs ?? 60_000, maxPerWindow));
     }
 
     if (maxDailyCalls !== undefined) {
