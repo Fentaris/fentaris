@@ -28,7 +28,7 @@ const defaultSensitiveKeys = [
   /credential/i,
 ];
 
-const defaultSensitiveValuePatterns = [
+const DEFAULT_PROFILER_SENSITIVE_VALUE_PATTERNS = [
   /^\s*Bearer\s+[A-Za-z0-9._~+/=-]{16,}\s*$/i,
   /^[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$/,
   /^github_pat_[A-Za-z0-9_]{20,}$/,
@@ -115,7 +115,7 @@ function matchesPath(path: string[], paths: string[][]): boolean {
 }
 
 function matchesSensitiveValue(value: string): boolean {
-  return defaultSensitiveValuePatterns.some((pattern) => pattern.test(value));
+  return DEFAULT_PROFILER_SENSITIVE_VALUE_PATTERNS.some((pattern) => pattern.test(value));
 }
 
 function normalizePath(path: string | string[]): string[] {
