@@ -137,6 +137,14 @@ export class FentarisAuth {
     return `sha256:${hashApiKey(apiKey)}`;
   }
 
+  /**
+   * Compare a stored raw or hashed API key with a provided raw key.
+   * @pk
+   */
+  static compareApiKey(candidate: string, provided: string): boolean {
+    return compareApiKey(candidate, provided);
+  }
+
   resolveApiKey(apiKey: string): string | null {
     for (const [userId, entry] of Object.entries(this.credentials.users)) {
       if (entry.apiKeys.some((candidate) => compareApiKey(candidate, apiKey))) {

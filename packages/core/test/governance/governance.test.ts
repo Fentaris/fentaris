@@ -130,6 +130,31 @@ describe("governance primitives", () => {
     expect(results.filter((result) => result.isError)).toHaveLength(1);
   });
 
+  it("does not consume secondary quotas after a configured limit is exhausted", async () => {
+    class RecordingRateLimitStore extends MemoryRateLimitStore {
+      consumedKeys: string[] = [];
+
+      override async consume(key: string, window: number, limit: number): Promise<boolean> {
+        this.consumedKeys.push(key);
+        return super.consume(key, window, limit);
+      }
+    }
+
+    const store = new RecordingRateLimitStore();
+    const limiter = new SlidingWindowRateLimiter({
+      store,
+      maxPerWindow: 1,
+      windowMs: 60_000,
+      maxDailyCalls: 2,
+    });
+
+    await expect(limiter.consume("user-1")).resolves.toBe(true);
+    store.consumedKeys = [];
+
+    await expect(limiter.consume("user-1")).resolves.toBe(false);
+    expect(store.consumedKeys).toEqual([]);
+  });
+
   it("resolves identity from configured headers", async () => {
     const strategy = headerIdentityStrategy({
       userIdHeader: "x-user-id",

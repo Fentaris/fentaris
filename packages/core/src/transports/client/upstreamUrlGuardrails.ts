@@ -45,7 +45,7 @@ export async function assertAllowedUpstreamUrl(url: URL, options: UpstreamHttpNe
 }
 
 async function resolveHost(hostname: string, options: UpstreamHttpNetworkOptions | undefined): Promise<Array<{ address: string }>> {
-  if (!options?.lookup && !options?.resolveDns) {
+  if (options?.resolveDns === false) {
     return [];
   }
 
@@ -111,10 +111,15 @@ function classifyIpv4(address: string): string | undefined {
 
 function classifyIpv6(address: string): string | undefined {
   const normalized = address.toLowerCase();
+  const mappedIpv4 = mappedIpv4FromIpv6(normalized);
+  if (mappedIpv4) {
+    return classifyIpv4(mappedIpv4);
+  }
+
   if (normalized === "::1") {
     return "loopback";
   }
-  if (normalized === "::" || normalized.startsWith("::ffff:0:")) {
+  if (normalized === "::") {
     return "unspecified";
   }
   if (normalized.startsWith("fc") || normalized.startsWith("fd")) {
@@ -124,4 +129,70 @@ function classifyIpv6(address: string): string | undefined {
     return "link-local";
   }
   return undefined;
+}
+
+function mappedIpv4FromIpv6(address: string): string | undefined {
+  const groups = parseIpv6Groups(address);
+  if (!groups) {
+    return undefined;
+  }
+
+  if (groups.slice(0, 5).some((group) => group !== 0) || groups[5] !== 0xffff) {
+    return undefined;
+  }
+
+  const high = groups[6];
+  const low = groups[7];
+  return [
+    high >> 8,
+    high & 0xff,
+    low >> 8,
+    low & 0xff,
+  ].join(".");
+}
+
+function parseIpv6Groups(address: string): number[] | undefined {
+  let normalized = address.toLowerCase();
+  if (normalized.includes(".")) {
+    const lastColon = normalized.lastIndexOf(":");
+    const ipv4 = normalized.slice(lastColon + 1);
+    if (lastColon === -1 || isIP(ipv4) !== 4) {
+      return undefined;
+    }
+
+    const octets = ipv4.split(".").map((part) => Number(part));
+    normalized = `${normalized.slice(0, lastColon)}:${((octets[0] << 8) | octets[1]).toString(16)}:${((octets[2] << 8) | octets[3]).toString(16)}`;
+  }
+
+  const parts = normalized.split("::");
+  if (parts.length > 2) {
+    return undefined;
+  }
+
+  const head = splitIpv6Part(parts[0]);
+  const tail = parts.length === 2 ? splitIpv6Part(parts[1]) : [];
+  if (!head || !tail) {
+    return undefined;
+  }
+
+  const missing = 8 - head.length - tail.length;
+  if ((parts.length === 2 && missing < 1) || (parts.length === 1 && missing !== 0)) {
+    return undefined;
+  }
+
+  return [...head, ...Array.from({ length: missing }, () => 0), ...tail];
+}
+
+function splitIpv6Part(part: string): number[] | undefined {
+  if (!part) {
+    return [];
+  }
+
+  const groups = part.split(":").map((group) => {
+    if (!/^[0-9a-f]{1,4}$/.test(group)) {
+      return Number.NaN;
+    }
+    return Number.parseInt(group, 16);
+  });
+  return groups.every((group) => Number.isInteger(group) && group >= 0 && group <= 0xffff) ? groups : undefined;
 }

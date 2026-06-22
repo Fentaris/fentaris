@@ -204,11 +204,11 @@ function isBoundSessionRequest(
   identity: IdentityMetadata | undefined,
   subject: ResolvedSubject | undefined,
 ): boolean {
-  if (!identity?.authenticated) {
-    return false;
+  const requestBinding = createSessionBinding(user, identity, subject);
+  if (!session.binding.authenticated) {
+    return true;
   }
 
-  const requestBinding = createSessionBinding(user, identity, subject);
   if (!requestBinding.authenticated) {
     return false;
   }

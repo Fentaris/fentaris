@@ -124,6 +124,9 @@ const fakes = vi.hoisted(() => {
     streamableTransports,
     sseTransports,
     stdioTransports,
+    resetSessionIds: () => {
+      nextSessionId = 1;
+    },
   };
 });
 
@@ -153,6 +156,7 @@ describe("proxy exposure transports", () => {
     fakes.streamableTransports.length = 0;
     fakes.sseTransports.length = 0;
     fakes.stdioTransports.length = 0;
+    fakes.resetSessionIds();
   });
 
   it("binds HTTP sessions to the authenticated identity and defaults to localhost", async () => {
@@ -194,6 +198,30 @@ describe("proxy exposure transports", () => {
     await handle.close();
   });
 
+  it("allows optional-auth HTTP sessions to continue without identity", async () => {
+    const runtime = createRuntime({ identityRequired: false });
+    const handle = await new HttpProxyExposureTransport({ port: 0 }).listen(runtime);
+    const server = fakes.httpServers[0];
+
+    const initialized = await request(server, {
+      method: "POST",
+      url: "/mcp",
+      headers: {},
+    });
+    const sessionId = initialized.headers["mcp-session-id"];
+    expect(sessionId).toBe("http-session-1");
+
+    const continued = await request(server, {
+      method: "POST",
+      url: "/mcp",
+      headers: { "mcp-session-id": sessionId ?? "" },
+    });
+    expect(continued.status).toBe(200);
+    expect(continued.body).toBe("continued");
+
+    await handle.close();
+  });
+
   it("requires authenticated SSE /messages requests for the bound session", async () => {
     const runtime = createRuntime({ identityRequired: true });
     const handle = await new SseProxyExposureTransport({ port: 0 }).listen(runtime);
@@ -228,6 +256,29 @@ describe("proxy exposure transports", () => {
       headers: { authorization: "Bearer alice" },
     });
     expect(matched.status).toBe(200);
+
+    await handle.close();
+  });
+
+  it("allows optional-auth SSE /messages requests to continue without identity", async () => {
+    const runtime = createRuntime({ identityRequired: false });
+    const handle = await new SseProxyExposureTransport({ port: 0 }).listen(runtime);
+    const server = fakes.httpServers[0];
+
+    await request(server, {
+      method: "GET",
+      url: "/sse",
+      headers: {},
+    });
+    const sessionId = fakes.sseTransports[0]?.sessionId;
+
+    const continued = await request(server, {
+      method: "POST",
+      url: `/messages?sessionId=${sessionId}`,
+      headers: {},
+    });
+    expect(continued.status).toBe(200);
+    expect(continued.body).toBe("posted");
 
     await handle.close();
   });
