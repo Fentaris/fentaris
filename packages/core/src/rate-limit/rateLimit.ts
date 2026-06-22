@@ -8,6 +8,12 @@ type Bucket = {
   expiresAt: number;
 };
 
+type RateLimitBucket = {
+  key: string;
+  window: number;
+  limit: number;
+};
+
 /**
  * In-memory rate limit store with expiring buckets.
  * @pk
@@ -44,6 +50,32 @@ export class MemoryRateLimitStore implements RateLimitStore {
     }
 
     bucket.count += 1;
+    return true;
+  }
+
+  async consumeMany(limits: RateLimitBucket[]): Promise<boolean> {
+    if (limits.some(({ limit }) => limit <= 0)) {
+      return false;
+    }
+
+    const now = Date.now();
+    for (const { key, limit } of limits) {
+      const bucket = this.activeBucket(key, now);
+      if (bucket && bucket.count >= limit) {
+        return false;
+      }
+    }
+
+    for (const { key, window } of limits) {
+      const bucket = this.activeBucket(key, now);
+      if (!bucket) {
+        this.buckets.set(key, { count: 1, expiresAt: now + window });
+        continue;
+      }
+
+      bucket.count += 1;
+    }
+
     return true;
   }
 
@@ -183,6 +215,23 @@ export class SlidingWindowRateLimiter implements RateLimiter {
 
   private async consumeCompositeLimit(key: string, maxPerWindow: number, maxDailyCalls: number): Promise<boolean> {
     return this.withConsumeLock(key, async () => {
+      const limits: RateLimitBucket[] = [
+        {
+          key: this.windowKey(key),
+          window: this.metadata?.windowMs ?? 60_000,
+          limit: maxPerWindow,
+        },
+        {
+          key: this.dailyKey(key),
+          window: this.dailyWindowMs(),
+          limit: maxDailyCalls,
+        },
+      ];
+
+      if (this.store.consumeMany) {
+        return this.store.consumeMany(limits);
+      }
+
       if (!(await this.checkLimit(key))) {
         return false;
       }

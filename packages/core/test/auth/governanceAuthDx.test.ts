@@ -138,6 +138,9 @@ describe("governance auth DX", () => {
 
     await proxy.callTool({ name: "github__read", arguments: { owner: "alice" } }, { id: "alice" });
     expect(approvalHandler).toHaveBeenCalledOnce();
+    expect(limiter.consume).toHaveBeenCalledWith("alice:github:read");
+    expect(limiter.checkLimit).not.toHaveBeenCalled();
+    expect(limiter.recordCall).not.toHaveBeenCalled();
     expect(approvalRequests).toEqual([
       {
         serverName: "github",
@@ -477,6 +480,7 @@ describe("governance auth DX", () => {
 
   it("keeps unauthenticated contexts explicit without creating an anonymous subject", async () => {
     const proxy = new McpProxy({
+      policy: Policy.allowAll(),
       servers: [new McpServer({ name: "github", transport: new EnvTransport() })],
     });
     const seen: unknown[] = [];
@@ -505,6 +509,8 @@ describe("governance auth DX", () => {
     expect(result.isError).toBe(true);
     expect(result._meta?.error).toMatchObject({
       policy: {
+        policyName: "effective-group-policy",
+        denialReason: 'Tool "delete" denied by policy "blocked"',
         matchedGroups: ["blocked"],
         matchedPermissions: [
           expect.objectContaining({
@@ -538,7 +544,8 @@ describe("governance auth DX", () => {
       return next();
     });
 
-    const groupResult = await groupProxy.callTool({ name: "github__read" }, { id: "alice" });
+    await groupProxy.callTool({ name: "github__read" }, { id: "alice" });
+    const groupResult = await groupProxy.callTool({ name: "github__delete" }, { id: "alice" });
 
     const globalProxy = new McpProxy({
       policy: policy("global").mcp("github").allow("read").mcp("github").deny("delete"),
@@ -565,12 +572,13 @@ describe("governance auth DX", () => {
       return next();
     });
 
-    await permissiveProxy.callTool({ name: "github__read" });
+    const permissiveResult = await permissiveProxy.callTool({ name: "github__read" });
 
     expect(groupChecks).toEqual([{ canRead: true, canDelete: false, canWrite: false }]);
     expect(globalChecks).toEqual([{ canRead: true, canDelete: false, canWrite: false }]);
     expect(permissiveChecks).toEqual([true]);
-    expect(groupResult.isError).toBeUndefined();
+    expect(groupResult.isError).toBe(true);
+    expect(permissiveResult.isError).toBeUndefined();
   });
 
   it("does not expose raw credential values through structured context domains", async () => {

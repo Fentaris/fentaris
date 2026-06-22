@@ -4,6 +4,7 @@ import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { McpProxy } from "../src/proxy/McpProxy.js";
 import { McpServer } from "../src/server/McpServer.js";
+import { Policy } from "../src/governance.js";
 import type { ProxyExposureHandle, ProxyExposureTransport, ProxyRuntime } from "../src/types.js";
 import type {
   CallToolRequest,
@@ -118,9 +119,14 @@ type PipelineProbeHandle = ProxyExposureHandle & {
   client: Client;
 };
 
+function allowAllMcpOperations(): Policy {
+  return Policy.allowAll().mcp("*").allowCapability({ operation: "*", target: "*" });
+}
+
 describe("proxy exposure pipeline", () => {
   it("starts each explicit exposure registered after the runtime is ready", async () => {
     const proxy = new McpProxy({
+      policy: allowAllMcpOperations(),
       servers: [new McpServer({ name: "github", transport: new MockTransport() })],
     });
 
@@ -140,6 +146,7 @@ describe("proxy exposure pipeline", () => {
   it("uses the same listTools and callTool pipeline for HTTP, stdio, and SSE exposure transports", async () => {
     const upstream = new MockTransport();
     const proxy = new McpProxy({
+      policy: allowAllMcpOperations(),
       servers: [new McpServer({ name: "github", transport: upstream })],
     });
     const seenUsers: string[] = [];

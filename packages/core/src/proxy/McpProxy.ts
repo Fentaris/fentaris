@@ -923,19 +923,6 @@ export class McpProxy {
       if (!context.policyDecision.allowed) {
         const denied = this.policyDeniedResult(context);
         this.writeAutoLog("failure", log, request, context, startedAt, denied);
-        await this.emitRuntimeEvent(createRuntimeEvent({
-          name: "mcp.call.success",
-          category: "mcp",
-          level: "warn",
-          server: serverName,
-          group: context.policy.matchedGroups[0],
-          user: resolvedUser.id,
-          operation: "tool:call",
-          target: toolName,
-          result: denied,
-          durationMs: Date.now() - startedAt,
-          message: "MCP tool call completed",
-        }));
         return denied;
       }
 
@@ -1939,7 +1926,7 @@ export class McpProxy {
     }
 
     const key = rateLimitKey(request, context.user);
-    if (!(await limiter.consume(key))) {
+    if (!(await consumePolicyRateLimit(limiter, key))) {
       return context.res.deny("Rate limit exceeded");
     }
 
@@ -2781,12 +2768,34 @@ function serverNameFromProxyTool(toolName: string): string {
   }
 }
 
-function isRateLimiter(value: unknown): value is RateLimiter {
+type RateLimiterLike = {
+  consume?: RateLimiter["consume"];
+  checkLimit: RateLimiter["checkLimit"];
+  recordCall: RateLimiter["recordCall"];
+  getRemainingCalls: RateLimiter["getRemainingCalls"];
+};
+
+async function consumePolicyRateLimit(limiter: RateLimiterLike, key: string): Promise<boolean> {
+  if (typeof limiter.consume === "function") {
+    return limiter.consume(key);
+  }
+
+  if (!(await limiter.checkLimit(key))) {
+    return false;
+  }
+
+  await limiter.recordCall(key);
+  return true;
+}
+
+function isRateLimiter(value: unknown): value is RateLimiterLike {
   return (
     value !== null &&
     typeof value === "object" &&
-    "consume" in value &&
-    "getRemainingCalls" in value
+    "checkLimit" in value &&
+    "recordCall" in value &&
+    "getRemainingCalls" in value &&
+    (!("consume" in value) || typeof (value as Record<string, unknown>).consume === "function")
   );
 }
 
