@@ -116,7 +116,11 @@ function extractUserObjectArgument(source: string): { source: string; start: num
   }
 
   const idMatch = /^\s*["']([^"']+)["']\s*,/u.exec(source);
-  const id = idMatch?.[1]?.trim();
+  if (!idMatch) {
+    return null;
+  }
+
+  const id = idMatch[1]?.trim();
   if (!id) {
     return null;
   }
