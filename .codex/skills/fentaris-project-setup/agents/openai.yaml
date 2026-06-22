@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fentaris Project Setup"
+  short_description: "Create and configure Fentaris proxy projects"
+  default_prompt: "Use $fentaris-project-setup to create and configure a new Fentaris proxy project."
