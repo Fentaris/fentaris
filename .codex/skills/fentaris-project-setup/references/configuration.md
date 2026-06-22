@@ -2,17 +2,26 @@
 
 ## Setup Sequence
 
-1. Create or select the project directory.
-2. Install or use the Fentaris CLI.
-3. Generate the project with `fentaris init <project-name>` when starting fresh.
-4. Configure `fentaris.json` for project discovery, runtime entrypoint, port, host, endpoint path, and local auth directory.
-5. Edit the TypeScript entrypoint with high-level declarations:
+1. Explain the selected workflow and why it fits the user's users, machines, runtime, MCP servers, and current auth constraints.
+2. Create or select the project directory.
+3. Install or use the Fentaris CLI.
+4. Generate the project with `fentaris init <project-name>` when starting fresh.
+5. Configure `fentaris.json` for project discovery, runtime entrypoint, port, host, endpoint path, and local auth directory.
+6. Edit the TypeScript entrypoint with high-level declarations:
    - `fentaris(...)` as the app boundary.
    - `mcp(...)` for upstream servers.
    - `policy(...)`, `group(...)`, and `user(...)` for access control.
    - Built-in transport helpers such as stdio or Streamable HTTP where appropriate.
-6. Add secrets through Fentaris secret commands or the project's established secret workflow. Do not embed secret values in code.
-7. Add scripts or docs that match the generated project style.
+7. Add secrets through Fentaris secret commands or the project's established secret workflow. Do not embed secret values in code.
+8. Add scripts or docs that match the generated project style.
+
+## User And Runtime Decisions
+
+- Same-machine local use: keep `host` on `127.0.0.1` and explain that the MCP client connects locally.
+- Different computers or team use: discuss where the proxy runs, which network can reach it, and what auth/policy protects it.
+- Cloud-shaped setup: keep config env-driven and deploy-ready, but do not run deploy because deploy is not available yet.
+- Existing app identity: map trusted headers or app context into Fentaris user identity at the proxy edge.
+- OAuth request: explain that OAuth 2.1 is not supported yet and choose API-key/header identity or an external auth boundary instead.
 
 ## Preferred Implementation Pattern
 

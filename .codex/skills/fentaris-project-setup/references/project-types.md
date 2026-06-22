@@ -2,6 +2,8 @@
 
 Use these shapes to guide setup questions and implementation.
 
+Read `discovery.md` first when the user is still deciding how Fentaris should fit their workflow.
+
 ## Local Developer Proxy
 
 Choose this when the user wants a quick local MCP proxy for one developer or a prototype.
@@ -19,6 +21,7 @@ Choose this when a team shares multiple upstream MCP servers through one endpoin
 - Add users/groups and policies early.
 - Add request identity mapping if the proxy receives headers such as user, tenant, trace, or environment.
 - Use logging/audit hooks when the user wants observability.
+- Ask whether team members connect from different machines. If yes, design the endpoint and host/network assumptions explicitly instead of leaving a laptop-local default.
 
 ## Production-Shaped Proxy
 
@@ -26,6 +29,7 @@ Choose this when the user mentions production, staging, governance, approvals, c
 
 - Bind publicly only when a deployment boundary is explicit.
 - Configure auth, policies, logging, and secrets before exposure.
+- Do not promise OAuth 2.1 support. Use API-key/header identity or an existing trusted auth boundary until OAuth 2.1 support exists.
 - Keep endpoint path stable and configurable through `fentaris.json` or env vars.
 - Do not run or invent deploy commands. State that Fentaris deploy is not available yet and the CLI is expected to add a smoother deploy flow later.
 
