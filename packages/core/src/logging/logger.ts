@@ -63,7 +63,7 @@ const levelWeight: Record<LogLevel, number> = {
 
 const defaultSensitiveKeys = [/token/i, /secret/i, /password/i, /authorization/i, /api[-_]?key/i, /credential/i];
 const defaultSensitiveValuePatterns = [
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{16,}\b/,
+  /(?:^|[^A-Za-z0-9._~+/=-])Bearer\s+[A-Za-z0-9._~+/=-]{16,}(?=$|[^A-Za-z0-9._~+/=-])/,
   /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
   /\bgh[opsur]_[A-Za-z0-9_]{20,}\b/,
   /\bgithub_pat_[A-Za-z0-9_]{40,}\b/,

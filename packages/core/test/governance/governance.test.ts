@@ -100,6 +100,71 @@ describe("governance primitives", () => {
     });
   });
 
+  it("enforces legacy custom rate limiters without consume", async () => {
+    const limiter = {
+      checkLimit: vi.fn()
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false),
+      recordCall: vi.fn(async () => undefined),
+      getRemainingCalls: vi.fn(async () => 0),
+    };
+    const middleware = rateLimitMiddleware({ limiter: limiter as never });
+    const request = {
+      serverName: "github",
+      toolName: "create_issue",
+      proxyToolName: "github__create_issue",
+      arguments: {},
+      raw: { name: "github__create_issue" },
+    };
+    const context = {
+      user: { id: "user-1" },
+      log: { info: vi.fn() },
+      res: new ResponseController(),
+    } as unknown as MiddlewareContext;
+    const next = vi.fn(async () => ({ content: [] }));
+
+    await expect(middleware(request, context, next)).resolves.toEqual({ content: [] });
+    await expect(middleware(request, context, next)).resolves.toEqual({
+      content: [{ type: "text", text: "Rate limit exceeded" }],
+      isError: true,
+    });
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(limiter.recordCall).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not consume the window bucket when the daily bucket rejects", async () => {
+    const store = new MemoryRateLimitStore();
+    const limiter = new SlidingWindowRateLimiter({
+      store,
+      keyPrefix: "test",
+      maxPerWindow: 2,
+      maxDailyCalls: 1,
+      windowMs: 60_000,
+    });
+
+    await expect(limiter.consume("user-1")).resolves.toBe(true);
+    await expect(limiter.consume("user-1")).resolves.toBe(false);
+
+    await expect(store.get("test:window:user-1")).resolves.toBe(1);
+  });
+
+  it("does not consume the daily bucket when the window bucket rejects", async () => {
+    const store = new MemoryRateLimitStore();
+    const limiter = new SlidingWindowRateLimiter({
+      store,
+      keyPrefix: "test",
+      maxPerWindow: 1,
+      maxDailyCalls: 2,
+      windowMs: 60_000,
+    });
+    const dayId = new Date().toISOString().slice(0, 10);
+
+    await expect(limiter.consume("user-1")).resolves.toBe(true);
+    await expect(limiter.consume("user-1")).resolves.toBe(false);
+
+    await expect(store.get(`test:daily:${dayId}:user-1`)).resolves.toBe(1);
+  });
+
   it("enforces the concurrent rate limit boundary atomically", async () => {
     const limiter = new SlidingWindowRateLimiter({
       store: new MemoryRateLimitStore(),

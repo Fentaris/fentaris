@@ -78,6 +78,7 @@ export class SlidingWindowRateLimiter implements RateLimiter {
   readonly metadata: RateLimiter["metadata"];
   private readonly store: RateLimitStore;
   private readonly keyPrefix: string;
+  private readonly consumeLocks = new Map<string, Promise<void>>();
 
   /**
    * Create a sliding-window limiter.
@@ -117,27 +118,22 @@ export class SlidingWindowRateLimiter implements RateLimiter {
   }
 
   async consume(key: string): Promise<boolean> {
-    if (!(await this.checkLimit(key))) {
-      return false;
+    const maxPerWindow = this.metadata?.maxPerWindow;
+    const maxDailyCalls = this.metadata?.maxDailyCalls;
+
+    if (maxPerWindow !== undefined && maxDailyCalls !== undefined) {
+      return this.consumeCompositeLimit(key, maxPerWindow, maxDailyCalls);
     }
 
-    if (this.metadata?.maxPerWindow !== undefined) {
-      const consumedWindow = await this.store.consume(this.windowKey(key), this.metadata.windowMs ?? 60_000, this.metadata.maxPerWindow);
-      if (!consumedWindow) {
-        return false;
-      }
+    if (maxPerWindow !== undefined) {
+      return Promise.resolve(this.store.consume(this.windowKey(key), this.metadata?.windowMs ?? 60_000, maxPerWindow));
     }
 
-    if (this.metadata?.maxDailyCalls !== undefined) {
-      const consumedDaily = await this.store.consume(this.dailyKey(key), this.dailyWindowMs(), this.metadata.maxDailyCalls);
-      if (!consumedDaily) {
-        return false;
-      }
+    if (maxDailyCalls !== undefined) {
+      return Promise.resolve(this.store.consume(this.dailyKey(key), this.dailyWindowMs(), maxDailyCalls));
     }
 
-    if (this.metadata?.maxPerWindow === undefined && this.metadata?.maxDailyCalls === undefined) {
-      await this.recordCall(key);
-    }
+    await this.recordCall(key);
     return true;
   }
 
@@ -184,6 +180,42 @@ export class SlidingWindowRateLimiter implements RateLimiter {
     tomorrow.setUTCHours(24, 0, 0, 0);
     return Math.max(1, tomorrow.getTime() - now.getTime());
   }
+
+  private async consumeCompositeLimit(key: string, maxPerWindow: number, maxDailyCalls: number): Promise<boolean> {
+    return this.withConsumeLock(key, async () => {
+      if (!(await this.checkLimit(key))) {
+        return false;
+      }
+
+      const windowAccepted = await Promise.resolve(this.store.consume(this.windowKey(key), this.metadata?.windowMs ?? 60_000, maxPerWindow));
+      if (!windowAccepted) {
+        return false;
+      }
+
+      return Promise.resolve(this.store.consume(this.dailyKey(key), this.dailyWindowMs(), maxDailyCalls));
+    });
+  }
+
+  private async withConsumeLock<T>(key: string, task: () => Promise<T>): Promise<T> {
+    const previous = this.consumeLocks.get(key) ?? Promise.resolve();
+    let releaseLock: (() => void) | undefined;
+    const next = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    const queued = previous.then(() => next, () => next);
+    this.consumeLocks.set(key, queued);
+
+    await previous.catch(() => undefined);
+
+    try {
+      return await task();
+    } finally {
+      releaseLock?.();
+      if (this.consumeLocks.get(key) === queued) {
+        this.consumeLocks.delete(key);
+      }
+    }
+  }
 }
 
 /**
@@ -210,7 +242,7 @@ export function rateLimitMiddleware(options: {
     }
 
     const key = options.key?.(request, context.user) ?? rateLimitKey(request, context.user);
-    if (!(await limiter.consume(key))) {
+    if (!(await consumeRateLimit(limiter, key))) {
       return context.res.deny(options.message ?? "Rate limit exceeded");
     }
 
@@ -218,13 +250,38 @@ export function rateLimitMiddleware(options: {
   };
 }
 
-function isRateLimiter(value: unknown): value is RateLimiter {
+type RateLimiterLike = {
+  consume?: RateLimiter["consume"];
+  checkLimit: RateLimiter["checkLimit"];
+  recordCall: RateLimiter["recordCall"];
+  getRemainingCalls: RateLimiter["getRemainingCalls"];
+  metadata?: RateLimiter["metadata"];
+};
+
+async function consumeRateLimit(limiter: RateLimiterLike, key: string): Promise<boolean> {
+  if (typeof limiter.consume === "function") {
+    return Promise.resolve(limiter.consume(key));
+  }
+
+  if (!(await Promise.resolve(limiter.checkLimit(key)))) {
+    return false;
+  }
+
+  await Promise.resolve(limiter.recordCall(key));
+  return true;
+}
+
+function isRateLimiter(value: unknown): value is RateLimiterLike {
   return (
     value !== null &&
     typeof value === "object" &&
-    "consume" in value &&
-    "checkLimit" in value &&
-    "recordCall" in value &&
-    "getRemainingCalls" in value
+    hasFunction(value, "checkLimit") &&
+    hasFunction(value, "recordCall") &&
+    hasFunction(value, "getRemainingCalls") &&
+    (!("consume" in value) || hasFunction(value, "consume"))
   );
+}
+
+function hasFunction(value: object, key: string): boolean {
+  return key in value && typeof (value as Record<string, unknown>)[key] === "function";
 }

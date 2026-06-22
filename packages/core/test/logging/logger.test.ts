@@ -68,6 +68,8 @@ describe("Logger redaction", () => {
     logger.info("message", {
       input: {
         bearer: "Bearer abcdefghijklmnopqrstuvwxyz123456",
+        paddedBearer: "Bearer abcdefghijklmnopqrstuvwxyz123456==",
+        slashBearer: "Bearer abcdefghijklmnopqrstuvwxyz123456/",
         jwt: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhbGljZSJ9.Gh5wqNQUs7Zk7q7g2Xf2aH9b0d1c2e3f4g5h6i",
         github: "ghp_abcdefghijklmnopqrstuvwxyz1234567890",
         keep: "Bearer abcdefghijklmnopqrstuvwxyz123456",
@@ -78,6 +80,8 @@ describe("Logger redaction", () => {
 
     expect(driver.entries[0]?.metadata.input).toMatchObject({
       bearer: "[REDACTED]",
+      paddedBearer: "[REDACTED]",
+      slashBearer: "[REDACTED]",
       jwt: "[REDACTED]",
       github: "[REDACTED]",
       keep: "Bearer abcdefghijklmnopqrstuvwxyz123456",
