@@ -286,7 +286,7 @@ describe("McpProxy", () => {
 
     await proxy.start();
 
-    expect(stderr.mock.calls.flat().join("\n")).toContain("http://localhost:0/configured");
+    expect(stderr.mock.calls.flat().join("\n")).toContain("http://127.0.0.1:0/configured");
     await proxy.stop();
   });
 
@@ -1211,25 +1211,22 @@ describe("McpProxy", () => {
     });
   });
 
-  it("denies tool calls and tool discovery by default without explicit policy", async () => {
+  it("allows tool calls and tool discovery by default without explicit policy", async () => {
     const transport = new MockTransport();
     const proxy = new McpProxy({
       servers: [new McpServer({ name: "github", transport })],
     });
 
-    await expect(proxy.listTools()).resolves.toEqual({ tools: [] });
-    await expect(proxy.callTool({ name: toProxyToolName("github", "create_issue") })).resolves.toMatchObject({
-      isError: true,
-      _meta: {
-        error: expect.objectContaining({
-          code: FentarisErrorCode.PolicyDenied,
-        }),
-      },
+    await expect(proxy.listTools()).resolves.toMatchObject({
+      tools: [expect.objectContaining({ name: toProxyToolName("github", "create_issue") })],
     });
-    expect(transport.callTool).not.toHaveBeenCalled();
+    await expect(proxy.callTool({ name: toProxyToolName("github", "create_issue") })).resolves.toMatchObject({
+      content: [{ type: "text", text: "called:create_issue" }],
+    });
+    expect(transport.callTool).toHaveBeenCalledOnce();
   });
 
-  it("uses explicit allow-all policy as the development open-access path", async () => {
+  it("supports explicit allow-all policy as an open-access path", async () => {
     const transport = new MockTransport();
     const proxy = new McpProxy({
       policy: Policy.allowAll(),

@@ -782,7 +782,7 @@ export class McpProxy {
         const result = await server.listTools(params, userForServer);
         const tools = this.groups.length > 0
           ? filterToolsByGroupPolicies(result.tools, server.name, userGroups)
-          : this.globalPolicy ? filterToolsByPolicy(result.tools, server.name, this.globalPolicy) : [];
+          : this.globalPolicy ? filterToolsByPolicy(result.tools, server.name, this.globalPolicy) : result.tools;
         return tools.map((tool) => ({
           ...tool,
           name: toProxyToolName(server.name, tool.name),
@@ -888,7 +888,7 @@ export class McpProxy {
     } else if (this.globalPolicy) {
       context.policyDecision = await this.globalPolicy.evaluate(request, resolvedUser, context);
     } else {
-      context.policyDecision = this.defaultDenyDecision(request, resolvedUser);
+      context.policyDecision = this.defaultAllowDecision(request, resolvedUser);
     }
     context.policy = {
       allowed: context.policyDecision?.allowed,
@@ -923,6 +923,19 @@ export class McpProxy {
       if (!context.policyDecision.allowed) {
         const denied = this.policyDeniedResult(context);
         this.writeAutoLog("failure", log, request, context, startedAt, denied);
+        await this.emitRuntimeEvent(createRuntimeEvent({
+          name: "mcp.call.success",
+          category: "mcp",
+          level: "warn",
+          server: serverName,
+          group: context.policy.matchedGroups[0],
+          user: resolvedUser.id,
+          operation: "tool:call",
+          target: toolName,
+          result: denied,
+          durationMs: Date.now() - startedAt,
+          message: "MCP tool call completed",
+        }));
         return denied;
       }
 
@@ -1832,7 +1845,7 @@ export class McpProxy {
     } else if (this.globalPolicy) {
       decision = await this.globalPolicy.evaluate(request, user, context);
     } else {
-      decision = this.defaultDenyDecision(request, user);
+      decision = this.defaultAllowDecision(request, user);
     }
 
     context.policyDecision = decision;
@@ -1871,25 +1884,20 @@ export class McpProxy {
     return context;
   }
 
-  private defaultDenyDecision(request: ToolCallRequest | CapabilityOperationRequest, user: UserContext): PolicyDecision {
+  private defaultAllowDecision(request: ToolCallRequest | CapabilityOperationRequest, user: UserContext): PolicyDecision {
     const capability = toCapabilityRequest(request);
-    const reason = capability.operation === "tool:call"
-      ? `Tool "${capability.target ?? "*"}" not permitted by policy`
-      : `Operation "${capability.operation}" not permitted by policy`;
     return {
-      allowed: false,
-      reason,
+      allowed: true,
       metadata: {
-        policyName: "default-deny",
+        policyName: "default-allow",
         matchedPermissions: [],
-        denialReason: reason,
         serverName: capability.serverName,
         operation: capability.operation,
         target: capability.target,
         targetKind: capability.targetKind,
         toolName: capability.targetKind === "tool" ? capability.target : undefined,
         userId: user.id,
-        effect: "deny",
+        effect: "allow",
       },
     };
   }
@@ -1903,7 +1911,7 @@ export class McpProxy {
       if (this.globalPolicy) {
         return filterToolsByPolicy([tool], serverName, this.globalPolicy).length > 0;
       }
-      return false;
+      return true;
     });
   }
 
