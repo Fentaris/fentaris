@@ -36,6 +36,13 @@ type HttpSessionState = {
   user: UserContext;
   identity?: IdentityMetadata;
   subject?: ResolvedSubject;
+  binding: SessionBinding;
+};
+
+type SessionBinding = {
+  authenticated: boolean;
+  strategy?: string;
+  userId?: string;
 };
 
 /**
@@ -43,8 +50,8 @@ type HttpSessionState = {
  * @pk
  */
 export class HttpProxyExposureTransport implements ProxyExposureTransport<HttpProxyExposureHandle> {
-  private readonly options: Required<Pick<HttpProxyExposureTransportOptions, "port" | "path">> &
-    Pick<HttpProxyExposureTransportOptions, "host" | "onStarted">;
+  private readonly options: Required<Pick<HttpProxyExposureTransportOptions, "port" | "host" | "path">> &
+    Pick<HttpProxyExposureTransportOptions, "onStarted">;
 
   /**
    * Create an HTTP proxy exposure transport.
@@ -53,7 +60,7 @@ export class HttpProxyExposureTransport implements ProxyExposureTransport<HttpPr
   constructor(options: HttpProxyExposureTransportOptions = {}) {
     this.options = {
       port: options.port ?? 3000,
-      host: options.host,
+      host: options.host ?? "127.0.0.1",
       path: options.path ?? "/mcp",
       onStarted: options.onStarted,
     };
@@ -103,16 +110,10 @@ export class HttpProxyExposureTransport implements ProxyExposureTransport<HttpPr
     });
 
     await new Promise<void>((resolve) => {
-      const onListening = () => {
+      server.listen(this.options.port, this.options.host, () => {
         this.options.onStarted?.();
         resolve();
-      };
-
-      if (this.options.host) {
-        server.listen(this.options.port, this.options.host, onListening);
-      } else {
-        server.listen(this.options.port, onListening);
-      }
+      });
     });
 
     return {
@@ -154,6 +155,11 @@ async function handleMcpRequest(
       return;
     }
 
+    if (!isBoundSessionRequest(session, user, identity, subject)) {
+      sendJsonRpcError(res, 401, FentarisErrorCode.Unauthorized, "Unauthorized");
+      return;
+    }
+
     await session.transport.handleRequest(req, res);
     return;
   }
@@ -168,7 +174,7 @@ async function handleMcpRequest(
     sessionIdGenerator: () => randomUUID(),
     enableJsonResponse: true,
     onsessioninitialized: (newSessionId) => {
-      sessions.set(newSessionId, { transport, server: sdkServer, user, identity, subject });
+      sessions.set(newSessionId, { transport, server: sdkServer, user, identity, subject, binding: createSessionBinding(user, identity, subject) });
       runtime.logger.debug("MCP proxy session initialized", { sessionId: newSessionId, userId: user.id });
       void runtime.emitSessionStart({
         user,
@@ -195,6 +201,37 @@ async function handleMcpRequest(
 
   await sdkServer.connect(transport);
   await transport.handleRequest(req, res);
+}
+
+function createSessionBinding(user: UserContext, identity: IdentityMetadata | undefined, subject: ResolvedSubject | undefined): SessionBinding {
+  return {
+    authenticated: Boolean(identity?.authenticated),
+    strategy: identity?.strategy,
+    userId: identity?.userId ?? subject?.id ?? user.id,
+  };
+}
+
+function isBoundSessionRequest(
+  session: HttpSessionState,
+  user: UserContext,
+  identity: IdentityMetadata | undefined,
+  subject: ResolvedSubject | undefined,
+): boolean {
+  const requestBinding = createSessionBinding(user, identity, subject);
+  if (session.binding.authenticated) {
+    return (
+      requestBinding.authenticated &&
+      Boolean(requestBinding.userId) &&
+      requestBinding.userId === session.binding.userId &&
+      requestBinding.strategy === session.binding.strategy
+    );
+  }
+
+  return (
+    !requestBinding.authenticated &&
+    requestBinding.userId === session.binding.userId &&
+    requestBinding.strategy === session.binding.strategy
+  );
 }
 
 function sendJsonRpcError(res: ServerResponse, httpStatus: number, code: number, message: string): void {

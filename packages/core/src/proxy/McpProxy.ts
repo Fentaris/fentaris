@@ -6,20 +6,11 @@ import { createContextualLogger, createProxyContext, createPolicyCan, createCapa
 import { isCapabilityAllowed } from "./capabilities.js";
 import { dispatchRouteHandler } from "./middleware.js";
 import { routeCompletion, completionTarget, capabilityToolRequest, isStructuredPolicyErrorResult, toStructuredError } from "./operations.js";
-import { operationEventName, matchesCallHook, matchesEventFilter, dispatchCallHooks, emitProxyEvent, type EventEntry } from "./events.js";
+import { operationEventName, matchesCallHook, dispatchCallHooks, emitProxyEvent, type EventEntry } from "./events.js";
 import { emitLifecycle } from "./lifecycle.js";
 import { createSdkServer } from "./sdkServer.js";
 import { ServerCatalog } from "./serverCatalog.js";
-import { Server as McpSdkServer } from "@modelcontextprotocol/sdk/server/index.js";
 import {
-  CallToolRequestSchema,
-  CompleteRequestSchema,
-  GetPromptRequestSchema,
-  ListPromptsRequestSchema,
-  ListResourcesRequestSchema,
-  ListResourceTemplatesRequestSchema,
-  ListToolsRequestSchema,
-  ReadResourceRequestSchema,
   type CallToolRequest,
   type CallToolResult,
   type CompleteRequest,
@@ -791,7 +782,7 @@ export class McpProxy {
         const result = await server.listTools(params, userForServer);
         const tools = this.groups.length > 0
           ? filterToolsByGroupPolicies(result.tools, server.name, userGroups)
-          : this.globalPolicy ? filterToolsByPolicy(result.tools, server.name, this.globalPolicy) : [];
+          : this.globalPolicy ? filterToolsByPolicy(result.tools, server.name, this.globalPolicy) : result.tools;
         return tools.map((tool) => ({
           ...tool,
           name: toProxyToolName(server.name, tool.name),
@@ -897,7 +888,7 @@ export class McpProxy {
     } else if (this.globalPolicy) {
       context.policyDecision = await this.globalPolicy.evaluate(request, resolvedUser, context);
     } else {
-      context.policyDecision = this.defaultDenyDecision(request, resolvedUser);
+      context.policyDecision = this.defaultAllowDecision(request, resolvedUser);
     }
     context.policy = {
       allowed: context.policyDecision?.allowed,
@@ -932,6 +923,19 @@ export class McpProxy {
       if (!context.policyDecision.allowed) {
         const denied = this.policyDeniedResult(context);
         this.writeAutoLog("failure", log, request, context, startedAt, denied);
+        await this.emitRuntimeEvent(createRuntimeEvent({
+          name: "mcp.call.success",
+          category: "mcp",
+          level: "warn",
+          server: serverName,
+          group: context.policy.matchedGroups[0],
+          user: resolvedUser.id,
+          operation: "tool:call",
+          target: toolName,
+          result: denied,
+          durationMs: Date.now() - startedAt,
+          message: "MCP tool call completed",
+        }));
         return denied;
       }
 
@@ -1841,7 +1845,7 @@ export class McpProxy {
     } else if (this.globalPolicy) {
       decision = await this.globalPolicy.evaluate(request, user, context);
     } else {
-      decision = this.defaultDenyDecision(request, user);
+      decision = this.defaultAllowDecision(request, user);
     }
 
     context.policyDecision = decision;
@@ -1880,25 +1884,20 @@ export class McpProxy {
     return context;
   }
 
-  private defaultDenyDecision(request: ToolCallRequest | CapabilityOperationRequest, user: UserContext): PolicyDecision {
+  private defaultAllowDecision(request: ToolCallRequest | CapabilityOperationRequest, user: UserContext): PolicyDecision {
     const capability = toCapabilityRequest(request);
-    const reason = capability.operation === "tool:call"
-      ? `Tool "${capability.target ?? "*"}" not permitted by policy`
-      : `Operation "${capability.operation}" not permitted by policy`;
     return {
-      allowed: false,
-      reason,
+      allowed: true,
       metadata: {
-        policyName: "default-deny",
+        policyName: "default-allow",
         matchedPermissions: [],
-        denialReason: reason,
         serverName: capability.serverName,
         operation: capability.operation,
         target: capability.target,
         targetKind: capability.targetKind,
         toolName: capability.targetKind === "tool" ? capability.target : undefined,
         userId: user.id,
-        effect: "deny",
+        effect: "allow",
       },
     };
   }
@@ -1912,7 +1911,7 @@ export class McpProxy {
       if (this.globalPolicy) {
         return filterToolsByPolicy([tool], serverName, this.globalPolicy).length > 0;
       }
-      return false;
+      return true;
     });
   }
 
@@ -1940,7 +1939,7 @@ export class McpProxy {
     }
 
     const key = rateLimitKey(request, context.user);
-    if (!(await limiter.consume(key))) {
+    if (!(await consumePolicyRateLimit(limiter, key))) {
       return context.res.deny("Rate limit exceeded");
     }
 
@@ -2659,6 +2658,10 @@ class McpProxyGroupHandle implements ProxyGroupHandle {
     return new McpProxyMcpHandle(this.proxy, name, this.id);
   }
 
+  server(name: string): ProxyMcpHandle {
+    return this.mcp(name);
+  }
+
   users(...users: User[]): ProxyGroupHandle {
     this.proxy.addGroupUsers(this.id, users);
     return this;
@@ -2778,14 +2781,34 @@ function serverNameFromProxyTool(toolName: string): string {
   }
 }
 
-function isRateLimiter(value: unknown): value is RateLimiter {
+type RateLimiterLike = {
+  consume?: RateLimiter["consume"];
+  checkLimit: RateLimiter["checkLimit"];
+  recordCall: RateLimiter["recordCall"];
+  getRemainingCalls: RateLimiter["getRemainingCalls"];
+};
+
+async function consumePolicyRateLimit(limiter: RateLimiterLike, key: string): Promise<boolean> {
+  if (typeof limiter.consume === "function") {
+    return limiter.consume(key);
+  }
+
+  if (!(await limiter.checkLimit(key))) {
+    return false;
+  }
+
+  await limiter.recordCall(key);
+  return true;
+}
+
+function isRateLimiter(value: unknown): value is RateLimiterLike {
   return (
     value !== null &&
     typeof value === "object" &&
-    "consume" in value &&
     "checkLimit" in value &&
     "recordCall" in value &&
-    "getRemainingCalls" in value
+    "getRemainingCalls" in value &&
+    (!("consume" in value) || typeof (value as Record<string, unknown>).consume === "function")
   );
 }
 

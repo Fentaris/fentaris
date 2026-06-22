@@ -79,6 +79,16 @@ async function withFakeProcessIo<T>(input: FakeTtyInput, output: FakeTtyOutput, 
   }
 }
 
+async function withFakeStdin<T>(input: PassThrough, run: () => Promise<T>): Promise<T> {
+  const stdin = process.stdin;
+  Object.defineProperty(process, "stdin", { configurable: true, value: input });
+  try {
+    return await run();
+  } finally {
+    Object.defineProperty(process, "stdin", { configurable: true, value: stdin });
+  }
+}
+
 async function writeHealthyProject(root: string, authDirectory = ".fentaris"): Promise<void> {
   await mkdir(join(root, "src"), { recursive: true });
   await mkdir(join(root, authDirectory), { recursive: true });
@@ -154,6 +164,15 @@ describe("default runtime prompts", () => {
       rt.prompt.close();
     });
   });
+
+  it("fails closed for non-TTY secret prompts", async () => {
+    const input = new PassThrough() as PassThrough & { isTTY?: boolean };
+    input.isTTY = false;
+    await withFakeStdin(input, async () => {
+      const rt = defaultRuntime();
+      await expect(rt.prompt.text("Credential value", { secret: true })).rejects.toThrow("Secret prompts require an interactive terminal");
+    });
+  });
 });
 
 describe("command routing helpers", () => {
@@ -187,6 +206,18 @@ describe("command routing helpers", () => {
         name: "secrets",
         args: ["set", "github.token"],
         options: { value: "-secret-value" },
+      },
+    });
+  });
+
+  it("parses stdin secret value option", () => {
+    expect(parseCommand(["secrets", "set", "github.token", "--value-stdin"])).toEqual({
+      kind: "ok",
+      path: ["secrets", "set"],
+      command: {
+        name: "secrets",
+        args: ["set", "github.token"],
+        options: { "value-stdin": true },
       },
     });
   });
@@ -695,6 +726,25 @@ describe("secrets", () => {
     const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(authDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
     expect(credentials.defaults["github.token"]).toBe("-secret-value");
     expect(rt.prompt.text).not.toHaveBeenCalled();
+    expect(rt.out.error.mock.calls.flat().join("\n")).toContain("--key exposes");
+    expect(rt.out.error.mock.calls.flat().join("\n")).toContain("--value exposes");
+  });
+
+  it("reads secret values from stdin without prompting", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const input = new PassThrough();
+    input.end("stdin-secret\n");
+
+    const rt = runtime(dir);
+    await withFakeStdin(input, async () => {
+      await expect(main(["secrets", "set", "github.token", "--value-stdin"], rt)).resolves.toBe(0);
+    });
+
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(credentials.defaults["github.token"]).toBe("stdin-secret");
+    expect(rt.prompt.text).not.toHaveBeenCalled();
+    expect(rt.prompt.confirm).not.toHaveBeenCalled();
   });
 
   it("prompts for reference, scope, and value when secrets set omits the reference", async () => {
@@ -779,6 +829,47 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     await expect(main(["secrets", "manifest", "--check"], rt)).resolves.toBe(0);
   });
 
+  it("generates scoped secret refs and credential env vars from the entrypoint", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `import { bearer, credential, credentialEnv, fentaris, group, mcp, user } from "@fentaris/core";
+const app = fentaris({
+  users: [user("alice", { credentials: { "linear.env": credentialEnv("LINEAR_TOKEN"), "linear.token": credential("linear.token") } })],
+  groups: [group({ id: "support", credentials: { "github.token": credentialEnv("SUPPORT_GITHUB_TOKEN") } })],
+});
+app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callTool: async () => ({}), close: async () => {} }, auth: bearer(credential("default.token")) });
+`,
+    );
+
+    const rt = runtime(dir);
+    await expect(main(["secrets", "manifest"], rt)).resolves.toBe(0);
+    const manifest = JSON.parse(await readFile(join(dir, ".fentaris", "secrets.manifest.json"), "utf8")) as {
+      references: Array<{ ref: string; scope: string }>;
+      envVars: string[];
+    };
+    expect(manifest.references).toEqual([
+      { ref: "default.token", scope: "default" },
+      { ref: "github.token", scope: "group:support" },
+      { ref: "linear.env", scope: "user:alice" },
+      { ref: "linear.token", scope: "user:alice" },
+    ]);
+    expect(manifest.envVars).toEqual(["LINEAR_TOKEN", "SUPPORT_GITHUB_TOKEN"]);
+  });
+
+  it("wraps invalid secrets manifest JSON errors", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(join(dir, ".fentaris", "secrets.manifest.json"), "{ nope");
+
+    const rt = runtime(dir);
+    await expect(main(["secrets", "list"], rt)).resolves.toBe(1);
+    const output = rt.out.error.mock.calls.flat().join("\n");
+    expect(output).toContain("Unable to parse secrets manifest");
+    expect(output).not.toContain("SyntaxError");
+  });
+
   it("creates the auth directory when generating the secrets manifest", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
@@ -812,6 +903,22 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     expect(output).toContain("fentaris secrets set github.token");
   });
 
+  it("uses an explicit key for secrets doctor", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, ".fentaris", "secrets.manifest.json"),
+      JSON.stringify({ version: 1, references: [{ ref: "github.token", scope: "default" }] }),
+    );
+    const credentials = { users: {}, groups: {}, defaults: { "github.token": "secret" } };
+    await writeFile(join(dir, ".fentaris", "credentials.enc.json"), JSON.stringify(FentarisAuth.encryptCredentials(credentials, "explicit-key")));
+
+    const rt = runtime(dir);
+    delete rt.env.FENTARIS_AUTH_KEY;
+    await expect(main(["secrets", "doctor", "--key", "explicit-key"], rt)).resolves.toBe(0);
+    expect(rt.out.log.mock.calls.flat().join("\n")).toContain("All secrets checks passed.");
+  });
+
   it("unsets stored credentials", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
@@ -827,5 +934,14 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     await expect(main(["secrets", "unset", "github.token"], rt)).resolves.toBe(0);
     const updated = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(backendDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
     expect(updated.defaults["github.token"]).toBeUndefined();
+  });
+
+  it("reports when unset removes nothing", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+
+    const rt = runtime(dir);
+    await expect(main(["secrets", "unset", "github.token"], rt)).resolves.toBe(0);
+    expect(rt.out.log.mock.calls.flat().join("\n")).toContain("No github.token credential found");
   });
 });

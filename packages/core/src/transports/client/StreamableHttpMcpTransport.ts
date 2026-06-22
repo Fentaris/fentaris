@@ -22,6 +22,7 @@ import type {
 import { resolveHttpTransportHeaders, type HttpTransportAuthOptions } from "../auth/transportAuth.js";
 import type { UserContext } from "../../types/shared.js";
 import type { FentarisTransport } from "../../types/transport.js";
+import { assertAllowedUpstreamUrl, type UpstreamHttpNetworkOptions } from "./upstreamUrlGuardrails.js";
 
 /**
  * Options for native MCP Streamable HTTP upstream transport.
@@ -33,6 +34,7 @@ export type StreamableHttpMcpTransportOptions = {
   requestInit?: RequestInit;
   fetch?: StreamableHTTPClientTransportOptions["fetch"];
   sessionId?: string;
+  network?: UpstreamHttpNetworkOptions;
   clientName?: string;
   clientVersion?: string;
 };
@@ -164,6 +166,7 @@ export class StreamableHttpMcpTransport implements FentarisTransport {
   }
 
   private async connect(): Promise<Client> {
+    await assertAllowedUpstreamUrl(new URL(this.options.url), this.options.network);
     const headers = await resolveHttpTransportHeaders(this.options.auth, this.user);
     const client = new Client(
       {

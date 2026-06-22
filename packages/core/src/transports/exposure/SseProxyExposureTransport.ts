@@ -16,6 +16,7 @@ import type {
  */
 export type SseProxyExposureTransportOptions = {
   port?: number;
+  host?: string;
   ssePath?: string;
   messagePath?: string;
   onStarted?: () => void;
@@ -35,6 +36,13 @@ type SseSessionState = {
   user: UserContext;
   identity?: IdentityMetadata;
   subject?: ResolvedSubject;
+  binding: SessionBinding;
+};
+
+type SessionBinding = {
+  authenticated: boolean;
+  strategy?: string;
+  userId?: string;
 };
 
 /**
@@ -42,7 +50,7 @@ type SseSessionState = {
  * @pk
  */
 export class SseProxyExposureTransport implements ProxyExposureTransport<SseProxyExposureHandle> {
-  private readonly options: Required<Pick<SseProxyExposureTransportOptions, "port" | "ssePath" | "messagePath">> &
+  private readonly options: Required<Pick<SseProxyExposureTransportOptions, "port" | "host" | "ssePath" | "messagePath">> &
     Pick<SseProxyExposureTransportOptions, "onStarted">;
 
   /**
@@ -52,6 +60,7 @@ export class SseProxyExposureTransport implements ProxyExposureTransport<SseProx
   constructor(options: SseProxyExposureTransportOptions = {}) {
     this.options = {
       port: options.port ?? 3000,
+      host: options.host ?? "127.0.0.1",
       ssePath: options.ssePath ?? "/sse",
       messagePath: options.messagePath ?? "/messages",
       onStarted: options.onStarted,
@@ -82,6 +91,17 @@ export class SseProxyExposureTransport implements ProxyExposureTransport<SseProx
             return;
           }
 
+          const { user, identity, subject } = await runtime.resolveHttpUser(req);
+          if (runtime.identityRequired && !identity?.authenticated) {
+            sendJsonRpcError(res, 401, FentarisErrorCode.Unauthorized, "Unauthorized");
+            return;
+          }
+
+          if (!isBoundSessionRequest(session, user, identity, subject)) {
+            sendJsonRpcError(res, 401, FentarisErrorCode.Unauthorized, "Unauthorized");
+            return;
+          }
+
           await session.transport.handlePostMessage(req, res);
           return;
         }
@@ -109,7 +129,7 @@ export class SseProxyExposureTransport implements ProxyExposureTransport<SseProx
     });
 
     await new Promise<void>((resolve) => {
-      server.listen(this.options.port, () => {
+      server.listen(this.options.port, this.options.host, () => {
         this.options.onStarted?.();
         resolve();
       });
@@ -147,7 +167,7 @@ export class SseProxyExposureTransport implements ProxyExposureTransport<SseProx
     const sdkServer = runtime.createSdkServer(user, identity, subject) as McpSdkServer;
     const transport = new SSEServerTransport(this.options.messagePath, res);
 
-    sessions.set(transport.sessionId, { transport, server: sdkServer, user, identity, subject });
+    sessions.set(transport.sessionId, { transport, server: sdkServer, user, identity, subject, binding: createSessionBinding(user, identity, subject) });
     transport.onclose = async () => {
       sessions.delete(transport.sessionId);
       await runtime.emitSessionEnd({
@@ -168,6 +188,37 @@ export class SseProxyExposureTransport implements ProxyExposureTransport<SseProx
     });
     await transport.start();
   }
+}
+
+function createSessionBinding(user: UserContext, identity: IdentityMetadata | undefined, subject: ResolvedSubject | undefined): SessionBinding {
+  return {
+    authenticated: Boolean(identity?.authenticated),
+    strategy: identity?.strategy,
+    userId: identity?.userId ?? subject?.id ?? user.id,
+  };
+}
+
+function isBoundSessionRequest(
+  session: SseSessionState,
+  user: UserContext,
+  identity: IdentityMetadata | undefined,
+  subject: ResolvedSubject | undefined,
+): boolean {
+  const requestBinding = createSessionBinding(user, identity, subject);
+  if (session.binding.authenticated) {
+    return (
+      requestBinding.authenticated &&
+      Boolean(requestBinding.userId) &&
+      requestBinding.userId === session.binding.userId &&
+      requestBinding.strategy === session.binding.strategy
+    );
+  }
+
+  return (
+    !requestBinding.authenticated &&
+    requestBinding.userId === session.binding.userId &&
+    requestBinding.strategy === session.binding.strategy
+  );
 }
 
 function sendJsonRpcError(res: ServerResponse, httpStatus: number, code: number, message: string): void {

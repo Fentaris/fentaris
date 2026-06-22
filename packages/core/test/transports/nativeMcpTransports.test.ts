@@ -261,6 +261,36 @@ describe("native MCP upstream transports", () => {
     expect(fakes.sseTransports).toHaveLength(0);
   });
 
+  it("blocks Streamable HTTP upstream URLs that resolve to private addresses unless allowed", async () => {
+    const blocked = new StreamableHttpMcpTransport({
+      url: "https://mcp.example/mcp",
+      network: {
+        lookup: async () => [{ address: "10.0.0.8" }],
+      },
+    });
+
+    await expect(blocked.listTools()).rejects.toThrow(/Blocked upstream URL/);
+    expect(fakes.streamableTransports).toHaveLength(0);
+
+    const allowed = new StreamableHttpMcpTransport({
+      url: "https://mcp.example/mcp",
+      network: {
+        allowedPrivateHosts: ["mcp.example"],
+        lookup: async () => [{ address: "10.0.0.8" }],
+      },
+    });
+
+    await expect(allowed.listTools()).resolves.toMatchObject({ tools: [{ name: "listed:{}" }] });
+    expect(fakes.streamableTransports).toHaveLength(1);
+  });
+
+  it("blocks SSE upstream localhost URLs by default", async () => {
+    const transport = new SseMcpTransport({ url: "http://localhost/sse" });
+
+    await expect(transport.listTools()).rejects.toThrow(/Blocked upstream URL/);
+    expect(fakes.sseTransports).toHaveLength(0);
+  });
+
   it("keeps the simple REST-like HttpTransport distinct from native MCP Streamable HTTP", async () => {
     const fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ tools: [] }) }) as Response);
     const transport = new HttpTransport({ baseUrl: "https://api.example/simple", fetch: fetchMock as unknown as typeof fetch });

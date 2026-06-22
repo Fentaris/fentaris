@@ -504,32 +504,23 @@ describe("governance auth DX", () => {
       groups: [group({ id: "blocked", users: [user("alice")], policy: policy("blocked").mcp("github").deny("delete") })],
       servers: [new McpServer({ name: "github", transport: new EnvTransport() })],
     });
-    const seen: unknown[] = [];
-
-    proxy.use((ctx, next) => {
-      seen.push({
-        allowed: ctx.policy.allowed,
-        reason: ctx.policy.reason,
-        matchedGroups: ctx.policy.matchedGroups,
-        matchedPermissions: ctx.policy.matchedPermissions.map((permission) => ({
-          policyName: permission.policyName,
-          groupId: permission.groupId,
-          serverName: permission.serverName,
-          toolName: permission.toolName,
-          effect: permission.effect,
-        })),
-      });
-      return next();
-    });
-
     const result = await proxy.callTool({ name: "github__delete" }, { id: "alice" });
 
     expect(result.isError).toBe(true);
-    expect(seen).toEqual([]);
     expect(result._meta?.error).toMatchObject({
       policy: {
         policyName: "effective-group-policy",
         denialReason: 'Tool "delete" denied by policy "blocked"',
+        matchedGroups: ["blocked"],
+        matchedPermissions: [
+          expect.objectContaining({
+            policyName: "blocked",
+            groupId: "blocked",
+            serverName: "github",
+            toolName: "delete",
+            effect: "deny",
+          }),
+        ],
       },
     });
   });

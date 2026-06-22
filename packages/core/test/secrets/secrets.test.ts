@@ -1,4 +1,5 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -71,8 +72,9 @@ describe("secrets", () => {
     await backend.initEmpty();
     await backend.set("github.token", "secret", { kind: "default" });
     expect(await backend.has("github.token", { kind: "default" })).toBe(true);
-    await backend.unset("github.token", { kind: "default" });
+    await expect(backend.unset("github.token", { kind: "default" })).resolves.toBe(true);
     expect(await backend.has("github.token", { kind: "default" })).toBe(false);
+    await expect(backend.unset("github.token", { kind: "default" })).resolves.toBe(false);
   });
 
   it("does not treat user API keys as arbitrary user credentials", async () => {
@@ -106,5 +108,64 @@ describe("secrets", () => {
     );
     expect(decrypted.defaults["github.token"]).toBe("value");
     expect(encodeSecretScope({ kind: "group", id: "support" })).toBe("group:support");
+    const envelope = JSON.parse(await readFile(join(dir, "credentials.enc.json"), "utf8")) as { version: number; kdf?: { name: string; iterations: number } };
+    expect(envelope.version).toBe(2);
+    expect(envelope.kdf?.name).toBe("pbkdf2-sha256");
+    expect(envelope.kdf?.iterations).toBeGreaterThan(100_000);
+  });
+
+  it("reads legacy SHA-256 encrypted credentials and writes migrated envelopes", async () => {
+    const dir = await createDir("fentaris-secrets-legacy-");
+    await writeFile(
+      join(dir, "credentials.enc.json"),
+      JSON.stringify(legacyEncryptCredentials({ users: {}, groups: {}, defaults: { "github.token": "legacy" } }, key)),
+    );
+    const backend = await LocalSecretsBackend.open({ dir, key });
+
+    expect(await backend.has("github.token", { kind: "default" })).toBe(true);
+    await backend.set("stripe.apiKey", "new", { kind: "default" });
+
+    const envelope = JSON.parse(await readFile(join(dir, "credentials.enc.json"), "utf8")) as { version: number };
+    expect(envelope.version).toBe(2);
+    const decrypted = FentarisAuth.decryptCredentials(envelope, key);
+    expect(decrypted.defaults["github.token"]).toBe("legacy");
+    expect(decrypted.defaults["stripe.apiKey"]).toBe("new");
+  });
+
+  it("rejects wrong local credential keys", async () => {
+    const dir = await createDir("fentaris-secrets-wrong-key-");
+    const backend = await LocalSecretsBackend.open({ dir, key });
+    await backend.initEmpty();
+
+    const wrongKeyBackend = await LocalSecretsBackend.open({ dir, key: "wrong-key" });
+    await expect(wrongKeyBackend.listRefs()).rejects.toThrow("Unable to decrypt local credentials");
+  });
+
+  it("writes owner-only credential file modes on Unix", async () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const dir = await createDir("fentaris-secrets-mode-");
+    const backend = await LocalSecretsBackend.open({ dir, key });
+    await backend.initEmpty();
+    await chmod(join(dir, "credentials.enc.json"), 0o644);
+    await backend.set("github.token", "value", { kind: "default" });
+
+    expect((await stat(join(dir, "credentials.enc.json"))).mode & 0o777).toBe(0o600);
   });
 });
+
+function legacyEncryptCredentials(credentials: unknown, key: string) {
+  const salt = randomBytes(16);
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", createHash("sha256").update(key).update(salt).digest(), iv);
+  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(credentials), "utf8"), cipher.final()]);
+  return {
+    version: 1,
+    algorithm: "aes-256-gcm",
+    salt: salt.toString("base64"),
+    iv: iv.toString("base64"),
+    tag: cipher.getAuthTag().toString("base64"),
+    ciphertext: ciphertext.toString("base64"),
+  };
+}

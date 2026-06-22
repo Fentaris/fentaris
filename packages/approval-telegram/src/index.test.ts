@@ -79,8 +79,8 @@ describe("telegramApproval", () => {
     expect(body.text).toContain("delete_repo");
     expect(body.text).not.toContain("raw-token");
     expect(body.text).not.toContain("raw-password");
-    expect(body.reply_markup.inline_keyboard[0]?.[0]?.callback_data).toBe("fentaris:a:req-1");
-    expect(body.reply_markup.inline_keyboard[0]?.[1]?.callback_data).toBe("fentaris:d:req-1");
+    expect(body.reply_markup.inline_keyboard[0]?.[0]?.callback_data).toMatch(/^ft:a:req-1:[A-Za-z0-9_-]{16}$/);
+    expect(body.reply_markup.inline_keyboard[0]?.[1]?.callback_data).toMatch(/^ft:d:req-1:[A-Za-z0-9_-]{16}$/);
   });
 
   it("returns existing store decisions without sending another Telegram message", async () => {
@@ -101,8 +101,43 @@ describe("telegramApproval", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("denies Telegram send failures by default", async () => {
+    const approval = telegramApproval({
+      botToken: "bot-token",
+      chatId: "chat-1",
+      fetch: vi.fn(async () => ({ ok: false, status: 503 })),
+      requestId: "req-failed",
+    }).approval;
+
+    await expect(approval?.(request(), context())).resolves.toMatchObject({
+      status: "denied",
+      reason: "Telegram approval request failed",
+      requestId: "req-failed",
+      metadata: { adapter: "telegram" },
+    });
+  });
+
+  it("warns when failOpen is explicitly enabled", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      telegramApproval({
+        botToken: "bot-token",
+        chatId: "chat-1",
+        fetch: okFetch(),
+        requestId: "req-fail-open",
+        failOpen: true,
+      });
+
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("Telegram approval failOpen is enabled"));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("stores callback decisions and answers Telegram callback queries", async () => {
     const fetchMock = okFetch();
+    const callbackData = await signedCallbackData("d", "req-3");
     const decisions = new Map<string, TelegramApprovalDecision>();
     const store = {
       get: (requestId: string) => decisions.get(requestId),
@@ -112,8 +147,8 @@ describe("telegramApproval", () => {
     };
 
     const result = await handleTelegramApprovalCallback(
-      { callback_query: { id: "callback-1", data: "fentaris:d:req-3" } },
-      { botToken: "bot-token", store, fetch: fetchMock, apiBaseUrl: "https://telegram.test" },
+      { callback_query: { id: "callback-1", data: callbackData, message: { chat: { id: "chat-1" } } } },
+      { botToken: "bot-token", chatId: "chat-1", store, fetch: fetchMock, apiBaseUrl: "https://telegram.test" },
     );
 
     expect(result).toEqual({ handled: true, requestId: "req-3", decision: "denied" });
@@ -126,6 +161,93 @@ describe("telegramApproval", () => {
     });
   });
 
+  it("rejects callbacks from the wrong chat", async () => {
+    const fetchMock = okFetch();
+    const store = createInMemoryTelegramApprovalStore();
+    const callbackData = await signedCallbackData("a", "req-wrong-chat");
+
+    await expect(
+      handleTelegramApprovalCallback(
+        { callback_query: { id: "callback-1", data: callbackData, message: { chat: { id: "other-chat" } } } },
+        { botToken: "bot-token", chatId: "chat-1", store, fetch: fetchMock },
+      ),
+    ).resolves.toEqual({ handled: false });
+    expect(await store.get("req-wrong-chat")).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects callbacks without chat metadata", async () => {
+    const fetchMock = okFetch();
+    const store = createInMemoryTelegramApprovalStore();
+    const callbackData = await signedCallbackData("a", "req-missing-chat");
+
+    await expect(
+      handleTelegramApprovalCallback(
+        { callback_query: { id: "callback-1", data: callbackData } },
+        { botToken: "bot-token", chatId: "chat-1", store, fetch: fetchMock },
+      ),
+    ).resolves.toEqual({ handled: false });
+    expect(await store.get("req-missing-chat")).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects webhook callbacks without the configured secret header", async () => {
+    const fetchMock = okFetch();
+    const store = createInMemoryTelegramApprovalStore();
+    const callbackData = await signedCallbackData("a", "req-missing-secret");
+
+    await expect(
+      handleTelegramApprovalCallback(
+        { callback_query: { id: "callback-1", data: callbackData, message: { chat: { id: "chat-1" } } } },
+        { botToken: "bot-token", chatId: "chat-1", webhookSecretToken: "webhook-secret", store, fetch: fetchMock },
+      ),
+    ).resolves.toEqual({ handled: false });
+    expect(await store.get("req-missing-secret")).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts webhook callbacks with the configured secret header", async () => {
+    const fetchMock = okFetch();
+    const store = createInMemoryTelegramApprovalStore();
+    const callbackData = await signedCallbackData("a", "req-webhook-secret");
+
+    await expect(
+      handleTelegramApprovalCallback(
+        { callback_query: { id: "callback-1", data: callbackData, message: { chat: { id: "chat-1" } } } },
+        {
+          botToken: "bot-token",
+          chatId: "chat-1",
+          webhookSecretToken: "webhook-secret",
+          headers: { "x-telegram-bot-api-secret-token": "webhook-secret" },
+          store,
+          fetch: fetchMock,
+        },
+      ),
+    ).resolves.toMatchObject({ handled: true, requestId: "req-webhook-secret", decision: "approved" });
+    expect(await store.get("req-webhook-secret")).toBe("approved");
+  });
+
+  it("rejects forged request IDs and invalid signatures", async () => {
+    const fetchMock = okFetch();
+    const store = createInMemoryTelegramApprovalStore();
+    const callbackData = await signedCallbackData("a", "req-original");
+    const forgedRequestId = callbackData.replace("req-original", "req-forged");
+    const invalidSignature = `${callbackData.slice(0, -1)}${callbackData.endsWith("x") ? "y" : "x"}`;
+
+    for (const data of [forgedRequestId, invalidSignature]) {
+      await expect(
+        handleTelegramApprovalCallback(
+          { callback_query: { id: "callback-1", data, message: { chat: { id: "chat-1" } } } },
+          { botToken: "bot-token", chatId: "chat-1", store, fetch: fetchMock },
+        ),
+      ).resolves.toEqual({ handled: false });
+    }
+
+    expect(await store.get("req-original")).toBeUndefined();
+    expect(await store.get("req-forged")).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("ignores unrelated Telegram callbacks", async () => {
     const fetchMock = okFetch();
     const store = createInMemoryTelegramApprovalStore();
@@ -133,9 +255,28 @@ describe("telegramApproval", () => {
     await expect(
       handleTelegramApprovalCallback(
         { callback_query: { id: "callback-1", data: "other:data" } },
-        { botToken: "bot-token", store, fetch: fetchMock },
+        { botToken: "bot-token", chatId: "chat-1", store, fetch: fetchMock },
       ),
     ).resolves.toEqual({ handled: false });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+async function signedCallbackData(action: "a" | "d", requestId: string): Promise<string> {
+  const fetchMock = okFetch();
+  const approval = telegramApproval({
+    botToken: "bot-token",
+    chatId: "chat-1",
+    fetch: fetchMock,
+    requestId,
+  }).approval;
+
+  await approval?.(request(), context());
+  const [, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+  const body = JSON.parse(init.body as string) as {
+    reply_markup: { inline_keyboard: Array<Array<{ callback_data: string }>> };
+  };
+  return action === "a"
+    ? body.reply_markup.inline_keyboard[0]?.[0]?.callback_data ?? ""
+    : body.reply_markup.inline_keyboard[0]?.[1]?.callback_data ?? "";
+}

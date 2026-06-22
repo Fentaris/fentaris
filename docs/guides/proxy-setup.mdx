@@ -39,6 +39,7 @@ const proxy = fentaris({
     }),
   ],
   port: Number(process.env.PORT ?? 3000),
+  host: process.env.FENTARIS_HOST ?? "127.0.0.1",
   path: "/mcp",
   name: "fentaris-proxy",
   version: "0.1.0",
@@ -56,11 +57,12 @@ Client integrations usually store the MCP endpoint. Keep `path` stable even if p
 const proxy = fentaris({
   servers,
   port: Number(process.env.PORT ?? 3000),
+  host: "127.0.0.1",
   path: "/mcp",
 });
 ```
 
-If you deploy behind a reverse proxy, keep the public URL stable and move only the internal service address.
+If you deploy behind a reverse proxy, keep the public URL stable and move only the internal service address. The default listener binds to `127.0.0.1`; use `host: "0.0.0.0"` only when the service is intentionally exposed by the deployment boundary.
 
 ## Configure Proxy Identity
 
@@ -70,6 +72,7 @@ const proxy = fentaris({
   name: "fentaris-proxy",
   version: "0.1.0",
   port: 3000,
+  host: "0.0.0.0",
   path: "/mcp",
 });
 ```

@@ -181,7 +181,7 @@ export { HttpTransport } from "./transports/index.js";
  * HTTP transport option types.
  * @pk
  */
-export type { HttpTransportOptions } from "./transports/index.js";
+export type { HttpTransportEnvHeaderMap, HttpTransportOptions, UpstreamHttpNetworkOptions } from "./transports/index.js";
 /**
  * Native MCP Streamable HTTP transport for upstream MCP servers.
  * @pk
