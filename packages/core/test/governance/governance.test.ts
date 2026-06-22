@@ -195,8 +195,17 @@ describe("governance primitives", () => {
     expect(results.filter((result) => result.isError)).toHaveLength(1);
   });
 
-  it("does not spend daily quota when the shorter window is exhausted", async () => {
-    const store = new MemoryRateLimitStore();
+  it("does not consume secondary quotas after a configured limit is exhausted", async () => {
+    class RecordingRateLimitStore extends MemoryRateLimitStore {
+      consumedKeys: string[] = [];
+
+      override async consume(key: string, window: number, limit: number): Promise<boolean> {
+        this.consumedKeys.push(key);
+        return super.consume(key, window, limit);
+      }
+    }
+
+    const store = new RecordingRateLimitStore();
     const limiter = new SlidingWindowRateLimiter({
       store,
       maxPerWindow: 1,
@@ -207,7 +216,10 @@ describe("governance primitives", () => {
     const key = "user-1:github:create_issue";
 
     await expect(limiter.consume(key)).resolves.toBe(true);
+    store.consumedKeys = [];
+
     await expect(limiter.consume(key)).resolves.toBe(false);
+    expect(store.consumedKeys).toEqual([]);
 
     await store.reset(`test:window:${key}`);
     await expect(limiter.consume(key)).resolves.toBe(true);

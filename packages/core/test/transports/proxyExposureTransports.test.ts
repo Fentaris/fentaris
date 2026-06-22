@@ -124,6 +124,9 @@ const fakes = vi.hoisted(() => {
     streamableTransports,
     sseTransports,
     stdioTransports,
+    resetSessionIds: () => {
+      nextSessionId = 1;
+    },
   };
 });
 
@@ -153,6 +156,7 @@ describe("proxy exposure transports", () => {
     fakes.streamableTransports.length = 0;
     fakes.sseTransports.length = 0;
     fakes.stdioTransports.length = 0;
+    fakes.resetSessionIds();
   });
 
   it("binds HTTP sessions to the authenticated identity and defaults to localhost", async () => {
@@ -214,6 +218,7 @@ describe("proxy exposure transports", () => {
       headers: { "mcp-session-id": sessionId ?? "" },
     });
     expect(continued.status).toBe(200);
+    expect(continued.body).toBe("continued");
 
     const upgraded = await request(server, {
       method: "POST",
@@ -281,6 +286,7 @@ describe("proxy exposure transports", () => {
       headers: {},
     });
     expect(continued.status).toBe(200);
+    expect(continued.body).toBe("posted");
 
     const upgraded = await request(server, {
       method: "POST",

@@ -51,8 +51,27 @@ const approval = telegramApproval({
 
 await handleTelegramApprovalCallback(telegramUpdateBody, {
   botToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
+  chatId: process.env.TELEGRAM_APPROVAL_CHAT_ID ?? "",
   store: approvalStore,
 });
 ```
 
 `telegramApproval(...)` returns `pending` until the store has an approval decision for the request id. Fentaris denies the current tool call while the approval is pending and includes safe approval metadata in the policy error.
+
+Callback buttons use signed compact payloads that bind the approve or deny action to the request id. `handleTelegramApprovalCallback(...)` rejects callbacks from any chat other than the configured `chatId`, callbacks without message chat metadata, and callback data with invalid signatures.
+
+## Secure webhooks
+
+When using Telegram webhooks, set a Telegram secret token and pass the request headers to the callback handler. The handler validates `X-Telegram-Bot-Api-Secret-Token` before processing callback data.
+
+```ts theme={null}
+await handleTelegramApprovalCallback(telegramUpdateBody, {
+  botToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
+  chatId: process.env.TELEGRAM_APPROVAL_CHAT_ID ?? "",
+  webhookSecretToken: process.env.TELEGRAM_WEBHOOK_SECRET ?? "",
+  headers: request.headers,
+  store: approvalStore,
+});
+```
+
+The default failure mode is fail closed: if Telegram message delivery fails, the protected call is denied. `failOpen: true` is still available as an explicit development or emergency override, and the adapter emits a warning when it is enabled because approval delivery failures will allow protected calls.

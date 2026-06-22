@@ -138,7 +138,7 @@ export class FentarisAuth {
   }
 
   /**
-   * Compare a stored API key or hash with a provided API key.
+   * Compare a stored raw or hashed API key with a provided raw key.
    * @pk
    */
   static compareApiKey(candidate: string, provided: string): boolean {
