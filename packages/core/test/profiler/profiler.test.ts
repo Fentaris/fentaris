@@ -229,6 +229,8 @@ describe("runtime profiler", () => {
       timestamp: new Date(),
       metadata: {
         token: "secret-token",
+        input: "Bearer abcdefghijklmnopqrstuvwxyz123456==",
+        body: "Bearer abcdefghijklmnopqrstuvwxyz123456/",
         private: "private-value",
         nested: { hide: "hide-me" },
         custom: "custom-value",
@@ -243,6 +245,8 @@ describe("runtime profiler", () => {
 
     expect(seen[0]?.metadata).toMatchObject({
       token: "[REDACTED]",
+      input: "[REDACTED]",
+      body: "[REDACTED]",
       private: "[REDACTED]",
       nested: { hide: "[REDACTED]" },
       custom: "custom-redacted",

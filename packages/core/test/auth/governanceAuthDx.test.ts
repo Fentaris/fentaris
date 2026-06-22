@@ -99,6 +99,7 @@ describe("governance auth DX", () => {
   it("applies fluent group policies with wildcard allows, denies, approval, limiter, and sensitive metadata", async () => {
     const limiter = {
       metadata: { maxPerWindow: 1 },
+      consume: vi.fn(async () => true),
       checkLimit: vi.fn(async () => true),
       recordCall: vi.fn(async () => undefined),
       getRemainingCalls: vi.fn(async () => 1),

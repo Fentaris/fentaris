@@ -62,6 +62,12 @@ const levelWeight: Record<LogLevel, number> = {
 };
 
 const defaultSensitiveKeys = [/token/i, /secret/i, /password/i, /authorization/i, /api[-_]?key/i, /credential/i];
+const defaultSensitiveValuePatterns = [
+  /(?:^|[^A-Za-z0-9._~+/=-])Bearer\s+[A-Za-z0-9._~+/=-]{16,}(?=$|[^A-Za-z0-9._~+/=-])/,
+  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
+  /\bgh[opsur]_[A-Za-z0-9_]{20,}\b/,
+  /\bgithub_pat_[A-Za-z0-9_]{40,}\b/,
+];
 const defaultReplacement = "[REDACTED]";
 
 /**
@@ -297,6 +303,10 @@ function redactValue(
     return options.replacement;
   }
 
+  if (typeof value === "string" && shouldRedactValue(value)) {
+    return options.replacement;
+  }
+
   if (!value || typeof value !== "object") {
     return value;
   }
@@ -329,4 +339,8 @@ function shouldRedactKey(key: string, keys: Array<string | RegExp> | undefined):
 function shouldRedactPath(path: string[], paths: string[] | undefined): boolean {
   const dotted = path.join(".");
   return Boolean(paths?.some((pattern) => pattern === dotted));
+}
+
+function shouldRedactValue(value: string): boolean {
+  return defaultSensitiveValuePatterns.some((pattern) => pattern.test(value));
 }
