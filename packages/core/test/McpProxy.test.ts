@@ -280,7 +280,15 @@ describe("McpProxy", () => {
     const srcDir = join(dir, "src");
     await writeFile(
       join(dir, "fentaris.json"),
-      JSON.stringify({ name: "demo", packageManager: "pnpm", entrypoint: "src/index.ts", port: 0, path: "/configured", authDir: ".fentaris" }),
+      JSON.stringify({
+        name: "demo",
+        packageManager: "pnpm",
+        entrypoint: "src/index.ts",
+        port: 0,
+        host: "localhost",
+        path: "/configured",
+        authDir: ".fentaris",
+      }),
     );
     await mkdir(srcDir, { recursive: true });
     process.chdir(srcDir);
@@ -291,7 +299,7 @@ describe("McpProxy", () => {
 
     await proxy.start();
 
-    expect(stderr.mock.calls.flat().join("\n")).toContain("http://127.0.0.1:0/configured");
+    expect(stderr.mock.calls.flat().join("\n")).toContain("http://localhost:0/configured");
     await proxy.stop();
   });
 

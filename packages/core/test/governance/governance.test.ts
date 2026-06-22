@@ -130,6 +130,24 @@ describe("governance primitives", () => {
     expect(results.filter((result) => result.isError)).toHaveLength(1);
   });
 
+  it("does not charge remaining quota when another bucket denies the call", async () => {
+    const store = new MemoryRateLimitStore();
+    const dayId = new Date().toISOString().slice(0, 10);
+    const limiter = new SlidingWindowRateLimiter({
+      store,
+      maxPerWindow: 2,
+      windowMs: 60_000,
+      maxDailyCalls: 1,
+      keyPrefix: "test",
+    });
+
+    await expect(limiter.consume("user-1")).resolves.toBe(true);
+    await expect(limiter.consume("user-1")).resolves.toBe(false);
+
+    await expect(store.get("test:window:user-1")).resolves.toBe(1);
+    await expect(store.get(`test:daily:${dayId}:user-1`)).resolves.toBe(1);
+  });
+
   it("resolves identity from configured headers", async () => {
     const strategy = headerIdentityStrategy({
       userIdHeader: "x-user-id",

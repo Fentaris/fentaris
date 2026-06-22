@@ -229,7 +229,7 @@ function deriveKey(key: string | Buffer, salt: Buffer): Buffer {
   return createHash("sha256").update(key).update(salt).digest();
 }
 
-function compareApiKey(candidate: string, provided: string): boolean {
+export function compareApiKey(candidate: string, provided: string): boolean {
   const normalizedCandidate = candidate.startsWith("sha256:") ? candidate.slice("sha256:".length) : hashApiKey(candidate);
   const normalizedProvided = hashApiKey(provided);
   const left = Buffer.from(normalizedCandidate, "hex");

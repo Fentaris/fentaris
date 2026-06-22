@@ -138,6 +138,9 @@ describe("governance auth DX", () => {
 
     await proxy.callTool({ name: "github__read", arguments: { owner: "alice" } }, { id: "alice" });
     expect(approvalHandler).toHaveBeenCalledOnce();
+    expect(limiter.consume).toHaveBeenCalledWith("alice:github:read");
+    expect(limiter.checkLimit).not.toHaveBeenCalled();
+    expect(limiter.recordCall).not.toHaveBeenCalled();
     expect(approvalRequests).toEqual([
       {
         serverName: "github",

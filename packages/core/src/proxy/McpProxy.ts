@@ -82,7 +82,7 @@ import {
 import { filterToolsByPolicy, getToolPermission } from "../policy.js";
 import { getCapabilityPermission, toCapabilityPermissions, toCapabilityRequest } from "../policy.js";
 import { rateLimitKey } from "../rate-limit/index.js";
-import { FentarisAuth } from "../auth.js";
+import { compareApiKey, type FentarisAuth } from "../auth/auth.js";
 import { resolveCredentialSource, type CredentialSourceMap } from "../credentials/index.js";
 import {
   buildSubjectIndex,
@@ -338,7 +338,7 @@ export class McpProxy {
     });
     const projectDefaults = readProjectRuntimeDefaults();
     this.defaultPort = options.port ?? projectDefaults.port;
-    this.defaultHost = options.host;
+    this.defaultHost = options.host ?? projectDefaults.host;
     this.defaultPath = options.path ?? projectDefaults.path ?? "/mcp";
     this.runtimeValidationConfig = {
       ...options,
@@ -1940,11 +1940,10 @@ export class McpProxy {
     }
 
     const key = rateLimitKey(request, context.user);
-    if (!(await limiter.checkLimit(key))) {
+    if (!(await limiter.consume(key))) {
       return context.res.deny("Rate limit exceeded");
     }
 
-    await limiter.recordCall(key);
     return undefined;
   }
 
@@ -2744,7 +2743,7 @@ function declaredApiKeyIdentityStrategy(groups: () => Group[]): IdentityStrategy
       for (const user of groups().flatMap((group) => group.users)) {
         for (const source of user.apiKeys) {
           const candidate = await resolveCredentialSource(source);
-          if (FentarisAuth.compareApiKey(candidate, apiKey)) {
+          if (compareApiKey(candidate, apiKey)) {
             return { id: user.id };
           }
         }
@@ -2783,6 +2782,7 @@ function isRateLimiter(value: unknown): value is RateLimiter {
   return (
     value !== null &&
     typeof value === "object" &&
+    "consume" in value &&
     "checkLimit" in value &&
     "recordCall" in value &&
     "getRemainingCalls" in value

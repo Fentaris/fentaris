@@ -8,6 +8,12 @@ type Bucket = {
   expiresAt: number;
 };
 
+type RateLimitBucket = {
+  key: string;
+  window: number;
+  limit: number;
+};
+
 /**
  * In-memory rate limit store with expiring buckets.
  * @pk
@@ -44,6 +50,32 @@ export class MemoryRateLimitStore implements RateLimitStore {
     }
 
     bucket.count += 1;
+    return true;
+  }
+
+  async consumeMany(limits: RateLimitBucket[]): Promise<boolean> {
+    if (limits.some(({ limit }) => limit <= 0)) {
+      return false;
+    }
+
+    const now = Date.now();
+    for (const { key, limit } of limits) {
+      const bucket = this.activeBucket(key, now);
+      if (bucket && bucket.count >= limit) {
+        return false;
+      }
+    }
+
+    for (const { key, window } of limits) {
+      const bucket = this.activeBucket(key, now);
+      if (!bucket) {
+        this.buckets.set(key, { count: 1, expiresAt: now + window });
+        continue;
+      }
+
+      bucket.count += 1;
+    }
+
     return true;
   }
 
@@ -117,14 +149,22 @@ export class SlidingWindowRateLimiter implements RateLimiter {
   }
 
   async consume(key: string): Promise<boolean> {
-    const limits: Array<Promise<boolean>> = [];
+    const limits: RateLimitBucket[] = [];
 
     if (this.metadata?.maxPerWindow !== undefined) {
-      limits.push(Promise.resolve(this.store.consume(this.windowKey(key), this.metadata.windowMs ?? 60_000, this.metadata.maxPerWindow)));
+      limits.push({
+        key: this.windowKey(key),
+        window: this.metadata.windowMs ?? 60_000,
+        limit: this.metadata.maxPerWindow,
+      });
     }
 
     if (this.metadata?.maxDailyCalls !== undefined) {
-      limits.push(Promise.resolve(this.store.consume(this.dailyKey(key), this.dailyWindowMs(), this.metadata.maxDailyCalls)));
+      limits.push({
+        key: this.dailyKey(key),
+        window: this.dailyWindowMs(),
+        limit: this.metadata.maxDailyCalls,
+      });
     }
 
     if (limits.length === 0) {
@@ -132,8 +172,22 @@ export class SlidingWindowRateLimiter implements RateLimiter {
       return true;
     }
 
-    const results = await Promise.all(limits);
-    return results.every(Boolean);
+    if (this.store.consumeMany) {
+      return this.store.consumeMany(limits);
+    }
+
+    const counts = await Promise.all(limits.map(({ key }) => this.store.get(key)));
+    if (counts.some((count, index) => count >= limits[index].limit)) {
+      return false;
+    }
+
+    for (const limit of limits) {
+      if (!(await this.store.consume(limit.key, limit.window, limit.limit))) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   async recordCall(key: string): Promise<void> {

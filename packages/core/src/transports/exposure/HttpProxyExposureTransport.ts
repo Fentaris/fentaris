@@ -17,6 +17,7 @@ import type {
  */
 export type HttpProxyExposureTransportOptions = {
   port?: number;
+  host?: string;
   path?: string;
   onStarted?: () => void;
 };
@@ -43,7 +44,7 @@ type HttpSessionState = {
  */
 export class HttpProxyExposureTransport implements ProxyExposureTransport<HttpProxyExposureHandle> {
   private readonly options: Required<Pick<HttpProxyExposureTransportOptions, "port" | "path">> &
-    Pick<HttpProxyExposureTransportOptions, "onStarted">;
+    Pick<HttpProxyExposureTransportOptions, "host" | "onStarted">;
 
   /**
    * Create an HTTP proxy exposure transport.
@@ -52,6 +53,7 @@ export class HttpProxyExposureTransport implements ProxyExposureTransport<HttpPr
   constructor(options: HttpProxyExposureTransportOptions = {}) {
     this.options = {
       port: options.port ?? 3000,
+      host: options.host,
       path: options.path ?? "/mcp",
       onStarted: options.onStarted,
     };
@@ -101,10 +103,16 @@ export class HttpProxyExposureTransport implements ProxyExposureTransport<HttpPr
     });
 
     await new Promise<void>((resolve) => {
-      server.listen(this.options.port, () => {
+      const onListening = () => {
         this.options.onStarted?.();
         resolve();
-      });
+      };
+
+      if (this.options.host) {
+        server.listen(this.options.port, this.options.host, onListening);
+      } else {
+        server.listen(this.options.port, onListening);
+      }
     });
 
     return {
