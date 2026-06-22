@@ -1633,6 +1633,26 @@ describe("McpProxy", () => {
     expect(seen).toEqual(["alice"]);
   });
 
+  it("supports server alias for group-scoped MCP handles", async () => {
+    const shared = new McpServer({ name: "linear", transport: new MockTransport() });
+    const proxy = new McpProxy({
+      groups: [
+        group({ id: "engineering", users: [user("alice")], policy: Policy.allowAll("engineering"), servers: [shared] }),
+        group({ id: "sales", users: [user("bob")], policy: Policy.allowAll("sales"), servers: [shared] }),
+      ],
+    });
+    const seen: string[] = [];
+    proxy.group("engineering").server("linear").use((ctx, next) => {
+      seen.push(ctx.subject?.id ?? "unknown");
+      return next();
+    });
+
+    await proxy.callTool({ name: toProxyToolName("linear", "create_issue") }, { id: "alice" });
+    await proxy.callTool({ name: toProxyToolName("linear", "create_issue") }, { id: "bob" });
+
+    expect(seen).toEqual(["alice"]);
+  });
+
   it("keeps global MCP servers visible and callable", async () => {
     const transport = new MockTransport();
     const proxy = new McpProxy({

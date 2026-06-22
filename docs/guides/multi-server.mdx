@@ -104,10 +104,10 @@ Group-scoped servers reduce accidental discovery. A caller only sees tools from 
 
 ## Add Server-specific Middleware
 
-Use server handles when validation only applies to one upstream MCP server.
+Use server handles when validation only applies to one upstream MCP server. Inside a group handle, `server(name)` scopes middleware to subjects in that group and that upstream server.
 
 ```ts theme={null}
-proxy.mcp("analytics").use(async (ctx, next) => {
+proxy.group("analysts").server("analytics").use(async (ctx, next) => {
   if (!ctx.subject?.hasGroup("analysts")) {
     return ctx.deny("Analytics tools require the analysts group.");
   }
@@ -120,7 +120,7 @@ proxy.mcp("analytics").use(async (ctx, next) => {
 });
 ```
 
-Prefer server-scoped middleware over global middleware when the rule only applies to one domain.
+Use `proxy.mcp("analytics")` for server-wide middleware, and prefer scoped handles over global middleware when the rule only applies to one domain.
 
 ## Separate Concerns By Server
 
