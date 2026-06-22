@@ -578,6 +578,10 @@ function mergeGroupDecisions(
   decisions: PolicyDecision[],
   reason?: string,
 ): PolicyDecision {
+  const limiter = allowed
+    ? decisions.find((decision) => decision.allowed && decision.metadata?.limiter)?.metadata?.limiter
+    : undefined;
+
   return {
     allowed,
     reason,
@@ -591,6 +595,7 @@ function mergeGroupDecisions(
         })),
       ),
       denialReason: allowed ? undefined : reason,
+      limiter,
       approval: decisions.find((decision) => decision.metadata?.approval)?.metadata?.approval,
     },
   };

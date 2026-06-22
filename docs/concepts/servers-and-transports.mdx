@@ -32,6 +32,28 @@ streamableHttp({
 })
 ```
 
+HTTP-family upstream transports block loopback, link-local, private, and metadata URLs by default. Allow internal endpoints only when they are part of your deployment boundary:
+
+```ts theme={null}
+streamableHttp({
+  url: "https://mcp.internal/mcp",
+  network: {
+    allowedPrivateHosts: ["mcp.internal"],
+  },
+})
+```
+
+For custom upstream headers, prefer transport auth options or explicit env mappings over forwarding whole environment objects:
+
+```ts theme={null}
+new HttpTransport({
+  baseUrl: "https://api.example/mcp",
+  envHeaderMap: {
+    "x-tenant-id": "TENANT_ID",
+  },
+}).withEnv(process.env as Record<string, string>)
+```
+
 ## Related Documentation
 
 * [Architecture](/concepts/architecture)

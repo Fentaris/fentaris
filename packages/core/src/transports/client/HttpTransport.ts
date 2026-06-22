@@ -5,6 +5,10 @@ import type {
   ListToolsResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import type { FentarisTransport } from "../../types/transport.js";
+import { resolveHttpTransportHeaders, type HttpTransportAuthOptions } from "../auth/transportAuth.js";
+import { assertAllowedUpstreamUrl, type UpstreamHttpNetworkOptions } from "./upstreamUrlGuardrails.js";
+
+export type HttpTransportEnvHeaderMap = Record<string, string> | ((env: Record<string, string>) => Record<string, string>);
 
 /**
  * Options for HTTP transport.
@@ -14,6 +18,9 @@ export type HttpTransportOptions = {
   baseUrl: string;
   headers?: Record<string, string>;
   authToken?: string;
+  auth?: HttpTransportAuthOptions;
+  envHeaderMap?: HttpTransportEnvHeaderMap;
+  network?: UpstreamHttpNetworkOptions;
   fetch?: typeof fetch;
 };
 
@@ -39,16 +46,16 @@ export class HttpTransport implements FentarisTransport {
   }
 
   /**
-   * Return a copy with env-derived headers merged in.
+   * Return a copy with explicitly mapped env-derived headers merged in.
    * @pk
    */
   withEnv(env: Record<string, string>): HttpTransport {
-    const authorization = env.AUTHORIZATION ?? env.AUTH_TOKEN;
+    const authorization = env.AUTHORIZATION ?? (env.AUTH_TOKEN ? `Bearer ${env.AUTH_TOKEN}` : undefined);
     return new HttpTransport({
       ...this.options,
       headers: {
         ...this.options.headers,
-        ...env,
+        ...mapEnvHeaders(env, this.options.envHeaderMap),
         ...(authorization ? { authorization } : {}),
       },
     });
@@ -67,11 +74,15 @@ export class HttpTransport implements FentarisTransport {
   }
 
   private async post<TResult>(method: "listTools" | "callTool", body: unknown): Promise<TResult> {
-    const response = await this.fetchImpl(new URL(method, ensureTrailingSlash(this.options.baseUrl)), {
+    const requestUrl = new URL(method, ensureTrailingSlash(this.options.baseUrl));
+    await assertAllowedUpstreamUrl(requestUrl, this.options.network);
+    const authHeaders = await resolveHttpTransportHeaders(this.options.auth, {});
+    const response = await this.fetchImpl(requestUrl, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         ...this.options.headers,
+        ...authHeaders,
         ...(this.options.authToken ? { authorization: `Bearer ${this.options.authToken}` } : {}),
       },
       body: JSON.stringify(body),
@@ -87,4 +98,23 @@ export class HttpTransport implements FentarisTransport {
 
 function ensureTrailingSlash(value: string): string {
   return value.endsWith("/") ? value : `${value}/`;
+}
+
+function mapEnvHeaders(env: Record<string, string>, mapper: HttpTransportEnvHeaderMap | undefined): Record<string, string> {
+  if (!mapper) {
+    return {};
+  }
+
+  if (typeof mapper === "function") {
+    return mapper(env);
+  }
+
+  const headers: Record<string, string> = {};
+  for (const [header, envName] of Object.entries(mapper)) {
+    const value = env[envName];
+    if (value) {
+      headers[header] = value;
+    }
+  }
+  return headers;
 }

@@ -24,7 +24,7 @@ export type ExecProbe = (command: string, args?: string[]) => boolean;
 
 export type Prompt = {
   text(question: string, options?: { secret?: boolean; defaultValue?: string }): Promise<string>;
-  select<T extends string>(question: string, choices: T[]): Promise<T>;
+  select<T extends string>(question: string, choices: T[], options?: { visibleItems?: number }): Promise<T>;
   confirm(question: string): Promise<boolean>;
   close(): void;
 };
@@ -62,6 +62,7 @@ export type ProjectConfig = {
   packageManager: PackageManager;
   entrypoint: string;
   port: number;
+  host?: string;
   path: string;
   authDir: string;
   secrets?: {

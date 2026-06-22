@@ -79,13 +79,23 @@ async function withFakeProcessIo<T>(input: FakeTtyInput, output: FakeTtyOutput, 
   }
 }
 
+async function withFakeStdin<T>(input: PassThrough, run: () => Promise<T>): Promise<T> {
+  const stdin = process.stdin;
+  Object.defineProperty(process, "stdin", { configurable: true, value: input });
+  try {
+    return await run();
+  } finally {
+    Object.defineProperty(process, "stdin", { configurable: true, value: stdin });
+  }
+}
+
 async function writeHealthyProject(root: string, authDirectory = ".fentaris"): Promise<void> {
   await mkdir(join(root, "src"), { recursive: true });
   await mkdir(join(root, authDirectory), { recursive: true });
   await writeFile(join(root, "README.md"), "# Demo\n");
   await writeFile(join(root, ".env"), "FENTARIS_AUTH_KEY=test-key\n");
   await writeFile(join(root, ".gitignore"), `${authDirectory}/\n`);
-  await writeFile(join(root, "src", "index.ts"), "console.log('demo');\n");
+  await writeFile(join(root, "src", "index.ts"), "import { Policy } from '@fentaris/core';\nPolicy.allowAll();\n");
   await writeFile(join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
   await writeFile(
     join(root, "package.json"),
@@ -154,6 +164,75 @@ describe("default runtime prompts", () => {
       rt.prompt.close();
     });
   });
+
+  it("fails closed for non-TTY secret prompts", async () => {
+    const input = new PassThrough() as PassThrough & { isTTY?: boolean };
+    input.isTTY = false;
+    await withFakeStdin(input, async () => {
+      const rt = defaultRuntime();
+      await expect(rt.prompt.text("Credential value", { secret: true })).rejects.toThrow("Secret prompts require an interactive terminal");
+    });
+  });
+
+  it("selects TTY menu items with arrow keys", async () => {
+    const input = new FakeTtyInput();
+    const output = new FakeTtyOutput();
+
+    await withFakeProcessIo(input, output, async () => {
+      const rt = defaultRuntime();
+      const selected = rt.prompt.select("Credential scope", ["default", "user", "group"]);
+      input.write("\u001b[B\r");
+
+      await expect(selected).resolves.toBe("user");
+      expect(output.text).toContain("Credential scope");
+      expect(output.text).toContain("Choose by number or exact label");
+      expect(input.rawModeCalls).toEqual([true, false]);
+    });
+  });
+
+  it("selects TTY menu items by number", async () => {
+    const input = new FakeTtyInput();
+    const output = new FakeTtyOutput();
+
+    await withFakeProcessIo(input, output, async () => {
+      const rt = defaultRuntime();
+      const selected = rt.prompt.select("Credential scope", ["default", "user", "group"]);
+      input.write("2\r");
+
+      await expect(selected).resolves.toBe("user");
+      expect(output.text).toContain("Choose by number or exact label");
+      expect(input.rawModeCalls).toEqual([true, false]);
+    });
+  });
+
+  it("selects TTY menu items by exact label", async () => {
+    const input = new FakeTtyInput();
+    const output = new FakeTtyOutput();
+
+    await withFakeProcessIo(input, output, async () => {
+      const rt = defaultRuntime();
+      const selected = rt.prompt.select("Credential scope", ["default", "user", "group"]);
+      input.write("group\r");
+
+      await expect(selected).resolves.toBe("group");
+      expect(input.rawModeCalls).toEqual([true, false]);
+    });
+  });
+
+  it("scrolls long TTY select menus", async () => {
+    const input = new FakeTtyInput();
+    const output = new FakeTtyOutput();
+
+    await withFakeProcessIo(input, output, async () => {
+      const rt = defaultRuntime();
+      const selected = rt.prompt.select("Group id", ["one", "two", "three", "four", "five"], { visibleItems: 3 });
+      input.write("\u001b[B\u001b[B\u001b[B\u001b[B\r");
+
+      await expect(selected).resolves.toBe("five");
+      expect(output.text).toContain("↓ more");
+      expect(output.text).toContain("↑ more");
+    });
+  });
 });
 
 describe("command routing helpers", () => {
@@ -187,6 +266,18 @@ describe("command routing helpers", () => {
         name: "secrets",
         args: ["set", "github.token"],
         options: { value: "-secret-value" },
+      },
+    });
+  });
+
+  it("parses stdin secret value option", () => {
+    expect(parseCommand(["secrets", "set", "github.token", "--value-stdin"])).toEqual({
+      kind: "ok",
+      path: ["secrets", "set"],
+      command: {
+        name: "secrets",
+        args: ["set", "github.token"],
+        options: { "value-stdin": true },
       },
     });
   });
@@ -311,7 +402,7 @@ describe("project template", () => {
     expect(rendered.files["README.md"]).not.toContain("Secrets workflow");
     expect(rendered.files["src/index.ts"]).toContain("https://mcp.specification.website/mcp");
     expect(rendered.files["src/index.ts"]).toContain("app.mcp(");
-    expect(rendered.files["src/index.ts"]).toContain("const app = fentaris();");
+    expect(rendered.files["src/index.ts"]).toContain("policy: Policy.allowAll()");
     expect(rendered.files["src/index.ts"]).not.toContain("user:");
     expect(rendered.files["src/index.ts"]).not.toContain("credentialJson");
     expect(rendered.files["src/index.ts"]).not.toContain("policy(");
@@ -457,6 +548,42 @@ describe("project commands", () => {
     await expect(main(["check", "--offline"], rt)).resolves.toBe(0);
     await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
     await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
+  });
+
+  it("warns during check when the entrypoint has no explicit proxy policy controls", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(join(dir, "src", "index.ts"), "console.log('open proxy');\n");
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+
+    await expect(main(["check", "--offline"], rt)).resolves.toBe(0);
+    const output = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
+
+    expect(output).toContain("proxy policy");
+    expect(output).toContain("No global policy, group policy, or explicit allow-all development policy detected.");
+    expect(output).toContain("Fentaris denies proxy calls by default.");
+
+    vi.mocked(rt.out.log).mockClear();
+    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(1);
+  });
+
+  it("accepts an explicit allow-all development policy during doctor", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `import { Policy, fentaris } from "@fentaris/core";
+const app = fentaris({ policy: Policy.allowAll() });
+void app;
+`,
+    );
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+
+    await expect(main(["doctor"], rt)).resolves.toBe(0);
+    const output = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
+
+    expect(output).toContain("Doctor");
+    expect(output).not.toContain("No global policy, group policy, or explicit allow-all development policy detected.");
   });
 
   it("prints compact doctor output with summary and issues only", async () => {
@@ -659,6 +786,25 @@ describe("secrets", () => {
     const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(authDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
     expect(credentials.defaults["github.token"]).toBe("-secret-value");
     expect(rt.prompt.text).not.toHaveBeenCalled();
+    expect(rt.out.error.mock.calls.flat().join("\n")).toContain("--key exposes");
+    expect(rt.out.error.mock.calls.flat().join("\n")).toContain("--value exposes");
+  });
+
+  it("reads secret values from stdin without prompting", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const input = new PassThrough();
+    input.end("stdin-secret\n");
+
+    const rt = runtime(dir);
+    await withFakeStdin(input, async () => {
+      await expect(main(["secrets", "set", "github.token", "--value-stdin"], rt)).resolves.toBe(0);
+    });
+
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(credentials.defaults["github.token"]).toBe("stdin-secret");
+    expect(rt.prompt.text).not.toHaveBeenCalled();
+    expect(rt.prompt.confirm).not.toHaveBeenCalled();
   });
 
   it("prompts for reference, scope, and value when secrets set omits the reference", async () => {
@@ -682,7 +828,66 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     expect(rt.prompt.select).toHaveBeenCalledWith("Secret reference", ["github.token (default)", "Add another reference"]);
     expect(rt.prompt.select).toHaveBeenCalledWith("Credential scope", ["default", "user", "group"]);
     expect(rt.prompt.confirm).toHaveBeenCalledWith("Store this credential?");
-    expect(rt.out.log.mock.calls.flat().join("\n")).toContain("Stored github.token as user alice credential.");
+    const output = rt.out.log.mock.calls.flat().join("\n");
+    expect(output).toContain("Stored github.token as user alice credential.");
+    expect(output.match(/Credential scope/g) ?? []).toHaveLength(0);
+  });
+
+  it("selects known user ids from the project entrypoint", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `import { credential, fentaris, group, Policy, user } from "@fentaris/core";
+const app = fentaris({
+  defaults: { credentials: { "github.token": credential("github.token") } },
+  groups: [group({ id: "support", users: [user("bob")], policy: Policy.allowAll() })],
+});
+void app;
+`,
+    );
+
+    const rt = runtime(dir);
+    rt.prompt = prompt(["secret-value"], ["github.token (default)", "user", "bob"]);
+
+    await expect(main(["secrets", "set"], rt)).resolves.toBe(0);
+
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(credentials.users.bob?.credentials["github.token"]).toBe("secret-value");
+    expect(rt.prompt.select).toHaveBeenCalledWith("User id", ["bob", "Add another user id"], { visibleItems: 8 });
+    expect(rt.prompt.text).toHaveBeenCalledTimes(1);
+  });
+
+  it("selects known group ids and supports manual group id entry", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `import { credential, fentaris, group, Policy, user } from "@fentaris/core";
+const app = fentaris({
+  defaults: { credentials: { "github.token": credential("github.token") } },
+  groups: [group({ id: "support", users: [user("bob")], policy: Policy.allowAll() })],
+});
+void app;
+`,
+    );
+
+    const knownGroup = runtime(dir);
+    knownGroup.prompt = prompt(["secret-value"], ["github.token (default)", "group", "support"]);
+
+    await expect(main(["secrets", "set"], knownGroup)).resolves.toBe(0);
+
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(credentials.groups.support?.["github.token"]).toBe("secret-value");
+    expect(knownGroup.prompt.select).toHaveBeenCalledWith("Group id", ["support", "Add another group id"], { visibleItems: 8 });
+
+    const manualGroup = runtime(dir);
+    manualGroup.prompt = prompt(["custom", "secret-value"], ["github.token (default)", "group", "Add another group id"]);
+
+    await expect(main(["secrets", "set"], manualGroup)).resolves.toBe(0);
+
+    const updatedCredentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(updatedCredentials.groups.custom?.["github.token"]).toBe("secret-value");
   });
 
   it("does not store a prompted secret when the review is declined", async () => {
@@ -743,6 +948,47 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     await expect(main(["secrets", "manifest", "--check"], rt)).resolves.toBe(0);
   });
 
+  it("generates scoped secret refs and credential env vars from the entrypoint", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, "src", "index.ts"),
+      `import { bearer, credential, credentialEnv, fentaris, group, mcp, user } from "@fentaris/core";
+const app = fentaris({
+  users: [user("alice", { credentials: { "linear.env": credentialEnv("LINEAR_TOKEN"), "linear.token": credential("linear.token") } })],
+  groups: [group({ id: "support", credentials: { "github.token": credentialEnv("SUPPORT_GITHUB_TOKEN") } })],
+});
+app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callTool: async () => ({}), close: async () => {} }, auth: bearer(credential("default.token")) });
+`,
+    );
+
+    const rt = runtime(dir);
+    await expect(main(["secrets", "manifest"], rt)).resolves.toBe(0);
+    const manifest = JSON.parse(await readFile(join(dir, ".fentaris", "secrets.manifest.json"), "utf8")) as {
+      references: Array<{ ref: string; scope: string }>;
+      envVars: string[];
+    };
+    expect(manifest.references).toEqual([
+      { ref: "default.token", scope: "default" },
+      { ref: "github.token", scope: "group:support" },
+      { ref: "linear.env", scope: "user:alice" },
+      { ref: "linear.token", scope: "user:alice" },
+    ]);
+    expect(manifest.envVars).toEqual(["LINEAR_TOKEN", "SUPPORT_GITHUB_TOKEN"]);
+  });
+
+  it("wraps invalid secrets manifest JSON errors", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(join(dir, ".fentaris", "secrets.manifest.json"), "{ nope");
+
+    const rt = runtime(dir);
+    await expect(main(["secrets", "list"], rt)).resolves.toBe(1);
+    const output = rt.out.error.mock.calls.flat().join("\n");
+    expect(output).toContain("Unable to parse secrets manifest");
+    expect(output).not.toContain("SyntaxError");
+  });
+
   it("creates the auth directory when generating the secrets manifest", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
@@ -776,6 +1022,22 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     expect(output).toContain("fentaris secrets set github.token");
   });
 
+  it("uses an explicit key for secrets doctor", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, ".fentaris", "secrets.manifest.json"),
+      JSON.stringify({ version: 1, references: [{ ref: "github.token", scope: "default" }] }),
+    );
+    const credentials = { users: {}, groups: {}, defaults: { "github.token": "secret" } };
+    await writeFile(join(dir, ".fentaris", "credentials.enc.json"), JSON.stringify(FentarisAuth.encryptCredentials(credentials, "explicit-key")));
+
+    const rt = runtime(dir);
+    delete rt.env.FENTARIS_AUTH_KEY;
+    await expect(main(["secrets", "doctor", "--key", "explicit-key"], rt)).resolves.toBe(0);
+    expect(rt.out.log.mock.calls.flat().join("\n")).toContain("All secrets checks passed.");
+  });
+
   it("unsets stored credentials", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
@@ -791,5 +1053,14 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     await expect(main(["secrets", "unset", "github.token"], rt)).resolves.toBe(0);
     const updated = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(backendDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
     expect(updated.defaults["github.token"]).toBeUndefined();
+  });
+
+  it("reports when unset removes nothing", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+
+    const rt = runtime(dir);
+    await expect(main(["secrets", "unset", "github.token"], rt)).resolves.toBe(0);
+    expect(rt.out.log.mock.calls.flat().join("\n")).toContain("No github.token credential found");
   });
 });

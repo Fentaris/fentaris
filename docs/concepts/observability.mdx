@@ -21,6 +21,7 @@ Use `check` for project validation and `doctor` for environment diagnostics.
 ## Runtime Profiler
 
 Projects can subscribe to profiler events around MCP calls, policy behavior, transport operations, and runtime lifecycle.
+Profiler events are redacted before handlers and sinks receive them. Default redaction covers sensitive keys and common token-shaped string values such as bearer tokens, JWTs, and GitHub PATs.
 
 ```ts theme={null}
 const runtimeProfiler = profiler()

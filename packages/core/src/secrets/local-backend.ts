@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { FentarisAuth, type LocalCredentials } from "../auth/auth.js";
 import type { SecretRef, SecretScope, SecretsBackend } from "./types.js";
@@ -74,15 +74,18 @@ export class LocalSecretsBackend implements SecretsBackend {
     await this.writeCredentials(credentials);
   }
 
-  async unset(ref: string, scope: SecretScope): Promise<void> {
+  async unset(ref: string, scope: SecretScope): Promise<boolean> {
     const credentials = await this.readCredentialsOptional();
     if (!credentials) {
-      return;
+      return false;
     }
+    let removed = false;
     if (scope.kind === "default") {
+      removed = Object.prototype.hasOwnProperty.call(credentials.defaults, ref);
       delete credentials.defaults[ref];
     } else if (scope.kind === "group") {
       if (credentials.groups[scope.id]) {
+        removed = Object.prototype.hasOwnProperty.call(credentials.groups[scope.id], ref);
         delete credentials.groups[scope.id][ref];
         if (Object.keys(credentials.groups[scope.id]).length === 0) {
           delete credentials.groups[scope.id];
@@ -91,13 +94,17 @@ export class LocalSecretsBackend implements SecretsBackend {
     } else {
       const user = credentials.users[scope.id];
       if (user) {
+        removed = Object.prototype.hasOwnProperty.call(user.credentials, ref);
         delete user.credentials[ref];
         if (user.apiKeys.length === 0 && Object.keys(user.credentials).length === 0) {
           delete credentials.users[scope.id];
         }
       }
     }
-    await this.writeCredentials(credentials);
+    if (removed) {
+      await this.writeCredentials(credentials);
+    }
+    return removed;
   }
 
   async initEmpty(): Promise<void> {
@@ -121,6 +128,9 @@ export class LocalSecretsBackend implements SecretsBackend {
     await mkdir(this.dir, { recursive: true });
     const filePath = path.join(this.dir, this.credentialsFile);
     await writeFile(filePath, JSON.stringify(FentarisAuth.encryptCredentials(credentials, this.key), null, 2));
+    if (process.platform !== "win32") {
+      await chmod(filePath, 0o600);
+    }
   }
 }
 

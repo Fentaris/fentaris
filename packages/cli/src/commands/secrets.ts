@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { manifestFromSecretRefs, manifestsEqual, parseManifest, serializeManifest } from "@fentaris/core";
+import { text as readStreamText } from "node:stream/consumers";
+import { FentarisAuth, manifestFromSecretRefs, manifestsEqual, parseManifest, serializeManifest } from "@fentaris/core";
 import { secretScope } from "../domain/auth/local-store.js";
 import { credentialsPath, manifestPath, openLocalSecretsBackend, scopeFromOptions } from "../domain/secrets/backend.js";
 import { buildListRows, getSecretsDoctorIssues, loadRequiredReferences } from "../domain/secrets/doctor.js";
@@ -48,12 +49,12 @@ async function runSecretsSet(command: CliCommand, reference: string | undefined,
   if (!(await backend.credentialsExist())) {
     await backend.initEmpty();
   }
-  const promptedValue = typeof input.options.value !== "string";
+  const promptedValue = typeof input.options.value !== "string" && input.options["value-stdin"] !== true;
   if (promptedValue) {
     section(runtime, "Secret value");
     runtime.out.log(`  ${style.hint(`${input.reference} will be hidden while stored and never printed back.`)}`);
   }
-  const value = typeof input.options.value === "string" ? input.options.value : await runtime.prompt.text(input.reference, { secret: true });
+  const value = await resolveSecretValue(input.reference, input.options, runtime);
   if (promptedValue) {
     printSecretsSetReview(runtime, input.reference, input.options, storagePath);
     const confirmed = await runtime.prompt.confirm("Store this credential?");
@@ -79,6 +80,9 @@ async function resolveSecretsSetInput(
   const options: CliOptions = { ...command.options };
   if (typeof options.user === "string" && typeof options.group === "string") {
     throw new Error("Use either --user or --group, not both.");
+  }
+  if (typeof options.value === "string" && options["value-stdin"] === true) {
+    throw new Error("Use either --value or --value-stdin, not both.");
   }
   if (reference?.trim()) {
     return { reference: reference.trim(), options };
@@ -115,17 +119,15 @@ async function resolveSecretsSetInput(
   }
 
   if (!hasScopeOption(options)) {
-    runtime.out.log("");
-    runtime.out.log(`  ${style.heading("Credential scope")}`);
     const scope = await runtime.prompt.select("Credential scope", ["default", "user", "group"]);
     if (scope === "user") {
-      const user = (await runtime.prompt.text("User id")).trim();
+      const user = await resolveSubjectId("user", options, runtime, project, required);
       if (!user) {
         throw new Error("User id is required.");
       }
       options.user = user;
     } else if (scope === "group") {
-      const group = (await runtime.prompt.text("Group id")).trim();
+      const group = await resolveSubjectId("group", options, runtime, project, required);
       if (!group) {
         throw new Error("Group id is required.");
       }
@@ -134,6 +136,21 @@ async function resolveSecretsSetInput(
   }
 
   return { reference: selectedReference, options };
+}
+
+async function resolveSecretValue(reference: string, options: CliOptions, runtime: Runtime): Promise<string> {
+  if (typeof options.value === "string") {
+    runtime.out.error("Warning: --value exposes secret values in process arguments. Prefer --value-stdin or an interactive prompt.");
+    return options.value;
+  }
+  if (options["value-stdin"] === true) {
+    const value = (await readStreamText(process.stdin)).replace(/\r?\n$/, "");
+    if (!value) {
+      throw new Error(`Secret value for ${reference} was empty on stdin.`);
+    }
+    return value;
+  }
+  return runtime.prompt.text(reference, { secret: true });
 }
 
 function printSecretsSetReview(runtime: Runtime, reference: string, options: CliOptions, storagePath: string): void {
@@ -161,6 +178,102 @@ function applyScopeLabel(options: CliOptions, scope: string): void {
   }
 }
 
+async function resolveSubjectId(
+  kind: "user" | "group",
+  options: CliOptions,
+  runtime: Runtime,
+  project: Awaited<ReturnType<typeof discoverProject>>,
+  required: Array<{ scope: string }>,
+): Promise<string> {
+  const label = kind === "user" ? "User id" : "Group id";
+  const knownIds = await loadKnownSubjectIds(kind, options, runtime, project, required);
+  if (knownIds.length === 0) {
+    return (await runtime.prompt.text(label)).trim();
+  }
+
+  const customChoice = `Add another ${kind} id`;
+  const selected = await runtime.prompt.select(label, [...knownIds, customChoice], { visibleItems: 8 });
+  if (selected === customChoice) {
+    return (await runtime.prompt.text(label)).trim();
+  }
+  return selected;
+}
+
+async function loadKnownSubjectIds(
+  kind: "user" | "group",
+  options: CliOptions,
+  runtime: Runtime,
+  project: Awaited<ReturnType<typeof discoverProject>>,
+  required: Array<{ scope: string }>,
+): Promise<string[]> {
+  const ids = new Set<string>();
+  const prefix = `${kind}:`;
+
+  for (const entry of required) {
+    if (entry.scope.startsWith(prefix)) {
+      ids.add(entry.scope.slice(prefix.length));
+    }
+  }
+
+  for (const id of await loadStoredSubjectIds(kind, options, runtime, project)) {
+    ids.add(id);
+  }
+
+  for (const id of await loadEntrypointSubjectIds(kind, project)) {
+    ids.add(id);
+  }
+
+  return Array.from(ids).filter(Boolean).sort((left, right) => left.localeCompare(right));
+}
+
+async function loadStoredSubjectIds(
+  kind: "user" | "group",
+  options: CliOptions,
+  runtime: Runtime,
+  project: Awaited<ReturnType<typeof discoverProject>>,
+): Promise<string[]> {
+  const key = typeof options.key === "string" ? options.key : runtime.env.FENTARIS_AUTH_KEY;
+  if (!key?.trim() || !(await exists(credentialsPath(project)))) {
+    return [];
+  }
+
+  try {
+    const envelope = JSON.parse(await readFile(credentialsPath(project), "utf8")) as unknown;
+    const credentials = FentarisAuth.decryptCredentials(envelope, key);
+    return kind === "user" ? Object.keys(credentials.users) : Object.keys(credentials.groups);
+  } catch {
+    return [];
+  }
+}
+
+async function loadEntrypointSubjectIds(kind: "user" | "group", project: Awaited<ReturnType<typeof discoverProject>>): Promise<string[]> {
+  const entrypoint = path.join(project.root, project.config.entrypoint);
+  if (!(await exists(entrypoint))) {
+    return [];
+  }
+
+  const source = await readFile(entrypoint, "utf8");
+  const ids = new Set<string>();
+  const patterns = kind === "user"
+    ? [/\buser\s*\(\s*["'`]([^"'`]+)["'`]/g, /\bnew\s+User\s*\(\s*["'`]([^"'`]+)["'`]/g]
+    : [
+        /\bgroup\s*\(\s*\{[\s\S]*?\bid\s*:\s*["'`]([^"'`]+)["'`][\s\S]*?\}\s*\)/g,
+        /\bnew\s+Group\s*\(\s*\{[\s\S]*?\bid\s*:\s*["'`]([^"'`]+)["'`][\s\S]*?\}\s*\)/g,
+        /\bapp\.group\s*\(\s*["'`]([^"'`]+)["'`]/g,
+      ];
+
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) {
+      const id = match[1]?.trim();
+      if (id) {
+        ids.add(id);
+      }
+    }
+  }
+
+  return Array.from(ids);
+}
+
 async function runSecretsUnset(command: CliCommand, reference: string | undefined, runtime: Runtime): Promise<void> {
   if (!reference) {
     throw new Error("Usage: fentaris secrets unset <reference> [--user <id> | --group <id>]");
@@ -168,8 +281,12 @@ async function runSecretsUnset(command: CliCommand, reference: string | undefine
 
   const project = await discoverProject(runtime.cwd);
   const backend = await openLocalSecretsBackend(project, runtime, command.options);
-  await backend.unset(reference, scopeFromOptions(command.options));
+  const removed = await backend.unset(reference, scopeFromOptions(command.options));
   section(runtime, "Secrets");
+  if (!removed) {
+    runtime.out.log(`  ${style.warn(`No ${reference} credential found in ${secretScope(command.options)} credentials.`)}`);
+    return;
+  }
   runtime.out.log(`  ${style.pass(`Removed ${reference} from ${secretScope(command.options)} credentials.`)}`);
 }
 
@@ -221,7 +338,7 @@ async function runSecretsManifest(command: CliCommand, runtime: Runtime): Promis
     if (!(await exists(target))) {
       throw new Error("secrets.manifest.json is missing. Run fentaris secrets manifest.");
     }
-    const current = parseManifest(JSON.parse(await readFile(target, "utf8")) as unknown);
+    const current = parseManifest(parseManifestJson(await readFile(target, "utf8"), target));
     if (!manifestsEqual(current, manifest)) {
       throw new Error("secrets.manifest.json is out of date. Run fentaris secrets manifest.");
     }
@@ -237,9 +354,19 @@ async function runSecretsManifest(command: CliCommand, runtime: Runtime): Promis
   runtime.out.log(`  ${style.hint(`${manifest.references.length} credential reference(s)${manifest.envVars?.length ? `, ${manifest.envVars.length} env var(s)` : ""}.`)}`);
 }
 
+function parseManifestJson(source: string, filePath: string): unknown {
+  try {
+    return JSON.parse(source) as unknown;
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.message : "Invalid JSON";
+    throw new Error(`Unable to parse secrets manifest at ${filePath}: ${detail}`, { cause: error });
+  }
+}
+
 async function runSecretsDoctor(command: CliCommand, runtime: Runtime): Promise<void> {
   const project = await discoverProject(runtime.cwd);
-  const issues = await getSecretsDoctorIssues(project, runtime, { strict: command.options.strict === true });
+  const key = typeof command.options.key === "string" ? command.options.key : undefined;
+  const issues = await getSecretsDoctorIssues(project, runtime, { strict: command.options.strict === true, key });
 
   if (command.options.json === true) {
     runtime.out.log(JSON.stringify({ issues }, null, 2));
