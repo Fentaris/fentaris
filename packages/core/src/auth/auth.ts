@@ -147,7 +147,7 @@ export class FentarisAuth {
 
   resolveApiKey(apiKey: string): string | null {
     for (const [userId, entry] of Object.entries(this.credentials.users)) {
-      if (entry.apiKeys.some((candidate) => compareApiKey(candidate, apiKey))) {
+      if (entry.apiKeys.some((candidate) => FentarisAuth.compareApiKey(candidate, apiKey))) {
         return userId;
       }
     }

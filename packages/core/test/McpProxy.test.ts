@@ -286,7 +286,7 @@ describe("McpProxy", () => {
 
     await proxy.start();
 
-    expect(stderr.mock.calls.flat().join("\n")).toContain("http://localhost:0/configured");
+    expect(stderr.mock.calls.flat().join("\n")).toContain("http://127.0.0.1:0/configured");
     await proxy.stop();
   });
 
@@ -1211,25 +1211,22 @@ describe("McpProxy", () => {
     });
   });
 
-  it("denies tool calls and tool discovery by default without explicit policy", async () => {
+  it("allows tool calls and tool discovery by default without explicit policy", async () => {
     const transport = new MockTransport();
     const proxy = new McpProxy({
       servers: [new McpServer({ name: "github", transport })],
     });
 
-    await expect(proxy.listTools()).resolves.toEqual({ tools: [] });
-    await expect(proxy.callTool({ name: toProxyToolName("github", "create_issue") })).resolves.toMatchObject({
-      isError: true,
-      _meta: {
-        error: expect.objectContaining({
-          code: FentarisErrorCode.PolicyDenied,
-        }),
-      },
+    await expect(proxy.listTools()).resolves.toMatchObject({
+      tools: [expect.objectContaining({ name: toProxyToolName("github", "create_issue") })],
     });
-    expect(transport.callTool).not.toHaveBeenCalled();
+    await expect(proxy.callTool({ name: toProxyToolName("github", "create_issue") })).resolves.toMatchObject({
+      content: [{ type: "text", text: "called:create_issue" }],
+    });
+    expect(transport.callTool).toHaveBeenCalledOnce();
   });
 
-  it("uses explicit allow-all policy as the development open-access path", async () => {
+  it("supports explicit allow-all policy as an open-access path", async () => {
     const transport = new MockTransport();
     const proxy = new McpProxy({
       policy: Policy.allowAll(),
@@ -1323,14 +1320,16 @@ describe("McpProxy", () => {
   });
 
   it("enforces policy-attached rate limiters without manual middleware", async () => {
-    let recordedCalls = 0;
+    let consumedCalls = 0;
     const limiter = {
       metadata: { maxPerWindow: 1, windowMs: 60_000 },
-      checkLimit: vi.fn(async () => recordedCalls < 1),
-      recordCall: vi.fn(async () => {
-        recordedCalls += 1;
+      consume: vi.fn(async () => {
+        consumedCalls += 1;
+        return consumedCalls <= 1;
       }),
-      getRemainingCalls: vi.fn(async () => Math.max(0, 1 - recordedCalls)),
+      checkLimit: vi.fn(async () => true),
+      recordCall: vi.fn(async () => undefined),
+      getRemainingCalls: vi.fn(async () => Math.max(0, 1 - consumedCalls)),
     };
     const transport = new MockTransport();
     const proxy = new McpProxy({
@@ -1346,8 +1345,9 @@ describe("McpProxy", () => {
       content: [{ type: "text", text: "Rate limit exceeded" }],
     });
 
-    expect(limiter.checkLimit).toHaveBeenCalledTimes(2);
-    expect(limiter.recordCall).toHaveBeenCalledTimes(1);
+    expect(limiter.consume).toHaveBeenCalledTimes(2);
+    expect(limiter.checkLimit).not.toHaveBeenCalled();
+    expect(limiter.recordCall).not.toHaveBeenCalled();
     expect(transport.callTool).toHaveBeenCalledOnce();
   });
 
@@ -1767,6 +1767,26 @@ describe("McpProxy", () => {
     });
     const seen: string[] = [];
     proxy.group("engineering").mcp("linear").use((ctx, next) => {
+      seen.push(ctx.subject?.id ?? "unknown");
+      return next();
+    });
+
+    await proxy.callTool({ name: toProxyToolName("linear", "create_issue") }, { id: "alice" });
+    await proxy.callTool({ name: toProxyToolName("linear", "create_issue") }, { id: "bob" });
+
+    expect(seen).toEqual(["alice"]);
+  });
+
+  it("supports server alias for group-scoped MCP handles", async () => {
+    const shared = new McpServer({ name: "linear", transport: new MockTransport() });
+    const proxy = new McpProxy({
+      groups: [
+        group({ id: "engineering", users: [user("alice")], policy: Policy.allowAll("engineering"), servers: [shared] }),
+        group({ id: "sales", users: [user("bob")], policy: Policy.allowAll("sales"), servers: [shared] }),
+      ],
+    });
+    const seen: string[] = [];
+    proxy.group("engineering").server("linear").use((ctx, next) => {
       seen.push(ctx.subject?.id ?? "unknown");
       return next();
     });

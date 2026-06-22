@@ -235,6 +235,8 @@ app.group("maintainers")
   Fluent groups must include at least one user and a policy before startup. Named policy references must be declared through `app.policy(name)` or passed as a concrete policy instance.
 </Note>
 
+Use `app.group(id).server(name)` to scope middleware, operation handlers, and event handlers to subjects in that group and a visible upstream MCP server. `app.group(id).mcp(name)` is kept as an equivalent alias.
+
 Fentaris validates the final configuration before serving. Common diagnostics include `FENTARIS_CONFIG_GROUP_POLICY_UNKNOWN`, `FENTARIS_CONFIG_GROUP_EMPTY_USERS`, `FENTARIS_CONFIG_DUPLICATE_GROUP`, and `FENTARIS_CONFIG_DUPLICATE_POLICY`. See [Troubleshooting](/troubleshooting#app-level-governance-diagnostics).
 
 ## Routes and Middleware

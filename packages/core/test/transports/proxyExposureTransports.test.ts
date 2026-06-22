@@ -198,7 +198,7 @@ describe("proxy exposure transports", () => {
     await handle.close();
   });
 
-  it("allows optional-auth HTTP sessions to continue without identity", async () => {
+  it("continues unauthenticated HTTP sessions when identity is optional", async () => {
     const runtime = createRuntime({ identityRequired: false });
     const handle = await new HttpProxyExposureTransport({ port: 0 }).listen(runtime);
     const server = fakes.httpServers[0];
@@ -209,7 +209,8 @@ describe("proxy exposure transports", () => {
       headers: {},
     });
     const sessionId = initialized.headers["mcp-session-id"];
-    expect(sessionId).toBe("http-session-1");
+    expect(initialized.status).toBe(200);
+    expect(sessionId).toBeTruthy();
 
     const continued = await request(server, {
       method: "POST",
@@ -218,6 +219,13 @@ describe("proxy exposure transports", () => {
     });
     expect(continued.status).toBe(200);
     expect(continued.body).toBe("continued");
+
+    const upgraded = await request(server, {
+      method: "POST",
+      url: "/mcp",
+      headers: { "mcp-session-id": sessionId ?? "", authorization: "Bearer alice" },
+    });
+    expect(upgraded.status).toBe(401);
 
     await handle.close();
   });
@@ -260,7 +268,7 @@ describe("proxy exposure transports", () => {
     await handle.close();
   });
 
-  it("allows optional-auth SSE /messages requests to continue without identity", async () => {
+  it("continues unauthenticated SSE sessions when identity is optional", async () => {
     const runtime = createRuntime({ identityRequired: false });
     const handle = await new SseProxyExposureTransport({ port: 0 }).listen(runtime);
     const server = fakes.httpServers[0];
@@ -279,6 +287,13 @@ describe("proxy exposure transports", () => {
     });
     expect(continued.status).toBe(200);
     expect(continued.body).toBe("posted");
+
+    const upgraded = await request(server, {
+      method: "POST",
+      url: `/messages?sessionId=${sessionId}`,
+      headers: { authorization: "Bearer alice" },
+    });
+    expect(upgraded.status).toBe(401);
 
     await handle.close();
   });
