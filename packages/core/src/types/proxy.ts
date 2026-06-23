@@ -240,7 +240,7 @@ export type ProxyEventHandler = (
 ) => MaybePromise<ListToolsResult["tools"] | SdkListToolsResult | void>;
 
 /**
- * Scoped upstream MCP handle returned by `proxy.mcp(name)`.
+ * Scoped upstream MCP handle returned by `proxy.mcp(name)` or `proxy.server(name)`.
  * @pk
  */
 export type ProxyMcpHandle = {

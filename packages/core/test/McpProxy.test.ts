@@ -1524,6 +1524,16 @@ describe("McpProxy", () => {
     });
   });
 
+  it("supports server alias for app-level MCP registration", async () => {
+    const app = fentaris({ policy: Policy.allowAll() });
+
+    app.server("github", { transport: new MockTransport() });
+
+    await expect(app.listTools()).resolves.toMatchObject({
+      tools: [expect.objectContaining({ name: toProxyToolName("github", "create_issue") })],
+    });
+  });
+
   it("validates deferred policy server references before start", async () => {
     const app = fentaris({
       groups: [

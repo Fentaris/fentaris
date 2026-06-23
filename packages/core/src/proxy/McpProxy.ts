@@ -459,6 +459,30 @@ export class McpProxy {
   }
 
   /**
+   * Register or retrieve a scoped upstream MCP handle.
+   * Alias for `mcp(...)`.
+   * @pk
+   */
+  server(name: string): ProxyMcpHandle;
+  server(name: string, options: ProxyMcpDeclarationOptions): ProxyMcpHandle;
+  server(name: string, server: McpServer): ProxyMcpHandle;
+  server(config: ProxyMcpDeclarationConfig): ProxyMcpHandle;
+  server(
+    nameOrConfig: string | ProxyMcpDeclarationConfig,
+    optionsOrServer?: ProxyMcpDeclarationOptions | McpServer,
+  ): ProxyMcpHandle {
+    if (typeof nameOrConfig !== "string") {
+      return this.mcp(nameOrConfig);
+    }
+
+    if (optionsOrServer instanceof McpServer) {
+      return this.mcp(nameOrConfig, optionsOrServer);
+    }
+
+    return optionsOrServer ? this.mcp(nameOrConfig, optionsOrServer) : this.mcp(nameOrConfig);
+  }
+
+  /**
    * Register or retrieve a scoped group handle.
    * @pk
    */
