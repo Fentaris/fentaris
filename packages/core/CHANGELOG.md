@@ -1,5 +1,11 @@
 # @fentaris/core
 
+## 2.0.0
+
+### Major Changes
+
+- ef570e8: Rename remaining legacy configuration and secrets provider identifiers to Fentaris.
+
 ## 1.0.0
 
 ### Major Changes
