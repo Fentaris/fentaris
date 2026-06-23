@@ -6,6 +6,12 @@
   max-width: 100%;
 }
 
+nav-logo img {
+  height: 3rem !important;
+  max-height: none !important;
+  width: auto !important;
+}
+
 @media (min-width: 1024px) {
   #content-area {
     padding-left: 2.5rem;
