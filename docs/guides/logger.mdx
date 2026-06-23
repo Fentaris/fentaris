@@ -1,15 +1,13 @@
 ---
 title: "Logger"
-description: "Configure Fentaris logging in detail, parameter by parameter."
+description: "Configure structured logging for Fentaris proxies with tags, metadata, redaction, and custom drivers."
 ---
 
-> Configure structured logging for Fentaris proxies and middleware.
-
-Use the default logger with `autoLog` first. Add a custom driver when logs need to go to a dedicated pipeline.
+Use the logger through the high-level proxy API first: enable `autoLog`, add request tags with `ctx.log`, and pass a custom logger only when logs need to leave stdout.
 
 ## Quick Start
 
-Pass logging options through the high-level proxy declaration.
+Enable automatic proxy logging where you declare the proxy.
 
 ```ts theme={null}
 import { fentaris, mcp, stdio } from "@fentaris/core";
@@ -27,11 +25,11 @@ const proxy = fentaris({
 });
 ```
 
-Fentaris exposes the request logger as `ctx.log` in middleware, server routes, tool routes, operation routes, and lifecycle events.
+`autoLog: true` records proxied tool call start, success, and failure entries with safe context such as operation, subject, upstream server, tool, downstream transport, session id, credential source metadata, and policy outcome when available.
 
-## Add Tags And Metadata
+## Add Request Tags
 
-Tags are indexed fields that should stay stable across a request. Metadata is detail for one log entry.
+`ctx.log` is available in middleware, server routes, tool routes, operation routes, and lifecycle events. Use tags for stable fields that should be attached to every later log entry in the request.
 
 ```ts theme={null}
 proxy.use(async (ctx, next) => {
@@ -40,49 +38,92 @@ proxy.use(async (ctx, next) => {
   ctx.log.setTag("subject", ctx.subject?.id ?? "anonymous");
 
   ctx.log.info("request.received", {
-    transport: ctx.transport?.type,
+    operation: ctx.operation,
+    transport: ctx.transport.type,
   });
 
   return next();
 });
 ```
 
-<Tip>
-  Keep tags short and consistent. Prefer `traceId`, `tenantId`, `subject`, `server`, and `tool` over free-form labels.
-</Tip>
+Keep tag names short and consistent. Prefer `traceId`, `tenantId`, `subject`, `server`, and `tool` over free-form labels.
+
+## Use Metadata For Event Detail
+
+Metadata should describe one log entry. Keep it structured and bounded so log queries remain predictable.
+
+```ts theme={null}
+proxy.mcp("github").tool("create_issue", async (ctx, next) => {
+  const result = await next();
+
+  ctx.log.info("github.create_issue.completed", {
+    allowed: ctx.policy.allowed,
+    reason: ctx.policy.reason,
+    server: ctx.server?.name,
+    tool: ctx.tool?.proxyName,
+  });
+
+  return result;
+});
+```
+
+Do not put raw prompts, raw tool arguments, request bodies, or secret values in metadata. Log identifiers, outcomes, durations, and bounded status fields instead.
 
 ## Logging Levels
 
 Use levels consistently so alerts and dashboards stay predictable.
 
 ```ts theme={null}
-ctx.log.debug("tool.input", { tool: ctx.tool?.proxyName });
-ctx.log.info("tool.call", { tool: ctx.tool?.proxyName });
-ctx.log.warn("tool.deny", { reason: "policy" });
-ctx.log.error("tool.error", { message: "upstream failed" });
+ctx.log.debug("tool.input.validated", { tool: ctx.tool?.proxyName });
+ctx.log.info("tool.call.completed", { tool: ctx.tool?.proxyName });
+ctx.log.warn("tool.call.denied", { reason: ctx.policy.reason });
+ctx.log.error("tool.call.failed", { message: "upstream failed" });
 ```
 
-- `debug`: noisy diagnostics for development.
-- `info`: normal operations such as routing and successful calls.
-- `warn`: recoverable issues and policy denies.
-- `error`: failures that need attention.
+- `debug`: noisy diagnostics for local development.
+- `info`: normal operations such as successful calls and routing decisions.
+- `warn`: recoverable problems, degraded behavior, and policy denies.
+- `error`: failed operations that need attention.
+- `fatal`: unrecoverable runtime failures.
 
-## Use A Custom Driver
+## Customize Auto Logs
 
-Create a `Logger` when you want to forward entries to an external logging pipeline.
+Use the object form when you want to keep automatic logging but tune levels.
+
+```ts theme={null}
+const proxy = fentaris({
+  servers: [
+    mcp("github", {
+      transport: stdio({ command: "github-mcp-server" }),
+    }),
+  ],
+  autoLog: {
+    startLevel: "debug",
+    successLevel: "info",
+    failureLevel: "error",
+  },
+});
+```
+
+Set `autoLog: false` or omit it when another layer already records the same lifecycle and duplicate logs would make operations harder to read.
+
+## Use A Custom Logger
+
+Pass a logger to `fentaris(...)` when stdout is not the right destination.
 
 ```ts theme={null}
 import { Logger, fentaris, mcp, stdio } from "@fentaris/core";
 
 const logger = new Logger({
+  level: "info",
   driver: {
     write(entry) {
       sendToLogPipeline({
         level: entry.level,
         message: entry.message,
-        tags: entry.tags,
+        timestamp: entry.timestamp.toISOString(),
+        context: entry.context,
         metadata: entry.metadata,
-        timestamp: entry.timestamp,
       });
     },
   },
@@ -99,37 +140,41 @@ const proxy = fentaris({
 });
 ```
 
-The driver must implement `write(entry)`. It can write JSON lines, forward to a vendor SDK, or fan out to logs and metrics.
+The driver receives structured entries. Forward the full entry when possible, then map `context` and `metadata` to the indexed fields your telemetry system expects.
 
-## Logger Entry Shape
+## Entry Shape
 
-Drivers receive structured entries with a stable shape.
+Custom drivers receive this shape:
 
 ```ts theme={null}
 type LogEntry = {
-  level: "debug" | "info" | "warn" | "error";
+  level: "debug" | "info" | "warn" | "error" | "fatal";
   message: string;
-  metadata?: Record<string, unknown>;
-  tags?: Record<string, string>;
-  timestamp: string;
+  timestamp: Date;
+  context: Record<string, unknown>;
+  metadata: Record<string, unknown>;
 };
 ```
 
-Use this structure for querying, retention policies, and alert rules.
+`context` comes from the logger and child loggers created by Fentaris. `metadata` comes from tags, annotations, and the metadata passed to each log call. Tags are stored as metadata keys prefixed with `tag.`.
 
-## JSON Lines Driver
+## Redaction
 
-Write one JSON object per line when your runtime already collects stdout.
+Redaction is enabled by default. Fentaris redacts common sensitive keys such as tokens, secrets, passwords, authorization values, API keys, and credentials. It also redacts common token-shaped string values.
 
 ```ts theme={null}
 const logger = new Logger({
-  driver: {
-    write(entry) {
-      process.stdout.write(`${JSON.stringify(entry)}\n`);
-    },
+  redact: {
+    keys: [/token/i, /secret/i, /customerSsn/i],
+    paths: ["payment.cardNumber"],
+    replacement: "[redacted]",
   },
 });
 ```
+
+<Warning>
+  Redaction is a safety net, not a logging strategy. Avoid writing secrets and raw payloads in the first place.
+</Warning>
 
 ## Redis Driver
 
@@ -147,6 +192,7 @@ const logger = new Logger({
 
 const proxy = fentaris({
   logger,
+  autoLog: true,
   servers: [
     mcp("github", {
       transport: stdio({ command: "github-mcp-server" }),
@@ -155,14 +201,16 @@ const proxy = fentaris({
 });
 ```
 
-## Lifecycle Events
+Redis is useful for local aggregation, short retention windows, and workers that transform logs before forwarding them elsewhere. For long-term production storage, forward entries to your logging platform.
 
-Use lifecycle events for operation-specific logs that should run after Fentaris knows the outcome.
+## Lifecycle Logs
+
+Lifecycle events are the best place for outcome-specific logs because Fentaris has already measured the operation and knows whether it succeeded.
 
 ```ts theme={null}
 proxy.on("tool:success", async ({ ctx, durationMs }) => {
   ctx.log.info("tool.success", {
-    server: ctx.tool?.serverName,
+    server: ctx.server?.name,
     tool: ctx.tool?.proxyName,
     durationMs,
   });
@@ -170,17 +218,18 @@ proxy.on("tool:success", async ({ ctx, durationMs }) => {
 
 proxy.on("resource:success", async ({ ctx, durationMs }) => {
   ctx.log.info("resource.success", {
+    server: ctx.server?.name,
     uri: ctx.resource?.uri,
     durationMs,
   });
 });
 ```
 
-Fentaris enriches logs with safe metadata such as operation, subject id, server name, tool name, proxied tool name, resource URI, prompt name, completion target, transport type, session id, credential source, and policy outcome where available.
+Use lifecycle logs for audit trails, latency reporting, and operation-level metrics. Use middleware logs for request intake and validation.
 
 ## Error Handling
 
-When middleware catches an error, log a stable message and return a safe denial message.
+When middleware catches an error, log a stable message and return a safe denial or failure response.
 
 ```ts theme={null}
 proxy.use(async (ctx, next) => {
@@ -189,6 +238,9 @@ proxy.use(async (ctx, next) => {
   } catch (error) {
     ctx.log.error("tool.error", {
       message: error instanceof Error ? error.message : String(error),
+      operation: ctx.operation,
+      server: ctx.server?.name,
+      tool: ctx.tool?.proxyName,
     });
 
     return ctx.deny("Tool failed. Try again later.");
@@ -196,12 +248,22 @@ proxy.use(async (ctx, next) => {
 });
 ```
 
-<Warning>
-  Do not log raw payloads, API keys, bearer tokens, decrypted credentials, or environment secret values.
-</Warning>
+Do not return internal error details to clients unless the client is trusted and the detail is safe.
+
+## Best Practices
+
+- Enable `autoLog` before adding custom entries.
+- Add `traceId`, `tenantId`, and `subject` tags in middleware.
+- Use stable event names such as `tool.success` or `github.create_issue.completed`.
+- Put dimensions in metadata instead of interpolating them into messages.
+- Keep metric labels and log tags bounded.
+- Use `warn` for policy denies and degraded behavior.
+- Use `error` for failed upstream calls and runtime failures.
+- Forward the complete structured entry to external logging systems.
 
 ## Related Documentation
 
-* [Observability](/guides/observability)
+* [Observability concept](/concepts/observability)
+* [Observability guide](/guides/observability)
 * [Security](/guides/security)
 * [Logger reference](/reference/logger)
