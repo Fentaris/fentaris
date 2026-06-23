@@ -38,6 +38,7 @@ export type CliCommandSpec = {
 const globalOptions: CliOptionSpec[] = [
   { name: "help", short: "h", description: "Print help" },
   { name: "version", short: "v", description: "Print version" },
+  { name: "non-interactive", description: "Fail instead of prompting for input. Use for automation and agent-driven runs." },
 ];
 
 const localSecretsKeyOption: CliOptionSpec = {

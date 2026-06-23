@@ -3,25 +3,29 @@ title: "Quickstart"
 description: "Create a Fentaris project, run the local proxy, and connect an MCP client."
 ---
 
-# Quickstart
-
-> Create a Fentaris project, run the local proxy, and connect an MCP client
-
 This quickstart uses the Fentaris CLI to generate a ready-to-run project with one local demo user and one remote HTTP MCP upstream.
 
-## Quick Start
+## Choose a Setup Path
+
+<CardGroup cols={3}>
+  <Card title="Setup with an agent" icon="bot" href="/getting-started/codex-skills">
+    Install the Fentaris agent skills when you want an agent to ask setup questions, choose the project shape, configure upstream MCP servers, and run validation.
+  </Card>
+  <Card title="Setup with the CLI" icon="terminal" href="#cli-setup">
+    Install `@fentaris/cli` when you want generated files, `fentaris.json`, package scripts, and a local proxy running at the default endpoint.
+  </Card>
+  <Card title="Manual setup" icon="code" href="/getting-started/setup">
+    Install `@fentaris/core` directly when you already have a TypeScript project or want full control over the proxy declaration.
+  </Card>
+</CardGroup>
+
+## CLI Setup
 
 Install the CLI and generate a project:
 
-<CodeGroup>
-  ```bash pnpm theme={null}
-  pnpm add -g @fentaris/cli
-  ```
-
-  ```bash npm theme={null}
-  npm i -g @fentaris/cli
-  ```
-</CodeGroup>
+```bash theme={null}
+npm i -g @fentaris/cli
+```
 
 ```bash theme={null}
 fentaris init my-proxy

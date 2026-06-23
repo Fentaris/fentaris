@@ -2,11 +2,21 @@ import { cliSpec, type CliCommandSpec, type CliOptionSpec } from "./cli-spec.js"
 import type { CliOptions, ParseResult } from "./types.js";
 
 export function parseCommand(argv: string[]): ParseResult {
-  if (argv.length === 0) {
+  const global = extractGlobalOptions(argv);
+  if (global.kind === "parse-error") {
+    return { kind: "parse-error", message: global.message, path: [] };
+  }
+  const parsedArgv = global.argv;
+
+  if (argv.length > 0 && parsedArgv.length === 0) {
+    return { kind: "parse-error", message: "expected a command", path: [] };
+  }
+
+  if (parsedArgv.length === 0) {
     return { kind: "help", path: [] };
   }
 
-  const [first, ...rest] = argv;
+  const [first, ...rest] = parsedArgv;
   if (first === "version") {
     return rest.length === 0 ? { kind: "version" } : { kind: "parse-error", message: `unexpected argument '${rest[0]}' found`, path: [] };
   }
@@ -15,7 +25,7 @@ export function parseCommand(argv: string[]): ParseResult {
     return parseHelp(rest);
   }
 
-  const pathResult = resolveCommandPath(argv);
+  const pathResult = resolveCommandPath(parsedArgv);
   if (pathResult.kind === "parse-error") {
     return pathResult;
   }
@@ -53,9 +63,44 @@ export function parseCommand(argv: string[]): ParseResult {
     command: {
       name: path[0] ?? "help",
       args: path.slice(1).concat(parsed.args),
-      options: parsed.options,
+      options: {
+        ...parsed.options,
+        ...(global.nonInteractive ? { "non-interactive": true } : {}),
+      },
     },
   };
+}
+
+function extractGlobalOptions(argv: string[]): { kind: "ok"; argv: string[]; nonInteractive: boolean } | { kind: "parse-error"; message: string } {
+  const parsedArgv: string[] = [];
+  let nonInteractive = false;
+  let passthrough = false;
+
+  for (const token of argv) {
+    if (passthrough) {
+      parsedArgv.push(token);
+      continue;
+    }
+
+    if (token === "--") {
+      passthrough = true;
+      parsedArgv.push(token);
+      continue;
+    }
+
+    if (token === "--non-interactive") {
+      nonInteractive = true;
+      continue;
+    }
+
+    if (token.startsWith("--non-interactive=")) {
+      return { kind: "parse-error", message: `unexpected argument '${token}' found` };
+    }
+
+    parsedArgv.push(token);
+  }
+
+  return { kind: "ok", argv: parsedArgv, nonInteractive };
 }
 
 function parseHelp(args: string[]): ParseResult {
@@ -184,7 +229,7 @@ function findOption(
   spec: CliCommandSpec,
   token: string,
 ): { option: CliOptionSpec; inlineValue: string | undefined; hasInlineValue: boolean } | undefined {
-  const options = spec.options ?? [];
+  const options = optionsForSpec(spec);
   if (token.startsWith("--")) {
     const body = token.slice(2);
     const separator = body.indexOf("=");
@@ -208,4 +253,13 @@ function findOption(
   }
 
   return undefined;
+}
+
+function optionsForSpec(spec: CliCommandSpec): CliOptionSpec[] {
+  const localOptions = spec.options ?? [];
+  const localNames = new Set(localOptions.map((option) => option.name));
+  const inheritedOptions = (cliSpec.options ?? [])
+    .filter((option) => option.name === "non-interactive")
+    .filter((option) => !localNames.has(option.name));
+  return [...localOptions, ...inheritedOptions];
 }

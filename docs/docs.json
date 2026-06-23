@@ -1,6 +1,6 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "name": "Fentaris",
+  "name": "fentaris",
   "theme": "almond",
   "colors": {
     "primary": "#0C0C0C",
@@ -8,12 +8,6 @@
     "dark": "#0C0C0C"
   },
   "description": "The centralized MCP proxy for routing tools, enforcing policy, and shipping observability.",
-  "logo": {
-    "light": "/assets/logo-white.png",
-    "dark": "/assets/logo-white.png",
-    "href": "/"
-  },
-  "favicon": "/assets/favicon.svg",
   "appearance": {
     "default": "dark"
   },
@@ -45,62 +39,75 @@
         "pages": ["index"]
       },
       {
-        "group": "Get Started",
+        "group": "Documentation",
         "pages": [
-          "getting-started/quickstart",
-          "getting-started/installation",
-          "getting-started/setup",
-          "getting-started/tutorial"
+          {
+            "group": "Get Started",
+            "expanded": true,
+            "pages": [
+              "getting-started/quickstart",
+              "getting-started/installation",
+              "getting-started/codex-skills",
+              "getting-started/setup",
+              "getting-started/tutorial"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "expanded": false,
+            "pages": [
+              "concepts/architecture",
+              "concepts/servers-and-transports",
+              "concepts/identity-and-auth",
+              "concepts/policies",
+              "concepts/observability"
+            ]
+          },
+          {
+            "group": "Guides",
+            "expanded": false,
+            "pages": [
+              "guides/proxy-setup",
+              "guides/middleware",
+              "guides/hooks",
+              "guides/multi-server",
+              "guides/observability",
+              "guides/logger",
+              "guides/flows",
+              "guides/end-to-end",
+              "guides/error-handling",
+              "guides/governance-auth",
+              "guides/telegram-approval",
+              "guides/security"
+            ]
+          },
+          "troubleshooting",
+          {
+            "group": "Reference",
+            "expanded": false,
+            "pages": [
+              "reference/cli",
+              "reference/config-file",
+              "reference/environment-variables",
+              "reference/mcp-proxy",
+              "reference/mcp-server",
+              "reference/stdio-transport",
+              "reference/logger",
+              "reference/extension-api",
+              "reference/types",
+              "reference-auto/index",
+              "reference-auto/status"
+            ]
+          }
         ]
-      },
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
       {
-        "group": "Concepts",
-        "pages": [
-          "concepts/architecture",
-          "concepts/servers-and-transports",
-          "concepts/identity-and-auth",
-          "concepts/policies",
-          "concepts/observability"
-        ]
-      },
-      {
-        "group": "Guides",
-        "collapsed": true,
-        "pages": [
-          "guides/proxy-setup",
-          "guides/middleware",
-          "guides/hooks",
-          "guides/multi-server",
-          "guides/observability",
-          "guides/logger",
-          "guides/flows",
-          "guides/end-to-end",
-          "guides/error-handling",
-          "guides/governance-auth",
-          "guides/telegram-approval",
-          "guides/security"
-        ]
-      },
-      {
-        "group": "Troubleshooting",
-        "pages": ["troubleshooting"]
-      },
-      {
-        "group": "Reference",
-        "collapsed": true,
-        "pages": [
-          "reference/cli",
-          "reference/config-file",
-          "reference/environment-variables",
-          "reference/mcp-proxy",
-          "reference/mcp-server",
-          "reference/stdio-transport",
-          "reference/logger",
-          "reference/extension-api",
-          "reference/types",
-          "reference-auto/index",
-          "reference-auto/status"
-        ]
+        "type": "github",
+        "href": "https://github.com/Fentaris/fentaris"
       }
     ]
   }

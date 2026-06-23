@@ -6,6 +6,12 @@
   max-width: 100%;
 }
 
+nav-logo img {
+  height: 3rem !important;
+  max-height: none !important;
+  width: auto !important;
+}
+
 @media (min-width: 1024px) {
   #content-area {
     padding-left: 2.5rem;
@@ -13,17 +19,10 @@
   }
 }
 
-body[data-page="index"] aside,
-body[data-page="index"] #sidebar,
-body[data-page="index"] [data-testid="sidebar"] {
-  display: none !important;
-  visibility: hidden !important;
-}
-
 body[data-page="index"] nav[aria-label="Breadcrumb"],
 body[data-page="index"] nav[aria-label="breadcrumb"],
-body[data-page="index"] h1:first-of-type,
-body[data-page="index"] h1:first-of-type + p {
+body[data-page="index"] h1,
+body[data-page="index"] h1 + p {
   display: none !important;
 }
 
@@ -34,6 +33,18 @@ body[data-page="index"] #content-area {
 
 body[data-page="index"] #content-area {
   padding-bottom: 4rem;
+}
+
+body[data-page="index"] #content {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 1024px) {
+  body[data-page="index"] #content {
+    padding-left: 20%;
+    padding-right: 20%;
+  }
 }
 
 pre code {

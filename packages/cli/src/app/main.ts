@@ -6,7 +6,7 @@ import { runInit } from "../commands/init.js";
 import { runSecrets } from "../commands/secrets.js";
 import { cliVersion } from "../shared/constants.js";
 import { parseCommand } from "../shared/parse.js";
-import type { CliCommand, Runtime } from "../shared/types.js";
+import type { CliCommand, Prompt, Runtime } from "../shared/types.js";
 import { printCommandHelp, printParseError, printRuntimeError } from "../ui/format.js";
 
 export async function main(argv: string[], runtime: Runtime): Promise<number> {
@@ -31,7 +31,7 @@ export async function main(argv: string[], runtime: Runtime): Promise<number> {
   }
 
   try {
-    await route(parsed.command, runtime);
+    await route(parsed.command, runtimeForCommand(parsed.command, runtime));
     return 0;
   } catch (error: unknown) {
     printRuntimeError(runtime, error);
@@ -39,6 +39,30 @@ export async function main(argv: string[], runtime: Runtime): Promise<number> {
   } finally {
     runtime.prompt.close();
   }
+}
+
+function runtimeForCommand(command: CliCommand, runtime: Runtime): Runtime {
+  if (command.options["non-interactive"] !== true) {
+    return runtime;
+  }
+
+  return {
+    ...runtime,
+    nonInteractive: true,
+    prompt: nonInteractivePrompt(runtime.prompt),
+  };
+}
+
+function nonInteractivePrompt(prompt: Prompt): Prompt {
+  const fail = async () => {
+    throw new Error("Command requires interactive input. Pass explicit options or omit --non-interactive.");
+  };
+  return {
+    text: fail,
+    select: fail,
+    confirm: fail,
+    close: () => prompt.close(),
+  };
 }
 
 async function route(command: CliCommand, runtime: Runtime): Promise<void> {

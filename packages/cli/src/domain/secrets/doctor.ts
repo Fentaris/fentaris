@@ -88,12 +88,12 @@ export async function getSecretsDoctorIssues(project: ProjectDiscovery, runtime:
     });
   }
 
-  if (project.config.panther?.projectId) {
+  if (project.config.fentaris?.projectId) {
     issues.push({
       status: "warn",
-      ref: "panther.cloud",
+      ref: "fentaris.cloud",
       scope: "cloud",
-      detail: "Panther Cloud project is configured but cloud sync is not available yet.",
+      detail: "Fentaris Cloud project is configured but cloud sync is not available yet.",
       hint: "Use the local encrypted store for now. Cloud sync arrives in a later release.",
     });
   }

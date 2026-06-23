@@ -1,8 +1,10 @@
-
+---
+mode: "wide"
+---
 
 <div className="fentaris-home px-4 py-8 mt-10 lg:pb-16 max-w-5xl mx-auto">
   <div className="text-center">
-    <img noZoom src="/assets/logo-white.png" className="mx-auto h-40 w-auto" alt="Fentaris" />
+    <img noZoom src="/assets/logo-white-trasparent.png" className="mx-auto h-40 w-auto" alt="Fentaris" />
   </div>
 
   <div className="max-w-2xl mx-auto px-4 mt-6 text-center">
@@ -17,87 +19,83 @@
   </div>
 
   <div className="px-6 lg:px-0 mt-10">
-    <CardGroup cols={2}>
+    <CardGroup cols={3}>
       <Card title="Get started" icon="sparkles" href="/getting-started/quickstart">
         Build a working proxy in minutes.
       </Card>
       <Card title="Tutorial" icon="map" href="/getting-started/tutorial">
         Walk through a full setup with middleware and hooks.
       </Card>
+      <Card title="Agent Skills" icon="bot" href="/getting-started/codex-skills">
+        Let an agent guide setup and project changes.
+      </Card>
     </CardGroup>
   </div>
 </div>
 
-## Start here
-
-Fentaris exposes one MCP endpoint in front of many upstream MCP servers. Use it to route tools, enforce per-user policy, store credentials locally, and inspect runtime health from one place.
-
-1. **Install and run a proxy** in [Quickstart](/getting-started/quickstart).
-2. **Understand the moving parts** in [Architecture](/concepts/architecture) and [Servers and transports](/concepts/servers-and-transports).
-3. **Harden and scale** with [Proxy setup](/guides/proxy-setup), [Security](/guides/security), and [Observability](/guides/observability).
-4. **Ship a real workflow** using the step-by-step [Tutorial](/getting-started/tutorial) and [End-to-end examples](/guides/end-to-end).
-
 ## Quickstart
 
-<Steps>
-  <Step title="Install @fentaris/core">
-    <CodeGroup>
-      ```bash pnpm theme={null}
-      pnpm add @fentaris/core
-      ```
+<Tabs>
+  <Tab title="Agent">
+    Use this path when you want Codex, Claude Code, or another supported agent to ask setup questions and create the project with the right users, upstream MCP servers, credentials, and policy defaults.
 
-      ```bash npm theme={null}
-      npm i @fentaris/core
-      ```
-    </CodeGroup>
-
-    This gives you the Fentaris SDK, the high-level proxy app API, transport helpers, governance helpers, and runtime APIs.
-  </Step>
-
-  <Step title="Create the proxy app">
-    ```ts theme={null}
-    import { fentaris } from "@fentaris/core";
-
-    const app = fentaris({
-      port: 3000,
-      path: "/mcp",
-    });
+    ```bash theme={null}
+    npx skills add Fentaris/fentaris-skills --skill '*'
     ```
 
-    `fentaris(...)` returns the high-level proxy app. Configure the public endpoint once, then attach upstream MCP servers to it.
-  </Step>
+    Restart or reload your agent, then ask it to create a Fentaris proxy:
 
-  <Step title="Add MCP servers with app.mcp(...)">
+    ```txt theme={null}
+    Use $fentaris-project-setup to help me create a Fentaris proxy for my team.
+    ```
+
+    The setup skill should inspect the target workflow, generate or update the proxy project, and run local validation before handing the project back.
+
+    [Agent Skills](/getting-started/codex-skills)
+  </Tab>
+
+  <Tab title="CLI">
+    Use this path when you want a generated Fentaris project with `fentaris.json`, package scripts, a starter TypeScript entrypoint, and CLI checks.
+
+    ```bash theme={null}
+    npm i -g @fentaris/cli
+    fentaris init my-proxy
+    cd my-proxy
+    fentaris dev
+    ```
+
+    The generated proxy listens on `http://localhost:4000/mcp` by default. Use this route for the fastest local project that can later add auth, policy, and more upstream MCP servers.
+
+    [Quickstart](/getting-started/quickstart)
+  </Tab>
+
+  <Tab title="Manual">
+    Use this path when you already have a TypeScript project or need to wire Fentaris directly into an existing app without generated files.
+
+    ```bash theme={null}
+    npm i @fentaris/core
+    ```
+
     ```ts theme={null}
-    import { stdio, streamableHttp } from "@fentaris/core";
+    import { fentaris, stdio } from "@fentaris/core";
+
+    const app = fentaris();
 
     app.mcp("filesystem", {
-      displayName: "Filesystem",
       transport: stdio({
         command: "npx",
-        args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
       }),
     });
 
-    app.mcp("docs", {
-      displayName: "Docs",
-      transport: streamableHttp({
-        url: "https://docs.example.com/mcp",
-      }),
-    });
-    ```
-
-    `app.mcp(...)` gives Fentaris a stable server name, display label, and transport configuration. Add one call per upstream MCP server.
-  </Step>
-
-  <Step title="Start the proxy">
-    ```ts theme={null}
     await app.start();
     ```
 
-    You now expose a single MCP endpoint that routes to upstream servers and enforces centralized policy.
-  </Step>
-</Steps>
+    Manual setup gives you the high-level API directly: declare upstream MCP servers, choose transports, then add identity, policy, middleware, and observability as the project grows.
+
+    [Manual setup](/getting-started/setup)
+  </Tab>
+</Tabs>
 
 ## Explore Fentaris
 

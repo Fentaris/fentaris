@@ -1,0 +1,87 @@
+---
+title: "Agent Skills"
+description: "Install the optional Fentaris skills for agent-assisted setup and development."
+---
+
+Fentaris ships agent skills that help an agent ask the right setup questions, create a proxy project, configure upstream MCP servers, and explain the resulting workflow. They are optional; use them when you want Codex, Claude Code, or another supported agent to guide setup instead of following the docs manually.
+
+## Quick Start
+
+Install the skills from the Fentaris skills repository:
+
+```bash theme={null}
+npx skills add Fentaris/fentaris-skills --skill '*'
+```
+
+Then restart or reload your agent so the new skills are loaded.
+
+## Included Skills
+
+### `fentaris-project-setup`
+
+Use this when starting from an empty project or when you want an agent to help decide the right proxy workflow.
+
+The skill guides discovery around:
+
+* users and groups
+* local, team, and cloud-shaped runtime choices
+* upstream MCP servers and credentials
+* policy, logging, and operational checks
+* current limits, including OAuth 2.1 and deploy support
+
+### `fentaris-app-development`
+
+Use this when you already have a Fentaris app and want an agent to modify it.
+
+The skill keeps changes aligned with the high-level Fentaris API first, validates the project after edits, and uses lower-level APIs only when an existing project or explicit user request requires it.
+
+## Install Options
+
+### Codex
+
+Install globally for Codex:
+
+```bash theme={null}
+npx skills add Fentaris/fentaris-skills -g -a codex --skill '*'
+```
+
+### Claude Code
+
+Install globally for Claude Code:
+
+```bash theme={null}
+npx skills add Fentaris/fentaris-skills -g -a claude-code --skill '*'
+```
+
+### Every Supported Agent
+
+Install globally for every agent supported by `npx skills`:
+
+```bash theme={null}
+npx skills add Fentaris/fentaris-skills -g --all
+```
+
+### List Skills
+
+List the available skills before installing:
+
+```bash theme={null}
+npx skills add Fentaris/fentaris-skills --list
+```
+
+## Use With Setup
+
+After installation, ask your agent to use the setup skill:
+
+```txt theme={null}
+Use $fentaris-project-setup to help me create a Fentaris proxy for my team.
+```
+
+The agent should first explain the Fentaris workflow, ask about users, machines, cloud/local needs, MCP servers, credentials, and policy, then create and validate the project.
+
+## Related Documentation
+
+* [Installation](/getting-started/installation)
+* [Quickstart](/getting-started/quickstart)
+* [Proxy setup](/guides/proxy-setup)
+* [CLI Usage](/reference/cli)

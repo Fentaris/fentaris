@@ -20,9 +20,26 @@
     <img src="https://img.shields.io/badge/typescript-6.x-blue?logo=typescript&labelColor=white" /></a>
   <a href="./pnpm-workspace.yaml" alt="pnpm workspace">
     <img src="https://img.shields.io/badge/pnpm-workspace-orange?logo=pnpm&labelColor=white" /></a>
+  <a href="./package.json" alt="Node.js runtime">
+    <img src="https://img.shields.io/badge/node-20%2B-green?logo=nodedotjs&labelColor=white" /></a>
   <a href="./packages/core/package.json" alt="License">
     <img src="https://img.shields.io/badge/license-MIT-green" /></a>
 </p>
+<details>
+<summary>Table of contents</summary>
+
+- [About](#about)
+- [Documentation](#documentation)
+    - [Skills for Coding Agents](#skills-for-coding-agents)
+- [Getting Started](#getting-started)
+- [Use the SDK in an Existing Project](#use-the-sdk-in-an-existing-project)
+- [Governance](#governance)
+- [Local Auth](#local-auth)
+- [Packages](#packages)
+- [Development](#development)
+- [License](#license)
+
+</details>
 
 ## About
 
@@ -35,16 +52,16 @@
 
 Fentaris is designed for teams that want MCP servers to behave like production infrastructure: stable names, centralized governance, auditable calls, and predictable client-facing endpoints.
 
-## Contents
+## Documentation
 
-- [Getting Started](#getting-started)
-- [Create a Project with the CLI](#create-a-project-with-the-cli)
-- [Documentation](#documentation)
-- [Use the SDK in an Existing Project](#use-the-sdk-in-an-existing-project)
-- [Governance](#governance)
-- [Local Auth](#local-auth)
-- [Packages](#packages)
-- [Development](#development)
+Visit our [docs](https://fentaris.mintlify.app) or jump to a [quickstart](https://fentaris.mintlify.app/getting-started/quickstart)
+
+#### Skills for Coding Agents
+
+ > Using Claude Code, Codex, Cursor or other AI coding agents?
+ > 
+ > [Install mcp-use skill for MCP Apps](https://www.skills.sh/fentaris/fentaris-skills/fentaris-project-setup)
+
 
 ## Getting Started
 
@@ -59,40 +76,13 @@ fentaris dev
 
 The generated proxy listens on `http://localhost:4000/mcp` by default. Point your MCP client to that endpoint.
 
-Use the SDK directly when you are embedding Fentaris into an existing TypeScript project:
-
-```bash
-pnpm add @fentaris/core
-```
-
-## Create a Project with the CLI
-
-`fentaris init` generates a runnable proxy project with a TypeScript entrypoint, `fentaris.json`, package scripts, local runtime directories, and project checks.
-
-```bash
-fentaris init my-proxy
-cd my-proxy
-fentaris dev
-```
-
-The generated project includes one remote HTTP MCP upstream, one local demo user, and no production authentication or policy rules. Add API-key auth and policies before exposing the proxy outside local development.
-
-## Documentation
-
-Start with the [docs homepage](https://fentaris.mintlify.app), or jump directly to:
-
-- [Quickstart](https://fentaris.mintlify.app/getting-started/quickstart): create and run a Fentaris proxy project.
-- [Architecture](https://fentaris.mintlify.app/concepts/architecture): understand the runtime model.
-- [Proxy setup](https://fentaris.mintlify.app/guides/proxy-setup): production-ready configuration patterns.
-- [Governance auth](https://fentaris.mintlify.app/guides/governance-auth): users, groups, policy, API keys, and upstream credentials.
-- [API reference](https://fentaris.mintlify.app/reference-auto): generated package reference.
 
 ## Use the SDK in an Existing Project
 
 Install the core package in an existing project:
 
 ```bash
-pnpm add @fentaris/core
+npm add @fentaris/core
 ```
 
 Build a proxy in a few lines:
@@ -111,6 +101,7 @@ app.mcp("filesystem", {
 
 await app.start();
 ```
+[→ Full documentation](https://fentaris.mintlify.app)
 
 Upstream tool names are still stable and namespaced by server. A filesystem tool is exposed to clients with a proxy name such as:
 
@@ -196,7 +187,7 @@ Fentaris can resolve caller identity and upstream credentials from local encrypt
 ```bash
 export FENTARIS_AUTH_KEY="your-local-encryption-key"
 
-fentaris secrets set github.token --user alice
+fentaris secrets set
 fentaris secrets list
 ```
 
@@ -215,7 +206,6 @@ Credential values are not exposed to middleware, hooks, logs, or policy callback
 Run the project for development:
 
 ```
-cd your-fentaris-project
 fentaris dev
 ```
 
@@ -237,4 +227,4 @@ pnpm docs:generate
 
 ## License
 
-MIT, as declared by the published Fentaris packages.
+[MIT](./LICENSE.txt), as declared by the published Fentaris packages.

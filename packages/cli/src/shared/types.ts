@@ -36,6 +36,7 @@ export type Runtime = {
   runner: ProcessRunner;
   probe: ExecProbe;
   prompt: Prompt;
+  nonInteractive?: boolean;
 };
 
 export type TemplateInput = {
@@ -68,7 +69,7 @@ export type ProjectConfig = {
   secrets?: {
     provider?: "local";
   };
-  panther?: {
+  fentaris?: {
     projectId?: string;
     environment?: string;
   };
