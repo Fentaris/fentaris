@@ -1,6 +1,6 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "name": "Fentaris",
+  "name": "fentaris",
   "theme": "almond",
   "colors": {
     "primary": "#0C0C0C",
@@ -8,12 +8,6 @@
     "dark": "#0C0C0C"
   },
   "description": "The centralized MCP proxy for routing tools, enforcing policy, and shipping observability.",
-  "logo": {
-    "light": "/assets/logo-white.png",
-    "dark": "/assets/logo-white.png",
-    "href": "/"
-  },
-  "favicon": "/assets/favicon.svg",
   "appearance": {
     "default": "dark"
   },
@@ -102,6 +96,14 @@
           "reference-auto/index",
           "reference-auto/status"
         ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "type": "github",
+        "href": "https://github.com/Fentaris/fentaris"
       }
     ]
   }
