@@ -52,7 +52,7 @@ export type SecretsManifestDiff = {
  * Secrets storage backend — local now, cloud in Phase 2.
  * @pk
  */
-export type SecretsProvider = "local" | "panther" | "hybrid";
+export type SecretsProvider = "local" | "fentaris" | "hybrid";
 
 /**
  * Secrets storage backend contract.
