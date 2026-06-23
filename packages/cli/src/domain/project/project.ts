@@ -106,6 +106,6 @@ function validateProjectConfig(value: unknown, configPath: string): ProjectConfi
     path: config.path,
     authDir: config.authDir,
     ...(config.secrets ? { secrets: config.secrets } : {}),
-    ...(config.panther ? { panther: config.panther } : {}),
+    ...(config.fentaris ? { fentaris: config.fentaris } : {}),
   };
 }

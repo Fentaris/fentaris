@@ -69,7 +69,7 @@ export type ProjectConfig = {
   secrets?: {
     provider?: "local";
   };
-  panther?: {
+  fentaris?: {
     projectId?: string;
     environment?: string;
   };
