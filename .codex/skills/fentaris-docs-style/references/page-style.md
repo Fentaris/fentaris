@@ -10,10 +10,6 @@ title: "CLI Usage"
 description: "Run and inspect Fentaris from the command line."
 ---
 
-# CLI Usage
-
-> Run and inspect Fentaris from the command line
-
 Short intro paragraph.
 
 ## Quick Start
@@ -57,6 +53,8 @@ Show the fix.
 
 ## Formatting
 
+- Do not add a top-level `#` heading that repeats the frontmatter `title`; Mintlify renders the page title automatically.
+- Do not add a leading blockquote that repeats the frontmatter `description`; Mintlify renders the description automatically under the page title.
 - Use `## Quick Start` for runnable tasks.
 - Use `###` headings for CLI flags, config keys, errors, and troubleshooting cases.
 - Use bullet lists only when they improve scanning.
