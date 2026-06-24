@@ -74,7 +74,10 @@ export const cliSpec: CliCommandSpec = {
     },
     {
       title: "Secrets",
-      commands: [{ name: "secrets", summary: "Manage local credentials and secret manifests." }],
+      commands: [
+        { name: "auth", summary: "Manage local identity authentication." },
+        { name: "secrets", summary: "Manage local credentials and secret manifests." },
+      ],
     },
   ],
   options: globalOptions,
@@ -135,6 +138,80 @@ export const cliSpec: CliCommandSpec = {
         { name: "timeout", valueName: "MS", description: "Runtime check timeout in milliseconds. [default: 10000]" },
         { name: "help", short: "h", description: "Print help" },
       ],
+    },
+    auth: {
+      name: "auth",
+      path: ["auth"],
+      description: "Manage local identity authentication.",
+      usage: "fentaris auth [OPTIONS] [COMMAND]",
+      commandGroups: [
+        {
+          title: "Commands",
+          commands: [{ name: "api-key", summary: "Manage API keys for local user identity." }],
+        },
+      ],
+      options: [{ name: "help", short: "h", description: "Print help" }],
+      commands: {
+        "api-key": {
+          name: "api-key",
+          path: ["auth", "api-key"],
+          description: "Manage API keys for local user identity.",
+          usage: "fentaris auth api-key [OPTIONS] [COMMAND]",
+          details: ["API keys authenticate clients through the x-fentaris-api-key header and resolve them to Fentaris users."],
+          commandGroups: [
+            {
+              title: "Commands",
+              commands: [
+                { name: "add", summary: "Store a local API key for a user." },
+                { name: "list", summary: "List local API-key counts by user." },
+                { name: "remove", summary: "Remove a local API key from a user." },
+              ],
+            },
+          ],
+          options: [{ name: "help", short: "h", description: "Print help" }],
+          commands: {
+            add: {
+              name: "add",
+              path: ["auth", "api-key", "add"],
+              description: "Store a local API key for a user.",
+              usage: "fentaris auth api-key add [OPTIONS] <user-id>",
+              arguments: [{ name: "user-id", required: true, description: "User id resolved when the API key is presented." }],
+              options: [
+                { name: "value", valueName: "VALUE", description: "API key value. Prefer --value-stdin to avoid exposing keys in process arguments." },
+                { name: "value-stdin", description: "Read the API key value from stdin instead of process arguments or an interactive prompt." },
+                { name: "generate", description: "Generate a new API key and print it once." },
+                localSecretsKeyOption,
+                { name: "help", short: "h", description: "Print help" },
+              ],
+            },
+            list: {
+              name: "list",
+              path: ["auth", "api-key", "list"],
+              description: "List local API-key counts by user.",
+              usage: "fentaris auth api-key list [OPTIONS]",
+              options: [
+                { name: "user", valueName: "ID", description: "Only list keys for one user id." },
+                { name: "json", description: "Output API-key references as JSON." },
+                localSecretsKeyOption,
+                { name: "help", short: "h", description: "Print help" },
+              ],
+            },
+            remove: {
+              name: "remove",
+              path: ["auth", "api-key", "remove"],
+              description: "Remove a local API key from a user.",
+              usage: "fentaris auth api-key remove [OPTIONS] <user-id>",
+              arguments: [{ name: "user-id", required: true, description: "User id to remove the API key from." }],
+              options: [
+                { name: "value", valueName: "VALUE", description: "API key value to remove. Prefer --value-stdin to avoid exposing keys in process arguments." },
+                { name: "value-stdin", description: "Read the API key value from stdin instead of process arguments or an interactive prompt." },
+                localSecretsKeyOption,
+                { name: "help", short: "h", description: "Print help" },
+              ],
+            },
+          },
+        },
+      },
     },
     secrets: {
       name: "secrets",
