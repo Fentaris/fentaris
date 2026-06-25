@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "dev": "tsc --watch",
+    "prepare": "tsc",
     "build": "tsc",
     "test": "vitest run src",
     "clean": "rm -rf dist"
