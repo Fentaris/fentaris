@@ -1,5 +1,20 @@
 # @fentaris/cli
 
+## 1.0.0
+
+### Major Changes
+
+- ef570e8: Rename remaining legacy configuration and secrets provider identifiers to Fentaris.
+
+### Minor Changes
+
+- 93f9816: Add global `--non-interactive` support for automation and ensure CLI prompts release stdin after completion so successful commands return to the shell.
+
+### Patch Changes
+
+- Updated dependencies [ef570e8]
+  - @fentaris/core@2.0.0
+
 ## 0.6.0
 
 ### Minor Changes
