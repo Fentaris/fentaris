@@ -42,6 +42,18 @@ import type {
 import type { Policy, PolicyDecision } from "./policy.js";
 import type { McpServerOptions } from "../server/index.js";
 import type { User } from "../governance/index.js";
+import type {
+  LocalCompletionHandler,
+  LocalCompletionReference,
+  LocalPromptHandler,
+  LocalPromptMetadata,
+  LocalResourceHandler,
+  LocalResourceMetadata,
+  LocalResourceTemplateMetadata,
+  LocalToolHandler,
+  LocalToolMetadata,
+  ProxyLocalHandle,
+} from "../local/declarations.js";
 
 /**
  * Safe downstream transport metadata attached to a proxy operation.
@@ -252,6 +264,19 @@ export type ProxyMcpHandle = {
   on(eventName: ProxyEventName, filter: ProxyEventFilter, handler: ProxyEventHandler): ProxyMcpHandle;
   ping(): Promise<HealthCheckResult>;
   health(): Promise<HealthCheckResult>;
+};
+
+export type {
+  LocalCompletionHandler,
+  LocalCompletionReference,
+  LocalPromptHandler,
+  LocalPromptMetadata,
+  LocalResourceHandler,
+  LocalResourceMetadata,
+  LocalResourceTemplateMetadata,
+  LocalToolHandler,
+  LocalToolMetadata,
+  ProxyLocalHandle,
 };
 
 /**

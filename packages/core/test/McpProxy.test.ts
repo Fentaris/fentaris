@@ -483,6 +483,197 @@ describe("McpProxy", () => {
     });
   });
 
+  it("declares and reuses a local capability namespace", async () => {
+    const proxy = new McpProxy({ policy: allowAllMcpOperations() });
+    const first = proxy.local("workspace");
+    const second = proxy.local("workspace");
+
+    expect(second).toBe(first);
+    first.tool("status", { inputSchema: { type: "object" } }, (ctx) => ({
+      content: [{ type: "text", text: `${ctx.server?.name}:${ctx.tool?.name}:${ctx.operation}` }],
+    }));
+    second.prompt("review_pr", { arguments: [{ name: "diff" }] }, (_ctx, params) => ({
+      messages: [{ role: "user", content: { type: "text", text: String(params.arguments?.diff ?? "") } }],
+    }));
+
+    await expect(proxy.listTools()).resolves.toMatchObject({
+      tools: [{ name: "workspace__status", title: "workspace: status" }],
+    });
+    await expect(proxy.listPrompts()).resolves.toMatchObject({
+      prompts: [{ name: "workspace__review_pr", arguments: [{ name: "diff" }] }],
+    });
+    await expect(proxy.callTool({ name: "workspace__status" })).resolves.toMatchObject({
+      content: [{ text: "workspace:status:tool:call" }],
+    });
+    await expect(proxy.getPrompt({ name: "workspace__review_pr", arguments: { diff: "patch" } })).resolves.toMatchObject({
+      messages: [{ content: { text: "patch" } }],
+    });
+  });
+
+  it("rejects duplicate and invalid local declarations", () => {
+    const proxy = new McpProxy();
+    const local = proxy.local("workspace");
+
+    expect(() => proxy.local("bad__namespace")).toThrow(/cannot include/);
+    expect(() => local.tool("", { inputSchema: { type: "object" } }, () => ({ content: [] }))).toThrow(/tool name cannot be empty/);
+    local.tool("status", { inputSchema: { type: "object" } }, () => ({ content: [] }));
+    expect(() => local.tool("status", { inputSchema: { type: "object" } }, () => ({ content: [] }))).toThrow(
+      /Duplicate local tool/,
+    );
+    expect(() => local.resource("", { name: "empty" }, () => ({ contents: [] }))).toThrow(/resource URI cannot be empty/);
+    local.resource("config://current", { name: "config" }, () => ({ contents: [] }));
+    expect(() => local.resource("config://current", { name: "config" }, () => ({ contents: [] }))).toThrow(
+      /Duplicate local resource/,
+    );
+    expect(() => local.resourceTemplate("config://{", { name: "bad" }, () => ({ contents: [] }))).toThrow(
+      /Invalid local resource template/,
+    );
+    expect(() => local.completion({ type: "ref/prompt", name: "missing" }, () => ({ completion: { values: [] } }))).toThrow(
+      /unknown prompt/,
+    );
+  });
+
+  it("detects collisions between local namespaces and upstream server names", async () => {
+    const proxy = new McpProxy({
+      servers: [new McpServer({ name: "workspace", transport: new MockTransport() })],
+    });
+
+    expect(() => proxy.local("workspace")).toThrow(FentarisConfigError);
+    await expect(proxy.listTools()).rejects.toThrow(/Local namespace "workspace" collides/);
+  });
+
+  it("mixes local and upstream capability listing", async () => {
+    const proxy = new McpProxy({
+      policy: allowAllMcpOperations(),
+      servers: [new McpServer({ name: "github", transport: new FeatureTransport() })],
+    });
+    proxy.local("workspace")
+      .tool("status", { inputSchema: { type: "object" } }, () => ({ content: [] }))
+      .resource("config://current", { name: "config" }, () => ({ contents: [] }))
+      .resourceTemplate("config://projects/{id}", { name: "project" }, () => ({ contents: [] }))
+      .prompt("review_pr", { arguments: [{ name: "diff" }] }, () => ({ messages: [] }));
+
+    await expect(proxy.listTools()).resolves.toMatchObject({
+      tools: [{ name: "github__create_issue" }, { name: "workspace__status" }],
+    });
+    await expect(proxy.listResources()).resolves.toMatchObject({
+      resources: [
+        { uri: "fentaris://resources/github/file%3A%2F%2F%2Fshared.md" },
+        { uri: "fentaris://resources/workspace/config%3A%2F%2Fcurrent", name: "config" },
+      ],
+    });
+    await expect(proxy.listResourceTemplates()).resolves.toMatchObject({
+      resourceTemplates: [
+        { uriTemplate: "fentaris://resource-templates/github/file%3A%2F%2F%2F%7Bpath%7D" },
+        { uriTemplate: "fentaris://resource-templates/workspace/config%3A%2F%2Fprojects%2F%7Bid%7D", name: "project" },
+      ],
+    });
+    await expect(proxy.listPrompts()).resolves.toMatchObject({
+      prompts: [{ name: "github__summarize" }, { name: "workspace__review_pr" }],
+    });
+  });
+
+  it("executes local resources with exact-before-template precedence and completions", async () => {
+    const proxy = new McpProxy({ policy: allowAllMcpOperations() });
+    proxy.local("workspace")
+      .resource("config://projects/current", { name: "current" }, (ctx, params) => ({
+        contents: [{ uri: params.uri, text: `exact:${ctx.resource?.uri}` }],
+      }))
+      .resourceTemplate("config://projects/{id}", { name: "project" }, (ctx, params) => ({
+        contents: [{ uri: params.uri, text: `template:${ctx.resource?.uri}` }],
+      }))
+      .prompt("review_pr", { arguments: [{ name: "diff" }] }, () => ({ messages: [] }))
+      .completion({ type: "ref/prompt", name: "review_pr" }, (ctx, params) => ({
+        completion: { values: [`${ctx.completion?.target}:${params.argument.value}`] },
+      }))
+      .completion({ type: "ref/resource", uriTemplate: "config://projects/{id}" }, (_ctx, params) => ({
+        completion: { values: [`resource:${params.argument.value}`] },
+      }));
+
+    await expect(proxy.readResource({ uri: "fentaris://resources/workspace/config%3A%2F%2Fprojects%2Fcurrent" })).resolves.toMatchObject({
+      contents: [{ text: "exact:config://projects/current" }],
+    });
+    await expect(proxy.readResource({ uri: "fentaris://resources/workspace/config%3A%2F%2Fprojects%2F123" })).resolves.toMatchObject({
+      contents: [{ text: "template:config://projects/123" }],
+    });
+    await expect(
+      proxy.complete({
+        ref: { type: "ref/prompt", name: "workspace__review_pr" },
+        argument: { name: "diff", value: "pa" },
+      }),
+    ).resolves.toMatchObject({ completion: { values: ["review_pr:pa"] } });
+    await expect(
+      proxy.complete({
+        ref: { type: "ref/resource", uri: "fentaris://resource-templates/workspace/config%3A%2F%2Fprojects%2F%7Bid%7D" },
+        argument: { name: "id", value: "12" },
+      }),
+    ).resolves.toMatchObject({ completion: { values: ["resource:12"] } });
+  });
+
+  it("normalizes unsupported local completions and invalid handler results", async () => {
+    const proxy = new McpProxy({ policy: allowAllMcpOperations() });
+    proxy.local("workspace")
+      .tool("bad_tool", { inputSchema: { type: "object" } }, () => ({ nope: true }) as never)
+      .resource("config://bad", { name: "bad" }, () => ({ nope: true }) as never)
+      .prompt("review_pr", { arguments: [{ name: "diff" }] }, () => ({ messages: [] }));
+
+    await expect(proxy.callTool({ name: "workspace__bad_tool" })).resolves.toMatchObject({
+      isError: true,
+      content: [{ text: "Local tool handler returned an invalid MCP tool result" }],
+    });
+    await expect(proxy.readResource({ uri: "fentaris://resources/workspace/config%3A%2F%2Fbad" })).rejects.toThrow(
+      /invalid MCP resource result/,
+    );
+    await expect(
+      proxy.complete({
+        ref: { type: "ref/prompt", name: "workspace__review_pr" },
+        argument: { name: "diff", value: "p" },
+      }),
+    ).rejects.toThrow(/does not support completions/);
+  });
+
+  it("applies policy, middleware, events, and logs to local capabilities", async () => {
+    const driver = new MemoryLogDriver();
+    const handler = vi.fn(() => ({ content: [{ type: "text" as const, text: "ok" }] }));
+    const proxy = new McpProxy({
+      logger: new Logger({ driver }),
+      policy: new Policy({ name: "local" })
+        .mcp("workspace")
+        .allow("status")
+        .mcp("workspace")
+        .denyCapability({ operation: "prompt:get", target: "blocked", targetKind: "prompt" }),
+    });
+    proxy.local("workspace")
+      .tool("status", { inputSchema: { type: "object" } }, handler)
+      .prompt("blocked", { arguments: [] }, () => ({ messages: [] }));
+    const seen: string[] = [];
+
+    proxy.mcp("workspace").use((ctx, next) => {
+      seen.push(`${ctx.operation}:${ctx.server?.name}`);
+      return next();
+    });
+    proxy.on("tool:success", ({ ctx }) => seen.push(`event:${ctx.tool?.name}`));
+    proxy.on("prompt:error", ({ ctx }) => seen.push(`denied:${ctx.prompt?.name}`));
+
+    await expect(proxy.callTool({ name: "workspace__status" }, { id: "ada" })).resolves.toMatchObject({
+      content: [{ text: "ok" }],
+    });
+    await expect(proxy.getPrompt({ name: "workspace__blocked" }, { id: "ada" })).rejects.toMatchObject({
+      code: FentarisErrorCode.PolicyDenied,
+    });
+
+    expect(handler).toHaveBeenCalledOnce();
+    expect(seen).toEqual(["tool:call:workspace", "event:status", "denied:blocked"]);
+    expect(driver.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: "MCP capability operation failed",
+          context: expect.objectContaining({ serverName: "workspace", operation: "prompt:get" }),
+        }),
+      ]),
+    );
+  });
+
   it("aggregates resources with proxied URIs and preserves metadata", async () => {
     const githubTransport = new FeatureTransport();
     const notionTransport = new FeatureTransport();

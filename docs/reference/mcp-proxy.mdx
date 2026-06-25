@@ -168,6 +168,36 @@ Parse a proxied prompt name and retrieve the upstream prompt.
 
 Route completion requests for proxied prompt references and proxied resource-template references.
 
+### `local(name)`
+
+Register or retrieve a local MCP capability namespace. Repeating the same name returns the same handle so modules can contribute declarations before startup.
+
+```ts theme={null}
+const workspace = app.local("workspace");
+
+workspace.tool("status", { inputSchema: { type: "object" } }, async (ctx) => ({
+  content: [{ type: "text", text: ctx.server?.name ?? "workspace" }],
+}));
+
+workspace.resource("config://current", { name: "Current config" }, async () => ({
+  contents: [{ uri: "config://current", text: "{}" }],
+}));
+
+workspace.resourceTemplate("config://projects/{id}", { name: "Project config" }, async (_ctx, params) => ({
+  contents: [{ uri: params.uri, text: "project" }],
+}));
+
+workspace.prompt("review_pr", { arguments: [{ name: "diff" }] }, async () => ({
+  messages: [],
+}));
+
+workspace.completion({ type: "ref/prompt", name: "review_pr" }, async (_ctx, params) => ({
+  completion: { values: [params.argument.value] },
+}));
+```
+
+Local tools and prompts are exposed with the existing proxied naming convention, such as `workspace__status`. Local resources and resource templates are exposed through Fentaris-owned proxy URIs. The namespace name cannot collide with an upstream MCP server name.
+
 ## App-Level Governance
 
 Use `proxy.policy(name)` and `proxy.group(id)` when modules contribute governance to one proxy instance or when upstream MCP servers are registered after construction.

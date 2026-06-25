@@ -234,6 +234,46 @@ fentaris://resource-templates/github/file%3A%2F%2F%2Fissues%2F%7Bid%7D.md
 
 Clients should pass these values back unchanged to `resources/read`, `prompts/get`, and `completion/complete`.
 
+## Add Local Capabilities
+
+Use `app.local(name)` when the Fentaris app itself should expose MCP tools, resources, prompts, or completions beside upstream MCP servers.
+
+```ts theme={null}
+import { fentaris, mcp, policy, stdio } from "@fentaris/core";
+
+const app = fentaris({
+  policy: policy("dev")
+    .mcp("github")
+    .allow("search_issues")
+    .mcp("workspace")
+    .allow("status")
+    .mcp("workspace")
+    .allowCapability({ operation: "resource:read", target: "config://current", targetKind: "resource" }),
+  servers: [
+    mcp("github", {
+      transport: stdio({ command: "github-mcp-server" }),
+    }),
+  ],
+});
+
+app.local("workspace")
+  .tool("status", { inputSchema: { type: "object" } }, async (ctx) => ({
+    content: [{ type: "text", text: `subject=${ctx.subject?.id ?? "anonymous"}` }],
+  }))
+  .resource("config://current", { name: "Current config" }, async () => ({
+    contents: [{ uri: "config://current", text: "{}" }],
+  }))
+  .prompt("review_pr", { arguments: [{ name: "diff" }] }, async (_ctx, params) => ({
+    messages: [{ role: "user", content: { type: "text", text: String(params.arguments?.diff ?? "") } }],
+  }));
+```
+
+Local tools and prompts use the same public naming convention as upstream servers, such as `workspace__status` and `workspace__review_pr`. Local resources and resource templates use the same Fentaris proxy URI helpers with `workspace` as the server name.
+
+<Note>
+  A local namespace name cannot match an upstream MCP server name. Fentaris reports a configuration diagnostic before serving requests.
+</Note>
+
 ## Customize Request Logging
 
 ```ts theme={null}

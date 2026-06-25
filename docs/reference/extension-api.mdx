@@ -90,6 +90,32 @@ const proxy = fentaris({
 
 This syntax is the recommended default for application authors because it keeps server, user, group, policy, and credential declarations together.
 
+## Local capability declarations
+
+Use `app.local(name)` for app-owned tools, resources, prompts, and completions. This is the preferred path when the behavior lives inside the Fentaris app and should still use policy, middleware, operation events, logging, and audit metadata.
+
+```ts theme={null}
+import { fentaris, policy } from "@fentaris/core";
+
+const app = fentaris({
+  policy: policy("workspace")
+    .mcp("workspace")
+    .allow("status")
+    .mcp("workspace")
+    .allowCapability({ operation: "prompt:get", target: "review_pr", targetKind: "prompt" }),
+});
+
+app.local("workspace")
+  .tool("status", { inputSchema: { type: "object" } }, async (ctx) => ({
+    content: [{ type: "text", text: ctx.auth.authenticated ? "ok" : "anonymous" }],
+  }))
+  .prompt("review_pr", { arguments: [{ name: "diff" }] }, async (_ctx, params) => ({
+    messages: [{ role: "user", content: { type: "text", text: String(params.arguments?.diff ?? "") } }],
+  }));
+```
+
+Local namespace names must be unique across upstream MCP server names. Policies address local namespaces with `.mcp(name)`.
+
 ## Advanced low-level APIs
 
 Use `createProxy()`, `McpProxy`, `McpServer`, and explicit transports when you need direct construction or custom downstream exposure:
@@ -134,6 +160,8 @@ await proxy.start({ port: 3000 });
 Extension authors can implement contracts from `@fentaris/core/extensions`.
 
 ### Upstream transport
+
+Custom `FentarisTransport` implementations remain the advanced escape hatch for protocol adapters, external runtimes, or behavior that should be packaged as an MCP server-like transport. For app-owned capabilities, prefer `app.local(name)`.
 
 ```ts theme={null}
 import type { FentarisTransport } from "@fentaris/core/extensions";

@@ -89,6 +89,27 @@ proxy.on("prompt:success", async ({ ctx, durationMs }) => {
 
 Audit logs should include operation, subject, server, target, policy outcome, and credential source metadata.
 
+Local capabilities declared with `app.local(name)` emit the same event families. The local namespace is reported as `ctx.server?.name`.
+
+```ts theme={null}
+proxy.on("tool:success", ({ ctx, durationMs }) => {
+  if (ctx.server?.name === "workspace") {
+    ctx.log.info("workspace.tool.success", {
+      tool: ctx.tool?.name,
+      durationMs,
+    });
+  }
+});
+
+proxy.on("resource:error", ({ ctx, error }) => {
+  ctx.log.warn("resource.error", {
+    namespace: ctx.server?.name,
+    uri: ctx.resource?.uri,
+    error: error?.message,
+  });
+});
+```
+
 ## Use A Custom Driver
 
 Pass a logger to `fentaris(...)` when stdout is not the right destination.
