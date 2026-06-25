@@ -1,5 +1,15 @@
 # @fentaris/cli
 
+## 1.1.1
+
+### Patch Changes
+
+- 4bad9fd: Build CLI output during local package installs so the `fentaris` binary is linked.
+- 80d865a: Accept empty Enter at the init package-manager prompt as the displayed default choice.
+- Updated dependencies [e889b9d]
+- Updated dependencies [40c6e9a]
+  - @fentaris/core@2.1.1
+
 ## 1.1.0
 
 ### Minor Changes

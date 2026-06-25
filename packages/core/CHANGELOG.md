@@ -1,5 +1,12 @@
 # @fentaris/core
 
+## 2.1.1
+
+### Patch Changes
+
+- e889b9d: Add a JSON stdout logger factory for structured Fentaris runtime logs.
+- 40c6e9a: Give two-argument middleware callbacks contextual `ctx` and `next` types in strict TypeScript.
+
 ## 2.1.0
 
 ### Minor Changes
