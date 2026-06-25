@@ -1,5 +1,7 @@
-export { Logger, ConsoleLoggerDriver, RedisLoggerDriver } from "./logging/index.js";
+export { Logger, ConsoleLoggerDriver, JsonConsoleLoggerDriver, RedisLoggerDriver, jsonConsoleLogger } from "./logging/index.js";
 export type {
+  JsonConsoleLoggerDriverOptions,
+  JsonConsoleLoggerOptions,
   LogEntry,
   LoggerDriver,
   LoggerOptions,
