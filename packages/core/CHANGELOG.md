@@ -1,5 +1,16 @@
 # @fentaris/core
 
+## 2.1.0
+
+### Minor Changes
+
+- 3874e97: Add `fentaris auth api-key` commands for storing, listing, generating, and removing local downstream API keys, with hashed API-key management helpers on the local secrets backend.
+- bde0b12: Add `app.local(name)` for declaring local MCP tools, resources, resource templates, prompts, and completions through the existing proxy governance pipeline. Local namespaces now consistently reject same-name upstream MCP registrations regardless of declaration order.
+
+### Patch Changes
+
+- 5a319c2: Add `app.server(...)` as a top-level alias for registering and retrieving upstream MCP server handles.
+
 ## 2.0.0
 
 ### Major Changes

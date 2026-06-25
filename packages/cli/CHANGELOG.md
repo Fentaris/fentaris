@@ -1,5 +1,18 @@
 # @fentaris/cli
 
+## 1.1.0
+
+### Minor Changes
+
+- 3874e97: Add `fentaris auth api-key` commands for storing, listing, generating, and removing local downstream API keys, with hashed API-key management helpers on the local secrets backend.
+
+### Patch Changes
+
+- Updated dependencies [5a319c2]
+- Updated dependencies [3874e97]
+- Updated dependencies [bde0b12]
+  - @fentaris/core@2.1.0
+
 ## 1.0.0
 
 ### Major Changes
