@@ -12,6 +12,7 @@
   ],
   "scripts": {
     "dev": "tsc --watch",
+    "prepare": "tsc",
     "build": "pnpm run clean && tsc",
     "test": "vitest run --dir test",
     "clean": "rm -rf dist"
