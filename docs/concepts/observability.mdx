@@ -1,34 +1,223 @@
 ---
 title: "Observability"
-description: "Understand logs, health checks, doctor output, and runtime profiler events."
+description: "Understand how Fentaris exposes logs, health, profiler events, and runtime diagnostics through the high-level API."
 ---
 
-Fentaris exposes observability through CLI checks, structured logs, runtime health checks, and profiler events.
+Fentaris centralizes MCP traffic, so it is also the right place to observe that traffic. Use the high-level proxy declaration to enable automatic logs, attach request metadata in middleware, subscribe to lifecycle events, and configure profiler output without wiring low-level runtime objects yourself.
 
-## Local Checks
+## What Observability Covers
+
+Observability in Fentaris is split across four surfaces:
+
+- structured logs from the proxy logger
+- health checks for the proxy and upstream MCP servers
+- profiler events for runtime, MCP, policy, transport, timeout, and error activity
+- CLI diagnostics for validating local projects and runtime setup
+
+These surfaces serve different jobs. Logs explain what happened during a request. Health checks answer whether the proxy and upstream MCP servers can respond. Profiler events provide lower-noise runtime signals that can be filtered, handled, or sent to sinks. CLI diagnostics help during development before the proxy is running.
+
+Most applications should start with logging and health checks, then add profiler events when they need focused runtime telemetry.
+
+## Start With The High-Level Proxy
+
+Configure observability where you declare the proxy. This keeps routing, policy, credentials, and telemetry in one place.
+
+```ts theme={null}
+import { fentaris, mcp, stdio } from "@fentaris/core";
+
+const proxy = fentaris({
+  servers: [
+    mcp("filesystem", {
+      transport: stdio({
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-filesystem", "/srv/shared"],
+      }),
+    }),
+  ],
+  autoLog: true,
+});
+```
+
+`autoLog: true` enables automatic logs for proxied tool calls. Fentaris records stable metadata when it is available, including the operation, subject, upstream server, tool, proxied tool name, downstream transport, session id, credential source metadata, and policy outcome.
+
+<Tip>
+  Enable `autoLog` before adding custom logging. It gives every proxy a consistent baseline and reduces the amount of request timing code you need to maintain.
+</Tip>
+
+## Request Context
+
+Every middleware, route, and lifecycle event receives a context object with a request-scoped logger at `ctx.log`. Use that logger to add stable tags and emit structured events.
+
+```ts theme={null}
+proxy.use(async (ctx, next) => {
+  ctx.log.setTag("traceId", ctx.transport.requestId ?? "no-trace");
+  ctx.log.setTag("subject", ctx.subject?.id ?? "anonymous");
+  ctx.log.setTag("tenantId", String(ctx.subject?.tenant?.id ?? "unknown"));
+
+  return next();
+});
+```
+
+Tags are best for fields that should appear on every log entry for the request. Good examples are `traceId`, `subject`, `tenantId`, `server`, and `tool`. Metadata is better for details that only belong to one event, such as `durationMs`, `allowed`, `reason`, or `uri`.
+
+<Warning>
+  Do not log raw tool arguments, raw prompts, API keys, bearer tokens, decrypted credentials, or environment secret values. Fentaris redacts common secret shapes, but application code should still avoid writing sensitive payloads.
+</Warning>
+
+## Manual Logs
+
+Use explicit log entries when a business event matters more than the generic proxy lifecycle. Keep event names stable because they become query keys in log stores and dashboards.
+
+```ts theme={null}
+proxy.mcp("filesystem").tool("read_file", async (ctx, next) => {
+  const result = await next();
+
+  ctx.log.info("filesystem.read_file.completed", {
+    allowed: ctx.policy.allowed,
+    server: ctx.server?.name,
+    tool: ctx.tool?.proxyName,
+  });
+
+  return result;
+});
+```
+
+Prefer a small set of predictable event names over dynamic messages. For example, use `github.create_issue.completed` with structured metadata instead of including the issue title or user input in the message.
+
+## Lifecycle Events
+
+Lifecycle events are useful when you want to observe operations after Fentaris knows the result. They work well for latency logs, audit trails, and metrics aggregation.
+
+```ts theme={null}
+proxy.on("tool:success", async ({ ctx, durationMs }) => {
+  ctx.log.info("tool.success", {
+    server: ctx.server?.name,
+    tool: ctx.tool?.proxyName,
+    durationMs,
+  });
+});
+
+proxy.on("tool:error", async ({ ctx, error, durationMs }) => {
+  ctx.log.error("tool.error", {
+    server: ctx.server?.name,
+    tool: ctx.tool?.proxyName,
+    durationMs,
+    message: error?.message,
+  });
+});
+```
+
+Use middleware when the log should happen before or around a request. Use lifecycle events when the log depends on the final outcome.
+
+## Health Checks
+
+Use health checks to verify whether the proxy can reach the components it depends on. Server-scoped handles expose health methods through the high-level API.
+
+```ts theme={null}
+const filesystem = proxy.mcp("filesystem");
+
+const result = await filesystem.health();
+
+if (result.status !== "ok") {
+  throw new Error(`filesystem health check failed: ${result.status}`);
+}
+```
+
+Health checks should feed readiness checks, startup validation, and operational alerts. They should not replace request logs, because a healthy server can still deny a request, time out on a specific operation, or return a tool-level error.
+
+## Profiler Events
+
+The runtime profiler emits structured events for proxy lifecycle, MCP calls, policy decisions, transport errors, health checks, timeouts, extension errors, and profiler sink errors. Use it when you need focused runtime telemetry that is separate from application logs.
+
+```ts theme={null}
+import { fentaris, mcp, profiler, stdio } from "@fentaris/core";
+
+const proxy = fentaris({
+  servers: [
+    mcp("github", {
+      transport: stdio({ command: "github-mcp-server" }),
+    }),
+  ],
+  profiler: profiler()
+    .level("info")
+    .track("mcp", "policy", "transport", "timeouts")
+    .on("mcp.call.success", (event) => {
+      metrics.histogram("fentaris.mcp.duration", event.durationMs ?? 0, {
+        server: event.server,
+        operation: event.operation,
+      });
+    }),
+});
+```
+
+The profiler supports filters, handlers, sinks, redaction, and presets through the builder. In concept pages, prefer the builder API because it keeps the runtime declaration readable and avoids low-level construction details.
+
+## Profiler Output
+
+During development, `pretty()` writes human-readable profiler output. In production, attach a sink or handler that forwards events to your telemetry system.
+
+```ts theme={null}
+const proxy = fentaris({
+  servers: [
+    mcp("github", {
+      transport: stdio({ command: "github-mcp-server" }),
+    }),
+  ],
+  profiler: profiler()
+    .track("errors", "timeouts")
+    .where({ level: "warn" })
+    .pretty(),
+});
+```
+
+Profiler events are redacted before handlers and sinks receive them. Default redaction covers sensitive keys and common token-shaped values such as bearer tokens, JWTs, and GitHub personal access tokens.
+
+<Note>
+  A profiler handler should be small and reliable. If it sends data to a remote service, prefer buffering or a sink that isolates failures so observability code does not become part of the request path.
+</Note>
+
+## Logger Relationship
+
+The logger is the request-level logging surface. It is available as `ctx.log`, can be configured on `fentaris({ logger })`, and is the right place for audit-friendly application events.
+
+Use the logger page when you need details about log levels, tags, metadata, redaction, custom drivers, and driver entry shape: [Logger guide](/guides/logger).
+
+The profiler and logger can be used together. A common production setup is:
+
+- `autoLog: true` for baseline request logs
+- `ctx.log.setTag(...)` in middleware for trace and tenant metadata
+- lifecycle hooks for audit events and latency
+- `profiler()` for focused runtime events, policy decisions, timeout tracking, and sink integration
+
+## CLI Diagnostics
+
+Use CLI diagnostics before runtime debugging. They validate project configuration, local dependencies, and runtime setup.
 
 ```bash theme={null}
 fentaris check --offline
 fentaris doctor --runtime
 ```
 
-Use `check` for project validation and `doctor` for environment diagnostics.
+Use `fentaris check --offline` when you want project validation without network-dependent checks. Use `fentaris doctor --runtime` when the issue may be caused by the local environment, runtime dependencies, or startup configuration.
 
-## Runtime Profiler
+## Production Checklist
 
-Projects can subscribe to profiler events around MCP calls, policy behavior, transport operations, and runtime lifecycle.
-Profiler events are redacted before handlers and sinks receive them. Default redaction covers sensitive keys and common token-shaped string values such as bearer tokens, JWTs, and GitHub PATs.
+For production proxies, keep the observability setup bounded and queryable:
 
-```ts theme={null}
-const runtimeProfiler = profiler()
-  .pretty()
-  .on("mcp.call.success", (event) => {
-    console.log(event.durationMs);
-  });
-```
+- enable `autoLog`
+- set `traceId`, `subject`, and tenant tags in middleware
+- log policy denies with stable reasons
+- capture tool latency from lifecycle events or profiler events
+- track transport errors and timeouts separately from application denials
+- keep metric labels bounded
+- forward structured logs to a system with retention and search
+- avoid raw payloads and secrets in logs, profiler metadata, and metric labels
+
+Observability should answer three questions quickly: who made the request, what Fentaris decided, and what happened upstream.
 
 ## Related Documentation
 
-* [CLI Usage](/reference/cli)
 * [Observability guide](/guides/observability)
-* [Logger reference](/reference/logger)
+* [Logger guide](/guides/logger)
+* [Security](/guides/security)
+* [CLI Usage](/reference/cli)
