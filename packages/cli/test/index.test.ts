@@ -908,7 +908,7 @@ describe("secrets", () => {
   it("does not duplicate existing user API keys", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
-    for (const _attempt of [1, 2]) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
       const input = new PassThrough();
       input.end("alice-api-key\n");
       const rt = runtime(dir);
@@ -958,7 +958,7 @@ describe("secrets", () => {
     await expect(main(["auth", "api-key", "add", "alice", "--generate"], rt)).resolves.toBe(0);
 
     const output = rt.out.log.mock.calls.flat().join("\n");
-    const match = output.match(/Generated key:\u001b\[[0-9;]+m ([A-Za-z0-9_-]+)/);
+    const match = output.match(/Generated key:[^\n]* ([A-Za-z0-9_-]+)/);
     expect(match?.[1]).toBeTruthy();
     const generated = match?.[1] ?? "";
     const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
