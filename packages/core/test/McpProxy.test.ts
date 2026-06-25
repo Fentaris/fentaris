@@ -542,6 +542,15 @@ describe("McpProxy", () => {
     await expect(proxy.listTools()).rejects.toThrow(/Local namespace "workspace" collides/);
   });
 
+  it("rejects upstream registration after a local namespace uses the same name", () => {
+    const app = fentaris();
+
+    app.local("workspace");
+
+    expect(() => app.mcp("workspace", { transport: new MockTransport() })).toThrow(FentarisConfigError);
+    expect(() => app.server("workspace", { transport: new MockTransport() })).toThrow(/Local namespace "workspace" collides/);
+  });
+
   it("mixes local and upstream capability listing", async () => {
     const proxy = new McpProxy({
       policy: allowAllMcpOperations(),

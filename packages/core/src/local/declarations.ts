@@ -135,6 +135,10 @@ export class LocalCapabilityRegistry {
     return namespace;
   }
 
+  hasNamespace(name: string): boolean {
+    return this.namespaces.has(name);
+  }
+
   servers(): McpServer[] {
     return [...this.namespaces.values()].map((namespace) => {
       const existing = this.serversByName.get(namespace.name);

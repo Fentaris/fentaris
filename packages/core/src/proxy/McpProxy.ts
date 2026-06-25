@@ -438,6 +438,9 @@ export class McpProxy {
       if (server.name !== name) {
         throw new Error(`MCP handle "${name}" cannot register MCP server "${server.name}"`);
       }
+      if (this.localRegistry.hasNamespace(name)) {
+        throw this.localNamespaceCollisionError(name);
+      }
       if (!this.serverByName.has(name)) {
         this.servers.push(server);
         this.serverCatalog.addGlobalServer(server);
@@ -1532,14 +1535,7 @@ export class McpProxy {
         }
 
         throw new FentarisConfigError([
-          {
-            severity: "error",
-            code: "FENTARIS_CONFIG_LOCAL_NAMESPACE_COLLISION",
-            title: "Local namespace collides with an MCP server",
-            message: `Local namespace "${server.name}" collides with a configured upstream MCP server.`,
-            path: ["proxy", "local", server.name],
-            hint: "Choose a local namespace that does not match any configured MCP server name.",
-          },
+          this.localNamespaceCollisionDiagnostic(server.name),
         ]);
       }
 
@@ -1547,6 +1543,21 @@ export class McpProxy {
       this.serverCatalog.addGlobalServer(server);
       this.serverByName.set(server.name, server);
     }
+  }
+
+  private localNamespaceCollisionError(name: string): FentarisConfigError {
+    return new FentarisConfigError([this.localNamespaceCollisionDiagnostic(name)]);
+  }
+
+  private localNamespaceCollisionDiagnostic(name: string) {
+    return {
+      severity: "error" as const,
+      code: "FENTARIS_CONFIG_LOCAL_NAMESPACE_COLLISION",
+      title: "Local namespace collides with an MCP server",
+      message: `Local namespace "${name}" collides with a configured upstream MCP server.`,
+      path: ["proxy", "local", name],
+      hint: "Choose a local namespace that does not match any configured MCP server name.",
+    };
   }
 
   registerServerMiddleware(serverName: string, handler: Middleware, groupId?: string): void {
