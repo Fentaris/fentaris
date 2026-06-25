@@ -191,8 +191,21 @@ const application = fentaris({
 application.policy("readonly").mcp("github").allow("read");
 application.usePolicy("readonly");
 application.usePolicy(policy("global").mcp("github").allow("read"));
+application.use(async (ctx, next) => {
+  console.log(ctx.requestId);
+  ctx.log.info("proxy middleware", { requestId: ctx.requestId });
+  await next();
+});
 application.server("docs", { transport: stdio({ command: "docs-mcp-server" }) }).use(typedMiddleware);
+application.server("docs").use(async (ctx, next) => {
+  ctx.log.info("server middleware", { server: ctx.server?.name });
+  return next();
+});
 application.group("guests").users(user("guest")).policy("readonly").mcp("github").use(typedMiddleware);
+application.group("guests").use(async (ctx, next) => {
+  ctx.log.info("group middleware", { subject: ctx.subject?.id });
+  return next();
+});
 application.local("workspace")
   .tool("status", { inputSchema: { type: "object" } }, ((ctx, params) => {
     ctx.log.info("local status", { operation: ctx.operation, tool: ctx.tool?.name });
