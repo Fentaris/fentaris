@@ -24,6 +24,7 @@
   ],
   "scripts": {
     "dev": "tsc --watch",
+    "prepare": "tsc",
     "build": "tsc",
     "typecheck:extensions": "tsc -p tsconfig.extension-api.json",
     "test": "vitest run test",

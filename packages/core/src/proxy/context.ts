@@ -137,6 +137,7 @@ export function createProxyContext(
     sessionId: stringMetadata(options.identity?.metadata, "sessionId"),
     requestId: stringMetadata(options.identity?.metadata, "requestId"),
   };
+  context.requestId = context.transport.requestId;
   context.auth = {
     strategy: options.identity?.strategy,
     authenticated: options.identity?.authenticated ?? Boolean(options.user.id),

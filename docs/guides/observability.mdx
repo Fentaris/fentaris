@@ -29,6 +29,17 @@ const proxy = fentaris({
 
 This records request timing, subject metadata, server name, tool name, policy outcome, credential source metadata, and lifecycle events where available.
 
+For JSON logs on stdout, pass `jsonConsoleLogger()` as the proxy logger.
+
+```ts theme={null}
+import { fentaris, jsonConsoleLogger } from "@fentaris/core";
+
+const proxy = fentaris({
+  logger: jsonConsoleLogger(),
+  autoLog: true,
+});
+```
+
 ## Add Contextual Metadata
 
 Use middleware to attach correlation tags that should appear on every log entry for a request.

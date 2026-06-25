@@ -206,6 +206,20 @@ describe("default runtime prompts", () => {
     });
   });
 
+  it("selects the default menu item when line input is empty", async () => {
+    const input = new PassThrough() as PassThrough & { isTTY?: boolean };
+    input.isTTY = false;
+
+    await withFakeStdin(input, async () => {
+      const rt = defaultRuntime();
+      const selected = rt.prompt.select("Package manager", ["pnpm", "npm", "bun"]);
+      input.write("\n");
+
+      await expect(selected).resolves.toBe("pnpm");
+      rt.prompt.close();
+    });
+  });
+
   it("selects TTY menu items by exact label", async () => {
     const input = new FakeTtyInput();
     const output = new FakeTtyOutput();
@@ -579,6 +593,10 @@ describe("project commands", () => {
     const manifest = JSON.parse(await readFile(join(dir, "demo", ".fentaris", "build", "manifest.json"), "utf8")) as { entrypoint: string };
     expect(manifest.entrypoint).toBe("src/index.ts");
     expect(rt.calls.some((call) => call.command === "pnpm" && call.args.join(" ") === "run build")).toBe(true);
+    const output = vi.mocked(rt.out.log).mock.calls.flat().join("\n");
+    expect(output).toContain("TypeScript output: dist/index.js");
+    expect(output).toContain("Fentaris metadata: .fentaris/build");
+    expect(output).toContain("Run with: node dist/index.js");
   });
 
   it("builds when local .env is absent but runtime secrets are provided", async () => {

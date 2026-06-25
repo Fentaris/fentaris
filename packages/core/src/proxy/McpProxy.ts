@@ -350,6 +350,8 @@ export class McpProxy {
    * Register a middleware handler.
    * @pk
    */
+  use(middleware: ProxyMiddleware): this;
+  use(middleware: LegacyMiddleware): this;
   use(middleware: Middleware): this {
     this.middleware.push(middleware);
     this.routes.push({ kind: "middleware", handler: middleware });
@@ -2680,6 +2682,8 @@ class McpProxyMcpHandle implements ProxyMcpHandle {
     private readonly groupId?: string,
   ) {}
 
+  use(handler: ProxyMiddleware): ProxyMcpHandle;
+  use(handler: LegacyMiddleware): ProxyMcpHandle;
   use(handler: Middleware): ProxyMcpHandle {
     this.proxy.registerServerMiddleware(this.name, handler, this.groupId);
     return this;
@@ -2744,6 +2748,8 @@ class McpProxyGroupHandle implements ProxyGroupHandle {
     return this;
   }
 
+  use(handler: ProxyMiddleware): ProxyGroupHandle;
+  use(handler: LegacyMiddleware): ProxyGroupHandle;
   use(handler: Middleware): ProxyGroupHandle {
     this.proxy.registerGroupMiddleware(this.id, handler);
     return this;

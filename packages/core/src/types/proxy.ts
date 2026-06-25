@@ -34,7 +34,7 @@ import type {
 } from "./mcp-operation.js";
 import type {
   LifecycleHookContext,
-  Middleware,
+  LegacyMiddleware,
   MiddlewareContext,
   ProxyMiddleware,
   ResponseController,
@@ -146,6 +146,7 @@ export type ProxyCompletionContext = {
  */
 export type ProxyContext = MiddlewareContext & {
   operation: ProxyOperation;
+  requestId?: string;
   transport: ProxyTransportContext;
   auth: ProxyAuthContext;
   policy: ProxyPolicyContext;
@@ -257,7 +258,8 @@ export type ProxyEventHandler = (
  */
 export type ProxyMcpHandle = {
   readonly name: string;
-  use(handler: Middleware): ProxyMcpHandle;
+  use(handler: ProxyMiddleware): ProxyMcpHandle;
+  use(handler: LegacyMiddleware): ProxyMcpHandle;
   tool(pattern: ProxyToolPattern, handler: ProxyToolHandler): ProxyMcpHandle;
   operation(operation: ProxyOperation, handler: ProxyOperationHandler): ProxyMcpHandle;
   on(eventName: ProxyEventName, handler: ProxyEventHandler): ProxyMcpHandle;
@@ -289,7 +291,8 @@ export type ProxyGroupHandle = {
   server(name: string): ProxyMcpHandle;
   users(...users: User[]): ProxyGroupHandle;
   policy(policyNameOrPolicy: string | Policy): ProxyGroupHandle;
-  use(handler: Middleware): ProxyGroupHandle;
+  use(handler: ProxyMiddleware): ProxyGroupHandle;
+  use(handler: LegacyMiddleware): ProxyGroupHandle;
   operation(operation: ProxyOperation, handler: ProxyOperationHandler): ProxyGroupHandle;
   on(eventName: ProxyEventName, handler: ProxyEventHandler): ProxyGroupHandle;
   on(eventName: ProxyEventName, filter: ProxyEventFilter, handler: ProxyEventHandler): ProxyGroupHandle;

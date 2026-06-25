@@ -27,6 +27,21 @@ const proxy = fentaris({
 
 `autoLog: true` records proxied tool call start, success, and failure entries with safe context such as operation, subject, upstream server, tool, downstream transport, session id, credential source metadata, and policy outcome when available.
 
+## JSON Stdout
+
+Use `jsonConsoleLogger()` when your process manager or log collector expects newline-delimited JSON on stdout.
+
+```ts theme={null}
+import { fentaris, jsonConsoleLogger } from "@fentaris/core";
+
+const proxy = fentaris({
+  logger: jsonConsoleLogger(),
+  autoLog: true,
+});
+```
+
+Each log line includes `level`, `message`, `timestamp`, `context`, and `metadata`. Redaction stays enabled by default.
+
 ## Add Request Tags
 
 `ctx.log` is available in middleware, server routes, tool routes, operation routes, and lifecycle events. Use tags for stable fields that should be attached to every later log entry in the request.

@@ -59,6 +59,45 @@ Point your MCP client to the endpoint printed by `fentaris dev`, usually:
 http://localhost:4000/mcp
 ```
 
+For a direct curl smoke test, initialize the MCP session and save the response headers:
+
+```bash theme={null}
+curl -sS -D headers.txt -o initialize.json -X POST http://127.0.0.1:4000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"curl","version":"1"}}}'
+```
+
+Capture the `mcp-session-id` header from the initialize response:
+
+```bash theme={null}
+SESSION_ID="$(grep -i '^mcp-session-id:' headers.txt | tr -d '\r' | cut -d' ' -f2)"
+```
+
+Send the MCP initialized notification on the same session:
+
+```bash theme={null}
+curl -sS -X POST http://127.0.0.1:4000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H "mcp-session-id: $SESSION_ID" \
+  -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+```
+
+Then list tools with the same `mcp-session-id` header:
+
+```bash theme={null}
+curl -sS -X POST http://127.0.0.1:4000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H "mcp-session-id: $SESSION_ID" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+```
+
+<Tip>
+  You can also use `npx @modelcontextprotocol/inspector` and point it at `http://127.0.0.1:4000/mcp`.
+</Tip>
+
 ## Validate the Project
 
 Run the local checks before connecting a client:

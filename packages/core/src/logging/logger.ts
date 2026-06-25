@@ -90,6 +90,62 @@ export class ConsoleLoggerDriver implements LoggerDriver {
 }
 
 /**
+ * JSON console logger driver options.
+ * @pk
+ */
+export type JsonConsoleLoggerDriverOptions = {
+  writeLine?: (line: string) => void;
+};
+
+/**
+ * Console driver that writes one JSON log entry per line.
+ * @pk
+ */
+export class JsonConsoleLoggerDriver implements LoggerDriver {
+  private readonly writeLine: (line: string) => void;
+
+  /**
+   * Create a JSON console logger driver.
+   * @pk
+   */
+  constructor(options: JsonConsoleLoggerDriverOptions = {}) {
+    this.writeLine = options.writeLine ?? ((line) => console.log(line));
+  }
+
+  /**
+   * Write the log entry as a single JSON line.
+   * @pk
+   */
+  write(entry: LogEntry): void {
+    this.writeLine(JSON.stringify({
+      level: entry.level,
+      message: entry.message,
+      timestamp: entry.timestamp.toISOString(),
+      context: entry.context,
+      metadata: entry.metadata,
+    }));
+  }
+}
+
+/**
+ * JSON stdout logger factory options.
+ * @pk
+ */
+export type JsonConsoleLoggerOptions = Omit<LoggerOptions, "driver"> & JsonConsoleLoggerDriverOptions;
+
+/**
+ * Create a logger that writes structured JSON entries to stdout.
+ * @pk
+ */
+export function jsonConsoleLogger(options: JsonConsoleLoggerOptions = {}): Logger {
+  const { writeLine, ...loggerOptions } = options;
+  return new Logger({
+    ...loggerOptions,
+    driver: new JsonConsoleLoggerDriver({ writeLine }),
+  });
+}
+
+/**
  * Minimal Redis-compatible logger client contract.
  * @pk
  */
