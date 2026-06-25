@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Logger, type LogEntry, type LoggerDriver } from "../../src/logging/index.js";
+import { Logger, JsonConsoleLoggerDriver, jsonConsoleLogger, type LogEntry, type LoggerDriver } from "../../src/logging/index.js";
 
 class MemoryDriver implements LoggerDriver {
   readonly entries: LogEntry[] = [];
@@ -85,6 +85,49 @@ describe("Logger redaction", () => {
       jwt: "[REDACTED]",
       github: "[REDACTED]",
       keep: "Bearer abcdefghijklmnopqrstuvwxyz123456",
+    });
+  });
+
+  it("writes structured JSON lines to stdout-compatible sinks", async () => {
+    const lines: string[] = [];
+    const logger = jsonConsoleLogger({
+      context: { service: "proxy" },
+      writeLine: (line) => lines.push(line),
+    });
+
+    logger.info("tool.success", { tool: "search", token: "raw-token" });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const payload = JSON.parse(lines[0] ?? "{}") as LogEntry;
+    expect(payload).toMatchObject({
+      level: "info",
+      message: "tool.success",
+      context: { service: "proxy" },
+      metadata: { tool: "search", token: "[REDACTED]" },
+    });
+    expect(typeof payload.timestamp).toBe("string");
+  });
+
+  it("allows the JSON console driver to be composed manually", () => {
+    const lines: string[] = [];
+    const driver = new JsonConsoleLoggerDriver({ writeLine: (line) => lines.push(line) });
+    const timestamp = new Date("2026-06-25T00:00:00.000Z");
+
+    driver.write({
+      level: "debug",
+      message: "ready",
+      timestamp,
+      context: { requestId: "req-1" },
+      metadata: { server: "github" },
+    });
+
+    expect(JSON.parse(lines[0] ?? "{}")).toEqual({
+      level: "debug",
+      message: "ready",
+      timestamp: "2026-06-25T00:00:00.000Z",
+      context: { requestId: "req-1" },
+      metadata: { server: "github" },
     });
   });
 });

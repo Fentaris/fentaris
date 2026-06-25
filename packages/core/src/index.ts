@@ -7,7 +7,7 @@
  * Logger utilities for core runtime logging.
  * @pk
  */
-export { Logger, ConsoleLoggerDriver, RedisLoggerDriver } from "./logging/index.js";
+export { Logger, ConsoleLoggerDriver, JsonConsoleLoggerDriver, RedisLoggerDriver, jsonConsoleLogger } from "./logging/index.js";
 /**
  * Runtime profiler, event, sink, and runtime error APIs.
  * @pk
@@ -44,6 +44,8 @@ export { DefaultErrorMapper, FentarisErrorCode } from "./errors/index.js";
  * @pk
  */
 export type {
+  JsonConsoleLoggerDriverOptions,
+  JsonConsoleLoggerOptions,
   LogEntry,
   LoggerDriver,
   LoggerOptions,

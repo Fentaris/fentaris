@@ -3,12 +3,14 @@ import {
   McpServer,
   ConsoleLoggerDriver,
   FentarisConfigError,
+  JsonConsoleLoggerDriver,
   Logger,
   assertValidFentarisConfig,
   defineFentarisConfig,
   fentaris,
   formatFentarisDiagnostics,
   group,
+  jsonConsoleLogger,
   mcp,
   policy,
   stdio,
@@ -19,6 +21,7 @@ import type {
   FentarisConfigValidationResult,
   FentarisDiagnostic,
   FentarisDiagnosticFormatterOptions,
+  JsonConsoleLoggerOptions,
   LocalToolHandler,
 } from "@fentaris/core";
 import type {
@@ -230,6 +233,7 @@ const typedConfig = defineFentarisConfig({
 const validation: FentarisConfigValidationResult = validateFentarisConfig(typedConfig);
 const diagnostics: FentarisDiagnostic[] = validation.diagnostics;
 const formatterOptions: FentarisDiagnosticFormatterOptions = { format: "plain", color: "never", unicode: "never" };
+const jsonLoggerOptions: JsonConsoleLoggerOptions = { level: "debug" };
 formatFentarisDiagnostics(diagnostics, formatterOptions);
 assertValidFentarisConfig(typedConfig);
 new FentarisConfigError(diagnostics).format({ format: "compact" });
@@ -245,7 +249,9 @@ proxy.use(typedMiddleware);
 proxy.on("tool:after", eventHandler);
 proxy.listen(new CustomExposureTransport());
 
+jsonConsoleLogger(jsonLoggerOptions).info("ready");
 new ConsoleLoggerDriver();
+new JsonConsoleLoggerDriver();
 new CustomRateLimiter();
 new CustomPluginLoader();
 new CustomPluginRegistry();
