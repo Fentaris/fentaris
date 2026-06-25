@@ -9,11 +9,19 @@ Fentaris can map API keys to users, load local encrypted credentials, and pass s
 
 Generated projects start without API-key identity. Add API-key auth when clients need to authenticate through the `x-fentaris-api-key` header.
 
+Use `fentaris auth api-key add` to register downstream client keys in the local encrypted store:
+
+```bash theme={null}
+printf '%s' "$ADMIN_API_KEY" | fentaris auth api-key add alice --value-stdin
+```
+
+Fentaris stores only a hash of the API key. `fentaris auth api-key list` shows user key counts, and `fentaris auth api-key remove` revokes a key when you provide the raw value to match.
+
 ## Local Credentials
 
 When enabled, local credentials are stored in `.fentaris/credentials.enc.json` and decrypted with `FENTARIS_AUTH_KEY`. New stores use a versioned AES-256-GCM envelope with PBKDF2 key derivation metadata. Existing legacy stores remain readable and are rewritten in the newer format after a successful update.
 
-On Unix platforms, Fentaris writes `credentials.enc.json` with owner-only permissions (`0600`). Automation should pass secret values through `FENTARIS_AUTH_KEY` and `fentaris secrets set --value-stdin`; interactive prompts are reserved for real terminals so secret values are not echoed in CI logs.
+On Unix platforms, Fentaris writes `credentials.enc.json` with owner-only permissions (`0600`). Automation should pass secret values through `FENTARIS_AUTH_KEY`, `fentaris auth api-key add --value-stdin`, and `fentaris secrets set --value-stdin`; interactive prompts are reserved for real terminals so secret values are not echoed in CI logs.
 
 <Note>
   The generated `.gitignore` excludes `.fentaris/` and `.env` so local secrets do not get committed by default.

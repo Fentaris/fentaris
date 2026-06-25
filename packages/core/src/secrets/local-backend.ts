@@ -74,6 +74,49 @@ export class LocalSecretsBackend implements SecretsBackend {
     await this.writeCredentials(credentials);
   }
 
+  /**
+   * Add a hashed API key for a local user identity.
+   * @pk
+   */
+  async addUserApiKey(userId: string, apiKey: string): Promise<boolean> {
+    const credentials = (await this.readCredentialsOptional()) ?? emptyCredentials();
+    const user = credentials.users[userId] ?? { apiKeys: [], credentials: {} };
+    if (user.apiKeys.some((candidate) => FentarisAuth.compareApiKey(candidate, apiKey))) {
+      return false;
+    }
+    credentials.users[userId] = {
+      ...user,
+      apiKeys: [...user.apiKeys, FentarisAuth.hashApiKey(apiKey)],
+    };
+    await this.writeCredentials(credentials);
+    return true;
+  }
+
+  /**
+   * Remove a local user API key by matching its raw value.
+   * @pk
+   */
+  async removeUserApiKey(userId: string, apiKey: string): Promise<boolean> {
+    const credentials = await this.readCredentialsOptional();
+    const user = credentials?.users[userId];
+    if (!credentials || !user) {
+      return false;
+    }
+
+    const apiKeys = user.apiKeys.filter((candidate) => !FentarisAuth.compareApiKey(candidate, apiKey));
+    if (apiKeys.length === user.apiKeys.length) {
+      return false;
+    }
+
+    if (apiKeys.length === 0 && Object.keys(user.credentials).length === 0) {
+      delete credentials.users[userId];
+    } else {
+      credentials.users[userId] = { ...user, apiKeys };
+    }
+    await this.writeCredentials(credentials);
+    return true;
+  }
+
   async unset(ref: string, scope: SecretScope): Promise<boolean> {
     const credentials = await this.readCredentialsOptional();
     if (!credentials) {
