@@ -239,6 +239,37 @@ proxy.mcp("github").use(async (ctx, next) => {
 
 `listTools` is filtered both before and after list hooks. Synthetic tools added by `onListTools` or `tools:list:after` must use the normal `<server>__<tool>` proxy name and match policy, or they are hidden from the final response.
 
+## Local Namespace Policy
+
+Local capabilities declared with `app.local(name)` are authorized through the same `.mcp(name)` policy namespace as upstream MCP servers.
+
+```ts theme={null}
+const workspacePolicy = policy("workspace")
+  .mcp("workspace")
+  .allow("status")
+  .mcp("workspace")
+  .allowCapability({
+    operation: "resource:read",
+    target: "config://current",
+    targetKind: "resource",
+  })
+  .mcp("workspace")
+  .allowCapability({
+    operation: "prompt:get",
+    target: "review_pr",
+    targetKind: "prompt",
+  });
+
+const app = fentaris({ policy: workspacePolicy });
+
+app.local("workspace")
+  .tool("status", { inputSchema: { type: "object" } }, async () => ({ content: [] }))
+  .resource("config://current", { name: "Current config" }, async () => ({ contents: [] }))
+  .prompt("review_pr", { arguments: [{ name: "diff" }] }, async () => ({ messages: [] }));
+```
+
+Denied local list entries are hidden from `tools/list`, `resources/list`, `resources/templates/list`, and `prompts/list`. Denied execution returns before the local handler runs.
+
 ## Capability Permissions
 
 Tool permissions are still supported, but Fentaris also accepts operation-based capability permissions for proxied resources, prompts, and completion.

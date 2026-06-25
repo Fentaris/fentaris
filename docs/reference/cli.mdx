@@ -19,7 +19,7 @@ fentaris dev
 * `--version`, `-v` - print the CLI version.
 * `--non-interactive` - fail instead of prompting for input. Use this in automation and agent-driven runs.
 
-Help is contextual. Use `fentaris <command> --help` or `fentaris secrets <command> --help` to print usage, arguments, and options for one command.
+Help is contextual. Use `fentaris <command> --help`, `fentaris auth <command> --help`, or `fentaris secrets <command> --help` to print usage, arguments, and options for one command.
 
 `--non-interactive` is accepted on every command. Commands that already have all required values continue normally; commands that would need a prompt return a runtime error instead of waiting for input.
 
@@ -97,6 +97,57 @@ Validate the project offline, run the generated project's `build` script, and wr
 ```bash theme={null}
 fentaris build
 ```
+
+### `fentaris auth api-key add <user-id>`
+
+Store a local API key for a user identity. Clients send this value in the `x-fentaris-api-key` header when connecting to Fentaris.
+
+```bash theme={null}
+printf '%s' "$ADMIN_API_KEY" | fentaris auth api-key add alice --value-stdin
+fentaris auth api-key add alice --generate
+```
+
+The raw API key is never stored. Fentaris writes a `sha256:` hash into `.fentaris/credentials.enc.json` and compares incoming client keys against that hash.
+
+Options:
+
+* `--value <key>` - pass the API key non-interactively.
+* `--value-stdin` - read the API key from standard input.
+* `--generate` - generate a new API key, print it once, and store only its hash.
+* `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
+
+<Warning>
+  Save generated API keys immediately. Fentaris stores only a hash and cannot print the raw key again.
+</Warning>
+
+### `fentaris auth api-key list`
+
+List stored API-key counts by user without printing key values.
+
+```bash theme={null}
+fentaris auth api-key list
+fentaris auth api-key list --user alice --json
+```
+
+Options:
+
+* `--user <id>` - only list API-key counts for one user.
+* `--json` - print machine-readable output.
+* `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
+
+### `fentaris auth api-key remove <user-id>`
+
+Remove a local API key from a user by providing the raw value to match.
+
+```bash theme={null}
+printf '%s' "$OLD_ADMIN_API_KEY" | fentaris auth api-key remove alice --value-stdin
+```
+
+Options:
+
+* `--value <key>` - pass the API key to remove non-interactively.
+* `--value-stdin` - read the API key to remove from standard input.
+* `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
 
 ### `fentaris secrets set [reference]`
 

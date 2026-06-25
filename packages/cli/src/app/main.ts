@@ -1,3 +1,4 @@
+import { runAuth } from "../commands/auth.js";
 import { runBuild } from "../commands/build.js";
 import { runCheck } from "../commands/check.js";
 import { runDev } from "../commands/dev.js";
@@ -66,6 +67,11 @@ function nonInteractivePrompt(prompt: Prompt): Prompt {
 }
 
 async function route(command: CliCommand, runtime: Runtime): Promise<void> {
+  if (command.name === "auth") {
+    await runAuth(command, runtime);
+    return;
+  }
+
   if (command.name === "secrets") {
     await runSecrets(command, runtime);
     return;

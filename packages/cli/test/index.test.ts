@@ -283,6 +283,28 @@ describe("command routing helpers", () => {
     });
   });
 
+  it("parses auth api-key commands", () => {
+    expect(parseCommand(["auth", "api-key", "add", "alice", "--value-stdin"])).toEqual({
+      kind: "ok",
+      path: ["auth", "api-key", "add"],
+      command: {
+        name: "auth",
+        args: ["api-key", "add", "alice"],
+        options: { "value-stdin": true },
+      },
+    });
+
+    expect(parseCommand(["auth", "api-key", "list", "--user", "alice", "--json"])).toEqual({
+      kind: "ok",
+      path: ["auth", "api-key", "list"],
+      command: {
+        name: "auth",
+        args: ["api-key", "list"],
+        options: { user: "alice", json: true },
+      },
+    });
+  });
+
   it("parses non-interactive on commands and nested commands", () => {
     expect(parseCommand(["--non-interactive", "check"])).toEqual({
       kind: "ok",
@@ -381,7 +403,7 @@ describe("command routing helpers", () => {
   it("rejects removed legacy auth commands", async () => {
     const rt = runtime("/tmp");
     await expect(main(["auth", "inspect", "--dir", ".fentaris", "--key", "test-key"], rt)).resolves.toBe(2);
-    expect(rt.out.error).toHaveBeenCalledWith(expect.stringContaining("error: unrecognized subcommand 'auth'"));
+    expect(rt.out.error).toHaveBeenCalledWith(expect.stringContaining("error: unrecognized subcommand 'inspect'"));
   });
 
   it("resolves provided and prompted project names", async () => {
@@ -858,6 +880,91 @@ describe("secrets", () => {
     expect(rt.prompt.confirm).not.toHaveBeenCalled();
   });
 
+  it("adds and lists user API keys without storing raw values", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const input = new PassThrough();
+    input.end("alice-api-key\n");
+
+    const rt = runtime(dir);
+    await withFakeStdin(input, async () => {
+      await expect(main(["auth", "api-key", "add", "alice", "--value-stdin"], rt)).resolves.toBe(0);
+    });
+
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(credentials.users.alice?.apiKeys).toHaveLength(1);
+    expect(credentials.users.alice?.apiKeys[0]).toMatch(/^sha256:/);
+    expect(credentials.users.alice?.apiKeys[0]).not.toBe("alice-api-key");
+    expect(FentarisAuth.compareApiKey(credentials.users.alice?.apiKeys[0] ?? "", "alice-api-key")).toBe(true);
+
+    const listRuntime = runtime(dir);
+    await expect(main(["auth", "api-key", "list"], listRuntime)).resolves.toBe(0);
+    const output = listRuntime.out.log.mock.calls.flat().join("\n");
+    expect(output).toContain("alice");
+    expect(output).toContain("1 key");
+    expect(output).not.toContain("alice-api-key");
+  });
+
+  it("does not duplicate existing user API keys", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const input = new PassThrough();
+      input.end("alice-api-key\n");
+      const rt = runtime(dir);
+      await withFakeStdin(input, async () => {
+        await expect(main(["auth", "api-key", "add", "alice", "--value-stdin"], rt)).resolves.toBe(0);
+      });
+    }
+
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(credentials.users.alice?.apiKeys).toHaveLength(1);
+  });
+
+  it("removes user API keys by value", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const credentialsPath = join(dir, ".fentaris", "credentials.enc.json");
+    await writeFile(
+      credentialsPath,
+      JSON.stringify(
+        FentarisAuth.encryptCredentials(
+          {
+            users: { alice: { apiKeys: [FentarisAuth.hashApiKey("alice-api-key")], credentials: {} } },
+            groups: {},
+            defaults: {},
+          },
+          "test-key",
+        ),
+      ),
+    );
+
+    const input = new PassThrough();
+    input.end("alice-api-key\n");
+    const rt = runtime(dir);
+    await withFakeStdin(input, async () => {
+      await expect(main(["auth", "api-key", "remove", "alice", "--value-stdin"], rt)).resolves.toBe(0);
+    });
+
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(credentialsPath, "utf8")) as unknown, "test-key");
+    expect(credentials.users.alice).toBeUndefined();
+  });
+
+  it("generates user API keys and prints them once", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const rt = runtime(dir);
+
+    await expect(main(["auth", "api-key", "add", "alice", "--generate"], rt)).resolves.toBe(0);
+
+    const output = rt.out.log.mock.calls.flat().join("\n");
+    const match = output.match(/Generated key:[^\n]* ([A-Za-z0-9_-]+)/);
+    expect(match?.[1]).toBeTruthy();
+    const generated = match?.[1] ?? "";
+    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
+    expect(FentarisAuth.compareApiKey(credentials.users.alice?.apiKeys[0] ?? "", generated)).toBe(true);
+  });
+
   it("fails non-interactive secrets set instead of prompting for missing input", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
@@ -992,6 +1099,34 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     expect(output).toContain("github.token");
     expect(output).toContain("set");
     expect(output).not.toContain("secret");
+  });
+
+  it("does not satisfy required user credentials with stored API keys", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, ".fentaris", "secrets.manifest.json"),
+      JSON.stringify({ version: 1, references: [{ ref: "alice", scope: "user:alice" }] }),
+    );
+    const input = new PassThrough();
+    input.end("alice-api-key\n");
+
+    const rt = runtime(dir);
+    await withFakeStdin(input, async () => {
+      await expect(main(["auth", "api-key", "add", "alice", "--value-stdin"], rt)).resolves.toBe(0);
+    });
+
+    const listRuntime = runtime(dir);
+    await expect(main(["secrets", "list", "--json"], listRuntime)).resolves.toBe(0);
+    const output = JSON.parse(listRuntime.out.log.mock.calls.flat().join("\n")) as {
+      secrets: Array<{ ref: string; scope: string; kind: string; status: string }>;
+    };
+    expect(output.secrets).toEqual(
+      expect.arrayContaining([
+        { ref: "alice", scope: "user:alice", kind: "credential", status: "missing" },
+        { ref: "alice", scope: "user:alice", kind: "apiKey", status: "1 key" },
+      ]),
+    );
   });
 
   it("generates and checks the secrets manifest from the entrypoint", async () => {

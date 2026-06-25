@@ -97,6 +97,27 @@ describe("secrets", () => {
     expect(await backend.has("github.token", { kind: "user", id: "alice" })).toBe(false);
   });
 
+  it("adds, deduplicates, and removes hashed user API keys", async () => {
+    const dir = await createDir("fentaris-secrets-api-key-manage-");
+    const backend = await LocalSecretsBackend.open({ dir, key });
+    await backend.initEmpty();
+
+    await expect(backend.addUserApiKey("alice", "api-key")).resolves.toBe(true);
+    await expect(backend.addUserApiKey("alice", "api-key")).resolves.toBe(false);
+
+    const afterAdd = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, "credentials.enc.json"), "utf8")) as unknown, key);
+    expect(afterAdd.users.alice?.apiKeys).toHaveLength(1);
+    expect(afterAdd.users.alice?.apiKeys[0]).toMatch(/^sha256:/);
+    expect(afterAdd.users.alice?.apiKeys[0]).not.toBe("api-key");
+    expect(FentarisAuth.compareApiKey(afterAdd.users.alice?.apiKeys[0] ?? "", "api-key")).toBe(true);
+
+    await expect(backend.removeUserApiKey("alice", "wrong-key")).resolves.toBe(false);
+    await expect(backend.removeUserApiKey("alice", "api-key")).resolves.toBe(true);
+
+    const afterRemove = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, "credentials.enc.json"), "utf8")) as unknown, key);
+    expect(afterRemove.users.alice).toBeUndefined();
+  });
+
   it("encrypts through FentarisAuth compatibility", async () => {
     const dir = await createDir("fentaris-secrets-compat-");
     const backend = await LocalSecretsBackend.open({ dir, key });

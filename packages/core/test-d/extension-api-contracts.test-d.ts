@@ -19,6 +19,7 @@ import type {
   FentarisConfigValidationResult,
   FentarisDiagnostic,
   FentarisDiagnosticFormatterOptions,
+  LocalToolHandler,
 } from "@fentaris/core";
 import type {
   FentarisTransport,
@@ -104,6 +105,10 @@ class CustomRegistry implements Registry {
 }
 
 class CustomRateLimiter implements RateLimiter {
+  async consume() {
+    return true;
+  }
+
   async checkLimit() {
     return true;
   }
@@ -183,7 +188,25 @@ const application = fentaris({
 application.policy("readonly").mcp("github").allow("read");
 application.usePolicy("readonly");
 application.usePolicy(policy("global").mcp("github").allow("read"));
+application.server("docs", { transport: stdio({ command: "docs-mcp-server" }) }).use(typedMiddleware);
 application.group("guests").users(user("guest")).policy("readonly").mcp("github").use(typedMiddleware);
+application.local("workspace")
+  .tool("status", { inputSchema: { type: "object" } }, ((ctx, params) => {
+    ctx.log.info("local status", { operation: ctx.operation, tool: ctx.tool?.name });
+    return { content: [{ type: "text", text: String(params.arguments?.verbose ?? false) }] };
+  }) satisfies LocalToolHandler)
+  .resource("config://current", { name: "Current config" }, (ctx, params) => ({
+    contents: [{ uri: params.uri, text: ctx.server?.name ?? "workspace" }],
+  }))
+  .resourceTemplate("config://projects/{id}", { name: "Project config" }, (_ctx, params) => ({
+    contents: [{ uri: params.uri, text: "project" }],
+  }))
+  .prompt("review_pr", { arguments: [{ name: "diff" }] }, (_ctx, params) => ({
+    messages: [{ role: "user", content: { type: "text", text: String(params.arguments?.diff ?? "") } }],
+  }))
+  .completion({ type: "ref/prompt", name: "review_pr" }, (_ctx, params) => ({
+    completion: { values: [params.argument.value] },
+  }));
 
 const configFirstApplication = fentaris({
   groups: [

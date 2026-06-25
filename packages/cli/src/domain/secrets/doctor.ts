@@ -171,7 +171,9 @@ function parseManifestJson(source: string, filePath: string): unknown {
 }
 
 export function buildListRows(required: SecretsManifestEntry[], stored: SecretRef[]): Array<{ ref: string; scope: string; kind: string; status: string }> {
-  const storedByKey = new Map(stored.map((entry) => [secretRefKey(entry.ref, entry.scope), entry]));
+  const storedCredentialsByKey = new Map(
+    stored.filter((entry) => entry.kind === "credential").map((entry) => [secretRefKey(entry.ref, entry.scope), entry]),
+  );
   const rows: Array<{ ref: string; scope: string; kind: string; status: string }> = [];
   const seen = new Set<string>();
 
@@ -179,7 +181,7 @@ export function buildListRows(required: SecretsManifestEntry[], stored: SecretRe
     const scope = decodeScope(entry.scope);
     const key = secretRefKey(entry.ref, scope);
     seen.add(key);
-    const storedEntry = storedByKey.get(key);
+    const storedEntry = storedCredentialsByKey.get(key);
     rows.push({
       ref: entry.ref,
       scope: entry.scope,
@@ -190,7 +192,7 @@ export function buildListRows(required: SecretsManifestEntry[], stored: SecretRe
 
   for (const entry of stored) {
     const key = secretRefKey(entry.ref, entry.scope);
-    if (seen.has(key)) {
+    if (entry.kind === "credential" && seen.has(key)) {
       continue;
     }
     rows.push({
