@@ -67,6 +67,9 @@ async function askSelectLine<T extends string>(question: string, choices: T[]): 
   });
   const answer = await askLine(`${style.hint("Choose by number or exact label")} ${style.command("›")} `);
   const trimmed = answer.trim();
+  if (!trimmed) {
+    return choices[0];
+  }
   const selectedByNumber = choices[Number(trimmed) - 1];
   const selected = selectedByNumber ?? choices.find((choice) => choice === trimmed);
   if (!selected) {

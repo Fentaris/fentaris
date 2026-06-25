@@ -206,6 +206,20 @@ describe("default runtime prompts", () => {
     });
   });
 
+  it("selects the default menu item when line input is empty", async () => {
+    const input = new PassThrough() as PassThrough & { isTTY?: boolean };
+    input.isTTY = false;
+
+    await withFakeStdin(input, async () => {
+      const rt = defaultRuntime();
+      const selected = rt.prompt.select("Package manager", ["pnpm", "npm", "bun"]);
+      input.write("\n");
+
+      await expect(selected).resolves.toBe("pnpm");
+      rt.prompt.close();
+    });
+  });
+
   it("selects TTY menu items by exact label", async () => {
     const input = new FakeTtyInput();
     const output = new FakeTtyOutput();
