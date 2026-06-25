@@ -92,11 +92,13 @@ Options:
 
 ### `fentaris build`
 
-Validate the project offline, run the generated project's `build` script, and write `.fentaris/build/manifest.json`.
+Validate the project offline, run the generated project's `build` script, write compiled TypeScript output to `dist/index.js`, and write Fentaris metadata to `.fentaris/build/manifest.json`.
 
 ```bash theme={null}
 fentaris build
 ```
+
+The built proxy runs with `node dist/index.js` or the generated project's `npm start` script.
 
 ### `fentaris auth api-key add <user-id>`
 
