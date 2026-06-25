@@ -1,50 +1,117 @@
 ---
 title: "Tutorial"
-description: "Build a multi-server proxy with the high-level Fentaris API."
+description: "Build a multi-server proxy step by step with the modern Fentaris app API."
 ---
 
-This tutorial walks through two upstream MCP servers, one proxy endpoint, middleware, and a server-scoped event hook.
+This tutorial starts from a generated Fentaris project and turns it into a proxy for two upstream MCP servers. The app code keeps runtime endpoint settings in `fentaris.json` and declares upstream servers with `app.mcp(...)`.
 
 ## Quick Start
 
-```ts theme={null}
-import { fentaris, mcp, stdio } from "@fentaris/core";
+Use the optional agent skills when you want an agent to ask setup questions, choose upstream MCP servers, and validate the project after edits:
 
-const proxy = fentaris({
-  servers: [
-    mcp("filesystem", {
-      displayName: "Filesystem",
-      transport: stdio({
-        command: "npx",
-        args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
-      }),
-    }),
-    mcp("diagnostics", {
-      displayName: "Diagnostics",
-      transport: stdio({
-        command: "node",
-        args: ["./dist/diagnostics-server.js"],
-      }),
-      env: (user) => ({
-        USER_ID: user.id ?? "anonymous",
-      }),
-    }),
-  ],
-  port: 3000,
-  path: "/mcp",
-  name: "fentaris-proxy",
-  version: "0.1.0",
-});
-
-await proxy.start();
+```bash theme={null}
+npx skills add Fentaris/fentaris-skills --skill '*'
 ```
 
-## Add Middleware
+Then restart or reload your agent and ask it to use the setup skill:
 
-Middleware runs before matching tool calls are forwarded upstream.
+```txt theme={null}
+Use $fentaris-project-setup to help me create a Fentaris proxy for my team.
+```
+
+If you prefer to build the tutorial manually, create a project with the CLI:
+
+```bash theme={null}
+npm i -g @fentaris/cli
+fentaris init tutorial-proxy
+cd tutorial-proxy
+```
+
+## Step 1: Configure the Runtime Endpoint
+
+`fentaris init` writes `fentaris.json`. Keep endpoint settings there instead of hardcoding them in `src/index.ts`:
+
+```json theme={null}
+{
+  "name": "tutorial-proxy",
+  "packageManager": "pnpm",
+  "entrypoint": "src/index.ts",
+  "port": 4000,
+  "path": "/mcp",
+  "authDir": ".fentaris"
+}
+```
+
+When `app.start()` runs without explicit options, `@fentaris/core` searches upward from the current working directory and reads the nearest `fentaris.json`. With the config above, the local endpoint is `http://localhost:4000/mcp`.
+
+<Tip>
+  Change `port` or `path` in `fentaris.json` when the local endpoint needs to move. Keep `src/index.ts` focused on proxy behavior.
+</Tip>
+
+## Step 2: Create the App Boundary
+
+Open `src/index.ts` and start with an empty Fentaris app:
 
 ```ts theme={null}
-proxy.use(async (ctx, next) => {
+import { fentaris, stdio } from "@fentaris/core";
+
+const app = fentaris();
+```
+
+`fentaris()` creates the proxy application boundary. In this tutorial, the app constructor stays empty because project discovery, port, and path come from `fentaris.json`, and upstream MCP servers are attached with `app.mcp(...)`.
+
+## Step 3: Attach the Filesystem Server
+
+Create a local directory that the filesystem MCP server can expose:
+
+```bash theme={null}
+mkdir demo-files
+echo "hello from Fentaris" > demo-files/readme.txt
+```
+
+Then register the upstream MCP server:
+
+```ts theme={null}
+app.mcp("filesystem", {
+  displayName: "Filesystem",
+  transport: stdio({
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+  }),
+});
+```
+
+`app.mcp("filesystem", ...)` gives the upstream server a stable Fentaris name. Fentaris uses that name when routing tool calls, applying middleware, logging events, and exposing proxied tool names such as `filesystem__read_file`.
+
+## Step 4: Attach a Diagnostics Server
+
+Add a second upstream MCP server for internal diagnostics:
+
+```ts theme={null}
+app.mcp("diagnostics", {
+  displayName: "Diagnostics",
+  transport: stdio({
+    command: "node",
+    args: ["./dist/diagnostics-server.js"],
+  }),
+  env: (user) => ({
+    USER_ID: user.id ?? "anonymous",
+  }),
+});
+```
+
+The `env` callback runs per request. It lets the upstream process receive request-scoped values without putting user-specific data into global process environment variables.
+
+<Note>
+  Replace `./dist/diagnostics-server.js` with a real MCP server entrypoint in your project. The tutorial focuses on the Fentaris wiring around multiple upstream MCP servers.
+</Note>
+
+## Step 5: Add Global Middleware
+
+Middleware runs after Fentaris builds request context and before the matching upstream MCP server receives the call:
+
+```ts theme={null}
+app.use(async (ctx, next) => {
   ctx.log.info("tool-call", {
     server: ctx.server?.name,
     tool: ctx.tool?.name,
@@ -58,34 +125,128 @@ proxy.use(async (ctx, next) => {
 });
 ```
 
-## Add a Server Hook
+Use middleware for runtime checks that depend on request data, tool arguments, tenant state, or an approval workflow. For static allow-list access, use policy rules.
+
+## Step 6: Add a Server Hook
+
+Server-scoped handles keep observability close to the upstream MCP server they describe:
 
 ```ts theme={null}
-proxy.mcp("diagnostics").on("tool:success", async ({ ctx, durationMs }) => {
-  ctx.log.info("diagnostics.tool.success", { durationMs });
+app.mcp("diagnostics").on("tool:success", async ({ ctx, durationMs }) => {
+  ctx.log.info("diagnostics.tool.success", {
+    tool: ctx.tool?.name,
+    durationMs,
+  });
 });
 ```
 
-## Connect a Client
+This hook only observes successful tool calls for the `diagnostics` upstream server. It does not affect filesystem calls and does not replace middleware or policy decisions.
 
-From your MCP client, call the proxy at `http://localhost:3000/mcp`.
+## Step 7: Start the Proxy
 
-<Tip>
-  Server-scoped routes such as `proxy.mcp("diagnostics")` keep tool-specific logic close to the upstream server it protects.
-</Tip>
+Finish `src/index.ts` with `app.start()`:
 
-## What you built
+```ts theme={null}
+await app.start();
+```
 
-- A single HTTP endpoint for multiple MCP servers.
-- A middleware layer that enforces policy.
-- Server-scoped logging for diagnostics calls.
+The complete entrypoint should look like this:
 
-## Low-Level API
+```ts theme={null}
+import { fentaris, stdio } from "@fentaris/core";
 
-`new McpProxy(...)`, `new McpServer(...)`, and `new StdioTransport(...)` remain available for advanced integrations. New applications should start with `fentaris(...)`, `mcp(...)`, and transport helpers.
+const app = fentaris();
+
+app.mcp("filesystem", {
+  displayName: "Filesystem",
+  transport: stdio({
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+  }),
+});
+
+app.mcp("diagnostics", {
+  displayName: "Diagnostics",
+  transport: stdio({
+    command: "node",
+    args: ["./dist/diagnostics-server.js"],
+  }),
+  env: (user) => ({
+    USER_ID: user.id ?? "anonymous",
+  }),
+});
+
+app.use(async (ctx, next) => {
+  ctx.log.info("tool-call", {
+    server: ctx.server?.name,
+    tool: ctx.tool?.name,
+  });
+
+  if (ctx.server?.name === "filesystem" && ctx.tool?.name === "delete") {
+    return ctx.deny("Filesystem delete is disabled in this environment.");
+  }
+
+  return next();
+});
+
+app.mcp("diagnostics").on("tool:success", async ({ ctx, durationMs }) => {
+  ctx.log.info("diagnostics.tool.success", {
+    tool: ctx.tool?.name,
+    durationMs,
+  });
+});
+
+await app.start();
+```
+
+Run the proxy:
+
+```bash theme={null}
+fentaris dev
+```
+
+## Step 8: Connect a Client
+
+Point your MCP client to the endpoint from `fentaris.json`:
+
+```bash theme={null}
+http://localhost:4000/mcp
+```
+
+Fentaris exposes one MCP endpoint and routes each request to the matching upstream MCP server. The client talks to Fentaris; Fentaris starts or connects to upstream MCP servers, applies policy and middleware, forwards allowed calls, and records hooks and logs.
+
+## Validate the Project
+
+Run static project checks before sharing the endpoint:
+
+```bash theme={null}
+fentaris check --offline
+```
+
+When the proxy is running, verify the runtime endpoint:
+
+```bash theme={null}
+fentaris doctor --runtime
+```
+
+<Warning>
+  The tutorial is suitable for local development. Add authentication and allow-list policies before exposing a Fentaris endpoint outside your machine.
+</Warning>
+
+## What You Built
+
+You now have:
+
+* one Fentaris endpoint configured by `fentaris.json`
+* two upstream MCP servers declared with `app.mcp(...)`
+* global middleware for logging and request-time denial
+* a server-scoped hook for diagnostics observability
 
 ## Related Documentation
 
-* [Architecture](/concepts/architecture)
+* [Agent Skills](/getting-started/codex-skills)
+* [Quickstart](/getting-started/quickstart)
+* [Config file](/reference/config-file)
 * [Middleware](/guides/middleware)
+* [Hooks](/guides/hooks)
 * [Proxy setup](/guides/proxy-setup)

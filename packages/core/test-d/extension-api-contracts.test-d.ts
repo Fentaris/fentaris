@@ -104,6 +104,10 @@ class CustomRegistry implements Registry {
 }
 
 class CustomRateLimiter implements RateLimiter {
+  async consume() {
+    return true;
+  }
+
   async checkLimit() {
     return true;
   }
@@ -183,6 +187,7 @@ const application = fentaris({
 application.policy("readonly").mcp("github").allow("read");
 application.usePolicy("readonly");
 application.usePolicy(policy("global").mcp("github").allow("read"));
+application.server("docs", { transport: stdio({ command: "docs-mcp-server" }) }).use(typedMiddleware);
 application.group("guests").users(user("guest")).policy("readonly").mcp("github").use(typedMiddleware);
 
 const configFirstApplication = fentaris({

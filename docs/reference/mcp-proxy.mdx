@@ -88,7 +88,7 @@ When no global policy, group policy, or explicit allow-all development policy is
 
 ### Runtime server registration
 
-Policies can reference upstream MCP server names that are registered later through `proxy.mcp(...)`, as long as registration happens before `start()` or `listen(...)`.
+Policies can reference upstream MCP server names that are registered later through `proxy.server(...)` or `proxy.mcp(...)`, as long as registration happens before `start()` or `listen(...)`.
 
 ```ts theme={null}
 const proxy = fentaris({
@@ -101,14 +101,14 @@ const proxy = fentaris({
   ],
 });
 
-proxy.mcp("github", {
+proxy.server("github", {
   transport: stdio({ command: "github-mcp-server" }),
 });
 ```
 
 At startup, Fentaris validates the final runtime configuration and fails with `FENTARIS_CONFIG_POLICY_SERVER_NOT_VISIBLE` if a policy still references a missing server.
 
-Use `validateFentarisConfig(config)` when you want a strict static check before composing an app with runtime `proxy.mcp(...)` calls.
+Use `validateFentarisConfig(config)` when you want a strict static check before composing an app with runtime `proxy.server(...)` calls.
 
 ### `logger`, `autoLog`, and `profiler`
 
@@ -185,8 +185,21 @@ app.group("guests")
   .users(user("guest"))
   .policy("readonly");
 
-app.mcp("github", {
+app.server("github", {
   transport: stdio({ command: "github-mcp-server" }),
+});
+```
+
+### `server(name, options?)`
+
+Register or retrieve a scoped upstream MCP server handle. `server(...)` is the app-level alias for `mcp(...)`.
+
+```ts theme={null}
+app.server("filesystem", {
+  transport: stdio({
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+  }),
 });
 ```
 
