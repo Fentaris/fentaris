@@ -3,7 +3,7 @@ title: "Middleware"
 description: "Enforce policy and transform tool calls."
 ---
 
-Middleware runs for every tool call. Use it for access control, logging, request shaping, and consistent policy enforcement. New middleware receives one unified `ctx` object plus `next`.
+Middleware runs for tool calls and governed resource, prompt, and completion operations. Use it for access control, logging, request shaping, and consistent policy enforcement. New middleware receives one unified `ctx` object plus `next`.
 
 If you need finer-grained hooks (only on specific tools), see [Hooks](/guides/hooks).
 
@@ -16,7 +16,7 @@ Use middleware when you need a decision or transformation to apply to *every* re
 - Logging, metrics, and tracing tags.
 - Guardrails for destructive or high-cost tools.
 
-If the logic is only for a single tool or server, prefer `proxy.tool(...)` or `proxy.mcp(name).tool(...)` routes to avoid slowing the full pipeline.
+If the logic is only for a single tool, operation, or server, prefer `proxy.tool(...)`, `proxy.operation(...)`, or `proxy.mcp(name).operation(...)` routes to avoid slowing the full pipeline.
 
 ## Basic middleware
 
@@ -173,7 +173,31 @@ proxy.use(async (ctx, next) => {
 
 ## Debugging middleware
 
-If requests are not behaving as expected, log `ctx.tool?.proxyName`, `ctx.server?.name`, and `ctx.tool?.name`. This will quickly tell you whether a route is matching the tool you expect.
+If requests are not behaving as expected, log `ctx.operation`, `ctx.server?.name`, `ctx.tool?.proxyName`, `ctx.resource?.uri`, `ctx.prompt?.name`, and `ctx.completion?.target`. This will quickly tell you whether a route is matching the capability you expect.
+
+## Local capabilities
+
+Local capabilities declared with `app.local(name)` use the same middleware and operation route pipeline as upstream MCP servers.
+
+```ts theme={null}
+app.local("workspace")
+  .tool("status", { inputSchema: { type: "object" } }, async (ctx) => ({
+    content: [{ type: "text", text: ctx.server?.name ?? "workspace" }],
+  }));
+
+app.mcp("workspace").use(async (ctx, next) => {
+  ctx.log.info("workspace.local", {
+    operation: ctx.operation,
+    tool: ctx.tool?.name,
+    resource: ctx.resource?.uri,
+    prompt: ctx.prompt?.name,
+  });
+
+  return next();
+});
+```
+
+For local tool handlers, `ctx.server?.name` is the local namespace and `ctx.tool?.name` is the unproxied local tool name. Local resources, prompts, and completions expose the same context fields as upstream operations.
 
 ## Ordering rules
 

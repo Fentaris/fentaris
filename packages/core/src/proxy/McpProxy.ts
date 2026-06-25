@@ -89,6 +89,7 @@ import { HttpProxyExposureTransport } from "../transports/exposure/HttpProxyExpo
 import { ResponseController } from "../types/middleware.js";
 import { FentarisConfigError, assertValidFentarisConfig, validateFentarisConfig, type FentarisDiagnostic } from "../config/index.js";
 import { resolveFentarisConfig } from "../config/resolve.js";
+import { LocalCapabilityRegistry } from "../local/declarations.js";
 import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
 import type { CredentialSourceMetadata, IdentityMetadata, ResolvedSubject, UserContext } from "../types/shared.js";
 import type {
@@ -117,6 +118,7 @@ import type {
   ProxyMcpDeclarationConfig,
   ProxyMcpDeclarationOptions,
   ProxyMcpHandle,
+  ProxyLocalHandle,
   ProxyOperationHandler,
   ProxyToolHandler,
   ProxyToolPattern,
@@ -257,6 +259,7 @@ export class McpProxy {
   private readonly servers: McpServer[];
   private readonly serverCatalog: ServerCatalog;
   private readonly serverByName = new Map<string, McpServer>();
+  private readonly localRegistry = new LocalCapabilityRegistry();
   private readonly middleware: Middleware[] = [];
   private readonly routes: RouteEntry[] = [];
   private readonly callHooks: Array<{ filter: ToolCallHookFilter; handler: ToolCallHook }> = [];
@@ -435,6 +438,9 @@ export class McpProxy {
       if (server.name !== name) {
         throw new Error(`MCP handle "${name}" cannot register MCP server "${server.name}"`);
       }
+      if (this.localRegistry.hasNamespace(name)) {
+        throw this.localNamespaceCollisionError(name);
+      }
       if (!this.serverByName.has(name)) {
         this.servers.push(server);
         this.serverCatalog.addGlobalServer(server);
@@ -480,6 +486,16 @@ export class McpProxy {
     }
 
     return optionsOrServer ? this.mcp(nameOrConfig, optionsOrServer) : this.mcp(nameOrConfig);
+  }
+
+  /**
+   * Register or retrieve a named local MCP capability namespace.
+   * @pk
+   */
+  local(name: string): ProxyLocalHandle {
+    const namespace = this.localRegistry.namespace(name);
+    this.materializeLocalNamespaces();
+    return namespace;
   }
 
   /**
@@ -668,11 +684,13 @@ export class McpProxy {
   }
 
   private assertRuntimeConfigValid(): void {
+    this.materializeLocalNamespaces();
     this.refreshDerivedGovernanceState({ validate: true });
     assertValidFentarisConfig(this.runtimeValidationConfig);
   }
 
   private assertDeferredPolicyServerVisibilityValid(): void {
+    this.materializeLocalNamespaces();
     this.refreshDerivedGovernanceState({ validate: true });
     const result = validateFentarisConfig(this.runtimeValidationConfig);
     const policyServerVisibilityErrors = result.errors.filter((error) => error.code === "FENTARIS_CONFIG_POLICY_SERVER_NOT_VISIBLE");
@@ -985,7 +1003,7 @@ export class McpProxy {
             return Promise.resolve(new ResponseController().deny(`Unknown MCP server "${serverName}"`));
           }
 
-          return this.forwardToolCall(params, upstreamUser, server);
+          return server.withProxyContext(context, () => this.forwardToolCall(params, upstreamUser, server));
         }));
       const response = context.res.applyInjections(result);
       this.writeAutoLog("success", log, request, context, startedAt, response);
@@ -1115,7 +1133,7 @@ export class McpProxy {
           const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
           context.credentialSources = credentialSource ? [credentialSource] : undefined;
           context.credentials.sources = context.credentialSources ?? [];
-          const upstream = await server.listResources(params, userForServer);
+          const upstream = await server.withProxyContext(context, () => server.listResources(params, userForServer));
           return {
             resources: upstream.resources.filter((resource) =>
               isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
@@ -1180,7 +1198,10 @@ export class McpProxy {
       const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
       context.credentialSources = credentialSource ? [credentialSource] : undefined;
       context.credentials.sources = context.credentialSources ?? [];
-      const result = await this.dispatchOperationRoutes(context, async () => server.readResource({ ...params, uri }, userForServer)) as ReadResourceResult;
+      const result = await this.dispatchOperationRoutes(
+        context,
+        async () => server.withProxyContext(context, () => server.readResource({ ...params, uri }, userForServer)),
+      ) as ReadResourceResult;
 
       return {
         ...result,
@@ -1231,7 +1252,7 @@ export class McpProxy {
           const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
           context.credentialSources = credentialSource ? [credentialSource] : undefined;
           context.credentials.sources = context.credentialSources ?? [];
-          const upstream = await server.listResourceTemplates(params, userForServer);
+          const upstream = await server.withProxyContext(context, () => server.listResourceTemplates(params, userForServer));
           return {
             resourceTemplates: upstream.resourceTemplates.filter((template) =>
               isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
@@ -1291,7 +1312,7 @@ export class McpProxy {
           const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
           context.credentialSources = credentialSource ? [credentialSource] : undefined;
           context.credentials.sources = context.credentialSources ?? [];
-          const upstream = await server.listPrompts(params, userForServer);
+          const upstream = await server.withProxyContext(context, () => server.listPrompts(params, userForServer));
           return {
             prompts: upstream.prompts.filter((prompt) =>
               isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
@@ -1356,7 +1377,10 @@ export class McpProxy {
       const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
       context.credentialSources = credentialSource ? [credentialSource] : undefined;
       context.credentials.sources = context.credentialSources ?? [];
-      return this.dispatchOperationRoutes(context, async () => server.getPrompt({ ...params, name: promptName }, userForServer)) as Promise<GetPromptResult>;
+      return this.dispatchOperationRoutes(
+        context,
+        async () => server.withProxyContext(context, () => server.getPrompt({ ...params, name: promptName }, userForServer)),
+      ) as Promise<GetPromptResult>;
     }) as Promise<GetPromptResult>;
   }
 
@@ -1400,7 +1424,10 @@ export class McpProxy {
       const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
       context.credentialSources = credentialSource ? [credentialSource] : undefined;
       context.credentials.sources = context.credentialSources ?? [];
-      return this.dispatchOperationRoutes(context, async () => server.complete(routed.params, userForServer)) as Promise<CompleteResult>;
+      return this.dispatchOperationRoutes(
+        context,
+        async () => server.withProxyContext(context, () => server.complete(routed.params, userForServer)),
+      ) as Promise<CompleteResult>;
     }) as Promise<CompleteResult>;
   }
 
@@ -1497,6 +1524,40 @@ export class McpProxy {
       policy: this.globalPolicy,
     });
     await emitProxyEvent(this.eventHandlers, "session:end", { ctx: proxyContext });
+  }
+
+  private materializeLocalNamespaces(): void {
+    for (const server of this.localRegistry.servers()) {
+      const existing = this.serverByName.get(server.name);
+      if (existing) {
+        if (existing === server) {
+          continue;
+        }
+
+        throw new FentarisConfigError([
+          this.localNamespaceCollisionDiagnostic(server.name),
+        ]);
+      }
+
+      this.servers.push(server);
+      this.serverCatalog.addGlobalServer(server);
+      this.serverByName.set(server.name, server);
+    }
+  }
+
+  private localNamespaceCollisionError(name: string): FentarisConfigError {
+    return new FentarisConfigError([this.localNamespaceCollisionDiagnostic(name)]);
+  }
+
+  private localNamespaceCollisionDiagnostic(name: string) {
+    return {
+      severity: "error" as const,
+      code: "FENTARIS_CONFIG_LOCAL_NAMESPACE_COLLISION",
+      title: "Local namespace collides with an MCP server",
+      message: `Local namespace "${name}" collides with a configured upstream MCP server.`,
+      path: ["proxy", "local", name],
+      hint: "Choose a local namespace that does not match any configured MCP server name.",
+    };
   }
 
   registerServerMiddleware(serverName: string, handler: Middleware, groupId?: string): void {

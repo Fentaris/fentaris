@@ -21,6 +21,7 @@ import { isCredentialReference, type CredentialReference } from "../credentials/
 import type { FentarisTransport } from "../types/transport.js";
 import type { Isolation } from "../types/policy.js";
 import type { UserContext } from "../types/shared.js";
+import type { ProxyContext } from "../types/proxy.js";
 
 /**
  * Resolve environment variables per user.
@@ -76,6 +77,10 @@ type EnvAwareTransport = FentarisTransport & {
 
 type UserAwareTransport = FentarisTransport & {
   withUser(user: UserContext): FentarisTransport;
+};
+
+type ProxyContextAwareTransport = FentarisTransport & {
+  withProxyContext<T>(context: ProxyContext, run: () => Promise<T>): Promise<T>;
 };
 
 /**
@@ -215,6 +220,19 @@ export class McpServer {
   }
 
   /**
+   * Run a server operation with a governed proxy context when the transport supports it.
+   * @pk
+   */
+  async withProxyContext<T>(context: ProxyContext, run: () => Promise<T>): Promise<T> {
+    const transport = this.transportFor(context.user);
+    if (!isProxyContextAwareTransport(transport)) {
+      return run();
+    }
+
+    return transport.withProxyContext(context, run);
+  }
+
+  /**
    * Whether the configured transport exposes resource operations.
    * @pk
    */
@@ -346,6 +364,10 @@ function isEnvAwareTransport(transport: FentarisTransport): transport is EnvAwar
 
 function isUserAwareTransport(transport: FentarisTransport): transport is UserAwareTransport {
   return "withUser" in transport && typeof transport.withUser === "function";
+}
+
+function isProxyContextAwareTransport(transport: FentarisTransport): transport is ProxyContextAwareTransport {
+  return "withProxyContext" in transport && typeof transport.withProxyContext === "function";
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {
