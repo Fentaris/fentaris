@@ -31,6 +31,8 @@ export async function runBuild(runtime: Runtime): Promise<void> {
       2,
     ),
   );
-  runtime.out.log(`  ${style.pass(`Build output: ${path.relative(runtime.cwd, outputDir)}`)}`);
-  runtime.out.log(`  Runtime entrypoint: ${project.config.entrypoint}`);
+  runtime.out.log(`  ${style.pass("TypeScript output: dist/index.js")}`);
+  runtime.out.log(`  Fentaris metadata: ${path.relative(runtime.cwd, outputDir)}`);
+  runtime.out.log(`  Runtime entrypoint metadata: ${project.config.entrypoint}`);
+  runtime.out.log("  Run with: node dist/index.js");
 }
