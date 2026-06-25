@@ -3,3 +3,4 @@ dist
 .pnpm-store
 *.tsbuildinfo
 tmp
+.DS_Store
