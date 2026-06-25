@@ -1101,6 +1101,34 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     expect(output).not.toContain("secret");
   });
 
+  it("does not satisfy required user credentials with stored API keys", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(
+      join(dir, ".fentaris", "secrets.manifest.json"),
+      JSON.stringify({ version: 1, references: [{ ref: "alice", scope: "user:alice" }] }),
+    );
+    const input = new PassThrough();
+    input.end("alice-api-key\n");
+
+    const rt = runtime(dir);
+    await withFakeStdin(input, async () => {
+      await expect(main(["auth", "api-key", "add", "alice", "--value-stdin"], rt)).resolves.toBe(0);
+    });
+
+    const listRuntime = runtime(dir);
+    await expect(main(["secrets", "list", "--json"], listRuntime)).resolves.toBe(0);
+    const output = JSON.parse(listRuntime.out.log.mock.calls.flat().join("\n")) as {
+      secrets: Array<{ ref: string; scope: string; kind: string; status: string }>;
+    };
+    expect(output.secrets).toEqual(
+      expect.arrayContaining([
+        { ref: "alice", scope: "user:alice", kind: "credential", status: "missing" },
+        { ref: "alice", scope: "user:alice", kind: "apiKey", status: "1 key" },
+      ]),
+    );
+  });
+
   it("generates and checks the secrets manifest from the entrypoint", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
