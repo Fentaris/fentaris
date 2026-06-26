@@ -93,6 +93,64 @@ app.use(async (ctx, next) => {
 
 Middleware runs before matching calls are forwarded to the upstream MCP server. Use it for request-time checks, logging, argument validation, and approval workflows.
 
+## Strict TypeScript Example
+
+In strict TypeScript projects, annotate exported middleware and policies at the boundary and let callback parameters infer from Fentaris:
+
+```ts theme={null}
+import {
+  bearer,
+  credential,
+  fentaris,
+  group,
+  mcp,
+  policy,
+  streamableHttp,
+  user,
+  type Middleware,
+} from "@fentaris/core";
+
+const requestTags: Middleware = async (ctx, next) => {
+  ctx.log.setTag("subject", ctx.subject?.id ?? "anonymous");
+  ctx.log.setTag("operation", ctx.operation);
+
+  if (ctx.server?.name === "github" && ctx.tool?.name === "delete_repo") {
+    return ctx.deny("Repository deletion is not allowed from this proxy.");
+  }
+
+  return next();
+};
+
+const maintainers = policy("maintainers")
+  .mcp("github")
+  .allow("search_issues")
+  .mcp("github")
+  .allow("create_issue");
+
+const app = fentaris({
+  autoLog: true,
+  servers: [
+    mcp("github", {
+      transport: streamableHttp({ url: "https://github.example/mcp" }),
+      auth: bearer(credential("github.token")),
+    }),
+  ],
+  groups: [
+    group({
+      id: "maintainers",
+      users: [user("alice")],
+      policy: maintainers,
+    }),
+  ],
+});
+
+app.use(requestTags);
+
+await app.start();
+```
+
+Use `type Middleware` for shared middleware functions. Inline `app.use(async (ctx, next) => ...)` callbacks also infer contextual `ctx` and `next` types.
+
 ## Connect an MCP Client
 
 Point your MCP client to the endpoint from `fentaris.json`:
@@ -130,5 +188,6 @@ For normal applications, prefer `fentaris()`, `app.server(...)`, and `stdio(...)
 
 * [Quickstart](/getting-started/quickstart)
 * [Tutorial](/getting-started/tutorial)
+* [Client Configs](/guides/client-configs)
 * [Config file](/reference/config-file)
 * [McpProxy reference](/reference/mcp-proxy)

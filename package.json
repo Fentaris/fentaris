@@ -4,6 +4,10 @@
   "private": true,
   "description": "Fentaris - Proxy MCP centralizzato",
   "packageManager": "pnpm@11.4.0",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=11.4.0"
+  },
   "scripts": {
     "dev:core": "pnpm --filter @fentaris/core dev",
     "dev:cli": "pnpm --filter @fentaris/cli dev",

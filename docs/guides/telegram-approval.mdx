@@ -42,6 +42,10 @@ const team = group({
 
 The adapter sends a Telegram message with Approve and Deny buttons. Tool arguments are included by default with sensitive keys such as tokens, passwords, API keys, authorization headers, secrets, and credentials redacted.
 
+## Local Approval Without A Bot
+
+For local development and tests, use an in-memory store and a mocked `fetch` implementation. This exercises the same policy approval path without creating a Telegram bot or webhook.
+
 ## Sensitive-Tool Test Path
 
 You can drive the full approval flow in a test without a real Telegram bot. Inject a `fetch` mock to capture the message request, and use `createInMemoryTelegramApprovalStore` to record a decision between calls. The example below uses `policy.evaluate(...)` so the test path matches the real policy pipeline.

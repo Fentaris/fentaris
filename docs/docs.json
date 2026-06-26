@@ -68,6 +68,7 @@
             "expanded": false,
             "pages": [
               "guides/proxy-setup",
+              "guides/client-configs",
               "guides/middleware",
               "guides/hooks",
               "guides/multi-server",
@@ -75,6 +76,7 @@
               "guides/logger",
               "guides/flows",
               "guides/end-to-end",
+              "guides/sdk-only-secrets",
               "guides/error-handling",
               "guides/governance-auth",
               "guides/telegram-approval",

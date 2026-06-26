@@ -5,8 +5,11 @@ description: "Install Fentaris and prepare your local environment."
 
 ## Requirements
 
-- Node.js 20+ (LTS recommended)
+- Node.js 20+ for generated Fentaris projects and SDK-only apps
+- Node.js 24 for developing this monorepo
 - pnpm or npm
+
+Fentaris runtime packages support Node.js 20 and newer. The Fentaris repository itself uses `pnpm@11.4.0` and CI runs on Node.js 24, so use Node.js 24 when installing or testing the monorepo.
 
 ## Install the CLI
 
