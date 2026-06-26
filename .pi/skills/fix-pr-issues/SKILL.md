@@ -1,6 +1,6 @@
 ---
 name: fix-pr-issues
-description: Use when the user asks the pi agent to fix, resolve, or address issues from a PR review on the Fentaris repo (e.g. "/pi resolve the issues you found", "/pi fixa i P2"). Defines the autonomous fix flow: read review → prioritize → fix → validate → commit → push.
+description: "Use when the user asks the pi agent to fix, resolve, or address issues from a PR review on the Fentaris repo (e.g. /pi resolve the issues you found, /pi fixa i P2). Defines the autonomous fix flow: read review, prioritize, fix, validate, commit, push."
 ---
 
 # Fix PR Issues — Fentaris
