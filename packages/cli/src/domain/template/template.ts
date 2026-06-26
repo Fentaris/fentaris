@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import semver from "semver";
 import { authDir, coreVersion, defaultCoreRange, remoteMcpUrl } from "../../shared/constants.js";
 import type { TemplateInput } from "../../shared/types.js";
 
@@ -171,27 +172,5 @@ function resolveCoreRange(value: string | undefined): string {
 }
 
 function isValidSemverRange(value: string): boolean {
-  // Accepts ranges, exact versions, and x-ranges: 2.0.0, ^2.0.0, ~2.0.0, >=2.0.0, 2.x, 2.0.x, *, 2.0.0 - 3.0.0
-  if (value === "*" || value === "x" || value === "X") {
-    return true;
-  }
-
-  const rangeToken = "[^\\s]+";
-  const comparator = "([<>=^~]|>=?|<=?)?\\s*(\\*|x|X|\\d+(?:\\.\\d+(?:\\.\\d+)?)?(?:\\.x|\\.X|\\.\\*)?)";
-  const simple = new RegExp(`^${comparator}$`);
-  if (simple.test(value)) {
-    return true;
-  }
-
-  const hyphenRange = new RegExp(`^${comparator}\\s+-\\s+${comparator}$`);
-  if (hyphenRange.test(value)) {
-    return true;
-  }
-
-  const andRange = new RegExp(`^${comparator}(\\s+${rangeToken})*$`);
-  if (andRange.test(value)) {
-    return true;
-  }
-
-  return false;
+  return semver.validRange(value) !== null;
 }

@@ -551,6 +551,7 @@ describe("core version range in template", () => {
       { range: "~2.0.0", expected: "~2.0.0" },
       { range: "2.0.0", expected: "2.0.0" },
       { range: ">=2.0.0", expected: ">=2.0.0" },
+      { range: ">=2.0.0 <3.0.0", expected: ">=2.0.0 <3.0.0" },
       { range: "latest", expected: "latest" },
       { range: "workspace:*", expected: "workspace:*" },
       { range: "file:../packages/core", expected: "file:../packages/core" },
@@ -570,15 +571,17 @@ describe("core version range in template", () => {
   });
 
   it("rejects a clearly invalid --core-version value with a helpful message", () => {
-    expect(() =>
-      renderTemplate({
-        projectName: "demo",
-        packageManager: "pnpm",
-        port: 4000,
-        proxyPath: "/mcp",
-        coreVersionRange: "not-a-range",
-      }),
-    ).toThrow(/Invalid --core-version value/);
+    for (const range of ["not-a-range", ">=2.0.0 typo"]) {
+      expect(() =>
+        renderTemplate({
+          projectName: "demo",
+          packageManager: "pnpm",
+          port: 4000,
+          proxyPath: "/mcp",
+          coreVersionRange: range,
+        }),
+      ).toThrow(/Invalid --core-version value/);
+    }
   });
 });
 
@@ -656,6 +659,24 @@ describe("@fentaris/core installed version check", () => {
     expect(output).toContain("@fentaris/core installed");
     expect(output).toContain("1.5.0");
     expect(output).toContain("^2.0.0");
+  });
+
+  it("honors pre-1.0 caret upper bounds for installed versions", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const packageJsonPath = join(dir, "package.json");
+    const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as { dependencies: Record<string, string> };
+    packageJson.dependencies["@fentaris/core"] = "^0.2.0";
+    await writeFile(packageJsonPath, JSON.stringify(packageJson));
+    await writeInstalledCoreVersion(dir, "0.3.0");
+
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+    await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
+
+    const output = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
+    expect(output).toContain("@fentaris/core installed");
+    expect(output).toContain("0.3.0");
+    expect(output).toContain("^0.2.0");
   });
 
   it("does not warn when node_modules/@fentaris/core is missing", async () => {

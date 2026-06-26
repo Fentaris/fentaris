@@ -4,109 +4,14 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { FentarisAuth } from "@fentaris/core";
+import semver from "semver";
 import { authDir, supportedPackageManagers } from "../../shared/constants.js";
 import type { HealthResult, PackageManager, ProjectConfig, ProjectDiscovery, Runtime } from "../../shared/types.js";
 import { canAccess, exists, isNodeError, readJson } from "../../shared/utils.js";
 import { loadRequiredReferences, secretsDoctorHealthResults } from "../secrets/doctor.js";
 
-type ParsedVersion = readonly [number, number, number];
-
-function parseSemver(value: string): ParsedVersion | null {
-  const match = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(value.trim());
-  if (!match) {
-    return null;
-  }
-  return [Number(match[1]), Number(match[2]), Number(match[3])] as const;
-}
-
-function compareSemver(a: ParsedVersion, b: ParsedVersion): number {
-  for (let i = 0; i < 3; i += 1) {
-    if (a[i] !== b[i]) {
-      return a[i] - b[i];
-    }
-  }
-  return 0;
-}
-
-function versionInRange(installed: ParsedVersion, range: string): boolean {
-  const expr = range.trim();
-  // Exact match.
-  const exact = parseSemver(expr);
-  if (exact) {
-    return compareSemver(installed, exact) === 0;
-  }
-  // Wildcard: any version.
-  if (expr === "*" || expr === "x" || expr === "X") {
-    return true;
-  }
-  // Caret: compatible with version (same major, >= minor.patch).
-  const caret = /^\^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(expr);
-  if (caret) {
-    const target: ParsedVersion = [Number(caret[1]), Number(caret[2]), Number(caret[3])];
-    if (target[0] !== installed[0]) {
-      return false;
-    }
-    return compareSemver(installed, target) >= 0;
-  }
-  // Tilde: same major.minor, >= patch.
-  const tilde = /^~(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(expr);
-  if (tilde) {
-    const target: ParsedVersion = [Number(tilde[1]), Number(tilde[2]), Number(tilde[3])];
-    if (target[0] !== installed[0] || target[1] !== installed[1]) {
-      return false;
-    }
-    return compareSemver(installed, target) >= 0;
-  }
-  // Comparison operators.
-  const comparator = /^(>=|<=|>|<|=)\s*(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(expr);
-  if (comparator) {
-    const target: ParsedVersion = [Number(comparator[2]), Number(comparator[3]), Number(comparator[4])];
-    const cmp = compareSemver(installed, target);
-    switch (comparator[1]) {
-      case ">=":
-        return cmp >= 0;
-      case "<=":
-        return cmp <= 0;
-      case ">":
-        return cmp > 0;
-      case "<":
-        return cmp < 0;
-      case "=":
-        return cmp === 0;
-    }
-  }
-  // Hyphen range: a - b means >=a <=b.
-  const hyphen = /^(\d+)\.(\d+)\.(\d+)\s+-\s+(\d+)\.(\d+)\.(\d+)$/.exec(expr);
-  if (hyphen) {
-    const lo: ParsedVersion = [Number(hyphen[1]), Number(hyphen[2]), Number(hyphen[3])];
-    const hi: ParsedVersion = [Number(hyphen[4]), Number(hyphen[5]), Number(hyphen[6])];
-    return compareSemver(installed, lo) >= 0 && compareSemver(installed, hi) <= 0;
-  }
-  // X-ranges: 2.x, 2.0.x, 2, 2.0
-  const major = /^(\d+)(?:\.(?:x|\*))?$/.exec(expr);
-  if (major) {
-    return installed[0] === Number(major[1]);
-  }
-  const majorMinor = /^(\d+)\.(\d+)(?:\.(?:x|\*))?$/.exec(expr);
-  if (majorMinor) {
-    return installed[0] === Number(majorMinor[1]) && installed[1] === Number(majorMinor[2]);
-  }
-  const majorMinorPatch = /^(\d+)\.(\d+)\.x$/.exec(expr);
-  if (majorMinorPatch) {
-    return installed[0] === Number(majorMinorPatch[1]) && installed[1] === Number(majorMinorPatch[2]);
-  }
-  return false;
-}
-
 function isValidatableRange(range: string): boolean {
-  const expr = range.trim();
-  if (expr === "*" || expr === "x" || expr === "X") return true;
-  if (parseSemver(expr)) return true;
-  if (/^[\^~]/.test(expr) && parseSemver(expr.slice(1))) return true;
-  if (/^[<>=]/.test(expr) && parseSemver(expr.replace(/^[<>=]+\s*/, ""))) return true;
-  if (/^\d+\s+-\s+\d/.test(expr)) return true;
-  if (/^\d+(?:\.(?:\d+)?(?:\.[x*])?)?$/.test(expr)) return true;
-  return false;
+  return semver.validRange(range.trim()) !== null;
 }
 
 function satisfiesInstalledRange(declaredRange: string, installedVersion: string): "pass" | "warn" | "skip" {
@@ -119,11 +24,10 @@ function satisfiesInstalledRange(declaredRange: string, installedVersion: string
   if (!isValidatableRange(declaredRange)) {
     return "skip";
   }
-  const parsed = parseSemver(installedVersion);
-  if (!parsed) {
+  if (!semver.valid(installedVersion)) {
     return "skip";
   }
-  return versionInRange(parsed, declaredRange) ? "pass" : "warn";
+  return semver.satisfies(installedVersion, declaredRange) ? "pass" : "warn";
 }
 
 export type DoctorOptions = {
