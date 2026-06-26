@@ -91,6 +91,9 @@ jobs:
 
               🤖 pi + <model>. Per Q&A: `/pi <domanda>`.
               ```
+            - **EVITA nits di stile**: niente "P3: manca punto e virgola", "P3: ordine invertito", "P3: commento potrebbe essere più chiaro". Posta solo issue che impattano funzionalità, sicurezza, performance, o contraddicono regole hard del repo.
+            - **EVITA P3 su scelte stilistiche soggettive** (es. "dovrebbe essere X invece di Y"). Se non rompe nulla, non segnalare.
+            - **Esegui self-validation**: prima di postare, valida i file che hai toccato (parse JSON/YAML, controlla sintassi) così non pubblichi bug evidenti (es. YAML rotto nel frontmatter di una skill).
             - Usa `create_pull_request_review` con body di sommario + commenti inline per ogni issue
             - Se la PR è OK, posta solo un commento "LGTM ✅" (non una review con linee)
             - Lingua: italiano per il body, code/identifiers in inglese
