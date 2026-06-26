@@ -1,0 +1,105 @@
+name: Pi PR Review
+
+on:
+  pull_request:
+    # Niente `synchronize`: evita review ad ogni push (rumore).
+    # Niente `edited`: triggera su cambio titolo/descrizione, non codice.
+    # La review parte solo all'apertura o quando un draft viene marcato ready.
+    types: [opened, ready_for_review]
+
+# Evita run sovrapposte su push consecutivi
+concurrency:
+  group: pi-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# Permessi minimi: serve solo leggere il codice e postare review
+# (l'agent non deve pushare o modificare file del repo)
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  pi-review:
+    # Non far partire review su PR da fork (sicurezza)
+    if: github.event.pull_request.head.repo.fork == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Run Pi review (OpenCode Go)
+        id: pi
+        env:
+          # OpenCode Go: env var richiesta dal pi SDK per il lookup del credential
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        uses: shaftoe/pi-coding-agent-action@v2.23.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # OpenCode Go è un provider built-in di pi: una sola API key,
+          # accesso a tutti i modelli del catalogo (es. minimax-m3, qwen-3.7-plus, ...).
+          provider: ${{ vars.PI_PROVIDER || 'opencode-go' }}
+          model: ${{ vars.PI_MODEL || 'minimax-m3' }}
+          token: ${{ secrets.OPENCODE_API_KEY }}
+          thinking_level: ${{ vars.PI_THINKING_LEVEL || 'medium' }}
+          # Tutti i tool built-in dell'action: get_pr_diff, get_issue_or_pr_thread,
+          # get_ci_status, create_pull_request_review, create_pull_request,
+          # update_pull_request, get_workflow_run_logs. Il prompt istruisce
+          # l'agent a usare SOLO i tool read-only + create_pull_request_review
+          # per la review (no commit/push non richiesti).
+          loaded_tools: all
+          diff_ignore_patterns: 'pnpm-lock.yaml dist/ node_modules/ *.lock'
+          export_session_html: true
+          prompt: |
+            Sei un reviewer PR esperto per Fentaris (pnpm monorepo, TypeScript strict).
+
+            ## Strumenti da usare (SOLO questi)
+            - `get_pr_diff` per leggere il diff (i `diff_ignore_patterns` escludono già lockfile/dist).
+            - `get_issue_or_pr_thread` per vedere se ci sono review esistenti (Codex, Cursor, umani).
+            - `get_ci_status` opzionalmente per vedere lo stato CI.
+            - `create_pull_request_review` per pubblicare la review con body di sommario + commenti inline.
+
+            ## Strumenti da NON usare
+            NON usare `create_pull_request`, `update_pull_request`, `get_workflow_run_logs`
+            né altri tool di scrittura. Il tuo compito è SOLO revisionare.
+
+            ## Procedura
+            1. Chiama `get_issue_or_pr_thread` per vedere se ci sono review esistenti. Non duplicare issue già segnalate — puoi solo aggiungere integrazioni, conferme da un altro angolo, o issue che il reviewer precedente ha mancato.
+            2. Chiama `get_pr_diff` per leggere il diff.
+            3. Se il contesto non è chiaro, leggi i file rilevanti con `read_file` (pi tool nativo, non un GitHub tool).
+            4. Analizza seguendo rigorosamente la skill `pr-review` caricata automaticamente (severity scale, formato output, cosa controllare/ignorare).
+
+            ## Output
+            - **NON narrare il tuo ragionamento** prima della review (no "Ho letto la PR...", no "Procedo con la review..."). Output = solo la review finale.
+            - **Body del sommario: MAX 5-8 righe.** Tabelle compatte, niente prosa, niente riepilogo del processo. Esempio buono:
+              ```
+              💡 AI Review by opencode-go/minimax-m3
+
+              Reviewed commit: <sha>
+
+              Trovati N issue (X blocker, Y major, Z minor). PR [OK / da rivedere / con problemi bloccanti].
+
+              🤖 pi + <model>. Per Q&A: `/pi <domanda>`.
+              ```
+            - Usa `create_pull_request_review` con body di sommario + commenti inline per ogni issue
+            - Se la PR è OK, posta solo un commento "LGTM ✅" (non una review con linee)
+            - Lingua: italiano per il body, code/identifiers in inglese
+            - NON aggiungere "Useful? React with 👍/👎"
+
+      - name: Upload session HTML artifact
+        if: ${{ steps.pi.outputs.session_html_path }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: pi-review-session-${{ github.event.pull_request.number }}
+          path: ${{ steps.pi.outputs.session_html_path }}
+          retention-days: 14
