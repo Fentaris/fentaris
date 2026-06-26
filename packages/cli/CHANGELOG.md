@@ -1,5 +1,17 @@
 # @fentaris/cli
 
+## 1.2.0
+
+### Minor Changes
+
+- 5825770: `fentaris init` now pins `@fentaris/core` to a known version range (currently `^2.0.0`) instead of `latest`. This makes local SDK/CLI integration tests deterministic and prevents a generated project from silently running a different core than the one this CLI was released against. Pass `--core-version <range>` to override the default; semver ranges, dist tags, and `workspace:*`/`file:` references are all accepted.
+- f2571ec: Allow `fentaris secrets` commands to run in SDK-only projects by discovering `package.json` projects that depend on `@fentaris/core`, including optional `package.json` metadata and `--entrypoint` support for manifest generation.
+
+### Patch Changes
+
+- 99b9900: Fix `fentaris init --non-interactive` by supporting explicit scaffold inputs, including `--package-manager`, by failing early when the project name is missing, and by reporting unavailable explicit package managers before install runs.
+- 67f1cc1: Report a warning when `@fentaris/core` is declared but missing from `node_modules` so `fentaris doctor` shows the install step by default.
+
 ## 1.1.1
 
 ### Patch Changes
