@@ -248,6 +248,12 @@ describe("default runtime prompts", () => {
       expect(output.text).toContain("↑ more");
     });
   });
+
+  it("reports spawn errors as failed process results", async () => {
+    const rt = defaultRuntime();
+
+    await expect(rt.runner("fentaris-missing-command-for-tests", [], { stdio: "ignore" })).resolves.toEqual({ code: 1 });
+  });
 });
 
 describe("command routing helpers", () => {
@@ -533,6 +539,27 @@ describe("project commands", () => {
     expect(rt.prompt.select).not.toHaveBeenCalled();
     expect(rt.calls.some((call) => call.command === "npm" && call.args[0] === "install")).toBe(false);
     expect(rt.calls.some((call) => call.command === "git" && call.args[0] === "init")).toBe(false);
+  });
+
+  it("fails init before installing when an explicit package manager is unavailable", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, npm: true, bun: false, git: true, docker: false });
+
+    await expect(main(["init", "demo", "--package-manager", "bun"], rt)).resolves.toBe(1);
+
+    expect(rt.out.error).toHaveBeenCalledWith(expect.stringContaining("Package manager 'bun' was not found."));
+    expect(rt.calls.some((call) => call.command === "bun" && call.args[0] === "install")).toBe(false);
+  });
+
+  it("allows unavailable explicit package managers when install is skipped", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, npm: true, bun: false, git: true, docker: false });
+
+    await expect(main(["init", "demo", "--package-manager", "bun", "--skip-install", "--skip-git"], rt)).resolves.toBe(0);
+
+    const config = JSON.parse(await readFile(join(dir, "demo", "fentaris.json"), "utf8")) as { packageManager: string };
+    expect(config.packageManager).toBe("bun");
+    expect(rt.calls.some((call) => call.command === "bun" && call.args[0] === "install")).toBe(false);
   });
 
   it("fails non-interactive init when the project name is missing", async () => {

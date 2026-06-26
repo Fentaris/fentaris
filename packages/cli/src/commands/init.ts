@@ -21,7 +21,8 @@ export async function runInit(command: CliCommand, runtime: Runtime): Promise<vo
   const targetDir = path.resolve(runtime.cwd, projectName);
   await ensureEmptyTargetDirectory(targetDir);
 
-  const packageManager = await resolveInitPackageManager(command, runtime);
+  const skipInstall = command.options["skip-install"] === true;
+  const packageManager = await resolveInitPackageManager(command, runtime, { requireInstalled: !skipInstall });
   const template = renderTemplate({
     projectName,
     packageManager,
@@ -34,7 +35,7 @@ export async function runInit(command: CliCommand, runtime: Runtime): Promise<vo
   runtime.out.log(`  ${style.pass(`Created ${projectName}`)}`);
 
   section(runtime, "Install");
-  if (command.options["skip-install"] === true) {
+  if (skipInstall) {
     runtime.out.log(`  ${style.warn("Skipped dependency install by request.")}`);
   } else {
     await runPackageInstall(packageManager, targetDir, runtime.runner);
@@ -59,10 +60,14 @@ export async function runInit(command: CliCommand, runtime: Runtime): Promise<vo
   runtime.out.log(nextSteps([`cd ${projectName}`, "fentaris dev"]));
 }
 
-async function resolveInitPackageManager(command: CliCommand, runtime: Runtime): Promise<PackageManager> {
+async function resolveInitPackageManager(command: CliCommand, runtime: Runtime, options: { requireInstalled: boolean }): Promise<PackageManager> {
   const option = stringOption(command.options, "package-manager", "");
   if (option) {
-    return validatePackageManager(option);
+    const packageManager = validatePackageManager(option);
+    if (options.requireInstalled && !runtime.probe(packageManager, ["--version"])) {
+      throw new Error(`Package manager '${packageManager}' was not found. Install ${packageManager} or pass --skip-install.`);
+    }
+    return packageManager;
   }
 
   return selectPackageManager(runtime.probe, runtime.prompt);
