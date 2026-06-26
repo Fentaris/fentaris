@@ -84,6 +84,72 @@ proxy.use((ctx, next) => {
 
 The same API is available through classes when you prefer object construction, but the helper style keeps users, groups, server bindings, and credential references close together.
 
+## Team-Governed Proxy
+
+Use this shape when one team proxy serves multiple users and different groups need different upstream permissions:
+
+```ts theme={null}
+import {
+  bearer,
+  credential,
+  credentialJson,
+  fentaris,
+  group,
+  jsonConsoleLogger,
+  mcp,
+  policy,
+  streamableHttp,
+  user,
+} from "@fentaris/core";
+
+const readers = policy("readers")
+  .mcp("github")
+  .allow("search_issues");
+
+const maintainers = policy("maintainers")
+  .mcp("github")
+  .allow("search_issues")
+  .mcp("github")
+  .allow("create_issue");
+
+const app = fentaris({
+  logger: jsonConsoleLogger(),
+  autoLog: true,
+  groups: [
+    group({
+      id: "readers",
+      users: [user("reader", { apiKeys: [credentialJson("users.reader.apiKeys.0")] })],
+      credentials: {
+        "github.token": credentialJson("groups.readers.github.token"),
+      },
+      policy: readers,
+    }),
+    group({
+      id: "maintainers",
+      users: [user("alice", { apiKeys: [credentialJson("users.alice.apiKeys.0")] })],
+      credentials: {
+        "github.token": credentialJson("groups.maintainers.github.token"),
+      },
+      policy: maintainers,
+    }),
+  ],
+  servers: [
+    mcp("github", {
+      transport: streamableHttp({ url: "https://github.example/mcp" }),
+      auth: bearer(credential("github.token")),
+    }),
+  ],
+});
+
+app.use((ctx, next) => {
+  ctx.log.setTag("subject", ctx.subject?.id ?? "anonymous");
+  ctx.log.setTag("groups", ctx.subject?.groups.map((group) => group.id).join(",") ?? "");
+  return next();
+});
+```
+
+Store the API keys and upstream tokens with the local secrets commands, then commit only `.fentaris/secrets.manifest.json`.
+
 ## App-Level Composition
 
 Use app-level governance declarations when the proxy is assembled across modules or when upstream MCP servers are registered after construction.
@@ -376,3 +442,4 @@ const proxy = new McpProxy({
 * [Security](/guides/security)
 * [Multi-server routing](/guides/multi-server)
 * [Observability](/guides/observability)
+* [SDK-only Secrets](/guides/sdk-only-secrets)

@@ -1,36 +1,149 @@
 ---
 title: "Telegram approval"
-description: "Gate sensitive Fentaris tool calls with a simple Telegram approval adapter."
+description: "Gate sensitive Fentaris tool calls with a Telegram approve/deny step that you pass to a policy permission."
 ---
 
-Use `@fentaris/approval-telegram` when a policy needs a human approve/deny step without building a custom UI.
+Use `@fentaris/approval-telegram` when a policy needs a human approve/deny step without building a custom UI. The adapter sends a Telegram message with Approve and Deny buttons, and the policy engine blocks the protected tool call until the store records a decision.
+
+## Policy Option, Not Middleware
+
+`telegramApproval(...)` returns a `Pick<ToolPermissionOptions, "approval">`. It is a **policy option** that you pass to `policy(...).mcp(server).allow(tool, ...)` or `policy(...).mcp(server).deny(tool, ...)`. It is **not** middleware, and there is no `.middleware(...)` method.
+
+<Note>
+  Telegram approval is evaluated by the policy engine before any middleware or tool route runs. If you want a runtime hook, use `proxy.use(...)` or a tool route. The policy option is for the "should this call proceed at all" decision; the middleware is for what happens next.
+</Note>
+
+Use the policy option when the decision depends on the call itself: which tool, which arguments, which subject. Use middleware when you want to react to the request after policy passes, for example to log, rewrite arguments, or call an external system.
+
+## Quick Start
 
 ```bash theme={null}
 pnpm add @fentaris/approval-telegram
 ```
 
-## Add an approval
-
 ```ts theme={null}
 import { telegramApproval } from "@fentaris/approval-telegram";
 import { group, policy, user } from "@fentaris/core";
 
-const maintainers = group({
+const maintainers = policy("maintainers")
+  .mcp("github")
+  .allow("delete_repo", telegramApproval({
+    botToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
+    chatId: process.env.TELEGRAM_APPROVAL_CHAT_ID ?? "",
+    reason: "Repository deletion requires Telegram approval",
+  }));
+
+const team = group({
   id: "maintainers",
-  users: [user("alice")],
-  policy: policy("maintainers")
-    .mcp("github")
-    .allow("delete_repo", telegramApproval({
-      botToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
-      chatId: process.env.TELEGRAM_APPROVAL_CHAT_ID ?? "",
-      reason: "Repository deletion requires Telegram approval",
-    })),
+  users: [user("alice"), user("bob")],
+  policy: maintainers,
 });
 ```
 
 The adapter sends a Telegram message with Approve and Deny buttons. Tool arguments are included by default with sensitive keys such as tokens, passwords, API keys, authorization headers, secrets, and credentials redacted.
 
-## Handle callbacks
+## Local Approval Without A Bot
+
+For local development and tests, use an in-memory store and a mocked `fetch` implementation. This exercises the same policy approval path without creating a Telegram bot or webhook.
+
+## Sensitive-Tool Test Path
+
+You can drive the full approval flow in a test without a real Telegram bot. Inject a `fetch` mock to capture the message request, and use `createInMemoryTelegramApprovalStore` to record a decision between calls. The example below uses `policy.evaluate(...)` so the test path matches the real policy pipeline.
+
+```ts theme={null}
+import { describe, expect, it, vi } from "vitest";
+import { Logger, policy, type MiddlewareContext } from "@fentaris/core";
+import {
+  createInMemoryTelegramApprovalStore,
+  telegramApproval,
+} from "@fentaris/approval-telegram";
+
+const fetchMock = vi.fn<typeof fetch>(async () => new Response(null, { status: 200 }));
+const store = createInMemoryTelegramApprovalStore();
+
+// Derive a stable requestId from the tool arguments so retries share one decision.
+const stableRequestId = (request: { toolName: string; arguments: unknown }) =>
+  `${request.toolName}:${JSON.stringify(request.arguments)}`;
+
+const maintainers = policy("maintainers")
+  .mcp("github")
+  .allow("delete_repo", telegramApproval({
+    botToken: "test-bot-token",
+    chatId: "test-chat-id",
+    store,
+    fetch: fetchMock,
+    requestId: stableRequestId,
+  }));
+
+function buildRequest() {
+  return {
+    serverName: "github",
+    toolName: "delete_repo",
+    proxyToolName: "github__delete_repo",
+    arguments: { owner: "fentaris", repo: "demo" },
+    raw: { name: "github__delete_repo" },
+  };
+}
+
+// Minimal MiddlewareContext for policy.evaluate(). Real proxies build a richer
+// context; the approval handler only reads `log` from this object.
+function buildContext(): MiddlewareContext {
+  return {
+    user: { id: "alice" },
+    subject: { id: "alice", groups: [], hasGroup: () => false },
+    log: new Logger({ redact: false }),
+    res: {} as never,
+    approval: {
+      approve: () => ({ status: "approved" }),
+      deny: () => ({ status: "denied" }),
+      pending: () => ({ status: "pending" }),
+    },
+  };
+}
+
+describe("telegram approval", () => {
+  it("denies the sensitive tool until a human approves", async () => {
+    // 1. First call: Telegram message is sent, approval is pending.
+    const pending = await maintainers.evaluate(buildRequest(), { id: "alice" }, buildContext());
+    expect(pending.allowed).toBe(false);
+    expect(pending.metadata?.approval?.status).toBe("pending");
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    // 2. Simulate a human pressing "Approve" in Telegram.
+    const requestId = pending.metadata!.approval!.requestId!;
+    await store.set(requestId, "approved");
+
+    // 3. Second call with the same request id: policy allows without re-sending.
+    const approved = await maintainers.evaluate(buildRequest(), { id: "alice" }, buildContext());
+    expect(approved.allowed).toBe(true);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("denies on Telegram delivery failure by default", async () => {
+    const failingFetch = vi.fn<typeof fetch>(async () => new Response(null, { status: 503 }));
+    const failPolicy = policy("maintainers")
+      .mcp("github")
+      .allow("delete_repo", telegramApproval({
+        botToken: "test-bot-token",
+        chatId: "test-chat-id",
+        store: createInMemoryTelegramApprovalStore(),
+        fetch: failingFetch,
+        requestId: stableRequestId,
+      }));
+
+    const decision = await failPolicy.evaluate(buildRequest(), { id: "alice" }, buildContext());
+    expect(decision.allowed).toBe(false);
+    expect(decision.metadata?.approval?.status).toBe("denied");
+    expect(decision.metadata?.approval?.reason).toBe("Telegram approval request failed");
+  });
+});
+```
+
+<Tip>
+  Pass `requestId` in the adapter options whenever retries should reuse one approval. The function form (`(request) => string`) is the most useful in tests and production: derive it from the tool name and the arguments that uniquely identify the operation, so the same human decision covers a retry. Without it, the adapter generates a new `requestId` per policy call, and a human has to approve every retry.
+</Tip>
+
+## Handle Callbacks
 
 Wire Telegram webhook updates to `handleTelegramApprovalCallback`. The in-memory store is useful for local demos; production deployments should provide a durable store.
 
@@ -60,7 +173,7 @@ await handleTelegramApprovalCallback(telegramUpdateBody, {
 
 Callback buttons use signed compact payloads that bind the approve or deny action to the request id. `handleTelegramApprovalCallback(...)` rejects callbacks from any chat other than the configured `chatId`, callbacks without message chat metadata, and callback data with invalid signatures.
 
-## Secure webhooks
+## Secure Webhooks
 
 When using Telegram webhooks, set a Telegram secret token and pass the request headers to the callback handler. The handler validates `X-Telegram-Bot-Api-Secret-Token` before processing callback data.
 
@@ -74,4 +187,25 @@ await handleTelegramApprovalCallback(telegramUpdateBody, {
 });
 ```
 
+## Fail Closed By Default
+
 The default failure mode is fail closed: if Telegram message delivery fails, the protected call is denied. `failOpen: true` is still available as an explicit development or emergency override, and the adapter emits a warning when it is enabled because approval delivery failures will allow protected calls.
+
+```ts theme={null}
+telegramApproval({
+  botToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
+  chatId: process.env.TELEGRAM_APPROVAL_CHAT_ID ?? "",
+  failOpen: true,
+});
+```
+
+<Warning>
+  `failOpen: true` allows the protected tool to run when Telegram delivery fails. Use only for development or break-glass operation. Production deployments should keep the fail-closed default.
+</Warning>
+
+## Related Documentation
+
+* [Policies](/concepts/policies)
+* [Governance auth](/guides/governance-auth)
+* [Security](/guides/security)
+* [Middleware](/guides/middleware)

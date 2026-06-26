@@ -6,7 +6,7 @@ import { secretScope } from "../domain/auth/local-store.js";
 import { credentialsPath, manifestPath, openLocalSecretsBackend, scopeFromOptions } from "../domain/secrets/backend.js";
 import { buildListRows, getSecretsDoctorIssues, loadRequiredReferences } from "../domain/secrets/doctor.js";
 import { scanEntrypointForSecrets } from "../domain/secrets/manifest-scan.js";
-import { discoverProject } from "../domain/project/project.js";
+import { discoverSecretsProject } from "../domain/project/project.js";
 import type { CliCommand, CliOptions, Runtime } from "../shared/types.js";
 import { exists } from "../shared/utils.js";
 import { section, style } from "../ui/format.js";
@@ -42,7 +42,7 @@ export async function runSecrets(command: CliCommand, runtime: Runtime): Promise
 }
 
 async function runSecretsSet(command: CliCommand, reference: string | undefined, runtime: Runtime): Promise<void> {
-  const project = await discoverProject(runtime.cwd);
+  const project = await discoverSecretsProject(runtime.cwd);
   const input = await resolveSecretsSetInput(command, reference, runtime, project);
   const storagePath = path.relative(project.root, credentialsPath(project));
   const backend = await openLocalSecretsBackend(project, runtime, input.options);
@@ -75,7 +75,7 @@ async function resolveSecretsSetInput(
   command: CliCommand,
   reference: string | undefined,
   runtime: Runtime,
-  project: Awaited<ReturnType<typeof discoverProject>>,
+  project: Awaited<ReturnType<typeof discoverSecretsProject>>,
 ): Promise<{ reference: string; options: CliOptions }> {
   const options: CliOptions = { ...command.options };
   if (typeof options.user === "string" && typeof options.group === "string") {
@@ -182,7 +182,7 @@ async function resolveSubjectId(
   kind: "user" | "group",
   options: CliOptions,
   runtime: Runtime,
-  project: Awaited<ReturnType<typeof discoverProject>>,
+  project: Awaited<ReturnType<typeof discoverSecretsProject>>,
   required: Array<{ scope: string }>,
 ): Promise<string> {
   const label = kind === "user" ? "User id" : "Group id";
@@ -203,7 +203,7 @@ async function loadKnownSubjectIds(
   kind: "user" | "group",
   options: CliOptions,
   runtime: Runtime,
-  project: Awaited<ReturnType<typeof discoverProject>>,
+  project: Awaited<ReturnType<typeof discoverSecretsProject>>,
   required: Array<{ scope: string }>,
 ): Promise<string[]> {
   const ids = new Set<string>();
@@ -230,7 +230,7 @@ async function loadStoredSubjectIds(
   kind: "user" | "group",
   options: CliOptions,
   runtime: Runtime,
-  project: Awaited<ReturnType<typeof discoverProject>>,
+  project: Awaited<ReturnType<typeof discoverSecretsProject>>,
 ): Promise<string[]> {
   const key = typeof options.key === "string" ? options.key : runtime.env.FENTARIS_AUTH_KEY;
   if (!key?.trim() || !(await exists(credentialsPath(project)))) {
@@ -246,7 +246,7 @@ async function loadStoredSubjectIds(
   }
 }
 
-async function loadEntrypointSubjectIds(kind: "user" | "group", project: Awaited<ReturnType<typeof discoverProject>>): Promise<string[]> {
+async function loadEntrypointSubjectIds(kind: "user" | "group", project: Awaited<ReturnType<typeof discoverSecretsProject>>): Promise<string[]> {
   const entrypoint = path.join(project.root, project.config.entrypoint);
   if (!(await exists(entrypoint))) {
     return [];
@@ -279,7 +279,7 @@ async function runSecretsUnset(command: CliCommand, reference: string | undefine
     throw new Error("Usage: fentaris secrets unset <reference> [--user <id> | --group <id>]");
   }
 
-  const project = await discoverProject(runtime.cwd);
+  const project = await discoverSecretsProject(runtime.cwd);
   const backend = await openLocalSecretsBackend(project, runtime, command.options);
   const removed = await backend.unset(reference, scopeFromOptions(command.options));
   section(runtime, "Secrets");
@@ -291,7 +291,7 @@ async function runSecretsUnset(command: CliCommand, reference: string | undefine
 }
 
 async function runSecretsList(command: CliCommand, runtime: Runtime): Promise<void> {
-  const project = await discoverProject(runtime.cwd);
+  const project = await discoverSecretsProject(runtime.cwd);
   const backend = await openLocalSecretsBackend(project, runtime, command.options);
   const stored = await backend.listRefs();
   const required = await loadRequiredReferences(project);
@@ -316,7 +316,10 @@ async function runSecretsList(command: CliCommand, runtime: Runtime): Promise<vo
 }
 
 async function runSecretsManifest(command: CliCommand, runtime: Runtime): Promise<void> {
-  const project = await discoverProject(runtime.cwd);
+  const project = await discoverSecretsProject(runtime.cwd, {
+    entrypoint: typeof command.options.entrypoint === "string" ? command.options.entrypoint : undefined,
+    requireEntrypoint: true,
+  });
   const entrypoint = path.join(project.root, project.config.entrypoint);
   if (!(await exists(entrypoint))) {
     throw new Error(`Entrypoint not found: ${project.config.entrypoint}`);
@@ -364,7 +367,7 @@ function parseManifestJson(source: string, filePath: string): unknown {
 }
 
 async function runSecretsDoctor(command: CliCommand, runtime: Runtime): Promise<void> {
-  const project = await discoverProject(runtime.cwd);
+  const project = await discoverSecretsProject(runtime.cwd);
   const key = typeof command.options.key === "string" ? command.options.key : undefined;
   const issues = await getSecretsDoctorIssues(project, runtime, { strict: command.options.strict === true, key });
 

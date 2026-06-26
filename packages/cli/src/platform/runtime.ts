@@ -279,7 +279,16 @@ async function askSecret(question: string, defaultValue?: string): Promise<strin
 
 function runProcess(command: string, args: string[], options: SpawnOptions = {}): Promise<CommandResult> {
   return new Promise((resolve) => {
+    let settled = false;
+    const finish = (code: number) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve({ code });
+    };
     const child = spawn(command, args, options);
-    child.on("close", (code) => resolve({ code: code ?? 1 }));
+    child.on("error", () => finish(1));
+    child.on("close", (code) => finish(code ?? 1));
   });
 }

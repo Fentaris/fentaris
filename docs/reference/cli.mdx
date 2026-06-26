@@ -40,12 +40,22 @@ fentaris init my-proxy
 
 Options:
 
+* `--package-manager <pm>` - set the generated project's package manager. Supported values: `pnpm`, `npm`, and `bun`. When install runs, this binary must be available on `PATH`.
 * `--port <port>` - set the generated proxy port. Default: `4000`.
 * `--path <path>` - set the generated MCP endpoint path. Default: `/mcp`.
+* `--core-version <range>` - set the version range for `@fentaris/core` written to the generated `package.json`. Default: `^2.0.0`. Accepts semver ranges (`^2.0.0`, `~2.0.0`, `2.0.0`, `>=2.0.0`), dist tags (`latest`, `next`), and workspace/file references (`workspace:*`, `file:../packages/core`). Use `workspace:*` or a `file:` reference to link a generated project against the local Fentaris monorepo.
 * `--skip-install` - create files without running package installation.
 * `--skip-git` - create files without initializing a git repository.
 
-`init` writes `fentaris.json`, `src/index.ts`, package scripts, TypeScript config, `.gitignore`, and a README. It initializes a git repository when git is available unless `--skip-git` is passed.
+`init` writes `fentaris.json`, `src/index.ts`, package scripts, TypeScript config, `.gitignore`, and a README. It initializes a git repository when git is available unless `--skip-git` is passed. The generated `package.json` pins `@fentaris/core` to the version range this CLI was released against, so the proxy always starts against a known-good core.
+
+Use `--non-interactive` with an explicit project name. Pass `--package-manager` when the environment has more than one supported package manager or when automation must be reproducible.
+
+```bash theme={null}
+fentaris init my-proxy --non-interactive --package-manager pnpm --port 4000 --path /mcp --skip-install --skip-git
+```
+
+When developing against the local Fentaris monorepo, pass `--core-version workspace:*` from a workspace package or `--core-version file:../packages/core` from an adjacent generated project. The generated app then imports the local `@fentaris/core` instead of the released range.
 
 ### `fentaris dev`
 
@@ -89,6 +99,8 @@ Options:
 * `--json` - print machine-readable results.
 * `--runtime` - check the running MCP endpoint.
 * `--timeout <ms>` - set runtime check timeout. Default: `10000`.
+
+When project dependencies have not been installed, `doctor` reports `node_modules/@fentaris/core` as a warning and prints the package manager install command to run.
 
 ### `fentaris build`
 
@@ -161,6 +173,8 @@ fentaris secrets set github.token --user admin
 fentaris secrets set github.token --value-stdin --non-interactive
 ```
 
+Generated projects are discovered from `fentaris.json`. SDK-only projects are discovered from the nearest `package.json` that depends on `@fentaris/core`; in that mode the CLI uses `.fentaris/` unless `package.json` contains a `fentaris.authDir` override.
+
 When `reference` or `--value` is omitted, the command walks through an interactive setup: pick a manifest reference, choose `default`, `user`, or `group` scope, enter the hidden value, review the redacted summary, and confirm before anything is written.
 
 Options:
@@ -214,12 +228,28 @@ Generate or validate `.fentaris/secrets.manifest.json` from `credential(...)` re
 
 ```bash theme={null}
 fentaris secrets manifest
+fentaris secrets manifest --entrypoint src/server.ts
 fentaris secrets manifest --check
 ```
 
 Options:
 
+* `--entrypoint <path>` - scan this entrypoint. Use it for SDK-only projects without `fentaris.json` or to override the configured entrypoint.
 * `--check` - fail when the committed manifest does not match the entrypoint scan.
+
+SDK-only projects can also declare the entrypoint in `package.json`:
+
+```json theme={null}
+{
+  "dependencies": {
+    "@fentaris/core": "^2.0.0"
+  },
+  "fentaris": {
+    "entrypoint": "src/server.ts",
+    "authDir": ".fentaris"
+  }
+}
+```
 
 <Tip>
   Commit `.fentaris/secrets.manifest.json` and run `fentaris secrets manifest --check` in CI to catch missing or stale schema updates.
@@ -257,5 +287,6 @@ Project commands search upward from the current directory for `fentaris.json`. L
 
 * [Quickstart](/getting-started/quickstart)
 * [Config file](/reference/config-file)
+* [SDK-only Secrets](/guides/sdk-only-secrets)
 * [Environment variables](/reference/environment-variables)
 * [Troubleshooting](/troubleshooting)

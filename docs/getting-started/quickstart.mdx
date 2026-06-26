@@ -33,6 +33,14 @@ cd my-proxy
 fentaris dev
 ```
 
+For automation, pass the project name and scaffold choices explicitly:
+
+```bash theme={null}
+fentaris init my-proxy --non-interactive --package-manager pnpm --skip-install --skip-git
+```
+
+If you omit `--skip-install`, the package manager passed to `--package-manager` must be installed and available on `PATH`.
+
 The proxy listens on `http://localhost:4000/mcp` by default. Generated projects read `port` and `path` from `fentaris.json`, so `fentaris dev` and `app.start()` stay aligned without hardcoding the endpoint in `src/index.ts`.
 
 <Note>
@@ -47,9 +55,27 @@ The proxy listens on `http://localhost:4000/mcp` by default. Generated projects 
 - `fentaris.json` for CLI project discovery and runtime `port`/`path` defaults.
 - `.gitignore`, TypeScript config, and package scripts.
 
+The generated `package.json` pins `@fentaris/core` to a caret range that matches the CLI release (currently `^2.0.0`). This makes local SDK/CLI integration tests deterministic — the app installs the same core the CLI was validated against instead of whatever happens to be `latest` on npm.
+
 <Note>
   `fentaris init` initializes a git repository when git is available. Pass `--skip-git` to create only the project files.
 </Note>
+
+### Local development against the monorepo
+
+If you are working inside the Fentaris repository and want a generated project to import the local `@fentaris/core` instead of the pinned range, pass a workspace or file reference to `--core-version`:
+
+```bash theme={null}
+fentaris init my-proxy --core-version workspace:*
+```
+
+or
+
+```bash theme={null}
+fentaris init my-proxy --core-version file:../packages/core
+```
+
+The doctor check will then skip the installed-version check for that range. Use `fentaris upgrade` (when available) to refresh generated projects after a core release.
 
 ## Connect a Client
 
@@ -98,6 +124,8 @@ curl -sS -X POST http://127.0.0.1:4000/mcp \
   You can also use `npx @modelcontextprotocol/inspector` and point it at `http://127.0.0.1:4000/mcp`.
 </Tip>
 
+For client-specific JSON snippets, see [Client Configs](/guides/client-configs).
+
 ## Validate the Project
 
 Run the local checks before connecting a client:
@@ -113,6 +141,7 @@ fentaris check --offline
 ## Related Documentation
 
 * [CLI Reference](/reference/cli)
+* [Client Configs](/guides/client-configs)
 * [Config file](/reference/config-file)
 * [Environment variables](/reference/environment-variables)
 * [Troubleshooting](/troubleshooting)

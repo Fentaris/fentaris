@@ -91,10 +91,12 @@ export const cliSpec: CliCommandSpec = {
       usage: "fentaris init [OPTIONS] [project-name]",
       arguments: [{ name: "project-name", description: "Directory and package name for the new project." }],
       options: [
+        { name: "package-manager", valueName: "PM", description: "Package manager written to the generated project. Supported values: pnpm, npm, bun." },
         { name: "skip-install", description: "Skip dependency installation." },
         { name: "skip-git", description: "Skip git repository initialization." },
         { name: "port", valueName: "PORT", description: "Port written to fentaris.json. [default: 4000]" },
         { name: "path", valueName: "PATH", description: "MCP route path written to fentaris.json. [default: /mcp]" },
+        { name: "core-version", valueName: "RANGE", description: "Version range for @fentaris/core in the generated package.json. Accepts semver ranges (^2.0.0), dist tags (latest), and workspace/file references (workspace:*, file:../packages/core). [default: ^2.0.0]" },
         { name: "help", short: "h", description: "Print help" },
       ],
     },
@@ -280,6 +282,7 @@ export const cliSpec: CliCommandSpec = {
           description: "Generate or check the secrets manifest.",
           usage: "fentaris secrets manifest [OPTIONS]",
           options: [
+            { name: "entrypoint", valueName: "PATH", description: "Entrypoint to scan when no fentaris.json is present or when overriding project config." },
             { name: "check", description: "Fail if secrets.manifest.json is missing or out of date." },
             { name: "help", short: "h", description: "Print help" },
           ],

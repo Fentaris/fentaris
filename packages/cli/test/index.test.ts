@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import { FentarisAuth } from "@fentaris/core";
 import {
   discoverProject,
+  discoverSecretsProject,
   ensureEmptyTargetDirectory,
   isDirectCliInvocation,
   main,
@@ -20,7 +21,7 @@ import {
   type Runtime,
 } from "../src/index.js";
 import { defaultRuntime } from "../src/platform/runtime.js";
-import { cliVersion } from "../src/shared/constants.js";
+import { cliVersion, coreVersion } from "../src/shared/constants.js";
 
 const execFile = promisify(execFileWithCallback);
 
@@ -104,7 +105,7 @@ async function writeHealthyProject(root: string, authDirectory = ".fentaris"): P
       version: "0.1.0",
       type: "module",
       scripts: { dev: "tsx src/index.ts", build: "tsc -p tsconfig.json", start: "node dist/index.js" },
-      dependencies: { "@fentaris/core": "latest", tsx: "latest" },
+      dependencies: { "@fentaris/core": "^2.0.0", tsx: "latest" },
       devDependencies: { typescript: "latest" },
     }),
   );
@@ -119,6 +120,39 @@ async function writeHealthyProject(root: string, authDirectory = ".fentaris"): P
   await writeFile(
     join(root, authDirectory, "credentials.enc.json"),
     JSON.stringify(FentarisAuth.encryptCredentials({ users: {}, groups: {}, defaults: {} }, "test-key")),
+  );
+  await writeInstalledCoreVersion(root, coreVersion);
+}
+
+async function writeInstalledCoreVersion(projectRoot: string, version: string): Promise<void> {
+  const installedDir = join(projectRoot, "node_modules", "@fentaris", "core");
+  await mkdir(installedDir, { recursive: true });
+  await writeFile(
+    join(installedDir, "package.json"),
+    JSON.stringify({ name: "@fentaris/core", version }),
+  );
+}
+
+async function writeSdkOnlyProject(root: string, options: { entrypoint?: string; packageFentaris?: Record<string, unknown> } = {}): Promise<void> {
+  const entrypoint = options.entrypoint ?? "src/index.ts";
+  await mkdir(join(root, "src"), { recursive: true });
+  await writeFile(join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+  await writeFile(
+    join(root, "package.json"),
+    JSON.stringify({
+      name: "sdk-only-demo",
+      version: "0.1.0",
+      type: "module",
+      dependencies: { "@fentaris/core": "^2.0.0" },
+      ...(options.packageFentaris ? { fentaris: options.packageFentaris } : {}),
+    }),
+  );
+  await writeFile(
+    join(root, entrypoint),
+    `import { bearer, credential, fentaris } from "@fentaris/core";
+const app = fentaris({});
+app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callTool: async () => ({}), close: async () => {} }, auth: bearer(credential("github.token")) });
+`,
   );
 }
 
@@ -247,6 +281,12 @@ describe("default runtime prompts", () => {
       expect(output.text).toContain("↓ more");
       expect(output.text).toContain("↑ more");
     });
+  });
+
+  it("reports spawn errors as failed process results", async () => {
+    const rt = defaultRuntime();
+
+    await expect(rt.runner("fentaris-missing-command-for-tests", [], { stdio: "ignore" })).resolves.toEqual({ code: 1 });
   });
 });
 
@@ -501,6 +541,208 @@ describe("project template", () => {
   });
 });
 
+describe("core version range in template", () => {
+  it("defaults the generated @fentaris/core range to the CLI-pinned caret", () => {
+    const rendered = renderTemplate({
+      projectName: "demo",
+      packageManager: "pnpm",
+      port: 4000,
+      proxyPath: "/mcp",
+      coreVersionRange: "^2.0.0",
+    });
+
+    const packageJson = JSON.parse(rendered.files["package.json"] ?? "{}") as { dependencies: Record<string, string> };
+    expect(packageJson.dependencies["@fentaris/core"]).toBe("^2.0.0");
+    expect(rendered.files["README.md"]).toContain("`@fentaris/core` to `^2.0.0`");
+  });
+
+  it("accepts a custom semver range, dist tag, and workspace reference", () => {
+    const ranges: Array<{ range: string; expected: string }> = [
+      { range: "~2.0.0", expected: "~2.0.0" },
+      { range: "2.0.0", expected: "2.0.0" },
+      { range: ">=2.0.0", expected: ">=2.0.0" },
+      { range: ">=2.0.0 <3.0.0", expected: ">=2.0.0 <3.0.0" },
+      { range: "latest", expected: "latest" },
+      { range: "workspace:*", expected: "workspace:*" },
+      { range: "file:../packages/core", expected: "file:../packages/core" },
+    ];
+
+    for (const { range, expected } of ranges) {
+      const rendered = renderTemplate({
+        projectName: "demo",
+        packageManager: "pnpm",
+        port: 4000,
+        proxyPath: "/mcp",
+        coreVersionRange: range,
+      });
+      const packageJson = JSON.parse(rendered.files["package.json"] ?? "{}") as { dependencies: Record<string, string> };
+      expect(packageJson.dependencies["@fentaris/core"]).toBe(expected);
+    }
+  });
+
+  it("rejects a clearly invalid --core-version value with a helpful message", () => {
+    for (const range of ["not-a-range", ">=2.0.0 typo"]) {
+      expect(() =>
+        renderTemplate({
+          projectName: "demo",
+          packageManager: "pnpm",
+          port: 4000,
+          proxyPath: "/mcp",
+          coreVersionRange: range,
+        }),
+      ).toThrow(/Invalid --core-version value/);
+    }
+  });
+});
+
+describe("init --core-version flag", () => {
+  it("writes the explicit range into the generated package.json", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: false });
+
+    await expect(
+      main(["init", "demo", "--non-interactive", "--package-manager", "pnpm", "--skip-install", "--skip-git", "--core-version", "workspace:*"], rt),
+    ).resolves.toBe(0);
+
+    const packageJson = JSON.parse(await readFile(join(dir, "demo", "package.json"), "utf8")) as { dependencies: Record<string, string> };
+    expect(packageJson.dependencies["@fentaris/core"]).toBe("workspace:*");
+  });
+
+  it("rejects an invalid --core-version value before writing files", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: false });
+
+    await expect(
+      main(["init", "demo", "--non-interactive", "--package-manager", "pnpm", "--skip-install", "--skip-git", "--core-version", "not-a-range"], rt),
+    ).resolves.toBe(1);
+
+    expect(rt.out.error).toHaveBeenCalledWith(expect.stringContaining("Invalid --core-version value"));
+  });
+
+  it("falls back to the default range when --core-version is not provided", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: false });
+
+    await expect(
+      main(["init", "demo", "--non-interactive", "--package-manager", "pnpm", "--skip-install", "--skip-git"], rt),
+    ).resolves.toBe(0);
+
+    const packageJson = JSON.parse(await readFile(join(dir, "demo", "package.json"), "utf8")) as { dependencies: Record<string, string> };
+    expect(packageJson.dependencies["@fentaris/core"]).toBe("^2.0.0");
+  });
+});
+
+describe("@fentaris/core installed version check", () => {
+  it("passes when the installed version satisfies the declared caret range", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeInstalledCoreVersion(dir, "2.0.3");
+
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+    await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
+
+    const output = String(vi.mocked(rt.out.log).mock.calls.at(-1)?.[0]);
+    expect(output).toContain('"label": "@fentaris/core installed"');
+    expect(output).toContain('"status": "pass"');
+    expect(output).toContain("2.0.3");
+    expect(output).toContain("^2.0.0");
+  });
+
+  it("warns when the installed version does not satisfy the declared caret range", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeInstalledCoreVersion(dir, "1.5.0");
+
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+    await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
+
+    const output = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
+    expect(output).toContain("@fentaris/core installed");
+    expect(output).toContain("1.5.0");
+    expect(output).toContain("^2.0.0");
+  });
+
+  it("honors pre-1.0 caret upper bounds for installed versions", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const packageJsonPath = join(dir, "package.json");
+    const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as { dependencies: Record<string, string> };
+    packageJson.dependencies["@fentaris/core"] = "^0.2.0";
+    await writeFile(packageJsonPath, JSON.stringify(packageJson));
+    await writeInstalledCoreVersion(dir, "0.3.0");
+
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+    await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
+
+    const output = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
+    expect(output).toContain("@fentaris/core installed");
+    expect(output).toContain("0.3.0");
+    expect(output).toContain("^0.2.0");
+  });
+
+  it("warns when node_modules/@fentaris/core is missing", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: false });
+    await expect(main(["init", "demo", "--skip-install"], rt)).resolves.toBe(0);
+
+    rt.cwd = join(dir, "demo");
+    await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    rt.env.FENTARIS_AUTH_KEY = "ambient-shell-key";
+    await expect(main(["doctor"], rt)).resolves.toBe(0);
+
+    const output = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
+    expect(output).toContain("@fentaris/core installed");
+    expect(output).toContain("not yet installed");
+    expect(output).toContain("pnpm install");
+
+    vi.mocked(rt.out.log).mockClear();
+    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(1);
+  });
+
+  it("skips validation for non-validatable ranges such as workspace and file", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const project = join(dir, "demo");
+    await mkdir(join(project, "src"), { recursive: true });
+    await mkdir(join(project, ".fentaris"), { recursive: true });
+    await writeFile(
+      join(project, "package.json"),
+      JSON.stringify({
+        name: "demo",
+        version: "0.1.0",
+        type: "module",
+        scripts: { dev: "tsx src/index.ts", build: "tsc -p tsconfig.json", start: "node dist/index.js" },
+        dependencies: { "@fentaris/core": "workspace:*", tsx: "latest" },
+        devDependencies: { typescript: "latest" },
+      }),
+    );
+    await writeFile(
+      join(project, "tsconfig.json"),
+      JSON.stringify({ compilerOptions: { target: "ES2022", module: "NodeNext", moduleResolution: "NodeNext" } }),
+    );
+    await writeFile(
+      join(project, "fentaris.json"),
+      JSON.stringify({ name: "demo", packageManager: "pnpm", entrypoint: "src/index.ts", port: 4000, path: "/mcp", authDir: ".fentaris" }),
+    );
+    await writeFile(join(project, ".gitignore"), ".fentaris/\n");
+    await writeFile(join(project, "README.md"), "# Demo\n");
+    await writeFile(
+      join(project, ".fentaris", "credentials.enc.json"),
+      JSON.stringify(FentarisAuth.encryptCredentials({ users: {}, groups: {}, defaults: {} }, "test-key")),
+    );
+    await writeFile(join(project, "src", "index.ts"), "import { Policy, fentaris } from '@fentaris/core';\nPolicy.allowAll();\n");
+    await writeInstalledCoreVersion(project, "2.5.0");
+    await writeFile(join(project, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+
+    const rt = runtime(project, { pnpm: true, git: true, docker: true });
+    await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
+
+    const output = String(vi.mocked(rt.out.log).mock.calls.at(-1)?.[0]);
+    expect(output).toContain('"label": "@fentaris/core installed"');
+    expect(output).toContain('"status": "pass"');
+    expect(output).toContain("workspace:*");
+  });
+});
+
 describe("project commands", () => {
   it("initializes a project with dry-run install and git when available", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
@@ -511,6 +753,59 @@ describe("project commands", () => {
     const config = JSON.parse(await readFile(join(dir, "demo", "fentaris.json"), "utf8")) as { name: string };
     expect(config.name).toBe("demo");
     expect(rt.calls.some((call) => call.command === "git" && call.args[0] === "init")).toBe(true);
+  });
+
+  it("supports non-interactive init when scaffold inputs are explicit", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, npm: true, bun: true, git: true, docker: false });
+
+    await expect(
+      main(["init", "demo", "--non-interactive", "--package-manager", "npm", "--port", "4321", "--path", "/agent", "--skip-install", "--skip-git"], rt),
+    ).resolves.toBe(0);
+
+    const config = JSON.parse(await readFile(join(dir, "demo", "fentaris.json"), "utf8")) as {
+      packageManager: string;
+      port: number;
+      path: string;
+    };
+    expect(config.packageManager).toBe("npm");
+    expect(config.port).toBe(4321);
+    expect(config.path).toBe("/agent");
+    expect(rt.prompt.text).not.toHaveBeenCalled();
+    expect(rt.prompt.select).not.toHaveBeenCalled();
+    expect(rt.calls.some((call) => call.command === "npm" && call.args[0] === "install")).toBe(false);
+    expect(rt.calls.some((call) => call.command === "git" && call.args[0] === "init")).toBe(false);
+  });
+
+  it("fails init before installing when an explicit package manager is unavailable", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, npm: true, bun: false, git: true, docker: false });
+
+    await expect(main(["init", "demo", "--package-manager", "bun"], rt)).resolves.toBe(1);
+
+    expect(rt.out.error).toHaveBeenCalledWith(expect.stringContaining("Package manager 'bun' was not found."));
+    expect(rt.calls.some((call) => call.command === "bun" && call.args[0] === "install")).toBe(false);
+  });
+
+  it("allows unavailable explicit package managers when install is skipped", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, npm: true, bun: false, git: true, docker: false });
+
+    await expect(main(["init", "demo", "--package-manager", "bun", "--skip-install", "--skip-git"], rt)).resolves.toBe(0);
+
+    const config = JSON.parse(await readFile(join(dir, "demo", "fentaris.json"), "utf8")) as { packageManager: string };
+    expect(config.packageManager).toBe("bun");
+    expect(rt.calls.some((call) => call.command === "bun" && call.args[0] === "install")).toBe(false);
+  });
+
+  it("fails non-interactive init when the project name is missing", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: false });
+
+    await expect(main(["init", "--non-interactive", "--skip-install"], rt)).resolves.toBe(1);
+
+    expect(rt.prompt.text).not.toHaveBeenCalled();
+    expect(rt.out.error).toHaveBeenCalledWith(expect.stringContaining("Project name is required for non-interactive init"));
   });
 
   it("skips git initialization when requested", async () => {
@@ -617,6 +912,7 @@ describe("project commands", () => {
 
     rt.cwd = join(dir, "demo");
     await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    await writeInstalledCoreVersion(rt.cwd, coreVersion);
     rt.env.FENTARIS_AUTH_KEY = "ambient-shell-key";
     await expect(main(["check", "--offline"], rt)).resolves.toBe(0);
     await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
@@ -719,6 +1015,7 @@ void app;
     rt.cwd = join(dir, "demo");
     rt.env.FENTARIS_AUTH_KEY = "ambient-shell-key";
     await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    await writeInstalledCoreVersion(rt.cwd, coreVersion);
 
     await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
     await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
@@ -738,6 +1035,7 @@ void app;
     delete rt.env.FENTARIS_AUTH_KEY;
     await mkdir(join(rt.cwd, ".fentaris"), { recursive: true });
     await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    await writeInstalledCoreVersion(rt.cwd, coreVersion);
 
     await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
     await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
@@ -1163,6 +1461,63 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     const manifest = JSON.parse(await readFile(join(dir, ".fentaris", "secrets.manifest.json"), "utf8")) as { references: Array<{ ref: string }> };
     expect(manifest.references).toEqual([{ ref: "github.token", scope: "default" }]);
     await expect(main(["secrets", "manifest", "--check"], rt)).resolves.toBe(0);
+  });
+
+  it("discovers SDK-only projects for secrets from package.json", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeSdkOnlyProject(dir);
+
+    await expect(discoverSecretsProject(join(dir, "src"))).resolves.toMatchObject({
+      root: dir,
+      configPath: join(dir, "package.json"),
+      config: {
+        name: "sdk-only-demo",
+        packageManager: "pnpm",
+        entrypoint: "src/index.ts",
+        authDir: ".fentaris",
+      },
+    });
+  });
+
+  it("generates the secrets manifest for SDK-only projects with an explicit entrypoint", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeSdkOnlyProject(dir, { entrypoint: "src/server.ts" });
+
+    const rt = runtime(dir);
+    await expect(main(["secrets", "manifest", "--entrypoint", "src/server.ts"], rt)).resolves.toBe(0);
+    const manifest = JSON.parse(await readFile(join(dir, ".fentaris", "secrets.manifest.json"), "utf8")) as { references: Array<{ ref: string }> };
+    expect(manifest.references).toEqual([{ ref: "github.token", scope: "default" }]);
+  });
+
+  it("uses package.json fentaris metadata for SDK-only secrets commands", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeSdkOnlyProject(dir, {
+      entrypoint: "src/server.ts",
+      packageFentaris: { entrypoint: "src/server.ts", authDir: ".local-fentaris" },
+    });
+
+    const manifestRuntime = runtime(dir);
+    await expect(main(["secrets", "manifest"], manifestRuntime)).resolves.toBe(0);
+    await expect(readFile(join(dir, ".local-fentaris", "secrets.manifest.json"), "utf8")).resolves.toContain("github.token");
+
+    const setRuntime = runtime(dir);
+    await expect(main(["secrets", "set", "github.token", "--value", "secret"], setRuntime)).resolves.toBe(0);
+    await expect(readFile(join(dir, ".local-fentaris", "credentials.enc.json"), "utf8")).resolves.toContain("ciphertext");
+  });
+
+  it("reports a guided error when an SDK-only manifest entrypoint cannot be inferred", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await mkdir(join(dir, "src"), { recursive: true });
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "sdk-only-demo", dependencies: { "@fentaris/core": "latest" } }),
+    );
+
+    const rt = runtime(dir);
+    await expect(main(["secrets", "manifest"], rt)).resolves.toBe(1);
+    const output = rt.out.error.mock.calls.flat().join("\n");
+    expect(output).toContain("SDK-only Fentaris project detected");
+    expect(output).toContain("fentaris secrets manifest --entrypoint src/index.ts");
   });
 
   it("generates scoped secret refs and credential env vars from the entrypoint", async () => {
