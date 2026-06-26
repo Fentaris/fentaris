@@ -5,6 +5,8 @@ description: "Configure Fentaris project discovery, runtime entrypoint, endpoint
 
 Generated projects use `fentaris.json` at the project root. The CLI uses this file to discover the project, run scripts, validate local state, and build runtime metadata. When an app starts without explicit `port` or `path` options, `@fentaris/core` also searches upward from the current working directory and uses the nearest project config defaults.
 
+SDK-only projects do not need `fentaris.json` for local secrets commands. When `fentaris secrets` cannot find a project config file, it can discover the nearest `package.json` that depends on `@fentaris/core` and use optional `package.json` metadata for the secrets entrypoint and local runtime directory.
+
 ## Quick Start
 
 ```json
@@ -102,6 +104,30 @@ Optional Fentaris Cloud project metadata for forward-compatible cloud sync. Clou
   "environment": "production"
 }
 ```
+
+## SDK-Only Secrets Metadata
+
+SDK-only projects can configure `fentaris secrets` without creating `fentaris.json`:
+
+```json
+{
+  "dependencies": {
+    "@fentaris/core": "^0.1.0"
+  },
+  "fentaris": {
+    "entrypoint": "src/server.ts",
+    "authDir": ".fentaris"
+  }
+}
+```
+
+Supported fields:
+
+* `entrypoint` - TypeScript file scanned by `fentaris secrets manifest`.
+* `authDir` - local runtime directory for `secrets.manifest.json` and `credentials.enc.json`.
+* `port`, `host`, and `path` - optional defaults used by the synthetic secrets project model.
+
+If `entrypoint` is omitted, `fentaris secrets manifest` checks `src/index.ts`, `src/main.ts`, and `index.ts`. Pass `--entrypoint <path>` when the file uses another name.
 
 ## Legacy Filename
 

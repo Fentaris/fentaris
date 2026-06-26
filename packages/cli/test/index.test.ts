@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import { FentarisAuth } from "@fentaris/core";
 import {
   discoverProject,
+  discoverSecretsProject,
   ensureEmptyTargetDirectory,
   isDirectCliInvocation,
   main,
@@ -119,6 +120,29 @@ async function writeHealthyProject(root: string, authDirectory = ".fentaris"): P
   await writeFile(
     join(root, authDirectory, "credentials.enc.json"),
     JSON.stringify(FentarisAuth.encryptCredentials({ users: {}, groups: {}, defaults: {} }, "test-key")),
+  );
+}
+
+async function writeSdkOnlyProject(root: string, options: { entrypoint?: string; packageFentaris?: Record<string, unknown> } = {}): Promise<void> {
+  const entrypoint = options.entrypoint ?? "src/index.ts";
+  await mkdir(join(root, "src"), { recursive: true });
+  await writeFile(join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+  await writeFile(
+    join(root, "package.json"),
+    JSON.stringify({
+      name: "sdk-only-demo",
+      version: "0.1.0",
+      type: "module",
+      dependencies: { "@fentaris/core": "latest" },
+      ...(options.packageFentaris ? { fentaris: options.packageFentaris } : {}),
+    }),
+  );
+  await writeFile(
+    join(root, entrypoint),
+    `import { bearer, credential, fentaris } from "@fentaris/core";
+const app = fentaris({});
+app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callTool: async () => ({}), close: async () => {} }, auth: bearer(credential("github.token")) });
+`,
   );
 }
 
@@ -1222,6 +1246,63 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     const manifest = JSON.parse(await readFile(join(dir, ".fentaris", "secrets.manifest.json"), "utf8")) as { references: Array<{ ref: string }> };
     expect(manifest.references).toEqual([{ ref: "github.token", scope: "default" }]);
     await expect(main(["secrets", "manifest", "--check"], rt)).resolves.toBe(0);
+  });
+
+  it("discovers SDK-only projects for secrets from package.json", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeSdkOnlyProject(dir);
+
+    await expect(discoverSecretsProject(join(dir, "src"))).resolves.toMatchObject({
+      root: dir,
+      configPath: join(dir, "package.json"),
+      config: {
+        name: "sdk-only-demo",
+        packageManager: "pnpm",
+        entrypoint: "src/index.ts",
+        authDir: ".fentaris",
+      },
+    });
+  });
+
+  it("generates the secrets manifest for SDK-only projects with an explicit entrypoint", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeSdkOnlyProject(dir, { entrypoint: "src/server.ts" });
+
+    const rt = runtime(dir);
+    await expect(main(["secrets", "manifest", "--entrypoint", "src/server.ts"], rt)).resolves.toBe(0);
+    const manifest = JSON.parse(await readFile(join(dir, ".fentaris", "secrets.manifest.json"), "utf8")) as { references: Array<{ ref: string }> };
+    expect(manifest.references).toEqual([{ ref: "github.token", scope: "default" }]);
+  });
+
+  it("uses package.json fentaris metadata for SDK-only secrets commands", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeSdkOnlyProject(dir, {
+      entrypoint: "src/server.ts",
+      packageFentaris: { entrypoint: "src/server.ts", authDir: ".local-fentaris" },
+    });
+
+    const manifestRuntime = runtime(dir);
+    await expect(main(["secrets", "manifest"], manifestRuntime)).resolves.toBe(0);
+    await expect(readFile(join(dir, ".local-fentaris", "secrets.manifest.json"), "utf8")).resolves.toContain("github.token");
+
+    const setRuntime = runtime(dir);
+    await expect(main(["secrets", "set", "github.token", "--value", "secret"], setRuntime)).resolves.toBe(0);
+    await expect(readFile(join(dir, ".local-fentaris", "credentials.enc.json"), "utf8")).resolves.toContain("ciphertext");
+  });
+
+  it("reports a guided error when an SDK-only manifest entrypoint cannot be inferred", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await mkdir(join(dir, "src"), { recursive: true });
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "sdk-only-demo", dependencies: { "@fentaris/core": "latest" } }),
+    );
+
+    const rt = runtime(dir);
+    await expect(main(["secrets", "manifest"], rt)).resolves.toBe(1);
+    const output = rt.out.error.mock.calls.flat().join("\n");
+    expect(output).toContain("SDK-only Fentaris project detected");
+    expect(output).toContain("fentaris secrets manifest --entrypoint src/index.ts");
   });
 
   it("generates scoped secret refs and credential env vars from the entrypoint", async () => {

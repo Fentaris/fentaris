@@ -168,6 +168,8 @@ fentaris secrets set github.token --user admin
 fentaris secrets set github.token --value-stdin --non-interactive
 ```
 
+Generated projects are discovered from `fentaris.json`. SDK-only projects are discovered from the nearest `package.json` that depends on `@fentaris/core`; in that mode the CLI uses `.fentaris/` unless `package.json` contains a `fentaris.authDir` override.
+
 When `reference` or `--value` is omitted, the command walks through an interactive setup: pick a manifest reference, choose `default`, `user`, or `group` scope, enter the hidden value, review the redacted summary, and confirm before anything is written.
 
 Options:
@@ -221,12 +223,28 @@ Generate or validate `.fentaris/secrets.manifest.json` from `credential(...)` re
 
 ```bash theme={null}
 fentaris secrets manifest
+fentaris secrets manifest --entrypoint src/server.ts
 fentaris secrets manifest --check
 ```
 
 Options:
 
+* `--entrypoint <path>` - scan this entrypoint. Use it for SDK-only projects without `fentaris.json` or to override the configured entrypoint.
 * `--check` - fail when the committed manifest does not match the entrypoint scan.
+
+SDK-only projects can also declare the entrypoint in `package.json`:
+
+```json theme={null}
+{
+  "dependencies": {
+    "@fentaris/core": "^0.1.0"
+  },
+  "fentaris": {
+    "entrypoint": "src/server.ts",
+    "authDir": ".fentaris"
+  }
+}
+```
 
 <Tip>
   Commit `.fentaris/secrets.manifest.json` and run `fentaris secrets manifest --check` in CI to catch missing or stale schema updates.

@@ -182,11 +182,12 @@ Policies can govern tool calls and MCP capabilities such as resources, prompts, 
 
 ## Local Auth
 
-Fentaris can resolve caller identity and upstream credentials from local encrypted files. In a generated project, `fentaris init` creates the store; set secrets with:
+Fentaris can resolve caller identity and upstream credentials from local encrypted files. Generated projects are discovered from `fentaris.json`; SDK-only projects are discovered from `package.json` when they depend on `@fentaris/core`.
 
 ```bash
 export FENTARIS_AUTH_KEY="your-local-encryption-key"
 
+fentaris secrets manifest --entrypoint src/index.ts
 fentaris secrets set
 fentaris secrets list
 ```
