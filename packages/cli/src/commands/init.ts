@@ -5,19 +5,24 @@ import {
   resolveProjectName,
   runPackageInstall,
   selectPackageManager,
+  validatePackageManager,
 } from "../domain/project/project.js";
 import { renderTemplate, writeTemplate } from "../domain/template/template.js";
-import type { CliCommand, Runtime } from "../shared/types.js";
+import type { CliCommand, PackageManager, Runtime } from "../shared/types.js";
 import { numberOption, stringOption } from "../shared/utils.js";
 import { nextSteps, printBanner, printHealthResults, section, style } from "../ui/format.js";
 
 export async function runInit(command: CliCommand, runtime: Runtime): Promise<void> {
   printBanner(runtime);
+  if (runtime.nonInteractive && !command.args[0]?.trim()) {
+    throw new Error("Project name is required for non-interactive init. Pass it as an argument.");
+  }
   const projectName = await resolveProjectName(command.args[0], runtime.prompt);
   const targetDir = path.resolve(runtime.cwd, projectName);
   await ensureEmptyTargetDirectory(targetDir);
 
-  const packageManager = await selectPackageManager(runtime.probe, runtime.prompt);
+  const skipInstall = command.options["skip-install"] === true;
+  const packageManager = await resolveInitPackageManager(command, runtime, { requireInstalled: !skipInstall });
   const template = renderTemplate({
     projectName,
     packageManager,
@@ -30,7 +35,7 @@ export async function runInit(command: CliCommand, runtime: Runtime): Promise<vo
   runtime.out.log(`  ${style.pass(`Created ${projectName}`)}`);
 
   section(runtime, "Install");
-  if (command.options["skip-install"] === true) {
+  if (skipInstall) {
     runtime.out.log(`  ${style.warn("Skipped dependency install by request.")}`);
   } else {
     await runPackageInstall(packageManager, targetDir, runtime.runner);
@@ -53,4 +58,17 @@ export async function runInit(command: CliCommand, runtime: Runtime): Promise<vo
 
   section(runtime, "Next Steps");
   runtime.out.log(nextSteps([`cd ${projectName}`, "fentaris dev"]));
+}
+
+async function resolveInitPackageManager(command: CliCommand, runtime: Runtime, options: { requireInstalled: boolean }): Promise<PackageManager> {
+  const option = stringOption(command.options, "package-manager", "");
+  if (option) {
+    const packageManager = validatePackageManager(option);
+    if (options.requireInstalled && !runtime.probe(packageManager, ["--version"])) {
+      throw new Error(`Package manager '${packageManager}' was not found. Install ${packageManager} or pass --skip-install.`);
+    }
+    return packageManager;
+  }
+
+  return selectPackageManager(runtime.probe, runtime.prompt);
 }
