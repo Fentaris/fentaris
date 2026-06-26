@@ -79,24 +79,25 @@ jobs:
             3. Se il contesto non è chiaro, leggi i file rilevanti con `read_file` (pi tool nativo, non un GitHub tool).
             4. Analizza seguendo rigorosamente la skill `pr-review` caricata automaticamente (severity scale, formato output, cosa controllare/ignorare).
 
-            ## Output
-            - **NON narrare il tuo ragionamento** prima della review (no "Ho letto la PR...", no "Procedo con la review..."). Output = solo la review finale.
-            - **Body del sommario: MAX 5-8 righe.** Tabelle compatte, niente prosa, niente riepilogo del processo. Esempio buono:
+            ## Output (Codex-like, stretto)
+            Segui **esattamente** il template definito nella skill `pr-review` caricata automaticamente. In sintesi:
+            - **Body di sommario: 4-5 righe max**, formato:
               ```
-              💡 AI Review by opencode-go/minimax-m3
+              💡 AI Review by <model-id>
 
-              Reviewed commit: <sha>
+              Reviewed commit: <short-sha>
 
-              Trovati N issue (X blocker, Y major, Z minor). PR [OK / da rivedere / con problemi bloccanti].
+              N issue: X 🛑 P1, Y 🟠 P2, Z 🟡 P3. PR [OK / da rivedere / con blocker].
 
-              🤖 pi + <model>. Per Q&A: `/pi <domanda>`.
+              🤖 pi + <model-id>. Per Q&A: `/pi <domanda>`.
               ```
-            - **EVITA nits di stile**: niente "P3: manca punto e virgola", "P3: ordine invertito", "P3: commento potrebbe essere più chiaro". Posta solo issue che impattano funzionalità, sicurezza, performance, o contraddicono regole hard del repo.
-            - **EVITA P3 su scelte stilistiche soggettive** (es. "dovrebbe essere X invece di Y"). Se non rompe nulla, non segnalare.
-            - **Esegui self-validation**: prima di postare, valida i file che hai toccato (parse JSON/YAML, controlla sintassi) così non pubblichi bug evidenti (es. YAML rotto nel frontmatter di una skill).
-            - Usa `create_pull_request_review` con body di sommario + commenti inline per ogni issue
-            - Se la PR è OK, posta solo un commento "LGTM ✅" (non una review con linee)
-            - Lingua: italiano per il body, code/identifiers in inglese
+            - **Inline comments**: prima riga = `<emoji> P<N>: <Title, max 80 char>`, body 2-4 righe, no editorial, no "Useful? React with 👍/👎"
+            - **NON narrare** ("Ho letto la PR...", "Procedo con la review..."). Output = solo la review finale.
+            - **EVITA nits di stile** (prettier, naming, refactor suggestions). Posta solo issue che impattano funzionalit\u00e0, sicurezza, performance, o violano regole hard del repo.
+            - **EVITA P3 soggettivi** ("dovrebbe essere X invece di Y"). Se non rompe nulla, non segnalare.
+            - **Self-validation obbligatoria**: prima di postare, parsa con `python3 -c "import yaml; yaml.safe_load(...)"` ogni file YAML/JSON che hai toccato. Non postare review su file non validati.
+            - Se la PR \u00e8 OK, posta solo `LGTM ✅` come commento (non una review con linee).
+            - Lingua: italiano per il body, code/identifiers in inglese.
             - NON aggiungere "Useful? React with 👍/👎"
 
       - name: Upload session HTML artifact
