@@ -91,6 +91,7 @@ export const cliSpec: CliCommandSpec = {
       usage: "fentaris init [OPTIONS] [project-name]",
       arguments: [{ name: "project-name", description: "Directory and package name for the new project." }],
       options: [
+        { name: "package-manager", valueName: "PM", description: "Package manager written to the generated project. Supported values: pnpm, npm, bun." },
         { name: "skip-install", description: "Skip dependency installation." },
         { name: "skip-git", description: "Skip git repository initialization." },
         { name: "port", valueName: "PORT", description: "Port written to fentaris.json. [default: 4000]" },

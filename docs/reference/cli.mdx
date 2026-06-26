@@ -40,12 +40,19 @@ fentaris init my-proxy
 
 Options:
 
+* `--package-manager <pm>` - set the generated project's package manager. Supported values: `pnpm`, `npm`, and `bun`.
 * `--port <port>` - set the generated proxy port. Default: `4000`.
 * `--path <path>` - set the generated MCP endpoint path. Default: `/mcp`.
 * `--skip-install` - create files without running package installation.
 * `--skip-git` - create files without initializing a git repository.
 
 `init` writes `fentaris.json`, `src/index.ts`, package scripts, TypeScript config, `.gitignore`, and a README. It initializes a git repository when git is available unless `--skip-git` is passed.
+
+Use `--non-interactive` with an explicit project name. Pass `--package-manager` when the environment has more than one supported package manager or when automation must be reproducible.
+
+```bash theme={null}
+fentaris init my-proxy --non-interactive --package-manager pnpm --port 4000 --path /mcp --skip-install --skip-git
+```
 
 ### `fentaris dev`
 

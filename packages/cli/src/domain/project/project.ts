@@ -45,6 +45,14 @@ export async function selectPackageManager(probe: ExecProbe, prompt: Prompt): Pr
   return prompt.select("Package manager", available);
 }
 
+export function validatePackageManager(value: string): PackageManager {
+  if (supportedPackageManagers.includes(value as PackageManager)) {
+    return value as PackageManager;
+  }
+
+  throw new Error(`Unsupported package manager '${value}'. Use pnpm, npm, or bun.`);
+}
+
 export async function discoverProject(fromDir: string): Promise<ProjectDiscovery> {
   let current = path.resolve(fromDir);
   while (true) {
