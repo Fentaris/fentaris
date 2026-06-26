@@ -54,6 +54,17 @@ mv fentaris.config.json fentaris.json
   Allowed package managers are `pnpm`, `npm`, and `bun`.
 </Note>
 
+### `@fentaris/core` is not installed
+
+`fentaris doctor` found `@fentaris/core` in `package.json`, but the package is missing from `node_modules`.
+
+```bash theme={null}
+pnpm install
+fentaris doctor
+```
+
+Use the package manager named in `fentaris.json` if your project does not use `pnpm`.
+
 ## Runtime Issues
 
 ### Proxy does not start

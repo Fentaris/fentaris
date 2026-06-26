@@ -21,7 +21,7 @@ import {
   type Runtime,
 } from "../src/index.js";
 import { defaultRuntime } from "../src/platform/runtime.js";
-import { cliVersion } from "../src/shared/constants.js";
+import { cliVersion, coreVersion } from "../src/shared/constants.js";
 
 const execFile = promisify(execFileWithCallback);
 
@@ -120,6 +120,16 @@ async function writeHealthyProject(root: string, authDirectory = ".fentaris"): P
   await writeFile(
     join(root, authDirectory, "credentials.enc.json"),
     JSON.stringify(FentarisAuth.encryptCredentials({ users: {}, groups: {}, defaults: {} }, "test-key")),
+  );
+  await writeInstalledCoreVersion(root, coreVersion);
+}
+
+async function writeInstalledCoreVersion(projectRoot: string, version: string): Promise<void> {
+  const installedDir = join(projectRoot, "node_modules", "@fentaris", "core");
+  await mkdir(installedDir, { recursive: true });
+  await writeFile(
+    join(installedDir, "package.json"),
+    JSON.stringify({ name: "@fentaris/core", version }),
   );
 }
 
@@ -623,15 +633,6 @@ describe("init --core-version flag", () => {
 });
 
 describe("@fentaris/core installed version check", () => {
-  async function writeInstalledCoreVersion(projectRoot: string, version: string): Promise<void> {
-    const installedDir = join(projectRoot, "node_modules", "@fentaris", "core");
-    await mkdir(installedDir, { recursive: true });
-    await writeFile(
-      join(installedDir, "package.json"),
-      JSON.stringify({ name: "@fentaris/core", version }),
-    );
-  }
-
   it("passes when the installed version satisfies the declared caret range", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
@@ -679,7 +680,7 @@ describe("@fentaris/core installed version check", () => {
     expect(output).toContain("^0.2.0");
   });
 
-  it("does not warn when node_modules/@fentaris/core is missing", async () => {
+  it("warns when node_modules/@fentaris/core is missing", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     const rt = runtime(dir, { pnpm: true, git: true, docker: false });
     await expect(main(["init", "demo", "--skip-install"], rt)).resolves.toBe(0);
@@ -687,7 +688,15 @@ describe("@fentaris/core installed version check", () => {
     rt.cwd = join(dir, "demo");
     await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
     rt.env.FENTARIS_AUTH_KEY = "ambient-shell-key";
-    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
+    await expect(main(["doctor"], rt)).resolves.toBe(0);
+
+    const output = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
+    expect(output).toContain("@fentaris/core installed");
+    expect(output).toContain("not yet installed");
+    expect(output).toContain("pnpm install");
+
+    vi.mocked(rt.out.log).mockClear();
+    await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(1);
   });
 
   it("skips validation for non-validatable ranges such as workspace and file", async () => {
@@ -903,6 +912,7 @@ describe("project commands", () => {
 
     rt.cwd = join(dir, "demo");
     await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    await writeInstalledCoreVersion(rt.cwd, coreVersion);
     rt.env.FENTARIS_AUTH_KEY = "ambient-shell-key";
     await expect(main(["check", "--offline"], rt)).resolves.toBe(0);
     await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
@@ -1005,6 +1015,7 @@ void app;
     rt.cwd = join(dir, "demo");
     rt.env.FENTARIS_AUTH_KEY = "ambient-shell-key";
     await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    await writeInstalledCoreVersion(rt.cwd, coreVersion);
 
     await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
     await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
@@ -1024,6 +1035,7 @@ void app;
     delete rt.env.FENTARIS_AUTH_KEY;
     await mkdir(join(rt.cwd, ".fentaris"), { recursive: true });
     await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    await writeInstalledCoreVersion(rt.cwd, coreVersion);
 
     await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
     await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);

@@ -100,6 +100,8 @@ Options:
 * `--runtime` - check the running MCP endpoint.
 * `--timeout <ms>` - set runtime check timeout. Default: `10000`.
 
+When project dependencies have not been installed, `doctor` reports `node_modules/@fentaris/core` as a warning and prints the package manager install command to run.
+
 ### `fentaris build`
 
 Validate the project offline, run the generated project's `build` script, write compiled TypeScript output to `dist/index.js`, and write Fentaris metadata to `.fentaris/build/manifest.json`.

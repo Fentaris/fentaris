@@ -388,7 +388,7 @@ async function installedCoreVersionResult(projectRoot: string, declaredRange: st
     return {
       group: "Package",
       label: "@fentaris/core installed",
-      status: "pass",
+      status: "warn",
       detail: `Declared as ${declaredRange}; not yet installed (node_modules/@fentaris/core is missing).`,
       hint: "Run the package manager install command (e.g. pnpm install) before running fentaris dev.",
     };
