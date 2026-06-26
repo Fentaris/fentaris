@@ -1,0 +1,99 @@
+---
+title: "Client Configs"
+description: "Point MCP clients at the local Fentaris endpoint."
+---
+
+Use one Fentaris endpoint for every MCP client. Generated projects listen at `http://localhost:4000/mcp` unless `fentaris.json` changes `port` or `path`.
+
+## Quick Start
+
+Start the proxy first:
+
+```bash theme={null}
+fentaris dev
+```
+
+Then configure the client with the endpoint printed by the CLI.
+
+## MCP Inspector
+
+Use the Inspector when you want to validate the endpoint before editing an agent config:
+
+```bash theme={null}
+npx @modelcontextprotocol/inspector
+```
+
+In the Inspector UI, select Streamable HTTP and enter:
+
+```bash theme={null}
+http://127.0.0.1:4000/mcp
+```
+
+If the proxy uses API-key auth, add the configured header:
+
+```txt theme={null}
+x-fentaris-api-key: <key>
+```
+
+## Claude Desktop
+
+For a local HTTP Fentaris endpoint, add a server entry to Claude's MCP config and restart Claude Desktop:
+
+```json theme={null}
+{
+  "mcpServers": {
+    "fentaris": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:4000/mcp"
+    }
+  }
+}
+```
+
+If the client version only supports command-based MCP servers, use a local bridge command or connect through the Inspector while upgrading the client. Do not expose the Fentaris endpoint publicly just to work around local client support.
+
+## Cursor
+
+Create or edit `.cursor/mcp.json` in the workspace:
+
+```json theme={null}
+{
+  "mcpServers": {
+    "fentaris": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:4000/mcp"
+    }
+  }
+}
+```
+
+For user-wide configuration, put the same `mcpServers` object in Cursor's global MCP settings.
+
+## Codex
+
+Codex MCP configuration is local to the Codex environment. Use the HTTP server form when your Codex version supports remote MCP endpoints:
+
+```toml theme={null}
+[mcp_servers.fentaris]
+type = "streamable-http"
+url = "http://127.0.0.1:4000/mcp"
+```
+
+If Codex is running in a sandboxed environment, make sure `127.0.0.1` resolves to the machine running `fentaris dev`. When it does not, expose the proxy through the environment's approved local networking path instead of changing Fentaris policy to be more permissive.
+
+## Auth Headers
+
+When API-key identity is enabled, send the key with the default Fentaris header:
+
+```txt theme={null}
+x-fentaris-api-key: <key>
+```
+
+Keep the API key in the client's secret storage when the client supports it. Fentaris stores only a hash of local API keys and cannot recover the raw value later.
+
+## Related Documentation
+
+* [Quickstart](/getting-started/quickstart)
+* [Governance auth](/guides/governance-auth)
+* [Security](/guides/security)
+* [Troubleshooting](/troubleshooting)

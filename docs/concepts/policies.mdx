@@ -25,6 +25,25 @@ const limitedPolicy = policy("limited-demo")
   Use broad wildcards intentionally. Health checks warn when policy grants broad access across every server and target.
 </Warning>
 
+## Rate Limits
+
+Attach rate limiters to the policy permission that should be limited. Fentaris enforces policy-attached limiters automatically before forwarding the tool call.
+
+```ts theme={null}
+import { SlidingWindowRateLimiter, policy } from "@fentaris/core";
+
+const supportLimiter = new SlidingWindowRateLimiter({
+  maxPerWindow: 60,
+  windowMs: 60_000,
+});
+
+const supportPolicy = policy("support")
+  .mcp("github")
+  .allow("create_issue", { limiter: supportLimiter });
+```
+
+The effective key includes the subject, upstream server, and tool, so the example allows each support user up to 60 `github.create_issue` calls per minute. For shared team quotas, provide a custom limiter or store that normalizes keys by group or tenant.
+
 ## App-Level Composition
 
 When a proxy is assembled across modules, declare policies and groups from the app handle before `start()`:
