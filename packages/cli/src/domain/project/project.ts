@@ -46,6 +46,40 @@ export async function selectPackageManager(probe: ExecProbe, prompt: Prompt): Pr
 }
 
 export async function discoverProject(fromDir: string): Promise<ProjectDiscovery> {
+  const configured = await discoverConfiguredProject(fromDir);
+  if (configured) {
+    return configured;
+  }
+
+  throw new Error("No Fentaris project found. Run this command inside a generated Fentaris project.");
+}
+
+export type SecretsProjectDiscoveryOptions = {
+  entrypoint?: string;
+  requireEntrypoint?: boolean;
+};
+
+export async function discoverSecretsProject(fromDir: string, options: SecretsProjectDiscoveryOptions = {}): Promise<ProjectDiscovery> {
+  const configured = await discoverConfiguredProject(fromDir);
+  if (configured) {
+    return withEntrypointOverride(configured, options.entrypoint);
+  }
+
+  const sdkOnly = await discoverSdkOnlyProject(fromDir, options);
+  if (sdkOnly) {
+    return sdkOnly;
+  }
+
+  throw new Error(
+    [
+      "No Fentaris project found.",
+      "Run this command inside a generated Fentaris project or an SDK-only project that depends on @fentaris/core.",
+      "For SDK-only apps, run `fentaris secrets manifest --entrypoint src/index.ts` or add `\"fentaris\": { \"entrypoint\": \"src/index.ts\" }` to package.json.",
+    ].join(" "),
+  );
+}
+
+async function discoverConfiguredProject(fromDir: string): Promise<ProjectDiscovery | undefined> {
   let current = path.resolve(fromDir);
   while (true) {
     const configPath = path.join(current, "fentaris.json");
@@ -62,10 +96,149 @@ export async function discoverProject(fromDir: string): Promise<ProjectDiscovery
 
     const parent = path.dirname(current);
     if (parent === current) {
-      throw new Error("No Fentaris project found. Run this command inside a generated Fentaris project.");
+      return undefined;
     }
     current = parent;
   }
+}
+
+async function discoverSdkOnlyProject(fromDir: string, options: SecretsProjectDiscoveryOptions): Promise<ProjectDiscovery | undefined> {
+  const packageJsonPath = await findPackageJson(fromDir);
+  if (!packageJsonPath) {
+    return undefined;
+  }
+
+  const packageJson = validatePackageJson(await readJson(packageJsonPath), packageJsonPath);
+  if (!dependsOnFentarisCore(packageJson)) {
+    return undefined;
+  }
+
+  const root = path.dirname(packageJsonPath);
+  const configuredEntrypoint = stringField(packageJson.fentaris, "entrypoint");
+  const entrypoint = options.entrypoint?.trim() || configuredEntrypoint || await inferSdkOnlyEntrypoint(root);
+  if (!entrypoint && options.requireEntrypoint === true) {
+    throw new Error(
+      [
+        "SDK-only Fentaris project detected, but no entrypoint was found.",
+        "Run `fentaris secrets manifest --entrypoint src/index.ts` or add `\"fentaris\": { \"entrypoint\": \"src/index.ts\" }` to package.json.",
+      ].join(" "),
+    );
+  }
+
+  const authDir = stringField(packageJson.fentaris, "authDir") ?? ".fentaris";
+  const host = stringField(packageJson.fentaris, "host");
+  const config: ProjectConfig = {
+    name: packageJson.name ?? path.basename(root),
+    packageManager: await inferPackageManager(root),
+    entrypoint: entrypoint ?? "src/index.ts",
+    port: numberField(packageJson.fentaris, "port") ?? 4000,
+    ...(host ? { host } : {}),
+    path: stringField(packageJson.fentaris, "path") ?? "/mcp",
+    authDir,
+  };
+
+  return { root, configPath: packageJsonPath, config };
+}
+
+async function findPackageJson(fromDir: string): Promise<string | undefined> {
+  let current = path.resolve(fromDir);
+  while (true) {
+    const packageJsonPath = path.join(current, "package.json");
+    if (await exists(packageJsonPath)) {
+      return packageJsonPath;
+    }
+
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return undefined;
+    }
+    current = parent;
+  }
+}
+
+type PackageJson = {
+  name?: string;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  fentaris?: Record<string, unknown>;
+};
+
+function validatePackageJson(value: unknown, packageJsonPath: string): PackageJson {
+  if (!value || typeof value !== "object") {
+    throw new Error(`Invalid package.json at ${packageJsonPath}`);
+  }
+
+  const input = value as PackageJson;
+  return {
+    ...(typeof input.name === "string" && input.name.trim() ? { name: input.name } : {}),
+    dependencies: recordField(input, "dependencies"),
+    devDependencies: recordField(input, "devDependencies"),
+    peerDependencies: recordField(input, "peerDependencies"),
+    optionalDependencies: recordField(input, "optionalDependencies"),
+    ...(input.fentaris && typeof input.fentaris === "object" && !Array.isArray(input.fentaris) ? { fentaris: input.fentaris as Record<string, unknown> } : {}),
+  };
+}
+
+function recordField(value: unknown, key: keyof PackageJson): Record<string, string> {
+  const record = (value as Record<string, unknown>)[key as string];
+  if (!record || typeof record !== "object" || Array.isArray(record)) {
+    return {};
+  }
+  return Object.fromEntries(Object.entries(record).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+}
+
+function dependsOnFentarisCore(packageJson: PackageJson): boolean {
+  return [
+    packageJson.dependencies,
+    packageJson.devDependencies,
+    packageJson.peerDependencies,
+    packageJson.optionalDependencies,
+  ].some((dependencies) => Boolean(dependencies?.["@fentaris/core"]));
+}
+
+async function inferSdkOnlyEntrypoint(root: string): Promise<string | undefined> {
+  for (const candidate of ["src/index.ts", "src/main.ts", "index.ts"]) {
+    if (await exists(path.join(root, candidate))) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+async function inferPackageManager(root: string): Promise<PackageManager> {
+  if (await exists(path.join(root, "pnpm-lock.yaml"))) {
+    return "pnpm";
+  }
+  if (await exists(path.join(root, "bun.lockb")) || await exists(path.join(root, "bun.lock"))) {
+    return "bun";
+  }
+  return "npm";
+}
+
+function withEntrypointOverride(project: ProjectDiscovery, entrypoint: string | undefined): ProjectDiscovery {
+  const trimmed = entrypoint?.trim();
+  if (!trimmed) {
+    return project;
+  }
+  return { ...project, config: { ...project.config, entrypoint: trimmed } };
+}
+
+function stringField(value: unknown, key: string): string | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const field = (value as Record<string, unknown>)[key];
+  return typeof field === "string" && field.trim() ? field : undefined;
+}
+
+function numberField(value: unknown, key: string): number | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const field = (value as Record<string, unknown>)[key];
+  return typeof field === "number" && Number.isFinite(field) ? field : undefined;
 }
 
 export async function runPackageInstall(packageManager: PackageManager, cwd: string, runner: ProcessRunner): Promise<void> {

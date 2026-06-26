@@ -280,6 +280,7 @@ export const cliSpec: CliCommandSpec = {
           description: "Generate or check the secrets manifest.",
           usage: "fentaris secrets manifest [OPTIONS]",
           options: [
+            { name: "entrypoint", valueName: "PATH", description: "Entrypoint to scan when no fentaris.json is present or when overriding project config." },
             { name: "check", description: "Fail if secrets.manifest.json is missing or out of date." },
             { name: "help", short: "h", description: "Print help" },
           ],
