@@ -8,6 +8,7 @@ import {
   validatePackageManager,
 } from "../domain/project/project.js";
 import { renderTemplate, writeTemplate } from "../domain/template/template.js";
+import { defaultCoreRange } from "../shared/constants.js";
 import type { CliCommand, PackageManager, Runtime } from "../shared/types.js";
 import { numberOption, stringOption } from "../shared/utils.js";
 import { nextSteps, printBanner, printHealthResults, section, style } from "../ui/format.js";
@@ -28,6 +29,7 @@ export async function runInit(command: CliCommand, runtime: Runtime): Promise<vo
     packageManager,
     port: numberOption(command.options, "port", 4000),
     proxyPath: stringOption(command.options, "path", "/mcp"),
+    coreVersionRange: resolveCoreVersionOption(command),
   });
 
   section(runtime, "Create Project");
@@ -71,4 +73,15 @@ async function resolveInitPackageManager(command: CliCommand, runtime: Runtime, 
   }
 
   return selectPackageManager(runtime.probe, runtime.prompt);
+}
+
+function resolveCoreVersionOption(command: CliCommand): string {
+  const option = command.options["core-version"];
+  if (option === undefined || option === true) {
+    return defaultCoreRange;
+  }
+  if (typeof option !== "string" || option.trim() === "") {
+    throw new Error("--core-version requires a version range string (e.g. ^2.0.0, workspace:*, file:../packages/core).");
+  }
+  return option;
 }

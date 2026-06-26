@@ -9,6 +9,123 @@ import type { HealthResult, PackageManager, ProjectConfig, ProjectDiscovery, Run
 import { canAccess, exists, isNodeError, readJson } from "../../shared/utils.js";
 import { loadRequiredReferences, secretsDoctorHealthResults } from "../secrets/doctor.js";
 
+type ParsedVersion = readonly [number, number, number];
+
+function parseSemver(value: string): ParsedVersion | null {
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+  return [Number(match[1]), Number(match[2]), Number(match[3])] as const;
+}
+
+function compareSemver(a: ParsedVersion, b: ParsedVersion): number {
+  for (let i = 0; i < 3; i += 1) {
+    if (a[i] !== b[i]) {
+      return a[i] - b[i];
+    }
+  }
+  return 0;
+}
+
+function versionInRange(installed: ParsedVersion, range: string): boolean {
+  const expr = range.trim();
+  // Exact match.
+  const exact = parseSemver(expr);
+  if (exact) {
+    return compareSemver(installed, exact) === 0;
+  }
+  // Wildcard: any version.
+  if (expr === "*" || expr === "x" || expr === "X") {
+    return true;
+  }
+  // Caret: compatible with version (same major, >= minor.patch).
+  const caret = /^\^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(expr);
+  if (caret) {
+    const target: ParsedVersion = [Number(caret[1]), Number(caret[2]), Number(caret[3])];
+    if (target[0] !== installed[0]) {
+      return false;
+    }
+    return compareSemver(installed, target) >= 0;
+  }
+  // Tilde: same major.minor, >= patch.
+  const tilde = /^~(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(expr);
+  if (tilde) {
+    const target: ParsedVersion = [Number(tilde[1]), Number(tilde[2]), Number(tilde[3])];
+    if (target[0] !== installed[0] || target[1] !== installed[1]) {
+      return false;
+    }
+    return compareSemver(installed, target) >= 0;
+  }
+  // Comparison operators.
+  const comparator = /^(>=|<=|>|<|=)\s*(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(expr);
+  if (comparator) {
+    const target: ParsedVersion = [Number(comparator[2]), Number(comparator[3]), Number(comparator[4])];
+    const cmp = compareSemver(installed, target);
+    switch (comparator[1]) {
+      case ">=":
+        return cmp >= 0;
+      case "<=":
+        return cmp <= 0;
+      case ">":
+        return cmp > 0;
+      case "<":
+        return cmp < 0;
+      case "=":
+        return cmp === 0;
+    }
+  }
+  // Hyphen range: a - b means >=a <=b.
+  const hyphen = /^(\d+)\.(\d+)\.(\d+)\s+-\s+(\d+)\.(\d+)\.(\d+)$/.exec(expr);
+  if (hyphen) {
+    const lo: ParsedVersion = [Number(hyphen[1]), Number(hyphen[2]), Number(hyphen[3])];
+    const hi: ParsedVersion = [Number(hyphen[4]), Number(hyphen[5]), Number(hyphen[6])];
+    return compareSemver(installed, lo) >= 0 && compareSemver(installed, hi) <= 0;
+  }
+  // X-ranges: 2.x, 2.0.x, 2, 2.0
+  const major = /^(\d+)(?:\.(?:x|\*))?$/.exec(expr);
+  if (major) {
+    return installed[0] === Number(major[1]);
+  }
+  const majorMinor = /^(\d+)\.(\d+)(?:\.(?:x|\*))?$/.exec(expr);
+  if (majorMinor) {
+    return installed[0] === Number(majorMinor[1]) && installed[1] === Number(majorMinor[2]);
+  }
+  const majorMinorPatch = /^(\d+)\.(\d+)\.x$/.exec(expr);
+  if (majorMinorPatch) {
+    return installed[0] === Number(majorMinorPatch[1]) && installed[1] === Number(majorMinorPatch[2]);
+  }
+  return false;
+}
+
+function isValidatableRange(range: string): boolean {
+  const expr = range.trim();
+  if (expr === "*" || expr === "x" || expr === "X") return true;
+  if (parseSemver(expr)) return true;
+  if (/^[\^~]/.test(expr) && parseSemver(expr.slice(1))) return true;
+  if (/^[<>=]/.test(expr) && parseSemver(expr.replace(/^[<>=]+\s*/, ""))) return true;
+  if (/^\d+\s+-\s+\d/.test(expr)) return true;
+  if (/^\d+(?:\.(?:\d+)?(?:\.[x*])?)?$/.test(expr)) return true;
+  return false;
+}
+
+function satisfiesInstalledRange(declaredRange: string, installedVersion: string): "pass" | "warn" | "skip" {
+  if (declaredRange.startsWith("workspace:") || declaredRange.startsWith("file:") || declaredRange.startsWith("link:") || declaredRange.startsWith("portal:")) {
+    return "skip";
+  }
+  if (declaredRange === "latest" || declaredRange === "next" || declaredRange === "beta" || declaredRange === "canary") {
+    return "skip";
+  }
+  if (!isValidatableRange(declaredRange)) {
+    return "skip";
+  }
+  const parsed = parseSemver(installedVersion);
+  if (!parsed) {
+    return "skip";
+  }
+  return versionInRange(parsed, declaredRange) ? "pass" : "warn";
+}
+
 export type DoctorOptions = {
   fix?: boolean;
   runtime?: boolean;
@@ -345,6 +462,83 @@ async function readAndValidateProjectConfig(configPath: string, root: string): P
   };
 }
 
+async function installedCoreVersionResult(projectRoot: string, declaredRange: string | undefined): Promise<HealthResult> {
+  if (!declaredRange) {
+    return {
+      group: "Package",
+      label: "@fentaris/core installed",
+      status: "warn",
+      detail: "Not declared in dependencies.",
+      hint: "Run fentaris init or add @fentaris/core to dependencies.",
+    };
+  }
+
+  // The point of this check is to catch the F-004 silent-version-mismatch
+  // problem: a generated project that pins a known range but the resolved
+  // installed version does not satisfy it. We never claim pass/fail for
+  // non-validatable ranges (dist tags, workspace/file references, git urls)
+  // because we cannot validate them without running the package manager.
+
+  const installedPath = path.join(projectRoot, "node_modules", "@fentaris", "core", "package.json");
+  if (!(await exists(installedPath))) {
+    return {
+      group: "Package",
+      label: "@fentaris/core installed",
+      status: "pass",
+      detail: `Declared as ${declaredRange}; not yet installed (node_modules/@fentaris/core is missing).`,
+      hint: "Run the package manager install command (e.g. pnpm install) before running fentaris dev.",
+    };
+  }
+
+  const installedJson = await readJsonResult(installedPath);
+  if (!installedJson.ok || !installedJson.value || typeof installedJson.value !== "object") {
+    return {
+      group: "Package",
+      label: "@fentaris/core installed",
+      status: "warn",
+      detail: "Installed version could not be read.",
+      hint: "Reinstall @fentaris/core with the package manager.",
+    };
+  }
+
+  const installedVersion = (installedJson.value as { version?: unknown }).version;
+  if (typeof installedVersion !== "string") {
+    return {
+      group: "Package",
+      label: "@fentaris/core installed",
+      status: "warn",
+      detail: "Installed version field is missing or not a string.",
+      hint: "Reinstall @fentaris/core with the package manager.",
+    };
+  }
+
+  if (!isValidatableRange(declaredRange)) {
+    return {
+      group: "Package",
+      label: "@fentaris/core installed",
+      status: "pass",
+      detail: `Installed ${installedVersion}; declared as ${declaredRange} (range cannot be statically validated).`,
+    };
+  }
+
+  const satisfaction = satisfiesInstalledRange(declaredRange, installedVersion);
+  if (satisfaction === "warn") {
+    return {
+      group: "Package",
+      label: "@fentaris/core installed",
+      status: "warn",
+      detail: `Installed ${installedVersion} does not satisfy declared range ${declaredRange}.`,
+      hint: "Run the package manager install command (e.g. pnpm install) to refresh dependencies, or re-run fentaris init --core-version <range>.",
+    };
+  }
+  return {
+    group: "Package",
+    label: "@fentaris/core installed",
+    status: "pass",
+    detail: `Installed ${installedVersion} satisfies declared range ${declaredRange}.`,
+  };
+}
+
 async function packageResults(project: ProjectDiscovery): Promise<HealthResult[]> {
   const packagePath = path.join(project.root, "package.json");
   const packageJson = await readJsonResult(packagePath);
@@ -373,6 +567,7 @@ async function packageResults(project: ProjectDiscovery): Promise<HealthResult[]
       detail: value.dependencies?.["@fentaris/core"] ? `Declared as ${value.dependencies["@fentaris/core"]}` : "Missing from dependencies.",
       hint: value.dependencies?.["@fentaris/core"] ? undefined : "Add @fentaris/core to dependencies, not only devDependencies.",
     },
+    await installedCoreVersionResult(project.root, value.dependencies?.["@fentaris/core"]),
     scriptResult(scripts, "dev"),
     scriptResult(scripts, "build"),
     {

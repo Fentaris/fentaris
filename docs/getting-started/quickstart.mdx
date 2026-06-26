@@ -55,9 +55,27 @@ The proxy listens on `http://localhost:4000/mcp` by default. Generated projects 
 - `fentaris.json` for CLI project discovery and runtime `port`/`path` defaults.
 - `.gitignore`, TypeScript config, and package scripts.
 
+The generated `package.json` pins `@fentaris/core` to a caret range that matches the CLI release (currently `^2.0.0`). This makes local SDK/CLI integration tests deterministic — the app installs the same core the CLI was validated against instead of whatever happens to be `latest` on npm.
+
 <Note>
   `fentaris init` initializes a git repository when git is available. Pass `--skip-git` to create only the project files.
 </Note>
+
+### Local development against the monorepo
+
+If you are working inside the Fentaris repository and want a generated project to import the local `@fentaris/core` instead of the pinned range, pass a workspace or file reference to `--core-version`:
+
+```bash theme={null}
+fentaris init my-proxy --core-version workspace:*
+```
+
+or
+
+```bash theme={null}
+fentaris init my-proxy --core-version file:../packages/core
+```
+
+The doctor check will then skip the installed-version check for that range. Use `fentaris upgrade` (when available) to refresh generated projects after a core release.
 
 ## Connect a Client
 
