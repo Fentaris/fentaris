@@ -43,10 +43,11 @@ Options:
 * `--package-manager <pm>` - set the generated project's package manager. Supported values: `pnpm`, `npm`, and `bun`. When install runs, this binary must be available on `PATH`.
 * `--port <port>` - set the generated proxy port. Default: `4000`.
 * `--path <path>` - set the generated MCP endpoint path. Default: `/mcp`.
+* `--core-version <range>` - set the version range for `@fentaris/core` written to the generated `package.json`. Default: `^2.0.0`. Accepts semver ranges (`^2.0.0`, `~2.0.0`, `2.0.0`, `>=2.0.0`), dist tags (`latest`, `next`), and workspace/file references (`workspace:*`, `file:../packages/core`). Use `workspace:*` or a `file:` reference to link a generated project against the local Fentaris monorepo.
 * `--skip-install` - create files without running package installation.
 * `--skip-git` - create files without initializing a git repository.
 
-`init` writes `fentaris.json`, `src/index.ts`, package scripts, TypeScript config, `.gitignore`, and a README. It initializes a git repository when git is available unless `--skip-git` is passed.
+`init` writes `fentaris.json`, `src/index.ts`, package scripts, TypeScript config, `.gitignore`, and a README. It initializes a git repository when git is available unless `--skip-git` is passed. The generated `package.json` pins `@fentaris/core` to the version range this CLI was released against, so the proxy always starts against a known-good core.
 
 Use `--non-interactive` with an explicit project name. Pass `--package-manager` when the environment has more than one supported package manager or when automation must be reproducible.
 

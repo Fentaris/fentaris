@@ -18,10 +18,12 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@fentaris/core": "workspace:*"
+    "@fentaris/core": "workspace:*",
+    "semver": "^7.8.5"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
+    "@types/semver": "^7.7.1",
     "vitest": "^4.1.7"
   },
   "keywords": [

@@ -4,10 +4,31 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { FentarisAuth } from "@fentaris/core";
+import semver from "semver";
 import { authDir, supportedPackageManagers } from "../../shared/constants.js";
 import type { HealthResult, PackageManager, ProjectConfig, ProjectDiscovery, Runtime } from "../../shared/types.js";
 import { canAccess, exists, isNodeError, readJson } from "../../shared/utils.js";
 import { loadRequiredReferences, secretsDoctorHealthResults } from "../secrets/doctor.js";
+
+function isValidatableRange(range: string): boolean {
+  return semver.validRange(range.trim()) !== null;
+}
+
+function satisfiesInstalledRange(declaredRange: string, installedVersion: string): "pass" | "warn" | "skip" {
+  if (declaredRange.startsWith("workspace:") || declaredRange.startsWith("file:") || declaredRange.startsWith("link:") || declaredRange.startsWith("portal:")) {
+    return "skip";
+  }
+  if (declaredRange === "latest" || declaredRange === "next" || declaredRange === "beta" || declaredRange === "canary") {
+    return "skip";
+  }
+  if (!isValidatableRange(declaredRange)) {
+    return "skip";
+  }
+  if (!semver.valid(installedVersion)) {
+    return "skip";
+  }
+  return semver.satisfies(installedVersion, declaredRange) ? "pass" : "warn";
+}
 
 export type DoctorOptions = {
   fix?: boolean;
@@ -345,6 +366,83 @@ async function readAndValidateProjectConfig(configPath: string, root: string): P
   };
 }
 
+async function installedCoreVersionResult(projectRoot: string, declaredRange: string | undefined): Promise<HealthResult> {
+  if (!declaredRange) {
+    return {
+      group: "Package",
+      label: "@fentaris/core installed",
+      status: "warn",
+      detail: "Not declared in dependencies.",
+      hint: "Run fentaris init or add @fentaris/core to dependencies.",
+    };
+  }
+
+  // The point of this check is to catch the F-004 silent-version-mismatch
+  // problem: a generated project that pins a known range but the resolved
+  // installed version does not satisfy it. We never claim pass/fail for
+  // non-validatable ranges (dist tags, workspace/file references, git urls)
+  // because we cannot validate them without running the package manager.
+
+  const installedPath = path.join(projectRoot, "node_modules", "@fentaris", "core", "package.json");
+  if (!(await exists(installedPath))) {
+    return {
+      group: "Package",
+      label: "@fentaris/core installed",
+      status: "pass",
+      detail: `Declared as ${declaredRange}; not yet installed (node_modules/@fentaris/core is missing).`,
+      hint: "Run the package manager install command (e.g. pnpm install) before running fentaris dev.",
+    };
+  }
+
+  const installedJson = await readJsonResult(installedPath);
+  if (!installedJson.ok || !installedJson.value || typeof installedJson.value !== "object") {
+    return {
+      group: "Package",
+      label: "@fentaris/core installed",
+      status: "warn",
+      detail: "Installed version could not be read.",
+      hint: "Reinstall @fentaris/core with the package manager.",
+    };
+  }
+
+  const installedVersion = (installedJson.value as { version?: unknown }).version;
+  if (typeof installedVersion !== "string") {
+    return {
+      group: "Package",
+      label: "@fentaris/core installed",
+      status: "warn",
+      detail: "Installed version field is missing or not a string.",
+      hint: "Reinstall @fentaris/core with the package manager.",
+    };
+  }
+
+  if (!isValidatableRange(declaredRange)) {
+    return {
+      group: "Package",
+      label: "@fentaris/core installed",
+      status: "pass",
+      detail: `Installed ${installedVersion}; declared as ${declaredRange} (range cannot be statically validated).`,
+    };
+  }
+
+  const satisfaction = satisfiesInstalledRange(declaredRange, installedVersion);
+  if (satisfaction === "warn") {
+    return {
+      group: "Package",
+      label: "@fentaris/core installed",
+      status: "warn",
+      detail: `Installed ${installedVersion} does not satisfy declared range ${declaredRange}.`,
+      hint: "Run the package manager install command (e.g. pnpm install) to refresh dependencies, or re-run fentaris init --core-version <range>.",
+    };
+  }
+  return {
+    group: "Package",
+    label: "@fentaris/core installed",
+    status: "pass",
+    detail: `Installed ${installedVersion} satisfies declared range ${declaredRange}.`,
+  };
+}
+
 async function packageResults(project: ProjectDiscovery): Promise<HealthResult[]> {
   const packagePath = path.join(project.root, "package.json");
   const packageJson = await readJsonResult(packagePath);
@@ -373,6 +471,7 @@ async function packageResults(project: ProjectDiscovery): Promise<HealthResult[]
       detail: value.dependencies?.["@fentaris/core"] ? `Declared as ${value.dependencies["@fentaris/core"]}` : "Missing from dependencies.",
       hint: value.dependencies?.["@fentaris/core"] ? undefined : "Add @fentaris/core to dependencies, not only devDependencies.",
     },
+    await installedCoreVersionResult(project.root, value.dependencies?.["@fentaris/core"]),
     scriptResult(scripts, "dev"),
     scriptResult(scripts, "build"),
     {

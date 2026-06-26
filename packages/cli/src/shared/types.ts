@@ -44,6 +44,13 @@ export type TemplateInput = {
   packageManager: PackageManager;
   port: number;
   proxyPath: string;
+  /**
+   * Version range expression for `@fentaris/core` to embed in the generated
+   * `package.json`. Accepts semver ranges (`^2.0.0`, `~2.0.0`, `2.0.0`),
+   * dist tags (`latest`, `next`), workspace references (`workspace:*`),
+   * and local file references (`file:../path`).
+   */
+  coreVersionRange: string;
 };
 
 export type HealthStatus = "pass" | "warn" | "fail";
