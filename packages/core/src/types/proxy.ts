@@ -12,14 +12,7 @@ import type {
 import type { Logger } from "../logging/index.js";
 import type { HealthCheckResult } from "../health/index.js";
 import type { RuntimeEvent } from "../profiler/index.js";
-import type {
-  CompleteResult,
-  ListPromptsResult,
-  ListResourcesResult,
-  ListResourceTemplatesResult,
-  ListToolsResult as SdkListToolsResult,
-  ReadResourceResult,
-} from "@modelcontextprotocol/sdk/types.js";
+import type { ListToolsResult as SdkListToolsResult } from "@modelcontextprotocol/sdk/types.js";
 import type {
   CredentialSourceMetadata,
   IdentityMetadata,

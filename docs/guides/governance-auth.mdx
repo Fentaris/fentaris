@@ -3,8 +3,6 @@ title: "Governance auth"
 description: "Declare users, groups, policy, API-key identity, and local upstream credentials."
 ---
 
-> Declare users, groups, policy, API-key identity, and upstream credentials in one Fentaris proxy.
-
 Use the governance auth DX when one proxy serves multiple callers and upstream servers need per-user or per-group credentials.
 
 ## Quick Start
@@ -83,6 +81,33 @@ proxy.use((ctx, next) => {
 ```
 
 The same API is available through classes when you prefer object construction, but the helper style keeps users, groups, server bindings, and credential references close together.
+
+## Provision Local Auth And Secrets
+
+The TypeScript declarations identify where Fentaris reads API-key hashes and upstream credentials. Provision the values after the project is built:
+
+```bash theme={null}
+export FENTARIS_AUTH_KEY="<local-encryption-key>"
+
+fentaris auth api-key add alice --generate
+fentaris auth api-key add bob --generate
+
+printf '%s' "$SUPPORT_GITHUB_TOKEN" \
+  | fentaris secrets set github.token --group support --value-stdin --non-interactive
+printf '%s' "$MAINTAINER_GITHUB_TOKEN" \
+  | fentaris secrets set github.token --group maintainers --value-stdin --non-interactive
+
+fentaris secrets manifest
+fentaris check --offline
+fentaris doctor
+fentaris dev
+```
+
+Save each generated API key when the CLI prints it. Fentaris stores only its hash. Clients send the raw value in the `x-fentaris-api-key` header.
+
+Choose `FENTARIS_AUTH_KEY` outside the project and provide it through your shell session or secret manager. Keep the same value for later reads and updates. Do not commit it, write it into generated project files, or include it in an agent response.
+
+`credentialJson("users.alice.apiKeys.0")` points at the first CLI-managed API-key hash for `alice`. `fentaris auth api-key add alice --generate` writes that value; application code must not generate or encrypt it directly.
 
 ## Team-Governed Proxy
 
@@ -187,6 +212,12 @@ app.mcp("github", {
   Fluent groups must include at least one user and a policy before startup. A named policy reference must be declared through `app.policy(name)` or Fentaris reports a configuration diagnostic.
 </Note>
 
+Use the declarative `group({ ... })` form when a group owns credential sources or group-scoped server declarations. The fluent group handle currently configures users, policy, middleware, operations, and events only.
+
+<Warning>
+  `app.group("maintainers").mcp("github")` scopes middleware, operation handlers, and events to the `github` server for that group. It does not declare the server. Register the upstream first with `app.mcp("github", options)` or `mcp("github", options)`.
+</Warning>
+
 ## Local auth files
 
 The generated local credential store uses one encrypted file by default:
@@ -207,6 +238,8 @@ printf '%s' "$GITHUB_TOKEN" | fentaris secrets set github.token --value-stdin
 ```
 
 `--key` and `--value` remain available for compatibility, but Fentaris warns because those values can be visible through process inspection.
+
+For agent-created projects, leave the encryption key and secret values for the user to provide after code generation. The handoff must list the exact CLI commands and scopes without inventing, printing, or persisting secret values.
 
 `secrets.manifest.json` lists required credential references only. Commit this file so teammates know which secrets a project needs without sharing encrypted values.
 
@@ -238,6 +271,22 @@ For an upstream binding such as `github -> bearer github.token`, Fentaris resolv
 If multiple groups provide the same credential reference, the default behavior follows configured group order.
 
 Middleware receives credential source metadata through `ctx.credentials.sources`, such as `{ reference: "github.token", source: "group", groupId: "support" }`, never the decrypted credential value.
+
+## Credential Source Placement
+
+Match the TypeScript source declaration to the scope used by `fentaris secrets set`:
+
+| CLI scope | TypeScript declaration | Encrypted JSON path |
+| --- | --- | --- |
+| default | `defaults.credentials["github.token"]` | `defaults.github.token` |
+| group | `group({ credentials: { "github.token": ... } })` | `groups.<group-id>.github.token` |
+| user | `user(id, { credentials: { "github.token": ... } })` | `users.<user-id>.credentials.github.token` |
+
+A global server can resolve user-, group-, or default-scoped credentials for the authenticated subject. A server declared in `group({ servers: [...] })` can resolve user credentials from that group, that group's credentials, or defaults.
+
+<Note>
+  A credential reference validates only when at least one source is visible in the server's scope or an auth-backed store is configured. Runtime resolution can still fail for a specific subject that has no matching user, group, or default value.
+</Note>
 
 ## Policy And Runtime Behavior
 

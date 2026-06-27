@@ -2,6 +2,7 @@
   "name": "fentaris",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Fentaris - Proxy MCP centralizzato",
   "packageManager": "pnpm@11.4.0",
   "engines": {

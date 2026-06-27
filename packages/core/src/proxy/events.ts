@@ -1,4 +1,4 @@
-import type { ProxyContext, ProxyEventName, ProxyEventFilter } from "../types/proxy.js";
+import type { ProxyContext, ProxyEventName, ProxyEventFilter, ProxyEventPayload } from "../types/proxy.js";
 import type { ToolCallHookFilter } from "../types/middleware.js";
 import type { ToolCallRequest } from "../types/mcp-operation.js";
 
@@ -99,14 +99,15 @@ export async function emitProxyEvent(
       continue;
     }
 
-    const result = await entry.handler({
+    const eventPayload: ProxyEventPayload = {
       ...payload,
       tools: transformedTools
         ? Array.isArray(transformedTools)
           ? transformedTools
           : transformedTools.tools
         : payload.tools,
-    } as any);
+    };
+    const result = await entry.handler(eventPayload);
 
     if (result) {
       transformedTools = result;

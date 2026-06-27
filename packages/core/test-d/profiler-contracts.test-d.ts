@@ -1,7 +1,8 @@
 import { profiler, type RuntimeEventMap, type RuntimeEventName } from "@fentaris/core";
 
-const name: RuntimeEventName = "mcp.call.timeout";
-type TimeoutEvent = RuntimeEventMap[typeof name];
+const eventName: RuntimeEventName = "mcp.call.timeout";
+type TimeoutEvent = RuntimeEventMap["mcp.call.timeout"];
+void eventName;
 
 profiler().on("mcp.call.timeout", (event) => {
   const timeout: number = event.timeoutMs;
