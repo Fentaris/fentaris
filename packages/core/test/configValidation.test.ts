@@ -4,6 +4,7 @@ import {
   assertValidFentarisConfig,
   createProxy,
   credential,
+  credentialEnv,
   defineFentarisConfig,
   formatFentarisDiagnostics,
   group,
@@ -128,6 +129,72 @@ describe("config validation", () => {
     });
 
     expect(proxy).toBeTruthy();
+  });
+
+  it("accepts global server credentials supplied by a group or user", () => {
+    const groupCredentialConfig = {
+      servers: [
+        mcp("github", {
+          transport: new TestTransport(),
+          auth: { type: "bearer" as const, credential: credential("github.token") },
+        }),
+      ],
+      groups: [
+        group({
+          id: "support",
+          users: [user("alice")],
+          credentials: { "github.token": credentialEnv("GROUP_GITHUB_TOKEN") },
+          policy: policy("support").mcp("github").allow("*"),
+        }),
+      ],
+    };
+    const userCredentialConfig = {
+      servers: [
+        mcp("github", {
+          transport: new TestTransport(),
+          auth: { type: "bearer" as const, credential: credential("github.token") },
+        }),
+      ],
+      groups: [
+        group({
+          id: "support",
+          users: [
+            user("alice", {
+              credentials: { "github.token": credentialEnv("USER_GITHUB_TOKEN") },
+            }),
+          ],
+          policy: policy("support").mcp("github").allow("*"),
+        }),
+      ],
+    };
+
+    expect(validateFentarisConfig(groupCredentialConfig).valid).toBe(true);
+    expect(validateFentarisConfig(userCredentialConfig).valid).toBe(true);
+  });
+
+  it("accepts scoped server credentials supplied by a user in the same group", () => {
+    const result = validateFentarisConfig({
+      groups: [
+        group({
+          id: "support",
+          users: [
+            user("alice", {
+              credentials: { "github.token": credentialEnv("USER_GITHUB_TOKEN") },
+            }),
+          ],
+          servers: [
+            mcp("github", {
+              transport: new TestTransport(),
+              auth: { type: "bearer", credential: credential("github.token") },
+            }),
+          ],
+          policy: policy("support").mcp("github").allow("*"),
+        }),
+      ],
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.diagnostics.map((entry) => entry.code)).not.toContain("FENTARIS_CONFIG_CREDENTIAL_MISSING");
   });
 
   it("throws structured diagnostics for invalid scoped handles", () => {

@@ -18,10 +18,12 @@ FENTARIS_API_KEY=... fentaris doctor --runtime
 Encryption key used to decrypt local credentials in `.fentaris/credentials.enc.json`.
 
 ```bash theme={null}
-FENTARIS_AUTH_KEY=fentaris-auth-...
+export FENTARIS_AUTH_KEY="<local-encryption-key>"
 ```
 
 `fentaris doctor` checks whether this variable is present before verifying encrypted credentials when a local credential store exists.
+
+Choose and retain this value through your normal local secret-management process. The same value is required for future reads and updates. Do not commit it, store it in generated project files, or expose it in command output. Agent-driven setup should leave this value for the user to provision and list the commands that require it.
 
 ### `FENTARIS_GUEST_API_KEY`
 

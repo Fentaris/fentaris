@@ -3,7 +3,7 @@ title: "Setup"
 description: "Configure a Fentaris proxy with the high-level TypeScript API."
 ---
 
-Use `fentaris()` as the app boundary, declare upstream MCP servers with `app.server(...)`, and keep local endpoint defaults in `fentaris.json`.
+Use `fentaris()` as the app boundary, declare upstream MCP servers with high-level helpers, and keep local endpoint defaults in `fentaris.json`.
 
 ## Prerequisites
 
@@ -101,6 +101,7 @@ In strict TypeScript projects, annotate exported middleware and policies at the 
 import {
   bearer,
   credential,
+  credentialJson,
   fentaris,
   group,
   mcp,
@@ -138,7 +139,14 @@ const app = fentaris({
   groups: [
     group({
       id: "maintainers",
-      users: [user("alice")],
+      users: [
+        user("alice", {
+          apiKeys: [credentialJson("users.alice.apiKeys.0")],
+        }),
+      ],
+      credentials: {
+        "github.token": credentialJson("groups.maintainers.github.token"),
+      },
       policy: maintainers,
     }),
   ],
@@ -150,6 +158,12 @@ await app.start();
 ```
 
 Use `type Middleware` for shared middleware functions. Inline `app.use(async (ctx, next) => ...)` callbacks also infer contextual `ctx` and `next` types.
+
+The declarative `fentaris({ ... })` form keeps group credentials next to the users and policy that own them. Use incremental calls such as `app.server(...)`, `app.policy(...)`, and `app.group(...)` when the app does not need to declare group- or user-scoped credential sources.
+
+<Note>
+  `app.group("maintainers").mcp("github")` returns a scoped middleware and event handle for an already declared server. It does not register an upstream transport or group credentials.
+</Note>
 
 ## Connect an MCP Client
 
