@@ -195,6 +195,16 @@ fentaris secrets set github.token --user admin
 
 Run the command inside the project or one of its subdirectories so the CLI can discover the correct `.env`. An exported `FENTARIS_AUTH_KEY` overrides the value in `.env`.
 
+### Auth setup requires interactive input
+
+`fentaris auth` and `fentaris auth api-key add` without explicit values require a real terminal. In CI or other non-interactive environments, provide the user and key source:
+
+```bash theme={null}
+printf '%s' "$CLIENT_API_KEY" | fentaris auth api-key add alice --value-stdin --non-interactive
+```
+
+Use `--generate` instead of `--value-stdin` when the job can securely capture the generated key from command output.
+
 ### Secrets manifest is missing or out of date
 
 `fentaris secrets manifest --check` fails when `.fentaris/secrets.manifest.json` does not match credential references in the project entrypoint.
