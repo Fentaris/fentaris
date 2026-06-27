@@ -1,5 +1,13 @@
 # @fentaris/cli
 
+## 1.2.1
+
+### Patch Changes
+
+- 673680d: Replace generated project guidance for the unavailable upgrade command with package-manager update instructions.
+- Updated dependencies [f46bdad]
+  - @fentaris/core@2.1.2
+
 ## 1.2.0
 
 ### Minor Changes
