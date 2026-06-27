@@ -1,5 +1,11 @@
 # @fentaris/core
 
+## 2.1.2
+
+### Patch Changes
+
+- f46bdad: Accept user- and group-scoped credential sources when validating upstream MCP server credential references.
+
 ## 2.1.1
 
 ### Patch Changes
