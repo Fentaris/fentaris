@@ -112,14 +112,31 @@ fentaris build
 
 The built proxy runs with `node dist/index.js` or the generated project's `npm start` script.
 
-### `fentaris auth api-key add <user-id>`
+### `fentaris auth`
+
+Open the guided local API-key menu:
+
+```bash theme={null}
+fentaris auth
+```
+
+Choose whether to add, list, or remove an API key. Add and remove flows select known users from the entrypoint, secrets manifest, and encrypted credential store. They show a redacted review and require confirmation before changing the store.
+
+Generated projects are discovered from `fentaris.json`. SDK-only projects are discovered from the nearest `package.json` that depends on `@fentaris/core`.
+
+Use the explicit `fentaris auth api-key` commands with `--non-interactive` in automation.
+
+### `fentaris auth api-key add [user-id]`
 
 Store a local API key for a user identity. Clients send this value in the `x-fentaris-api-key` header when connecting to Fentaris.
 
 ```bash theme={null}
+fentaris auth api-key add
 printf '%s' "$ADMIN_API_KEY" | fentaris auth api-key add alice --value-stdin
 fentaris auth api-key add alice --generate
 ```
+
+When the user id is omitted, the command offers known users and allows manual entry. When no key value option is present, choose whether to generate a new key or enter an existing key, then review and confirm the change.
 
 The raw API key is never stored. Fentaris writes a `sha256:` hash into `.fentaris/credentials.enc.json` and compares incoming client keys against that hash.
 
@@ -174,6 +191,8 @@ fentaris secrets set github.token --value-stdin --non-interactive
 ```
 
 Generated projects are discovered from `fentaris.json`. SDK-only projects are discovered from the nearest `package.json` that depends on `@fentaris/core`; in that mode the CLI uses `.fentaris/` unless `package.json` contains a `fentaris.authDir` override.
+
+Auth and secrets commands read `FENTARIS_AUTH_KEY` from the exported environment or the discovered project `.env` before prompting. An exported value takes precedence over `.env`.
 
 When `reference` or `--value` is omitted, the command walks through an interactive setup: pick a manifest reference, choose `default`, `user`, or `group` scope, enter the hidden value, review the redacted summary, and confirm before anything is written.
 
