@@ -6,6 +6,7 @@ import { secretScope } from "../domain/auth/local-store.js";
 import { credentialsPath, manifestPath, openLocalSecretsBackend, scopeFromOptions } from "../domain/secrets/backend.js";
 import { buildListRows, getSecretsDoctorIssues, loadRequiredReferences } from "../domain/secrets/doctor.js";
 import { scanEntrypointForSecrets } from "../domain/secrets/manifest-scan.js";
+import { loadProjectEnv } from "../domain/project/env.js";
 import { discoverSecretsProject } from "../domain/project/project.js";
 import type { CliCommand, CliOptions, Runtime } from "../shared/types.js";
 import { exists } from "../shared/utils.js";
@@ -232,7 +233,8 @@ async function loadStoredSubjectIds(
   runtime: Runtime,
   project: Awaited<ReturnType<typeof discoverSecretsProject>>,
 ): Promise<string[]> {
-  const key = typeof options.key === "string" ? options.key : runtime.env.FENTARIS_AUTH_KEY;
+  const env = await loadProjectEnv(project.root, runtime.env);
+  const key = typeof options.key === "string" ? options.key : env.FENTARIS_AUTH_KEY;
   if (!key?.trim() || !(await exists(credentialsPath(project)))) {
     return [];
   }

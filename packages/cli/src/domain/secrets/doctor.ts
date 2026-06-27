@@ -11,6 +11,7 @@ import {
 } from "@fentaris/core";
 import type { HealthResult, ProjectDiscovery, Runtime } from "../../shared/types.js";
 import { exists } from "../../shared/utils.js";
+import { loadProjectEnv } from "../project/env.js";
 import { credentialsPath, formatScopeLabel, manifestPath, openLocalSecretsBackend } from "./backend.js";
 import { scanEntrypointForSecrets } from "./manifest-scan.js";
 
@@ -30,7 +31,8 @@ export type SecretsDoctorIssue = {
 export async function getSecretsDoctorIssues(project: ProjectDiscovery, runtime: Runtime, options: SecretsDoctorOptions = {}): Promise<SecretsDoctorIssue[]> {
   const issues: SecretsDoctorIssue[] = [];
   const required = await loadRequiredReferences(project);
-  const key = options.key ?? runtime.env.FENTARIS_AUTH_KEY;
+  const env = await loadProjectEnv(project.root, runtime.env);
+  const key = options.key ?? env.FENTARIS_AUTH_KEY;
   const storeExists = await exists(credentialsPath(project));
 
   let stored: SecretRef[] = [];

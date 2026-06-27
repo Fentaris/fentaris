@@ -23,7 +23,9 @@ export FENTARIS_AUTH_KEY="<local-encryption-key>"
 
 `fentaris doctor` checks whether this variable is present before verifying encrypted credentials when a local credential store exists.
 
-Choose and retain this value through your normal local secret-management process. The same value is required for future reads and updates. Do not commit it, store it in generated project files, or expose it in command output. Agent-driven setup should leave this value for the user to provision and list the commands that require it.
+Local `fentaris secrets` and `fentaris auth api-key` commands resolve the key in this order: `--key`, the exported process environment, the discovered project `.env`, then the interactive prompt. A shell export overrides the project `.env`.
+
+Choose and retain this value through your normal local secret-management process. The same value is required for future reads and updates. Do not commit `.env` or expose the key in command output.
 
 ### `FENTARIS_GUEST_API_KEY`
 

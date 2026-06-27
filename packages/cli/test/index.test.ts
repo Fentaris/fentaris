@@ -1161,6 +1161,43 @@ describe("secrets", () => {
     expect(rt.out.error.mock.calls.flat().join("\n")).toContain("--value exposes");
   });
 
+  it("loads the local encryption key from the discovered project .env for secrets set", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+
+    const rt = runtime(join(dir, "src"));
+    delete rt.env.FENTARIS_AUTH_KEY;
+    await expect(main(["secrets", "set", "github.token", "--value", "secret-value"], rt)).resolves.toBe(0);
+
+    const credentials = FentarisAuth.decryptCredentials(
+      JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown,
+      "test-key",
+    );
+    expect(credentials.defaults["github.token"]).toBe("secret-value");
+    expect(rt.prompt.text).not.toHaveBeenCalled();
+  });
+
+  it("keeps an exported auth key ahead of the project .env for secrets commands", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await writeFile(join(dir, ".env"), "FENTARIS_AUTH_KEY=dotenv-key\n");
+    await writeFile(
+      join(dir, ".fentaris", "credentials.enc.json"),
+      JSON.stringify(FentarisAuth.encryptCredentials({ users: {}, groups: {}, defaults: {} }, "exported-key")),
+    );
+
+    const rt = runtime(dir);
+    rt.env.FENTARIS_AUTH_KEY = "exported-key";
+    await expect(main(["secrets", "set", "github.token", "--value", "secret-value"], rt)).resolves.toBe(0);
+
+    const credentials = FentarisAuth.decryptCredentials(
+      JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown,
+      "exported-key",
+    );
+    expect(credentials.defaults["github.token"]).toBe("secret-value");
+    expect(rt.prompt.text).not.toHaveBeenCalled();
+  });
+
   it("reads secret values from stdin without prompting", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);

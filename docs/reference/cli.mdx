@@ -175,6 +175,8 @@ fentaris secrets set github.token --value-stdin --non-interactive
 
 Generated projects are discovered from `fentaris.json`. SDK-only projects are discovered from the nearest `package.json` that depends on `@fentaris/core`; in that mode the CLI uses `.fentaris/` unless `package.json` contains a `fentaris.authDir` override.
 
+The command reads `FENTARIS_AUTH_KEY` from the exported environment or the discovered project `.env` before prompting. An exported value takes precedence over `.env`.
+
 When `reference` or `--value` is omitted, the command walks through an interactive setup: pick a manifest reference, choose `default`, `user`, or `group` scope, enter the hidden value, review the redacted summary, and confirm before anything is written.
 
 Options:

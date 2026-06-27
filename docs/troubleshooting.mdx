@@ -186,11 +186,14 @@ If the key is lost for a disposable local project, reinitialize the project or r
 
 ### Secret command asks for a key
 
-`fentaris secrets set` needs the local auth key. Provide it through `FENTARIS_AUTH_KEY`, `--key`, or the interactive prompt.
+`fentaris secrets set` needs the local auth key. The CLI checks `--key`, the exported `FENTARIS_AUTH_KEY`, and the discovered project `.env` before opening the interactive prompt.
 
 ```bash theme={null}
-FENTARIS_AUTH_KEY=<key> fentaris secrets set github.token --user admin
+printf 'FENTARIS_AUTH_KEY=<key>\n' >> .env
+fentaris secrets set github.token --user admin
 ```
+
+Run the command inside the project or one of its subdirectories so the CLI can discover the correct `.env`. An exported `FENTARIS_AUTH_KEY` overrides the value in `.env`.
 
 ### Secrets manifest is missing or out of date
 
