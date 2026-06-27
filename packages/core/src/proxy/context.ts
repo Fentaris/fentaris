@@ -5,9 +5,8 @@ import type { IdentityMetadata, ResolvedSubject, UserContext } from "../types/sh
 import type { MiddlewareContext } from "../types/middleware.js";
 import type { Policy, Registry } from "../types/policy.js";
 import type { ProxyContext } from "../types/proxy.js";
-import { getToolPermission, getCapabilityPermission } from "../policy.js";
+import { getToolPermission } from "../policy.js";
 import { type Group, type SubjectIndex } from "../governance.js";
-import { capabilityPermissionsForPolicy } from "./capabilities.js";
 import type { Logger } from "../logger.js";
 import type { McpServer } from "../server/McpServer.js";
 

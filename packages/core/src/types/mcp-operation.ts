@@ -11,7 +11,6 @@ import type {
   ListResourcesResult,
   ListResourceTemplatesRequest,
   ListResourceTemplatesResult,
-  ListToolsRequest,
   ListToolsResult,
   ReadResourceRequest,
   ReadResourceResult,
