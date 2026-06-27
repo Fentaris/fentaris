@@ -3,7 +3,7 @@ title: "Quickstart"
 description: "Create a Fentaris project, run the local proxy, and connect an MCP client."
 ---
 
-This quickstart uses the Fentaris CLI to generate a ready-to-run project with one local demo user and one remote HTTP MCP upstream.
+This quickstart uses the Fentaris CLI to generate a ready-to-run local project with one remote HTTP upstream MCP server.
 
 ## Choose a Setup Path
 
@@ -44,7 +44,7 @@ If you omit `--skip-install`, the package manager passed to `--package-manager` 
 The proxy listens on `http://localhost:4000/mcp` by default. Generated projects read `port` and `path` from `fentaris.json`, so `fentaris dev` and `app.start()` stay aligned without hardcoding the endpoint in `src/index.ts`.
 
 <Note>
-  The generated app does not configure authentication or policy rules. Add API-key auth and policies before exposing the proxy outside a local development environment.
+  The generated app explicitly allows all upstream operations and does not configure authentication. Replace the development policy with API-key auth and an allow-list policy before exposing the proxy outside your machine.
 </Note>
 
 ## Generated Project
@@ -75,7 +75,11 @@ or
 fentaris init my-proxy --core-version file:../packages/core
 ```
 
-The doctor check will then skip the installed-version check for that range. Use `fentaris upgrade` (when available) to refresh generated projects after a core release.
+The doctor check skips installed-version validation for workspace and file references. Use your package manager to update released dependencies:
+
+```bash theme={null}
+pnpm update @fentaris/core
+```
 
 ## Connect a Client
 

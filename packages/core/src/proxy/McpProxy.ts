@@ -62,7 +62,6 @@ import {
 import { McpServer, type McpServerOptions, type ServerCredentialBinding } from "../server/McpServer.js";
 import {
   fromProxyPromptName,
-  fromProxyResourceTemplateUri,
   fromProxyResourceUri,
   fromProxyToolName,
   toProxyPromptName,
@@ -70,8 +69,7 @@ import {
   toProxyResourceUri,
   toProxyToolName,
 } from "../nameMapping.js";
-import { filterToolsByPolicy, getToolPermission } from "../policy.js";
-import { getCapabilityPermission, toCapabilityPermissions, toCapabilityRequest } from "../policy.js";
+import { filterToolsByPolicy, toCapabilityRequest } from "../policy.js";
 import { rateLimitKey } from "../rate-limit/index.js";
 import { FentarisAuth } from "../auth.js";
 import { resolveCredentialSource, type CredentialSourceMap } from "../credentials/index.js";
@@ -105,7 +103,7 @@ import type {
   ToolCallHookFilter,
 } from "../types/middleware.js";
 import type { ProxyOperationResult } from "../types/mcp-operation.js";
-import type { CapabilityPermission, ErrorMapper, IdentityStrategy, Policy, PolicyDecision, RateLimiter, Registry } from "../types/policy.js";
+import type { ErrorMapper, IdentityStrategy, Policy, PolicyDecision, RateLimiter, Registry } from "../types/policy.js";
 import type {
   ProxyContext,
   ProxyEventFilter,
@@ -2888,11 +2886,6 @@ function isRateLimiter(value: unknown): value is RateLimiterLike {
     "getRemainingCalls" in value &&
     (!("consume" in value) || typeof (value as Record<string, unknown>).consume === "function")
   );
-}
-
-function stringMetadata(metadata: Record<string, unknown> | undefined, key: string): string | undefined {
-  const value = metadata?.[key];
-  return typeof value === "string" ? value : undefined;
 }
 
 function normalizeHeaders(headers: IncomingHttpHeaders): Record<string, string> {

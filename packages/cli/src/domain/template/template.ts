@@ -74,12 +74,12 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
         "",
       ].join("\n"),
       ".fentaris/secrets.manifest.json": JSON.stringify({ version: 1, references: [] }, null, 2),
-      "src/index.ts": renderEntrypoint(input),
+      "src/index.ts": renderEntrypoint(),
     },
   };
 }
 
-export function renderEntrypoint(input: TemplateInput): string {
+export function renderEntrypoint(): string {
   return `import { Policy, fentaris, streamableHttp } from "@fentaris/core";
 
 const app = fentaris({
@@ -122,7 +122,7 @@ ${input.packageManager} dev
 
 \`fentaris dev\` starts the project. The proxy listens on \`http://127.0.0.1:${input.port}${input.proxyPath}\` by default.
 
-The generated project pins \`@fentaris/core\` to \`${coreRange}\` (currently \`^${coreVersion}\` by default). Run \`${input.packageManager} outdated @fentaris/core\` to see if a newer compatible release is available, or \`fentaris upgrade\` when it lands.
+The generated project pins \`@fentaris/core\` to \`${coreRange}\` (currently \`^${coreVersion}\` by default). Run \`${input.packageManager} outdated @fentaris/core\` to check for compatible updates, then \`${input.packageManager} update @fentaris/core\` to install them.
 
 ## Project files
 

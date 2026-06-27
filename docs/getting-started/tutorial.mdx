@@ -37,6 +37,7 @@ cd tutorial-proxy
   "packageManager": "pnpm",
   "entrypoint": "src/index.ts",
   "port": 4000,
+  "host": "127.0.0.1",
   "path": "/mcp",
   "authDir": ".fentaris"
 }
@@ -53,12 +54,14 @@ When `app.start()` runs without explicit options, `@fentaris/core` searches upwa
 Open `src/index.ts` and start with an empty Fentaris app:
 
 ```ts theme={null}
-import { fentaris, stdio } from "@fentaris/core";
+import { Policy, fentaris, stdio, streamableHttp } from "@fentaris/core";
 
-const app = fentaris();
+const app = fentaris({
+  policy: Policy.allowAll(),
+});
 ```
 
-`fentaris()` creates the proxy application boundary. In this tutorial, the app constructor stays empty because project discovery, port, and path come from `fentaris.json`, and upstream MCP servers are attached with `app.mcp(...)`.
+`fentaris()` creates the proxy application boundary. Project discovery, host, port, and path come from `fentaris.json`, while upstream MCP servers are attached with `app.mcp(...)`. `Policy.allowAll()` keeps this local tutorial focused on routing; replace it with an allow-list policy before sharing the endpoint.
 
 ## Step 3: Attach the Filesystem Server
 
@@ -83,27 +86,21 @@ app.mcp("filesystem", {
 
 `app.mcp("filesystem", ...)` gives the upstream server a stable Fentaris name. Fentaris uses that name when routing tool calls, applying middleware, logging events, and exposing proxied tool names such as `filesystem__read_file`.
 
-## Step 4: Attach a Diagnostics Server
+## Step 4: Attach a Remote Server
 
-Add a second upstream MCP server for internal diagnostics:
+Add the public MCP specification server as a second upstream:
 
 ```ts theme={null}
-app.mcp("diagnostics", {
-  displayName: "Diagnostics",
-  transport: stdio({
-    command: "node",
-    args: ["./dist/diagnostics-server.js"],
-  }),
-  env: (user) => ({
-    USER_ID: user.id ?? "anonymous",
+app.mcp("specification", {
+  displayName: "MCP Specification",
+  transport: streamableHttp({
+    url: "https://mcp.specification.website/mcp",
   }),
 });
 ```
 
-The `env` callback runs per request. It lets the upstream process receive request-scoped values without putting user-specific data into global process environment variables.
-
 <Note>
-  Replace `./dist/diagnostics-server.js` with a real MCP server entrypoint in your project. The tutorial focuses on the Fentaris wiring around multiple upstream MCP servers.
+  The specification server requires network access. The filesystem server remains local, so you can still start the proxy and test local routing if the remote server is unavailable.
 </Note>
 
 ## Step 5: Add Global Middleware
@@ -117,7 +114,7 @@ app.use(async (ctx, next) => {
     tool: ctx.tool?.name,
   });
 
-  if (ctx.server?.name === "filesystem" && ctx.tool?.name === "delete") {
+  if (ctx.server?.name === "filesystem" && ctx.tool?.name === "delete_file") {
     return ctx.deny("Filesystem delete is disabled in this environment.");
   }
 
@@ -132,15 +129,15 @@ Use middleware for runtime checks that depend on request data, tool arguments, t
 Server-scoped handles keep observability close to the upstream MCP server they describe:
 
 ```ts theme={null}
-app.mcp("diagnostics").on("tool:success", async ({ ctx, durationMs }) => {
-  ctx.log.info("diagnostics.tool.success", {
+app.mcp("specification").on("tool:success", async ({ ctx, durationMs }) => {
+  ctx.log.info("specification.tool.success", {
     tool: ctx.tool?.name,
     durationMs,
   });
 });
 ```
 
-This hook only observes successful tool calls for the `diagnostics` upstream server. It does not affect filesystem calls and does not replace middleware or policy decisions.
+This hook only observes successful tool calls for the `specification` upstream MCP server. It does not affect filesystem calls and does not replace middleware or policy decisions.
 
 ## Step 7: Start the Proxy
 
@@ -153,9 +150,11 @@ await app.start();
 The complete entrypoint should look like this:
 
 ```ts theme={null}
-import { fentaris, stdio } from "@fentaris/core";
+import { Policy, fentaris, stdio, streamableHttp } from "@fentaris/core";
 
-const app = fentaris();
+const app = fentaris({
+  policy: Policy.allowAll(),
+});
 
 app.mcp("filesystem", {
   displayName: "Filesystem",
@@ -165,14 +164,10 @@ app.mcp("filesystem", {
   }),
 });
 
-app.mcp("diagnostics", {
-  displayName: "Diagnostics",
-  transport: stdio({
-    command: "node",
-    args: ["./dist/diagnostics-server.js"],
-  }),
-  env: (user) => ({
-    USER_ID: user.id ?? "anonymous",
+app.mcp("specification", {
+  displayName: "MCP Specification",
+  transport: streamableHttp({
+    url: "https://mcp.specification.website/mcp",
   }),
 });
 
@@ -182,15 +177,15 @@ app.use(async (ctx, next) => {
     tool: ctx.tool?.name,
   });
 
-  if (ctx.server?.name === "filesystem" && ctx.tool?.name === "delete") {
+  if (ctx.server?.name === "filesystem" && ctx.tool?.name === "delete_file") {
     return ctx.deny("Filesystem delete is disabled in this environment.");
   }
 
   return next();
 });
 
-app.mcp("diagnostics").on("tool:success", async ({ ctx, durationMs }) => {
-  ctx.log.info("diagnostics.tool.success", {
+app.mcp("specification").on("tool:success", async ({ ctx, durationMs }) => {
+  ctx.log.info("specification.tool.success", {
     tool: ctx.tool?.name,
     durationMs,
   });
@@ -240,7 +235,7 @@ You now have:
 * one Fentaris endpoint configured by `fentaris.json`
 * two upstream MCP servers declared with `app.mcp(...)`
 * global middleware for logging and request-time denial
-* a server-scoped hook for diagnostics observability
+* a server-scoped hook for remote upstream observability
 
 ## Related Documentation
 
