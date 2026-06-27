@@ -231,11 +231,25 @@ function validateIdentity(config: McpProxyOptions, groups: Group[], diagnostics:
 function validateCredentialReferences(config: McpProxyOptions, groups: Group[], diagnostics: FentarisDiagnostic[]): void {
   const defaultCredentials = config.defaults?.credentials ?? {};
   const authBacked = Boolean(config.auth);
+  const globalCredentials = groups.reduce<CredentialSourceMap>(
+    (available, group) => ({
+      ...available,
+      ...group.credentials,
+      ...group.users.reduce<CredentialSourceMap>(
+        (userCredentials, user) => ({ ...userCredentials, ...user.credentials }),
+        {},
+      ),
+    }),
+    { ...defaultCredentials },
+  );
   for (const [index, server] of (config.servers ?? []).entries()) {
-    validateServerCredentials(server, defaultCredentials, ["servers", index], diagnostics, authBacked);
+    validateServerCredentials(server, globalCredentials, ["servers", index], diagnostics, authBacked);
   }
   for (const [groupIndex, group] of groups.entries()) {
-    const available = { ...defaultCredentials, ...group.credentials };
+    const available = group.users.reduce<CredentialSourceMap>(
+      (credentials, user) => ({ ...credentials, ...user.credentials }),
+      { ...defaultCredentials, ...group.credentials },
+    );
     for (const [serverIndex, server] of group.servers.entries()) {
       validateServerCredentials(server, available, ["groups", groupIndex, "servers", serverIndex], diagnostics, authBacked);
     }
