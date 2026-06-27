@@ -48,7 +48,7 @@ export function parseCommand(argv: string[]): ParseResult {
     return { kind: "parse-error", message: "expected a command", path: [] };
   }
 
-  if (spec.commands && parsed.args.length === 0) {
+  if (spec.commands && parsed.args.length === 0 && spec.allowNoSubcommand !== true) {
     return { kind: "parse-error", message: "expected a command", path };
   }
 

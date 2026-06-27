@@ -25,6 +25,7 @@ export type CliCommandSpec = {
   description: string;
   details?: string[];
   usage: string;
+  allowNoSubcommand?: boolean;
   commandGroups?: CliCommandGroup[];
   arguments?: CliArgumentSpec[];
   options?: CliOptionSpec[];
@@ -146,13 +147,18 @@ export const cliSpec: CliCommandSpec = {
       path: ["auth"],
       description: "Manage local identity authentication.",
       usage: "fentaris auth [OPTIONS] [COMMAND]",
+      allowNoSubcommand: true,
+      details: ["Omit the command to open an interactive menu for adding, listing, or removing local API keys."],
       commandGroups: [
         {
           title: "Commands",
           commands: [{ name: "api-key", summary: "Manage API keys for local user identity." }],
         },
       ],
-      options: [{ name: "help", short: "h", description: "Print help" }],
+      options: [
+        localSecretsKeyOption,
+        { name: "help", short: "h", description: "Print help" },
+      ],
       commands: {
         "api-key": {
           name: "api-key",
@@ -176,8 +182,9 @@ export const cliSpec: CliCommandSpec = {
               name: "add",
               path: ["auth", "api-key", "add"],
               description: "Store a local API key for a user.",
-              usage: "fentaris auth api-key add [OPTIONS] <user-id>",
-              arguments: [{ name: "user-id", required: true, description: "User id resolved when the API key is presented." }],
+              usage: "fentaris auth api-key add [OPTIONS] [user-id]",
+              details: ["Omit the user id or API-key value to use the guided setup with user selection, key generation or entry, a redacted review, and confirmation before writing."],
+              arguments: [{ name: "user-id", description: "User id resolved when the API key is presented. If omitted, an interactive prompt is used." }],
               options: [
                 { name: "value", valueName: "VALUE", description: "API key value. Prefer --value-stdin to avoid exposing keys in process arguments." },
                 { name: "value-stdin", description: "Read the API key value from stdin instead of process arguments or an interactive prompt." },
