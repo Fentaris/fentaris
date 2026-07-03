@@ -92,9 +92,14 @@ import {
   createSetupSchema,
   validateSetupSchema,
   cloud as cloudTarget,
+  detectStaticPlacementOverlaps,
   isValidTargetName,
   validateDeviceSelector,
+  PlacementResolver,
   type ExecutionTarget,
+  type PlacementBindingModel,
+  type PlacementResolution,
+  type PlacementRequest,
   type SetupFieldDescriptor,
   type SetupSchema,
 } from "../edge/index.js";
@@ -662,6 +667,32 @@ export class McpProxy {
     ]);
   }
 
+  /**
+   * Build a {@link PlacementResolver} over the registered targets and
+   * normalized placement bindings. The resolver never grants capability
+   * access; callers must have already established server-catalog visibility
+   * and policy authorization before relying on its result.
+   * @pk
+   */
+  placementResolver(): PlacementResolver {
+    return new PlacementResolver({
+      targets: this.targets,
+      bindings: this.placementBindings as readonly PlacementBindingModel[],
+    });
+  }
+
+  /**
+   * Resolve a placement for an already-authorized request. Intended to be
+   * called at dispatch time, after server-catalog visibility and policy
+   * authorization have established that the subject may use the server.
+   * Throws `EDGE_UNAUTHORIZED_TARGET` for an ineligible explicit selection and
+   * `EDGE_PLACEMENT_AMBIGUOUS` for unresolved runtime group overlap.
+   * @pk
+   */
+  resolvePlacement(request: PlacementRequest): PlacementResolution {
+    return this.placementResolver().resolve(request);
+  }
+
   /** Register a setup schema for a server. @pk */
   registerServerSetup(serverName: string, schema: Record<string, SetupFieldDescriptor> | SetupSchema): void {
     if (!this.serverByName.has(serverName)) {
@@ -1044,6 +1075,42 @@ export class McpProxy {
           });
         }
       }
+    }
+
+    // Statically overlapping group bindings with different targets are an
+    // actionable configuration error at startup. Dynamic overlap that cannot
+    // be known at startup is left to runtime EDGE_PLACEMENT_AMBIGUOUS errors.
+    // @pk
+    const staticSubjectGroups = new Map<string, string[]>();
+    for (const group of this.groups) {
+      for (const user of group.users) {
+        const list = staticSubjectGroups.get(user.id);
+        if (list) {
+          list.push(group.id);
+        } else {
+          staticSubjectGroups.set(user.id, [group.id]);
+        }
+      }
+    }
+    const userBindingKeys = new Set<string>();
+    for (const binding of this.placementBindings) {
+      if (binding.scope === "user" && binding.userId !== undefined) {
+        userBindingKeys.add(`${binding.serverName}|${binding.userId}`);
+      }
+    }
+    for (const overlap of detectStaticPlacementOverlaps({
+      subjectGroups: staticSubjectGroups,
+      bindings: this.placementBindings as readonly PlacementBindingModel[],
+      userBindings: userBindingKeys,
+    })) {
+      diagnostics.push({
+        severity: "error",
+        code: "FENTARIS_CONFIG_PLACEMENT_AMBIGUOUS",
+        title: "Overlapping group placement bindings",
+        message: `Subject "${overlap.subjectId}" belongs to groups binding "${overlap.serverName}" to different targets (${overlap.targets.join(", ")}).`,
+        path: ["proxy", "placement", overlap.serverName],
+        hint: "Add an app.user(subjectId).mcp(name).target(...) binding or align the group target declarations.",
+      });
     }
 
     // Validate edge target device selectors. @pk

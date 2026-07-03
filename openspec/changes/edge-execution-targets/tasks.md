@@ -20,13 +20,13 @@
 
 ## 3. Placement Resolution
 
-- [ ] 3.1 Add execution placement binding and scope models for global, group, and user contexts.
-- [ ] 3.2 Implement placement resolution with allowed explicit-session, user, group, global, and implicit-cloud precedence.
-- [ ] 3.3 Detect statically overlapping group bindings with different targets and emit actionable startup diagnostics.
-- [ ] 3.4 Reject dynamically ambiguous group placements at runtime and deduplicate matching bindings that converge on one target.
-- [ ] 3.5 Ensure placement resolution runs only after server catalog visibility and policy authorization and never grants capability access.
-- [ ] 3.6 Implement logical device selectors for session device, user default device, named alias, and shared pool strategy through a control-plane resolver interface.
-- [ ] 3.7 Add tests for precedence, explicit target authorization, catalog/policy isolation, cross-group ambiguity, aliases, pools, and no-eligible-device errors.
+- [x] 3.1 Add execution placement binding and scope models for global, group, and user contexts.
+- [x] 3.2 Implement placement resolution with allowed explicit-session, user, group, global, and implicit-cloud precedence.
+- [x] 3.3 Detect statically overlapping group bindings with different targets and emit actionable startup diagnostics.
+- [x] 3.4 Reject dynamically ambiguous group placements at runtime and deduplicate matching bindings that converge on one target.
+- [x] 3.5 Ensure placement resolution runs only after server catalog visibility and policy authorization and never grants capability access.
+- [x] 3.6 Implement logical device selectors for session device, user default device, named alias, and shared pool strategy through a control-plane resolver interface.
+- [x] 3.7 Add tests for precedence, explicit target authorization, catalog/policy isolation, cross-group ambiguity, aliases, pools, and no-eligible-device errors.
 
 ## 4. Session Target Bindings
 

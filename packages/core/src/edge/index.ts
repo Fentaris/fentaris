@@ -99,3 +99,23 @@ export type { LaunchRecipe } from "./recipe.js";
 
 export { EDGE_ERROR_CODES, edgeError, isEdgeError } from "./errors.js";
 export type { EdgeError, EdgeErrorCode, EdgeErrorOptions } from "./errors.js";
+
+export {
+  PlacementResolver,
+  detectStaticPlacementOverlaps,
+  requireDevice,
+  resolveDeviceSelector,
+} from "./placement.js";
+export type {
+  DeviceResolution,
+  DeviceResolver,
+  DeviceResolverContext,
+  PlacementBindingModel,
+  PlacementOverlapDiagnostic,
+  PlacementRequest,
+  PlacementResolution,
+  PlacementResolverInputs,
+  PlacementScope,
+  PlacementSource,
+  StaticOverlapInputs,
+} from "./placement.js";
