@@ -145,7 +145,7 @@ export type {
  * MCP proxy options.
  * @pk
  */
-export type { AutoLogOptions, IdentityResolverOptions, McpProxyOptions, McpProxyStartOptions, McpProxyStopOptions } from "./proxy/index.js";
+export type { AutoLogOptions, IdentityResolverOptions, McpProxyOptions, McpProxyStartOptions, McpProxyStopOptions, PlacementBindingConfig } from "./proxy/index.js";
 /**
  * MCP server wrapper.
  * @pk
@@ -276,6 +276,7 @@ export type {
   ProxyMcpDeclarationConfig,
   ProxyMcpDeclarationOptions,
   ProxyMcpHandle,
+  ProxyUserHandle,
   LocalCompletionHandler,
   LocalCompletionReference,
   LocalPromptHandler,

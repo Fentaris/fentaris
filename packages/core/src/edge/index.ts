@@ -32,6 +32,7 @@ export {
   DeviceSelectorBuilder,
   isCloudTarget,
   isEdgeTarget,
+  isValidTargetName,
   validateDeviceSelector,
 } from "./target.js";
 export type {

@@ -10,13 +10,13 @@
 
 ## 2. Fluent Target, User, and Setup APIs
 
-- [ ] 2.1 Add `app.target(name, target)` registration and target retrieval with duplicate, invalid-name, and unknown-target diagnostics.
-- [ ] 2.2 Extend global MCP handles with `.setup(schema)` and `.target(name)` while preserving existing middleware, event, health, and declaration behavior.
-- [ ] 2.3 Extend group-scoped MCP handles with `.target(name)` and record group placement bindings independently from server visibility and policy.
-- [ ] 2.4 Add `app.user(id)` and user-scoped MCP handles that record placement bindings without creating or authenticating a subject.
-- [ ] 2.5 Normalize fluent and constructor-style target, setup, and placement declarations into one internal configuration model.
-- [ ] 2.6 Add validation for unresolved user handles, missing targets, duplicate bindings, incompatible setup fields, undeclared runtime references, unused required fields, and unsafe secret defaults.
-- [ ] 2.7 Add fluent API and configuration-validation tests covering global, group, user, target, setup, and backward-compatible no-target declarations.
+- [x] 2.1 Add `app.target(name, target)` registration and target retrieval with duplicate, invalid-name, and unknown-target diagnostics.
+- [x] 2.2 Extend global MCP handles with `.setup(schema)` and `.target(name)` while preserving existing middleware, event, health, and declaration behavior.
+- [x] 2.3 Extend group-scoped MCP handles with `.target(name)` and record group placement bindings independently from server visibility and policy.
+- [x] 2.4 Add `app.user(id)` and user-scoped MCP handles that record placement bindings without creating or authenticating a subject.
+- [x] 2.5 Normalize fluent and constructor-style target, setup, and placement declarations into one internal configuration model.
+- [x] 2.6 Add validation for unresolved user handles, missing targets, duplicate bindings, incompatible setup fields, undeclared runtime references, unused required fields, and unsafe secret defaults.
+- [x] 2.7 Add fluent API and configuration-validation tests covering global, group, user, target, setup, and backward-compatible no-target declarations.
 
 ## 3. Placement Resolution
 

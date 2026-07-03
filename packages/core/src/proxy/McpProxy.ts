@@ -88,6 +88,18 @@ import { ResponseController } from "../types/middleware.js";
 import { FentarisConfigError, assertValidFentarisConfig, validateFentarisConfig, type FentarisDiagnostic } from "../config/index.js";
 import { resolveFentarisConfig } from "../config/resolve.js";
 import { LocalCapabilityRegistry } from "../local/declarations.js";
+import {
+  createSetupSchema,
+  validateSetupSchema,
+  cloud as cloudTarget,
+  isValidTargetName,
+  validateDeviceSelector,
+  type ExecutionTarget,
+  type SetupFieldDescriptor,
+  type SetupSchema,
+} from "../edge/index.js";
+import type { LaunchRecipe } from "../edge/recipe.js";
+import { StdioTransport } from "../transports/client/StdioTransport.js";
 import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
 import type { CredentialSourceMetadata, IdentityMetadata, ResolvedSubject, UserContext } from "../types/shared.js";
 import type {
@@ -117,6 +129,7 @@ import type {
   ProxyMcpDeclarationOptions,
   ProxyMcpHandle,
   ProxyLocalHandle,
+  ProxyUserHandle,
   ProxyOperationHandler,
   ProxyToolHandler,
   ProxyToolPattern,
@@ -181,6 +194,26 @@ type FluentGroupDeclaration = {
   policy?: string | Policy;
 };
 
+type PlacementScope = "global" | "group" | "user";
+
+/** A placement binding declared through fluent or constructor-style config. @pk */
+export type PlacementBindingConfig = {
+  /** Server name the binding applies to. @pk */
+  serverName: string;
+  /** Scope of the binding. @pk */
+  scope: PlacementScope;
+  /** Group id for group-scoped bindings. @pk */
+  groupId?: string;
+  /** User id for user-scoped bindings. @pk */
+  userId?: string;
+  /** Registered or built-in target name. @pk */
+  targetName: string;
+};
+
+type PlacementBinding = PlacementBindingConfig;
+
+const CLOUD_TARGET_NAME = "cloud";
+
 /**
  * Options for creating an MCP proxy server.
  * @pk
@@ -207,6 +240,12 @@ export type McpProxyOptions = {
   errorMapper?: ErrorMapper;
   name?: string;
   version?: string;
+  /** Constructor-style execution-target declarations. @pk */
+  targets?: Record<string, ExecutionTarget>;
+  /** Constructor-style per-server setup schemas. @pk */
+  setup?: Record<string, Record<string, SetupFieldDescriptor> | SetupSchema>;
+  /** Constructor-style placement bindings. @pk */
+  placements?: PlacementBindingConfig[];
 };
 
 /**
@@ -289,8 +328,14 @@ export class McpProxy {
   private runtimeValidationConfig: McpProxyOptions;
   private readonly namedPolicies = new Map<string, GovernancePolicy>();
   private readonly fluentGroups = new Map<string, FluentGroupDeclaration>();
+  private readonly targets = new Map<string, ExecutionTarget>();
+  private readonly setupSchemas = new Map<string, SetupSchema>();
+  private readonly placementBindings: PlacementBinding[] = [];
+  private readonly fluentUsers = new Set<string>();
   private httpServer: HttpServer | null = null;
   private readonly exposureHandles = new Set<ProxyExposureHandle>();
+
+  private static readonly BUILTIN_TARGET_NAMES = new Set<string>([CLOUD_TARGET_NAME]);
 
   /**
    * Create a new MCP proxy instance.
@@ -341,6 +386,31 @@ export class McpProxy {
 
     for (const server of this.serverCatalog.allServers()) {
       this.serverByName.set(server.name, server);
+    }
+
+    // Normalize constructor-style target, setup, and placement declarations
+    // into the same internal model the fluent API uses. @pk
+    if (options.targets) {
+      for (const [name, target] of Object.entries(options.targets)) {
+        if (!isValidTargetName(name) || McpProxy.BUILTIN_TARGET_NAMES.has(name)) {
+          continue;
+        }
+        this.targets.set(name, target.kind === "cloud" ? cloudTarget : target);
+      }
+    }
+    if (options.setup) {
+      for (const [serverName, schema] of Object.entries(options.setup)) {
+        if (!this.serverByName.has(serverName)) {
+          continue;
+        }
+        const built = "version" in schema && "fields" in schema ? (schema as SetupSchema) : createSetupSchema(schema as Record<string, SetupFieldDescriptor>);
+        this.setupSchemas.set(serverName, built);
+      }
+    }
+    if (options.placements) {
+      for (const binding of options.placements) {
+        this.registerPlacementBinding(binding);
+      }
     }
   }
 
@@ -505,6 +575,145 @@ export class McpProxy {
   group(groupId: string): ProxyGroupHandle {
     this.fluentGroup(groupId);
     return new McpProxyGroupHandle(this, groupId);
+  }
+
+  /**
+   * Register or retrieve a reusable named execution target. Target bindings
+   * describe where an MCP runs and never grant MCP capability access. The
+   * built-in `cloud` target always executes the configured transport on the
+   * Fentaris host and need not be registered.
+   * @pk
+   */
+  target(name: string, target?: ExecutionTarget): this {
+    if (!isValidTargetName(name)) {
+      throw new FentarisConfigError([
+        {
+          severity: "error",
+          code: "FENTARIS_CONFIG_TARGET_INVALID_NAME",
+          title: "Invalid execution target name",
+          message: `Execution target name "${name}" is not a valid identifier.`,
+          path: ["proxy", "target", name],
+          hint: "Use lowercase letters, digits, and hyphens; start with a letter or digit; 1-63 characters.",
+        },
+      ]);
+    }
+    if (McpProxy.BUILTIN_TARGET_NAMES.has(name)) {
+      throw new FentarisConfigError([
+        {
+          severity: "error",
+          code: "FENTARIS_CONFIG_TARGET_RESERVED",
+          title: "Reserved execution target name",
+          message: `Execution target name "${name}" is reserved.`,
+          path: ["proxy", "target", name],
+          hint: "Choose a different name; \"cloud\" is always available as the implicit target.",
+        },
+      ]);
+    }
+    if (target === undefined) {
+      return this; // retrieval-only form `app.target(name)` is not supported; ignore harmlessly
+    }
+    if (!target || (target.kind !== "cloud" && target.kind !== "edge")) {
+      throw new FentarisConfigError([
+        {
+          severity: "error",
+          code: "FENTARIS_CONFIG_TARGET_INVALID",
+          title: "Invalid execution target",
+          message: `Execution target "${name}" is not a cloud or edge target.`,
+          path: ["proxy", "target", name],
+        },
+      ]);
+    }
+    if (this.targets.has(name)) {
+      throw new FentarisConfigError([
+        {
+          severity: "error",
+          code: "FENTARIS_CONFIG_TARGET_DUPLICATE",
+          title: "Duplicate execution target",
+          message: `Execution target "${name}" is already declared.`,
+          path: ["proxy", "target", name],
+          hint: "Reuse the named target via app.mcp(name).target(name).",
+        },
+      ]);
+    }
+    const stored = target.kind === "cloud" ? cloudTarget : target;
+    this.targets.set(name, stored);
+    this.runtimeValidationConfig = { ...this.runtimeValidationConfig };
+    return this;
+  }
+
+  /** Resolve a registered or built-in target by name. @pk */
+  resolveTarget(name: string): ExecutionTarget {
+    const known = this.targets.get(name);
+    if (known) {
+      return known;
+    }
+    if (McpProxy.BUILTIN_TARGET_NAMES.has(name)) {
+      return cloudTarget;
+    }
+    throw new FentarisConfigError([
+      {
+        severity: "error",
+        code: "FENTARIS_CONFIG_TARGET_UNKNOWN",
+        title: "Unknown execution target",
+        message: `Execution target "${name}" is not registered.`,
+        path: ["proxy", "target", name],
+        hint: "Declare it with app.target(name, edge(...)) or use the built-in \"cloud\" target.",
+      },
+    ]);
+  }
+
+  /** Register a setup schema for a server. @pk */
+  registerServerSetup(serverName: string, schema: Record<string, SetupFieldDescriptor> | SetupSchema): void {
+    if (!this.serverByName.has(serverName)) {
+      throw new FentarisConfigError([
+        {
+          severity: "error",
+          code: "FENTARIS_CONFIG_HANDLE_UNKNOWN_SERVER",
+          title: "Setup schema references an unknown server",
+          message: `Setup schema for "${serverName}" does not match a configured upstream MCP server.`,
+          path: ["proxy", "mcp", serverName, "setup"],
+        },
+      ]);
+    }
+    const built = "version" in schema && "fields" in schema ? (schema as SetupSchema) : createSetupSchema(schema as Record<string, SetupFieldDescriptor>);
+    this.setupSchemas.set(serverName, built);
+  }
+
+  /** Record a placement binding unless a conflicting one already exists. @pk */
+  registerPlacementBinding(binding: PlacementBinding): void {
+    const existing = this.placementBindings.find(
+      (entry) =>
+        entry.serverName === binding.serverName &&
+        entry.scope === binding.scope &&
+        entry.groupId === binding.groupId &&
+        entry.userId === binding.userId &&
+        entry.targetName === binding.targetName,
+    );
+    if (existing) {
+      return;
+    }
+    this.placementBindings.push(binding);
+  }
+
+  /**
+   * Retrieve a user-scoped MCP handle. Records placement bindings without
+   * creating or authenticating a subject.
+   * @pk
+   */
+  user(userId: string): ProxyUserHandle {
+    if (typeof userId !== "string" || userId.trim() === "") {
+      throw new FentarisConfigError([
+        {
+          severity: "error",
+          code: "FENTARIS_CONFIG_USER_ID_EMPTY",
+          title: "Empty user id",
+          message: "app.user(id) requires a non-empty subject id.",
+          path: ["proxy", "user"],
+        },
+      ]);
+    }
+    this.fluentUsers.add(userId);
+    return new McpProxyUserHandle(this, userId);
   }
 
   /**
@@ -687,6 +896,200 @@ export class McpProxy {
     this.materializeLocalNamespaces();
     this.refreshDerivedGovernanceState({ validate: true });
     assertValidFentarisConfig(this.runtimeValidationConfig);
+    const edgeDiagnostics = this.validateEdgeConfiguration();
+    if (edgeDiagnostics.length > 0) {
+      throw new FentarisConfigError(edgeDiagnostics);
+    }
+  }
+
+  /**
+   * Validate fluent and constructor-style target, setup, and placement
+   * declarations: unresolved user handles, missing targets, duplicate
+   * conflicting bindings, incompatible setup fields, undeclared runtime
+   * references, unused required fields, and unsafe secret defaults. Target
+   * bindings never grant MCP capability access.
+   * @pk
+   */
+  validateEdgeConfiguration(): FentarisDiagnostic[] {
+    const diagnostics: FentarisDiagnostic[] = [];
+
+    // Unresolved user handles: a user-scoped binding whose subject has no
+    // corresponding declared user in any group. We cannot know at config time
+    // whether an identity strategy will resolve it, so flag only the missing
+    // declared-subject case as a warning. @pk
+    const declaredUserIds = new Set<string>();
+    for (const group of this.groups) {
+      for (const user of group.users) {
+        declaredUserIds.add(user.id);
+      }
+    }
+    for (const userId of this.fluentUsers) {
+      if (!declaredUserIds.has(userId)) {
+        const hasBinding = this.placementBindings.some((binding) => binding.userId === userId);
+        if (hasBinding) {
+          diagnostics.push({
+            severity: "warning",
+            code: "FENTARIS_CONFIG_USER_UNRESOLVED",
+            title: "Unresolved user handle",
+            message: `app.user("${userId}") records placement bindings but no declared subject resolves this id.`,
+            path: ["proxy", "user", userId],
+            hint: "Ensure an identity strategy or declared group user resolves this subject before relying on its bindings.",
+          });
+        }
+      }
+    }
+
+    // Missing targets and duplicate conflicting bindings. @pk
+    const conflictKey = (binding: PlacementBinding) =>
+      `${binding.serverName}|${binding.scope}|${binding.groupId ?? ""}|${binding.userId ?? ""}`;
+    const seen = new Map<string, string>();
+    for (const binding of this.placementBindings) {
+      const path = ["proxy", "placement", binding.serverName, binding.scope, binding.groupId ?? binding.userId ?? "global"];
+      if (!this.serverByName.has(binding.serverName)) {
+        diagnostics.push({
+          severity: "error",
+          code: "FENTARIS_CONFIG_PLACEMENT_UNKNOWN_SERVER",
+          title: "Placement binding references an unknown server",
+          message: `Placement binding for "${binding.serverName}" does not match a configured upstream MCP server.`,
+          path,
+        });
+        continue;
+      }
+      if (!this.targets.has(binding.targetName) && !McpProxy.BUILTIN_TARGET_NAMES.has(binding.targetName)) {
+        diagnostics.push({
+          severity: "error",
+          code: "FENTARIS_CONFIG_PLACEMENT_UNKNOWN_TARGET",
+          title: "Placement binding references an unknown target",
+          message: `Execution target "${binding.targetName}" is not registered.`,
+          path,
+          hint: "Declare it with app.target(name, edge(...)) or use the built-in \"cloud\" target.",
+        });
+      }
+      const key = conflictKey(binding);
+      const previous = seen.get(key);
+      if (previous !== undefined && previous !== binding.targetName) {
+        diagnostics.push({
+          severity: "error",
+          code: "FENTARIS_CONFIG_PLACEMENT_DUPLICATE",
+          title: "Conflicting placement binding",
+          message: `Server "${binding.serverName}" has multiple target bindings (${previous}, ${binding.targetName}) for the same ${binding.scope} scope.`,
+          path,
+        });
+      } else if (previous === undefined) {
+        seen.set(key, binding.targetName);
+      }
+    }
+
+    // Setup schema validation and runtime-reference reconciliation. @pk
+    for (const [serverName, schema] of this.setupSchemas) {
+      const server = this.serverByName.get(serverName);
+      const schemaPath = ["proxy", "mcp", serverName, "setup"];
+      for (const diag of validateSetupSchema(schema)) {
+        diagnostics.push({
+          severity: diag.severity,
+          code: diag.code,
+          title: "Setup schema validation",
+          message: diag.message,
+          path: diag.field ? [...schemaPath, diag.field] : schemaPath,
+        });
+      }
+      if (!server) {
+        continue;
+      }
+      const recipe = this.serverLaunchRecipe(serverName);
+      if (!recipe) {
+        continue;
+      }
+      const fieldMap = schema.fields;
+      const referenced = new Set(recipe.setupFieldRefs);
+
+      // Undeclared runtime references: a token references a field not in the schema. @pk
+      for (const ref of referenced) {
+        if (!fieldMap[ref]) {
+          diagnostics.push({
+            severity: "error",
+            code: "EDGE_SETUP_UNDECLARED_REFERENCE",
+            title: "Undeclared runtime reference",
+            message: `Runtime reference "${ref}" used by "${serverName}" is not declared in its setup schema.`,
+            path: schemaPath,
+            hint: `Add a matching setup field for "${ref}".`,
+          });
+        }
+      }
+
+      // Incompatible setup fields: a secret runtime reference must map to a secret field. @pk
+      const secretRefs = this.collectSecretRuntimeRefs(server);
+      for (const ref of secretRefs) {
+        const field = fieldMap[ref];
+        if (field && field.kind !== "secret") {
+          diagnostics.push({
+            severity: "error",
+            code: "EDGE_SETUP_INCOMPATIBLE_FIELD",
+            title: "Incompatible setup field",
+            message: `Runtime secret reference "${ref}" is bound to a non-secret ${field.kind} field.`,
+            path: [...schemaPath, ref],
+          });
+        }
+      }
+
+      // Unused required fields: a required field not referenced by the recipe. @pk
+      for (const [fieldName, field] of Object.entries(fieldMap)) {
+        if (field.required && !referenced.has(fieldName) && field.kind !== "secret") {
+          diagnostics.push({
+            severity: "warning",
+            code: "EDGE_SETUP_UNUSED_REQUIRED",
+            title: "Unused required setup field",
+            message: `Required setup field "${fieldName}" is not referenced by the launch recipe.`,
+            path: [...schemaPath, fieldName],
+          });
+        }
+      }
+    }
+
+    // Validate edge target device selectors. @pk
+    for (const [name, target] of this.targets) {
+      if (target.kind === "edge") {
+        const selectorErrors = validateDeviceSelector(target.device);
+        for (const message of selectorErrors) {
+          diagnostics.push({
+            severity: "error",
+            code: "FENTARIS_CONFIG_TARGET_INVALID_SELECTOR",
+            title: "Invalid edge device selector",
+            message: `Target "${name}": ${message}`,
+            path: ["proxy", "target", name],
+          });
+        }
+      }
+    }
+
+    return diagnostics;
+  }
+
+  /** Compile a launch recipe for a registered server, if it uses stdio. @pk */
+  private serverLaunchRecipe(serverName: string): LaunchRecipe | undefined {
+    const server = this.serverByName.get(serverName);
+    if (!server) {
+      return undefined;
+    }
+    const transport = server.transport;
+    if (transport instanceof StdioTransport) {
+      const schema = this.setupSchemas.get(serverName);
+      return transport.toLaunchRecipe(schema);
+    }
+    return undefined;
+  }
+
+  /** Collect runtime secret references used by a server's stdio transport. @pk */
+  private collectSecretRuntimeRefs(server: McpServer): string[] {
+    const transport = server.transport;
+    if (!(transport instanceof StdioTransport)) {
+      return [];
+    }
+    const refs: string[] = [];
+    for (const token of transport.runtimeValueTokens()) {
+      if (token.kind === "secret") refs.push(token.ref);
+    }
+    return [...new Set(refs)];
   }
 
   private assertDeferredPolicyServerVisibilityValid(): void {
@@ -2674,11 +3077,16 @@ export function createProxy(options: McpProxyOptions = {}): McpProxy {
 export const fentaris = createProxy;
 
 class McpProxyMcpHandle implements ProxyMcpHandle {
+  private readonly scope: PlacementScope;
+
   constructor(
     private readonly proxy: McpProxy,
     readonly name: string,
     private readonly groupId?: string,
-  ) {}
+    private readonly userId?: string,
+  ) {
+    this.scope = userId !== undefined ? "user" : groupId !== undefined ? "group" : "global";
+  }
 
   use(handler: ProxyMiddleware): ProxyMcpHandle;
   use(handler: LegacyMiddleware): ProxyMcpHandle;
@@ -2710,6 +3118,24 @@ class McpProxyMcpHandle implements ProxyMcpHandle {
       throw new Error(`Missing handler for proxy event "${eventName}"`);
     }
     this.proxy.registerServerEvent(this.name, eventName, filter, handler, this.groupId);
+    return this;
+  }
+
+  setup(schema: Record<string, SetupFieldDescriptor> | SetupSchema): ProxyMcpHandle {
+    this.proxy.registerServerSetup(this.name, schema);
+    return this;
+  }
+
+  target(targetName: string): ProxyMcpHandle {
+    // Defer target resolution to configuration validation so fluent and
+    // constructor-style declarations surface unknown targets consistently. @pk
+    this.proxy.registerPlacementBinding({
+      serverName: this.name,
+      scope: this.scope,
+      ...(this.groupId !== undefined ? { groupId: this.groupId } : {}),
+      ...(this.userId !== undefined ? { userId: this.userId } : {}),
+      targetName,
+    });
     return this;
   }
 
@@ -2772,6 +3198,26 @@ class McpProxyGroupHandle implements ProxyGroupHandle {
     }
     this.proxy.registerGroupEvent(this.id, eventName, filter, handler);
     return this;
+  }
+}
+
+/**
+ * Scoped user handle returned by `proxy.user(id)`. Records placement bindings
+ * without creating or authenticating a subject.
+ * @pk
+ */
+class McpProxyUserHandle implements ProxyUserHandle {
+  constructor(
+    private readonly proxy: McpProxy,
+    readonly id: string,
+  ) {}
+
+  mcp(name: string): ProxyMcpHandle {
+    return new McpProxyMcpHandle(this.proxy, name, undefined, this.id);
+  }
+
+  server(name: string): ProxyMcpHandle {
+    return this.mcp(name);
   }
 }
 

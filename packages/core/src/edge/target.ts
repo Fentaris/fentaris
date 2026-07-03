@@ -180,6 +180,14 @@ export function isEdgeTarget(target: ExecutionTarget): target is EdgeExecutionTa
   return target.kind === "edge";
 }
 
+/** Target name identifier pattern; conservative and DNS-like for control-plane use. @pk */
+const TARGET_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/i;
+
+/** Whether a candidate execution-target name is syntactically valid. @pk */
+export function isValidTargetName(name: string): boolean {
+  return typeof name === "string" && TARGET_NAME_PATTERN.test(name) && !name.endsWith("-");
+}
+
 /** Validate a device selector structure and return collected diagnostic messages. @pk */
 export function validateDeviceSelector(selector: DeviceSelector): string[] {
   const errors: string[] = [];

@@ -91,7 +91,8 @@ export class McpServer {
   readonly name: string;
   readonly displayName: string;
 
-  private readonly transport: FentarisTransport;
+  /** The transport backing this server; exposed for edge recipe/validation. @pk */
+  readonly transport: FentarisTransport;
   private readonly auth?: McpServerAuth;
   private readonly env?: EnvResolver;
   private readonly isolation?: Isolation;

@@ -20,7 +20,9 @@ import type {
   ReadResourceResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import { isRuntimeValueToken, describeRuntimeValueToken, type RuntimeValueToken } from "../../edge/runtimeInput.js";
+import { compileLaunchRecipe, type LaunchRecipe } from "../../edge/recipe.js";
 import { edgeError } from "../../edge/errors.js";
+import type { SetupSchema } from "../../edge/setup.js";
 import type { FentarisTransport } from "../../types/transport.js";
 
 /**
@@ -60,6 +62,33 @@ export class StdioTransport implements FentarisTransport {
     }
 
     this.options = options;
+  }
+
+  /**
+   * Compile this transport's declaration into a serializable launch recipe bound
+   * to an optional setup schema. Cloud/edge validation uses this to reconcile
+   * runtime-value references against declared setup fields.
+   * @pk
+   */
+  toLaunchRecipe(schema?: SetupSchema): LaunchRecipe {
+    return compileLaunchRecipe(this.options, schema);
+  }
+
+  /**
+   * Return every runtime-value token declared in arguments and environment.
+   * Used by configuration validation to reconcile references against setup
+   * fields without exposing the full options object.
+   * @pk
+   */
+  runtimeValueTokens(): RuntimeValueToken[] {
+    const tokens: RuntimeValueToken[] = [];
+    for (const value of this.options.args ?? []) {
+      if (isRuntimeValueToken(value)) tokens.push(value);
+    }
+    for (const value of Object.values(this.options.env ?? {})) {
+      if (isRuntimeValueToken(value)) tokens.push(value);
+    }
+    return tokens;
   }
 
   /**

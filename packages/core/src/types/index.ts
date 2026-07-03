@@ -96,6 +96,7 @@ export type {
   ProxyResourceContext,
   ProxyRuntime,
   ProxyGroupHandle,
+  ProxyUserHandle,
   ProxyServerContext,
   ProxyToolContext,
   ProxyToolHandler,
