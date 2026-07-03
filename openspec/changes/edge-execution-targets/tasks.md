@@ -1,12 +1,12 @@
 ## 1. Public Target and Runtime Input Contracts
 
-- [ ] 1.1 Add public cloud/edge execution-target, device-selector, target-selection-strategy, and target declaration types in `@fentaris/core`.
-- [ ] 1.2 Add `runtime.input(...)`, `runtime.secret(...)`, and serializable runtime-value token types with validation and safe inspection helpers.
-- [ ] 1.3 Extend `StdioTransportOptions` to accept runtime-value tokens in supported argument and environment positions while preserving plain-string compatibility.
-- [ ] 1.4 Add public setup field builders for folder, file, secret, string, boolean, number, and select inputs.
-- [ ] 1.5 Add MCP setup schema types and a normalized, versioned launch-recipe representation.
-- [ ] 1.6 Export target, selector, runtime input, setup, recipe, and error contracts from the supported core entrypoints.
-- [ ] 1.7 Add focused type and unit tests for target builders, selector composition, runtime tokens, setup builders, and launch-recipe serialization.
+- [x] 1.1 Add public cloud/edge execution-target, device-selector, target-selection-strategy, and target declaration types in `@fentaris/core`.
+- [x] 1.2 Add `runtime.input(...)`, `runtime.secret(...)`, and serializable runtime-value token types with validation and safe inspection helpers.
+- [x] 1.3 Extend `StdioTransportOptions` to accept runtime-value tokens in supported argument and environment positions while preserving plain-string compatibility.
+- [x] 1.4 Add public setup field builders for folder, file, secret, string, boolean, number, and select inputs.
+- [x] 1.5 Add MCP setup schema types and a normalized, versioned launch-recipe representation.
+- [x] 1.6 Export target, selector, runtime input, setup, recipe, and error contracts from the supported core entrypoints.
+- [x] 1.7 Add focused type and unit tests for target builders, selector composition, runtime tokens, setup builders, and launch-recipe serialization.
 
 ## 2. Fluent Target, User, and Setup APIs
 

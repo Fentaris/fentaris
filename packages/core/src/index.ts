@@ -417,6 +417,66 @@ export {
 export { MemoryRegistry, RedisRegistry } from "./registry/index.js";
 export type { RedisRegistryClient, RedisRegistryOptions } from "./registry/index.js";
 /**
+ * Edge execution targets, runtime inputs, setup fields, launch recipes, and errors.
+ * @pk
+ */
+export {
+  DeviceSelectorBuilder,
+  EDGE_ERROR_CODES,
+  LAUNCH_RECIPE_VERSION,
+  cloud,
+  collectRecipeRuntimeRefs,
+  compileLaunchRecipe,
+  computeRecipeDigest,
+  createSetupSchema,
+  describeRuntimeValueToken,
+  edge,
+  edgeError,
+  isCloudTarget,
+  isEdgeTarget,
+  isEdgeError,
+  isRuntimeValueToken,
+  parseLaunchRecipe,
+  runtime,
+  runtimeValueRef,
+  serializeLaunchRecipe,
+  validateDeviceSelector,
+  validateSetupSchema,
+} from "./edge/index.js";
+export type {
+  BooleanSetupField,
+  CloudExecutionTarget,
+  DeviceSelector,
+  DeviceSelectorType,
+  EdgeError,
+  EdgeErrorCode,
+  EdgeExecutionTarget,
+  EdgeTargetOptions,
+  ExecutionTarget,
+  FileSystemFieldOptions,
+  FileSetupField,
+  FolderSetupField,
+  LaunchRecipe,
+  NumberFieldOptions,
+  NumberSetupField,
+  RuntimeValueToken,
+  RuntimeValueTokenKind,
+  ScalarFieldOptions,
+  SecretSetupField,
+  SelectFieldOptions,
+  SelectOption,
+  SelectSetupField,
+  SetupDiagnostic,
+  SetupField,
+  SetupFieldAccess,
+  SetupFieldDescriptor,
+  SetupFieldKind,
+  SetupSchema,
+  StringSetupField,
+  TargetKind,
+  TargetSelectionStrategy,
+} from "./edge/index.js";
+/**
  * Rate limit store implementations.
  * @pk
  */
