@@ -150,6 +150,55 @@ export {
   EDGE_MCP_ENVELOPE_VERSION,
   isEdgeMcpInboundEnvelope,
 } from "./protocol.js";
+
+export {
+  EDGE_PROTOCOL_VERSION,
+  parseEdgeProtocolMessage,
+} from "./controlProtocol.js";
+export type {
+  EdgeAgentMessage,
+  EdgeCapabilityManifestMessage,
+  EdgeControlPlaneMessage,
+  EdgeDesiredDeployment,
+  EdgeDesiredStateAckMessage,
+  EdgeDesiredStateMessage,
+  EdgeHeartbeatMessage,
+  EdgeHelloAckMessage,
+  EdgeHelloMessage,
+  EdgeLifecycleMessage,
+  EdgeProtocolClaims,
+  EdgeProtocolMessage,
+  EdgeSetupStatusMessage,
+} from "./controlProtocol.js";
+
+export {
+  InMemoryEdgeCapabilityManifestStore,
+  InMemoryEdgeChannelBroker,
+  InMemoryEdgeConnectionStore,
+  InMemoryEdgeDesiredStateStore,
+  InMemoryEdgeDeviceRegistry,
+  InMemoryEdgeSetupStatusStore,
+} from "./controlPlane.js";
+export type {
+  EdgeCapabilityManifestStore,
+  EdgeChannelBroker,
+  EdgeConnectionRecord,
+  EdgeConnectionStore,
+  EdgeDesiredStateStore,
+  EdgeDeviceRecord,
+  EdgeDeviceRegistry,
+  EdgeSetupStatusStore,
+} from "./controlPlane.js";
+
+export { EdgeWebSocketGateway } from "./gateway.js";
+export type {
+  AuthenticatedEdgeIdentity,
+  EdgeGatewayAuthenticator,
+  EdgeGatewayAuthorization,
+  EdgeGatewayAuthorizer,
+  EdgeGatewaySocket,
+  EdgeWebSocketGatewayOptions,
+} from "./gateway.js";
 export type {
   EdgeMcpCancelEnvelope,
   EdgeMcpErrorEnvelope,

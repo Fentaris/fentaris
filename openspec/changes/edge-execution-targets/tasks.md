@@ -51,14 +51,14 @@
 
 ## 6. Edge Control-Plane and Gateway Contracts
 
-- [ ] 6.1 Define versioned edge protocol messages for hello, heartbeat, desired state, setup/readiness, capability manifests, MCP operations, cancellation, and lifecycle events.
-- [ ] 6.2 Define replaceable device registry, desired deployment, setup status, capability manifest, edge connection, and channel broker contracts.
-- [ ] 6.3 Implement reference in-memory stores with documented single-instance limitations.
-- [ ] 6.4 Implement the reference outbound WebSocket gateway with protocol negotiation, request correlation, heartbeat, backpressure, and connection cleanup.
-- [ ] 6.5 Authenticate gateway connections with device-bound credentials and bind them to tenant, edge node, protocol version, and monotonically increasing connection generation.
-- [ ] 6.6 Authorize every inbound and outbound message against server-side device, deployment, subject, target, and session state.
-- [ ] 6.7 Implement idempotent desired-state publication and acknowledgement with stale-version rejection.
-- [ ] 6.8 Add gateway security and lifecycle tests for forged routing fields, replay, old generations, duplicate messages, malformed frames, disconnects, and broker/store adapters.
+- [x] 6.1 Define versioned edge protocol messages for hello, heartbeat, desired state, setup/readiness, capability manifests, MCP operations, cancellation, and lifecycle events.
+- [x] 6.2 Define replaceable device registry, desired deployment, setup status, capability manifest, edge connection, and channel broker contracts.
+- [x] 6.3 Implement reference in-memory stores with documented single-instance limitations.
+- [x] 6.4 Implement the reference outbound WebSocket gateway with protocol negotiation, request correlation, heartbeat, backpressure, and connection cleanup.
+- [x] 6.5 Authenticate gateway connections with device-bound credentials and bind them to tenant, edge node, protocol version, and monotonically increasing connection generation.
+- [x] 6.6 Authorize every inbound and outbound message against server-side device, deployment, subject, target, and session state.
+- [x] 6.7 Implement idempotent desired-state publication and acknowledgement with stale-version rejection.
+- [x] 6.8 Add gateway security and lifecycle tests for forged routing fields, replay, old generations, duplicate messages, malformed frames, disconnects, and broker/store adapters.
 
 ## 7. Edge Package and Enrollment
 
