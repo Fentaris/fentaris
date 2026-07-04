@@ -1,8 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { text as readStreamText } from "node:stream/consumers";
-import { FentarisAuth, manifestFromSecretRefs, manifestsEqual, parseManifest, serializeManifest } from "@fentaris/core";
+import { manifestFromSecretRefs, manifestsEqual, parseManifest, serializeManifest } from "@fentaris/core";
 import { secretScope } from "../domain/auth/local-store.js";
+import { resolveSubjectId } from "../domain/auth/subjects.js";
 import { credentialsPath, manifestPath, openLocalSecretsBackend, scopeFromOptions } from "../domain/secrets/backend.js";
 import { buildListRows, getSecretsDoctorIssues, loadRequiredReferences } from "../domain/secrets/doctor.js";
 import { scanEntrypointForSecrets } from "../domain/secrets/manifest-scan.js";
@@ -176,102 +177,6 @@ function applyScopeLabel(options: CliOptions, scope: string): void {
   } else if (scope.startsWith("group:")) {
     options.group = scope.slice("group:".length);
   }
-}
-
-async function resolveSubjectId(
-  kind: "user" | "group",
-  options: CliOptions,
-  runtime: Runtime,
-  project: Awaited<ReturnType<typeof discoverSecretsProject>>,
-  required: Array<{ scope: string }>,
-): Promise<string> {
-  const label = kind === "user" ? "User id" : "Group id";
-  const knownIds = await loadKnownSubjectIds(kind, options, runtime, project, required);
-  if (knownIds.length === 0) {
-    return (await runtime.prompt.text(label)).trim();
-  }
-
-  const customChoice = `Add another ${kind} id`;
-  const selected = await runtime.prompt.select(label, [...knownIds, customChoice], { visibleItems: 8 });
-  if (selected === customChoice) {
-    return (await runtime.prompt.text(label)).trim();
-  }
-  return selected;
-}
-
-async function loadKnownSubjectIds(
-  kind: "user" | "group",
-  options: CliOptions,
-  runtime: Runtime,
-  project: Awaited<ReturnType<typeof discoverSecretsProject>>,
-  required: Array<{ scope: string }>,
-): Promise<string[]> {
-  const ids = new Set<string>();
-  const prefix = `${kind}:`;
-
-  for (const entry of required) {
-    if (entry.scope.startsWith(prefix)) {
-      ids.add(entry.scope.slice(prefix.length));
-    }
-  }
-
-  for (const id of await loadStoredSubjectIds(kind, options, runtime, project)) {
-    ids.add(id);
-  }
-
-  for (const id of await loadEntrypointSubjectIds(kind, project)) {
-    ids.add(id);
-  }
-
-  return Array.from(ids).filter(Boolean).sort((left, right) => left.localeCompare(right));
-}
-
-async function loadStoredSubjectIds(
-  kind: "user" | "group",
-  options: CliOptions,
-  runtime: Runtime,
-  project: Awaited<ReturnType<typeof discoverSecretsProject>>,
-): Promise<string[]> {
-  const key = typeof options.key === "string" ? options.key : runtime.env.FENTARIS_AUTH_KEY;
-  if (!key?.trim() || !(await exists(credentialsPath(project)))) {
-    return [];
-  }
-
-  try {
-    const envelope = JSON.parse(await readFile(credentialsPath(project), "utf8")) as unknown;
-    const credentials = FentarisAuth.decryptCredentials(envelope, key);
-    return kind === "user" ? Object.keys(credentials.users) : Object.keys(credentials.groups);
-  } catch {
-    return [];
-  }
-}
-
-async function loadEntrypointSubjectIds(kind: "user" | "group", project: Awaited<ReturnType<typeof discoverSecretsProject>>): Promise<string[]> {
-  const entrypoint = path.join(project.root, project.config.entrypoint);
-  if (!(await exists(entrypoint))) {
-    return [];
-  }
-
-  const source = await readFile(entrypoint, "utf8");
-  const ids = new Set<string>();
-  const patterns = kind === "user"
-    ? [/\buser\s*\(\s*["'`]([^"'`]+)["'`]/g, /\bnew\s+User\s*\(\s*["'`]([^"'`]+)["'`]/g]
-    : [
-        /\bgroup\s*\(\s*\{[\s\S]*?\bid\s*:\s*["'`]([^"'`]+)["'`][\s\S]*?\}\s*\)/g,
-        /\bnew\s+Group\s*\(\s*\{[\s\S]*?\bid\s*:\s*["'`]([^"'`]+)["'`][\s\S]*?\}\s*\)/g,
-        /\bapp\.group\s*\(\s*["'`]([^"'`]+)["'`]/g,
-      ];
-
-  for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) {
-      const id = match[1]?.trim();
-      if (id) {
-        ids.add(id);
-      }
-    }
-  }
-
-  return Array.from(ids);
 }
 
 async function runSecretsUnset(command: CliCommand, reference: string | undefined, runtime: Runtime): Promise<void> {

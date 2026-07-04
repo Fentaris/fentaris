@@ -114,6 +114,20 @@ Use `validateFentarisConfig(config)` when you want a strict static check before 
 
 Runtime logging and profiler configuration.
 
+### `targets`, `setup`, `placements`, and `edge`
+
+Configure reusable cloud/edge targets, per-server setup schemas, scoped placement bindings, and edge runtime adapters.
+
+Prefer fluent declarations for application code:
+
+```ts theme={null}
+app.target("personal", edge({ device: edge.userDefaultDevice() }));
+app.mcp("filesystem").setup({ workspace: edge.folder({ access: "read" }) });
+app.user("alice").mcp("filesystem").target("personal");
+```
+
+See [Edge API Reference](/reference/edge) for adapter and protocol details.
+
 ### `name` and `version`
 
 MCP server identity surfaced to clients during initialization.

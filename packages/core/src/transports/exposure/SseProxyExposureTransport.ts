@@ -9,6 +9,7 @@ import type {
   ResolvedSubject,
   UserContext,
 } from "../../types/shared.js";
+import { attachDownstreamSessionId, ensureIdentityWithMetadata } from "./downstreamSession.js";
 
 /**
  * Options for SSE downstream proxy exposure.
@@ -164,10 +165,12 @@ export class SseProxyExposureTransport implements ProxyExposureTransport<SseProx
     identity: IdentityMetadata | undefined,
     subject: ResolvedSubject | undefined,
   ): Promise<void> {
-    const sdkServer = runtime.createSdkServer(user, identity, subject) as McpSdkServer;
     const transport = new SSEServerTransport(this.options.messagePath, res);
+    const sessionIdentity = ensureIdentityWithMetadata(identity);
+    attachDownstreamSessionId(sessionIdentity, transport.sessionId);
+    const sdkServer = runtime.createSdkServer(user, sessionIdentity, subject) as McpSdkServer;
 
-    sessions.set(transport.sessionId, { transport, server: sdkServer, user, identity, subject, binding: createSessionBinding(user, identity, subject) });
+    sessions.set(transport.sessionId, { transport, server: sdkServer, user, identity: sessionIdentity, subject, binding: createSessionBinding(user, identity, subject) });
     transport.onclose = async () => {
       sessions.delete(transport.sessionId);
       await runtime.emitSessionEnd({

@@ -1,0 +1,80 @@
+---
+title: "Edge Execution"
+description: "Place governed MCP workloads on enrolled user or shared devices."
+---
+
+Edge execution lets a cloud-hosted Fentaris proxy run an upstream MCP server against resources that remain on an enrolled device.
+
+## Model
+
+Fentaris keeps four concerns separate:
+
+```text theme={null}
+MCP definition -> setup schema -> execution target -> scoped placement binding
+```
+
+The MCP definition owns the command and capabilities. The setup schema declares local values needed at launch. A target describes where work can run. A placement binding selects a target for a global, group, or user scope.
+
+```ts theme={null}
+import { edge, fentaris, runtime, stdio } from "@fentaris/core";
+
+const app = fentaris();
+
+app.mcp("filesystem", {
+  transport: stdio({
+    command: "filesystem-mcp",
+    args: ["--workspace", runtime.input("workspace")],
+  }),
+});
+
+app.mcp("filesystem").setup({
+  workspace: edge.folder({ access: "read" }),
+});
+
+app.target("personal-device", edge({
+  device: edge.userDefaultDevice(),
+}));
+
+app.mcp("filesystem").target("personal-device");
+```
+
+## Placement Precedence
+
+Fentaris resolves placement after server visibility and policy authorization:
+
+1. Allowed target selected for the downstream session
+2. User binding
+3. Matching group binding
+4. Global binding
+5. Built-in `cloud` target
+
+Conflicting group targets fail with `EDGE_PLACEMENT_AMBIGUOUS`. Declaration order does not break ties.
+
+<Warning>
+  A target binding does not grant MCP access. The server catalog and policy must make the capability visible and callable before placement runs.
+</Warning>
+
+## Session Pinning
+
+The first edge-dependent operation pins `{ session, subject, target }` to one eligible edge node and connection generation. Every MCP declaration using the same logical target in that session reuses the pin.
+
+If the device disconnects, calls fail with `EDGE_UNAVAILABLE`. Fentaris does not silently fail over a stateful session to another device.
+
+## Local Data Boundary
+
+Folder paths, file paths, secret values, device private keys, and complete process environments remain on the edge. The control plane receives opaque grant references, readiness, recipe digests, and validated capability manifests.
+
+The edge agent:
+
+* accepts only cloud-defined desired deployments;
+* requires local consent for new recipe digests and sensitive grants;
+* checks canonical path containment and access on every resolution;
+* isolates a process/client by deployment and downstream session;
+* applies local deny and revocation before cloud desired state.
+
+## Related Documentation
+
+* [Set Up an Edge Device](/guides/edge-device)
+* [Edge API Reference](/reference/edge)
+* [Policies](/concepts/policies)
+

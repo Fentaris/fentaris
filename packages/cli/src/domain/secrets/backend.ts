@@ -2,6 +2,7 @@ import path from "node:path";
 import { LocalSecretsBackend, type SecretScope } from "@fentaris/core";
 import type { CliOptions, ProjectDiscovery, Runtime } from "../../shared/types.js";
 import { authKeyFromRuntime } from "../auth/local-store.js";
+import { loadProjectEnv } from "../project/env.js";
 
 export function authDirectory(project: ProjectDiscovery): string {
   return path.join(project.root, project.config.authDir);
@@ -16,7 +17,8 @@ export function credentialsPath(project: ProjectDiscovery): string {
 }
 
 export async function openLocalSecretsBackend(project: ProjectDiscovery, runtime: Runtime, options: CliOptions = {}): Promise<LocalSecretsBackend> {
-  const key = await authKeyFromRuntime(runtime, options);
+  const env = await loadProjectEnv(project.root, runtime.env);
+  const key = await authKeyFromRuntime({ ...runtime, env }, options);
   return LocalSecretsBackend.open({ dir: authDirectory(project), key });
 }
 

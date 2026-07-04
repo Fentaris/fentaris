@@ -109,6 +109,38 @@ stdio({
 
 Then check the policy assigned to the user or group.
 
+For an edge target, an empty list can also mean that no validated capability manifest exists yet. Complete local setup and let the deployment initialize once:
+
+```bash theme={null}
+fentaris-edge status
+```
+
+### Edge call returns `EDGE_UNAVAILABLE`
+
+The selected device is offline, its connection generation changed, or the downstream session is pinned to an unavailable connection.
+
+```bash theme={null}
+fentaris-edge status
+```
+
+Reconnect the enrolled device, then start a new downstream MCP session. Fentaris does not silently move an existing stateful session to another device.
+
+### Edge setup remains pending
+
+The current recipe requires missing consent or a folder, file, secret, or scalar field is incomplete. A changed recipe digest requires new workload consent; a changed filesystem access level invalidates only that grant.
+
+Run `fentaris-edge status`, complete the local prompt, and retry with the same desired-state version.
+
+### Edge command is denied
+
+The local executable/package allowlist rejected the recipe. Add the exact
+executable or package to `FENTARIS_EDGE_ALLOWED_EXECUTABLES` or
+`FENTARIS_EDGE_ALLOWED_PACKAGES`, reconnect the agent, and renew local consent.
+
+<Warning>
+  Do not allow a generic shell executable to bypass the allowlist. Approve the concrete MCP executable or package.
+</Warning>
+
 ## App-Level Governance Diagnostics
 
 Fentaris validates fluent `app.policy(...)` and `app.group(...)` declarations before serving requests. Startup or the first governed operation fails with structured configuration diagnostics when the final proxy state is invalid.
@@ -186,11 +218,24 @@ If the key is lost for a disposable local project, reinitialize the project or r
 
 ### Secret command asks for a key
 
-`fentaris secrets set` needs the local auth key. Provide it through `FENTARIS_AUTH_KEY`, `--key`, or the interactive prompt.
+`fentaris secrets set` needs the local auth key. The CLI checks `--key`, the exported `FENTARIS_AUTH_KEY`, and the discovered project `.env` before opening the interactive prompt.
 
 ```bash theme={null}
-FENTARIS_AUTH_KEY=<key> fentaris secrets set github.token --user admin
+printf 'FENTARIS_AUTH_KEY=<key>\n' >> .env
+fentaris secrets set github.token --user admin
 ```
+
+Run the command inside the project or one of its subdirectories so the CLI can discover the correct `.env`. An exported `FENTARIS_AUTH_KEY` overrides the value in `.env`.
+
+### Auth setup requires interactive input
+
+`fentaris auth` and `fentaris auth api-key add` without explicit values require a real terminal. In CI or other non-interactive environments, provide the user and key source:
+
+```bash theme={null}
+printf '%s' "$CLIENT_API_KEY" | fentaris auth api-key add alice --value-stdin --non-interactive
+```
+
+Use `--generate` instead of `--value-stdin` when the job can securely capture the generated key from command output.
 
 ### Secrets manifest is missing or out of date
 
