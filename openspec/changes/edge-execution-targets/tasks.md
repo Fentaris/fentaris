@@ -62,12 +62,12 @@
 
 ## 7. Edge Package and Enrollment
 
-- [ ] 7.1 Scaffold the publishable `@fentaris/edge` workspace package, executable entry point, TypeScript configuration, build, test, and package metadata.
-- [ ] 7.2 Implement platform adapters for protected device key storage, local configuration, process supervision, paths, and credential storage.
-- [ ] 7.3 Implement browser/device authorization login, random keypair creation, device proof, enrollment, token refresh, and secure reconnect.
-- [ ] 7.4 Implement `fentaris-edge login`, `status`, `disconnect`, and `revoke` commands without an MCP add/configuration command.
-- [ ] 7.5 Ensure status and errors redact private paths, secrets, credentials, tokens, and full command environments.
-- [ ] 7.6 Add enrollment and CLI tests for first login, repeat login, copied non-secret configuration, hostname changes, revoked credentials, and disconnected status.
+- [x] 7.1 Scaffold the publishable `@fentaris/edge` workspace package, executable entry point, TypeScript configuration, build, test, and package metadata.
+- [x] 7.2 Implement platform adapters for protected device key storage, local configuration, process supervision, paths, and credential storage.
+- [x] 7.3 Implement browser/device authorization login, random keypair creation, device proof, enrollment, token refresh, and secure reconnect.
+- [x] 7.4 Implement `fentaris-edge login`, `status`, `disconnect`, and `revoke` commands without an MCP add/configuration command.
+- [x] 7.5 Ensure status and errors redact private paths, secrets, credentials, tokens, and full command environments.
+- [x] 7.6 Add enrollment and CLI tests for first login, repeat login, copied non-secret configuration, hostname changes, revoked credentials, and disconnected status.
 
 ## 8. Edge Setup and Local Grants
 

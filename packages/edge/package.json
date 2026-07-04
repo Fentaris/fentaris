@@ -1,0 +1,55 @@
+{
+  "name": "@fentaris/edge",
+  "version": "0.1.0",
+  "description": "Fentaris governed edge execution agent",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "fentaris-edge": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "tsc --watch",
+    "prepare": "tsc",
+    "build": "pnpm run clean && tsc",
+    "test": "vitest run --dir test",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@fentaris/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "vitest": "^4.1.7"
+  },
+  "keywords": [
+    "fentaris",
+    "mcp",
+    "edge",
+    "agent"
+  ],
+  "author": "Gabriele Cipriani",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fentaris/fentaris.git",
+    "directory": "packages/edge"
+  },
+  "homepage": "https://github.com/Fentaris/fentaris#readme",
+  "bugs": {
+    "url": "https://github.com/Fentaris/fentaris/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
