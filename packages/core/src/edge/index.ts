@@ -119,3 +119,26 @@ export type {
   PlacementSource,
   StaticOverlapInputs,
 } from "./placement.js";
+
+export {
+  InMemorySessionBindingStore,
+} from "./sessionBinding.js";
+export type {
+  ConnectionGeneration,
+  SessionBindingExpiryOptions,
+  SessionBindingInput,
+  SessionBindingKey,
+  SessionBindingListener,
+  SessionBindingRemovalReason,
+  SessionBindingStore,
+  SessionTargetBinding,
+} from "./sessionBinding.js";
+
+export {
+  EdgeSessionPinner,
+} from "./sessionPinning.js";
+export type {
+  EdgeSessionPinnerInputs,
+  SessionPinRequest,
+  SessionPinResult,
+} from "./sessionPinning.js";

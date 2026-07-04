@@ -30,14 +30,14 @@
 
 ## 4. Session Target Bindings
 
-- [ ] 4.1 Define session-target binding, connection-generation, expiry, and store contracts.
-- [ ] 4.2 Implement the reference in-memory session-target binding store with atomic create/read/delete and expiry cleanup.
-- [ ] 4.3 Propagate downstream session identity into proxy operation context for HTTP, SSE, and supported stdio exposure paths.
-- [ ] 4.4 Lazily resolve and pin `{ session, subject, target }` to one eligible edge node before the first edge-dependent operation.
-- [ ] 4.5 Reuse a pinned device across all MCP declarations using the same logical target in one downstream session.
-- [ ] 4.6 Remove bindings and notify dependent workloads on session end, expiry, or runtime shutdown.
-- [ ] 4.7 Reject silent device takeover or failover and return normalized placement, unauthorized-target, and `EDGE_UNAVAILABLE` errors.
-- [ ] 4.8 Add unit and integration tests for pinning, reuse, expiry, reconnect generations, session cleanup, disconnect behavior, and a shared-store adapter fixture.
+- [x] 4.1 Define session-target binding, connection-generation, expiry, and store contracts.
+- [x] 4.2 Implement the reference in-memory session-target binding store with atomic create/read/delete and expiry cleanup.
+- [x] 4.3 Propagate downstream session identity into proxy operation context for HTTP, SSE, and supported stdio exposure paths.
+- [x] 4.4 Lazily resolve and pin `{ session, subject, target }` to one eligible edge node before the first edge-dependent operation.
+- [x] 4.5 Reuse a pinned device across all MCP declarations using the same logical target in one downstream session.
+- [x] 4.6 Remove bindings and notify dependent workloads on session end, expiry, or runtime shutdown.
+- [x] 4.7 Reject silent device takeover or failover and return normalized placement, unauthorized-target, and `EDGE_UNAVAILABLE` errors.
+- [x] 4.8 Add unit and integration tests for pinning, reuse, expiry, reconnect generations, session cleanup, disconnect behavior, and a shared-store adapter fixture.
 
 ## 5. Target-Aware MCP Dispatch
 

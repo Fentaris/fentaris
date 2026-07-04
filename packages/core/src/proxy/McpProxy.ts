@@ -96,13 +96,19 @@ import {
   isValidTargetName,
   validateDeviceSelector,
   PlacementResolver,
+  EdgeSessionPinner,
+  type DeviceResolver,
   type ExecutionTarget,
   type PlacementBindingModel,
   type PlacementResolution,
   type PlacementRequest,
+  type SessionBindingExpiryOptions,
+  type SessionBindingListener,
+  type SessionBindingStore,
   type SetupFieldDescriptor,
   type SetupSchema,
 } from "../edge/index.js";
+import type { SessionPinRequest, SessionPinResult } from "../edge/index.js";
 import type { LaunchRecipe } from "../edge/recipe.js";
 import { StdioTransport } from "../transports/client/StdioTransport.js";
 import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
@@ -251,6 +257,28 @@ export type McpProxyOptions = {
   setup?: Record<string, Record<string, SetupFieldDescriptor> | SetupSchema>;
   /** Constructor-style placement bindings. @pk */
   placements?: PlacementBindingConfig[];
+  /**
+   * Edge execution wiring: control-plane device resolver, replaceable
+   * session-binding store, expiry, and removal listener. When omitted, edge
+   * targets cannot be pinned and the runtime behaves as cloud-only.
+   * @pk
+   */
+  edge?: EdgeRuntimeOptions;
+};
+
+/**
+ * Edge runtime wiring supplied to {@link McpProxyOptions.edge}.
+ * @pk
+ */
+export type EdgeRuntimeOptions = {
+  /** Control-plane device resolver used to pin edge targets. @pk */
+  deviceResolver?: DeviceResolver;
+  /** Replaceable session-binding store; defaults to in-memory. @pk */
+  sessionBindingStore?: SessionBindingStore;
+  /** Expiry configuration for the default in-memory binding store. @pk */
+  sessionBindingExpiry?: SessionBindingExpiryOptions;
+  /** Removal listener for session-target bindings. @pk */
+  sessionBindingListener?: SessionBindingListener;
 };
 
 /**
@@ -337,6 +365,8 @@ export class McpProxy {
   private readonly setupSchemas = new Map<string, SetupSchema>();
   private readonly placementBindings: PlacementBinding[] = [];
   private readonly fluentUsers = new Set<string>();
+  private readonly edgeOptions?: EdgeRuntimeOptions;
+  private edgeSessionPinnerCache?: EdgeSessionPinner;
   private httpServer: HttpServer | null = null;
   private readonly exposureHandles = new Set<ProxyExposureHandle>();
 
@@ -388,6 +418,7 @@ export class McpProxy {
       groups: this.groups,
       defaults: { credentials: this.defaultCredentials },
     };
+    this.edgeOptions = options.edge;
 
     for (const server of this.serverCatalog.allServers()) {
       this.serverByName.set(server.name, server);
@@ -691,6 +722,58 @@ export class McpProxy {
    */
   resolvePlacement(request: PlacementRequest): PlacementResolution {
     return this.placementResolver().resolve(request);
+  }
+
+  /**
+   * Lazily build (and cache) the edge session pinner over the registered
+   * targets, normalized bindings, and configured device resolver. Returns
+   * `undefined` when no device resolver is configured (cloud-only runtime).
+   * @pk
+   */
+  edgeSessionPinner(): EdgeSessionPinner | undefined {
+    if (!this.edgeOptions?.deviceResolver) {
+      return undefined;
+    }
+    if (!this.edgeSessionPinnerCache) {
+      const pinner = new EdgeSessionPinner({
+        targets: this.targets,
+        bindings: this.placementBindings as readonly PlacementBindingModel[],
+        deviceResolver: this.edgeOptions.deviceResolver,
+        store: this.edgeOptions.sessionBindingStore,
+        expiry: this.edgeOptions.sessionBindingExpiry,
+      });
+      if (this.edgeOptions.sessionBindingListener) {
+        pinner.addListener(this.edgeOptions.sessionBindingListener);
+      }
+      this.edgeSessionPinnerCache = pinner;
+    }
+    return this.edgeSessionPinnerCache;
+  }
+
+  /**
+   * Lazily resolve and pin a downstream session to one eligible edge device
+   * per logical target before the first edge-dependent operation. Cloud
+   * targets return without pinning. Throws normalized edge errors.
+   * @pk
+   */
+  async pinSessionTarget(request: SessionPinRequest): Promise<SessionPinResult> {
+    const pinner = this.edgeSessionPinner();
+    if (!pinner) {
+      const placement = this.resolvePlacement(request);
+      return { kind: "cloud", targetName: "cloud", placement };
+    }
+    return pinner.pin(request);
+  }
+
+  /** Remove every session-target binding for a downstream session. @pk */
+  async endEdgeSession(sessionId: string): Promise<void> {
+    await this.edgeSessionPinner()?.endSession(sessionId);
+  }
+
+  /** Remove every session-target binding on runtime shutdown. @pk */
+  async shutdownEdgeSessions(): Promise<void> {
+    await this.edgeSessionPinner()?.shutdown();
+    this.edgeSessionPinnerCache = undefined;
   }
 
   /** Register a setup schema for a server. @pk */
@@ -1196,6 +1279,8 @@ export class McpProxy {
       this.exposureHandles.clear();
       this.httpServer = null;
       await Promise.all(this.serverCatalog.allServers().map((server) => server.close()));
+      // Remove every session-target binding and notify dependent workloads. @pk
+      await this.shutdownEdgeSessions();
     }, { shutdownTimeoutMs: options.shutdownTimeoutMs ?? this.lifecycleDefaults.shutdownTimeoutMs });
     await this.emitRuntimeEvent(createRuntimeEvent({
       name: "runtime.stop",
@@ -1994,6 +2079,10 @@ export class McpProxy {
       policy: this.globalPolicy,
     });
     await emitProxyEvent(this.eventHandlers, "session:end", { ctx: proxyContext });
+    // Release session-target bindings and notify dependent workloads. @pk
+    if (context.sessionId) {
+      await this.endEdgeSession(context.sessionId);
+    }
   }
 
   private materializeLocalNamespaces(): void {

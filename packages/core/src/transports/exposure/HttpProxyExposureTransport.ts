@@ -10,6 +10,7 @@ import type {
   ResolvedSubject,
   UserContext,
 } from "../../types/shared.js";
+import { attachDownstreamSessionId, ensureIdentityWithMetadata } from "./downstreamSession.js";
 
 /**
  * Options for HTTP downstream proxy exposure.
@@ -169,12 +170,16 @@ async function handleMcpRequest(
     return;
   }
 
-  const sdkServer = runtime.createSdkServer(user, identity, subject) as McpSdkServer;
+  // Ensure a mutable identity so the downstream session id can be attached
+  // once it is known and observed by the SDK-server handlers. @pk
+  const sessionIdentity = ensureIdentityWithMetadata(identity);
+  const sdkServer = runtime.createSdkServer(user, sessionIdentity, subject) as McpSdkServer;
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
     enableJsonResponse: true,
     onsessioninitialized: (newSessionId) => {
-      sessions.set(newSessionId, { transport, server: sdkServer, user, identity, subject, binding: createSessionBinding(user, identity, subject) });
+      attachDownstreamSessionId(sessionIdentity, newSessionId);
+      sessions.set(newSessionId, { transport, server: sdkServer, user, identity: sessionIdentity, subject, binding: createSessionBinding(user, identity, subject) });
       runtime.logger.debug("MCP proxy session initialized", { sessionId: newSessionId, userId: user.id });
       void runtime.emitSessionStart({
         user,

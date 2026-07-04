@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { Server as McpSdkServer } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { FentarisTransportError, createRuntimeEvent, runtimeErrorToEventPayload } from "../../profiler/index.js";
+import { attachDownstreamSessionId, ensureIdentityWithMetadata } from "./downstreamSession.js";
 import type { ProxyExposureHandle, ProxyExposureTransport, ProxyRuntime } from "../../types/proxy.js";
 import type {
   IdentityMetadata,
@@ -37,7 +39,13 @@ export class StdioProxyExposureTransport implements ProxyExposureTransport {
       throw new Error("Stdio proxy exposure requires an authenticated identity when identityRequired is enabled");
     }
 
-    const sdkServer = runtime.createSdkServer(resolved.user, resolved.identity, resolved.subject) as McpSdkServer;
+    // stdio is a single-session transport with no SDK-supplied session id;
+    // derive a stable downstream session id so edge session pinning and proxy
+    // operation context see a consistent session identity. @pk
+    const downstreamSessionId = randomUUID();
+    const sessionIdentity = ensureIdentityWithMetadata(resolved.identity);
+    attachDownstreamSessionId(sessionIdentity, downstreamSessionId);
+    const sdkServer = runtime.createSdkServer(resolved.user, sessionIdentity, resolved.subject) as McpSdkServer;
     const transport = new StdioServerTransport();
 
     try {
@@ -54,15 +62,17 @@ export class StdioProxyExposureTransport implements ProxyExposureTransport {
     }
     await runtime.emitSessionStart({
       user: resolved.user,
-      identity: resolved.identity,
-      log: runtime.logger.child({ userId: resolved.user.id, transport: "stdio" }),
+      identity: sessionIdentity,
+      sessionId: downstreamSessionId,
+      log: runtime.logger.child({ userId: resolved.user.id, transport: "stdio", sessionId: downstreamSessionId }),
     });
 
     transport.onclose = () => {
       void runtime.emitSessionEnd({
         user: resolved.user,
-        identity: resolved.identity,
-        log: runtime.logger.child({ userId: resolved.user.id, transport: "stdio" }),
+        identity: sessionIdentity,
+        sessionId: downstreamSessionId,
+        log: runtime.logger.child({ userId: resolved.user.id, transport: "stdio", sessionId: downstreamSessionId }),
       });
     };
 
