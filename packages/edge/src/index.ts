@@ -56,6 +56,22 @@ export type {
   SupervisedProcess,
 } from "./platform.js";
 export { redactEdgeValue, safeEdgeError } from "./redaction.js";
+export {
+  LocalSetupManager,
+  TerminalSetupProvider,
+} from "./setup.js";
+export type {
+  CompiledLocalLaunchPlan,
+  DesiredSetupRequirement,
+  LocalGrantDatabase,
+  LocalGrantRecord,
+  LocalSetupManagerOptions,
+  LocalSetupProvider,
+  LocalSetupState,
+  LocalSetupStatus,
+  SetupFieldResponse,
+  TerminalSetupPrompter,
+} from "./setup.js";
 
 export async function main(
   argv: readonly string[],
@@ -99,4 +115,3 @@ function resolvePath(value: string): string {
     return value;
   }
 }
-

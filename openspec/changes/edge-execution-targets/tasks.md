@@ -71,15 +71,15 @@
 
 ## 8. Edge Setup and Local Grants
 
-- [ ] 8.1 Implement desired setup requirement ingestion keyed by deployment, recipe digest, and setup schema version.
-- [ ] 8.2 Define the pluggable local setup provider contract and implement the initial terminal provider with explicit workload and resource consent.
-- [ ] 8.3 Implement local folder and file grants with canonicalization, access metadata, opaque IDs, and persistent storage.
-- [ ] 8.4 Implement edge-local secret grants using the operating-system credential store when available and a documented protected fallback.
-- [ ] 8.5 Implement string, boolean, number, and select field collection and validation without leaking locally scoped values.
-- [ ] 8.6 Compile declarative launch plans locally, substitute resolved grants, and reject unsupported code payloads or stale desired-state versions.
-- [ ] 8.7 Enforce traversal, symlink containment, and read/write grant checks whenever filesystem-sensitive values are resolved.
-- [ ] 8.8 Reconcile setup schema changes so only affected grants become pending and dependent workloads stop until consent is restored.
-- [ ] 8.9 Add setup and security tests for missing fields, incompatible types, denied/revoked grants, path escape, secret redaction, stale setup responses, and post-login assignments.
+- [x] 8.1 Implement desired setup requirement ingestion keyed by deployment, recipe digest, and setup schema version.
+- [x] 8.2 Define the pluggable local setup provider contract and implement the initial terminal provider with explicit workload and resource consent.
+- [x] 8.3 Implement local folder and file grants with canonicalization, access metadata, opaque IDs, and persistent storage.
+- [x] 8.4 Implement edge-local secret grants using the operating-system credential store when available and a documented protected fallback.
+- [x] 8.5 Implement string, boolean, number, and select field collection and validation without leaking locally scoped values.
+- [x] 8.6 Compile declarative launch plans locally, substitute resolved grants, and reject unsupported code payloads or stale desired-state versions.
+- [x] 8.7 Enforce traversal, symlink containment, and read/write grant checks whenever filesystem-sensitive values are resolved.
+- [x] 8.8 Reconcile setup schema changes so only affected grants become pending and dependent workloads stop until consent is restored.
+- [x] 8.9 Add setup and security tests for missing fields, incompatible types, denied/revoked grants, path escape, secret redaction, stale setup responses, and post-login assignments.
 
 ## 9. Edge Workload Supervisor
 
