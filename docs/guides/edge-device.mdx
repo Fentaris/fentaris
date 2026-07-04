@@ -1,0 +1,123 @@
+---
+title: "Set Up an Edge Device"
+description: "Install, enroll, assign, inspect, and revoke a Fentaris edge device."
+---
+
+Use `fentaris-edge` on the device that owns the filesystem, credentials, or local process you want an MCP client to use.
+
+## Quick Start
+
+```bash theme={null}
+pnpm add -g @fentaris/edge
+export FENTARIS_EDGE_CONTROL_PLANE_URL="https://fentaris.example"
+fentaris-edge login
+```
+
+Open the displayed verification URL and enter the user code. Login creates a random device keypair, proves possession, enrolls the device, starts synchronization, and prompts for pending local setup.
+
+<Note>
+  The hostname is a display label, not device identity. Copying non-secret config without the protected key cannot authenticate another installation as the device.
+</Note>
+
+## Define and Assign the Workload
+
+The application defines the MCP. The edge CLI does not have an `add` command.
+
+```ts theme={null}
+app.mcp("filesystem", {
+  transport: stdio({
+    command: "filesystem-mcp",
+    args: ["--workspace", runtime.input("workspace")],
+  }),
+});
+
+app.mcp("filesystem").setup({
+  workspace: edge.folder({ access: "read" }),
+});
+
+app.target("personal", edge({
+  device: edge.userDefaultDevice(),
+}));
+
+app.user("alice").mcp("filesystem").target("personal");
+```
+
+The local prompt shows the recipe digest and requested access. Approving a folder stores its canonical path locally and reports only an opaque grant ID.
+
+## Inspect and Disconnect
+
+```bash theme={null}
+fentaris-edge status
+fentaris-edge disconnect
+```
+
+Status reports connection, desired deployments, readiness, and blocked counts. It does not print local paths, tokens, credentials, secrets, or full environments.
+
+`disconnect` closes the channel and stops workloads according to shutdown policy. Existing pinned sessions fail with `EDGE_UNAVAILABLE`; they do not move to another device.
+
+## Revoke the Device
+
+```bash theme={null}
+fentaris-edge revoke
+```
+
+Revocation removes the server-side device authorization, stops the local connection, and deletes local identity state. Grant or workload denial is also sticky: replaying desired state cannot restart it until local consent is renewed.
+
+## Placement Examples
+
+### Personal filesystem
+
+```ts theme={null}
+app.target("personal", edge({ device: edge.userDefaultDevice() }));
+app.user("alice").mcp("filesystem").target("personal");
+```
+
+### Group-scoped personal devices
+
+```ts theme={null}
+app.target("member-device", edge({
+  device: edge.sessionDevice().or(edge.userDefaultDevice()),
+}));
+app.group("developers").mcp("workspace").target("member-device");
+```
+
+### Shared worker pool
+
+```ts theme={null}
+app.target("team-workers", edge({
+  device: edge.pool("team-workers"),
+  strategy: "least-loaded",
+}));
+app.group("build-team").mcp("builder").target("team-workers");
+```
+
+### Cloud fallback
+
+Omit a placement binding to use implicit `cloud`, or bind it explicitly:
+
+```ts theme={null}
+app.mcp("search").target("cloud");
+```
+
+Selector fallback can choose another eligible selector before pinning. It does not fail over after a session is pinned.
+
+## Troubleshooting
+
+### Setup remains pending
+
+Run `fentaris-edge status`. Approve every required field and the current recipe digest. A schema access change invalidates only affected grants.
+
+### Device reconnects but calls fail
+
+An existing session is pinned to its original connection generation. Start a new downstream MCP session after reconnection.
+
+### Command is denied
+
+Add the exact executable or package to the local allowlist, then renew consent for the recipe digest. Do not allow a shell interpreter as a generic workaround.
+
+## Related Documentation
+
+* [Edge Execution](/concepts/edge-execution)
+* [Edge API Reference](/reference/edge)
+* [Troubleshooting](/troubleshooting)
+

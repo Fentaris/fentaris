@@ -803,6 +803,16 @@ export class McpProxy {
         : {}),
     };
     const placement = this.resolvePlacement(placementRequest);
+    await this.edgeOptions?.telemetry?.emit({
+      name: "edge.target.resolved",
+      subjectId: context.subject?.id ?? context.user.id,
+      tenantId: metadataString(metadata, "tenantId"),
+      targetName: placement.targetName,
+      deploymentId: server.name,
+      downstreamSessionId: context.transport.sessionId,
+      outcome: placement.kind,
+      metadata: { source: placement.source },
+    }).catch(() => undefined);
     if (placement.kind === "cloud") {
       this.assertCloudLaunchReady(server);
       context.execution = {
@@ -864,6 +874,17 @@ export class McpProxy {
       connectionGeneration: pin.binding.connectionGeneration,
       reused: pin.reused,
     };
+    await this.edgeOptions?.telemetry?.emit({
+      name: "edge.session.bound",
+      subjectId: context.subject?.id ?? context.user.id,
+      tenantId: metadataString(metadata, "tenantId"),
+      targetName: pin.targetName,
+      deploymentId: server.name,
+      edgeNodeId: pin.binding.edgeNodeId,
+      connectionGeneration: pin.binding.connectionGeneration,
+      downstreamSessionId: sessionId,
+      outcome: pin.reused ? "reused" : "created",
+    }).catch(() => undefined);
     const run = () => edge(edgeTransport);
     return edgeTransport.withProxyContext ? edgeTransport.withProxyContext(context, run) : run();
   }

@@ -109,6 +109,36 @@ stdio({
 
 Then check the policy assigned to the user or group.
 
+For an edge target, an empty list can also mean that no validated capability manifest exists yet. Complete local setup and let the deployment initialize once:
+
+```bash theme={null}
+fentaris-edge status
+```
+
+### Edge call returns `EDGE_UNAVAILABLE`
+
+The selected device is offline, its connection generation changed, or the downstream session is pinned to an unavailable connection.
+
+```bash theme={null}
+fentaris-edge status
+```
+
+Reconnect the enrolled device, then start a new downstream MCP session. Fentaris does not silently move an existing stateful session to another device.
+
+### Edge setup remains pending
+
+The current recipe requires missing consent or a folder, file, secret, or scalar field is incomplete. A changed recipe digest requires new workload consent; a changed filesystem access level invalidates only that grant.
+
+Run `fentaris-edge status`, complete the local prompt, and retry with the same desired-state version.
+
+### Edge command is denied
+
+The local executable/package allowlist rejected the recipe. Add the exact executable or package and renew local consent.
+
+<Warning>
+  Do not allow a generic shell executable to bypass the allowlist. Approve the concrete MCP executable or package.
+</Warning>
+
 ## App-Level Governance Diagnostics
 
 Fentaris validates fluent `app.policy(...)` and `app.group(...)` declarations before serving requests. Startup or the first governed operation fails with structured configuration diagnostics when the final proxy state is invalid.

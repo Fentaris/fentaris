@@ -18,6 +18,7 @@ import type {
   EdgeSetupStatusStore,
 } from "./controlPlane.js";
 import { edgeError } from "./errors.js";
+import type { EdgeTelemetry } from "./observability.js";
 import type {
   EdgeMcpOutboundEnvelope,
 } from "./protocol.js";
@@ -70,6 +71,7 @@ export interface EdgeWebSocketGatewayOptions {
   maxBufferedBytes?: number;
   now?: () => number;
   connectionId?: () => string;
+  telemetry?: EdgeTelemetry;
 }
 
 type ActiveConnection = {
@@ -196,6 +198,14 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel {
       await this.authorize("outbound", active, message);
       await this.sendFrame(active, message);
     }
+    await this.options.telemetry?.emit({
+      name: "edge.desired.reconciled",
+      tenantId: state.tenantId,
+      edgeNodeId: state.edgeNodeId,
+      connectionGeneration: active?.record.connectionGeneration,
+      outcome: "published",
+      metadata: { desiredVersion: state.desiredVersion, deploymentCount: state.deployments.length },
+    });
     return status;
   }
 
@@ -253,6 +263,13 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel {
     await this.options.connectionStore.bind(record);
     const active: ActiveConnection = { identity, record, socket, removeMessage, removeClose };
     this.active.set(storageKey, active);
+    await this.options.telemetry?.emit({
+      name: "edge.connection.generation",
+      tenantId: identity.tenantId,
+      edgeNodeId: identity.edgeNodeId,
+      connectionGeneration: generation,
+      outcome: "connected",
+    });
     await this.sendFrame(active, {
       version: EDGE_PROTOCOL_VERSION,
       kind: "edge.hello.ack",
@@ -382,6 +399,13 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel {
       active.record.edgeNodeId,
       active.record.connectionGeneration,
     );
+    await this.options.telemetry?.emit({
+      name: "edge.connection.generation",
+      tenantId: active.record.tenantId,
+      edgeNodeId: active.record.edgeNodeId,
+      connectionGeneration: active.record.connectionGeneration,
+      outcome: "disconnected",
+    });
   }
 }
 

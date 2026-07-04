@@ -464,6 +464,8 @@ export {
   validateSetupSchema,
   isEdgeMcpInboundEnvelope,
   parseEdgeProtocolMessage,
+  edgeHealth,
+  redactEdgeProtocolValue,
 } from "./edge/index.js";
 export type {
   AuthenticatedEdgeIdentity,
@@ -519,6 +521,11 @@ export type {
   EdgeDesiredStateMessage,
   EdgeDesiredStateStore,
   EdgeDiscoveryState,
+  EdgeHealthOptions,
+  EdgeHealthProbeResult,
+  EdgeRuntimeEvent,
+  EdgeRuntimeEventName,
+  EdgeTelemetrySink,
   EdgeDeviceRecord,
   EdgeDeviceRegistry,
   EdgeGatewayAuthenticator,

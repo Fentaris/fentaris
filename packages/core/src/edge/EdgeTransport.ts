@@ -22,6 +22,7 @@ import type {
 import type { ProxyContext } from "../types/proxy.js";
 import type { FentarisTransport } from "../types/transport.js";
 import { EDGE_ERROR_CODES, edgeError } from "./errors.js";
+import type { EdgeTelemetry } from "./observability.js";
 import {
   EDGE_MCP_ENVELOPE_VERSION,
   isEdgeMcpInboundEnvelope,
@@ -45,6 +46,7 @@ export interface EdgeTransportOptions {
   defaultTimeoutMs?: number;
   requestId?: () => string;
   onLateResult?: (message: EdgeMcpInboundEnvelope) => void;
+  telemetry?: EdgeTelemetry;
 }
 
 type PendingRequest = {
@@ -55,6 +57,7 @@ type PendingRequest = {
   readonly timer: ReturnType<typeof setTimeout>;
   readonly signal?: AbortSignal;
   readonly abort?: () => void;
+  readonly startedAt: number;
 };
 
 /**
@@ -70,6 +73,7 @@ export class EdgeTransport implements FentarisTransport {
   private readonly defaultTimeoutMs: number;
   private readonly requestId: () => string;
   private readonly onLateResult?: (message: EdgeMcpInboundEnvelope) => void;
+  private readonly telemetry?: EdgeTelemetry;
   private readonly context = new AsyncLocalStorage<ProxyContext>();
   private readonly pending = new Map<string, PendingRequest>();
   private readonly unsubscribe: () => void;
@@ -83,6 +87,7 @@ export class EdgeTransport implements FentarisTransport {
     }
     this.requestId = options.requestId ?? randomUUID;
     this.onLateResult = options.onLateResult;
+    this.telemetry = options.telemetry;
     this.unsubscribe = this.channel.onMessage((message) => this.receive(message));
   }
 
@@ -172,11 +177,14 @@ export class EdgeTransport implements FentarisTransport {
 
     return new Promise<Result>((resolve, reject) => {
       const timeoutMs = Math.max(0, deadline - Date.now());
+      const startedAt = Date.now();
+      this.emit("edge.request.started", envelope, { outcome: "started" });
       const timer = setTimeout(() => {
         const pending = this.pending.get(requestId);
         if (!pending) return;
         this.finish(requestId);
         void this.sendCancel(requestId, route, "deadline");
+        this.emit("edge.request.timeout", envelope, { durationMs: Date.now() - startedAt, outcome: "timeout" });
         reject(edgeError("EDGE_WORKLOAD", `Edge MCP ${operation} exceeded its deadline.`, {
           details: { operation, requestId },
         }));
@@ -187,6 +195,7 @@ export class EdgeTransport implements FentarisTransport {
             if (!this.pending.has(requestId)) return;
             this.finish(requestId);
             void this.sendCancel(requestId, route, "aborted");
+            this.emit("edge.request.cancelled", envelope, { durationMs: Date.now() - startedAt, outcome: "cancelled" });
             reject(edgeError("EDGE_WORKLOAD", `Edge MCP ${operation} was cancelled.`, {
               details: { operation, requestId },
             }));
@@ -209,10 +218,12 @@ export class EdgeTransport implements FentarisTransport {
         timer,
         signal,
         abort,
+        startedAt,
       });
       void this.channel.send(envelope).catch((cause) => {
         if (!this.pending.has(requestId)) return;
         this.finish(requestId);
+        this.emit("edge.request.failed", envelope, { durationMs: Date.now() - startedAt, outcome: "unavailable" });
         reject(edgeError("EDGE_UNAVAILABLE", "Unable to send the edge MCP request.", {
           details: { operation, requestId },
           cause,
@@ -240,6 +251,7 @@ export class EdgeTransport implements FentarisTransport {
     }
     if (value.operation !== pending.operation || !sameRoute(value.route, pending.route)) {
       this.finish(value.requestId);
+      this.emit("edge.request.failed", value, { durationMs: Date.now() - pending.startedAt, outcome: "protocol-error" });
       pending.reject(edgeError("EDGE_PROTOCOL", "Edge MCP response routing did not match its request.", {
         details: { requestId: value.requestId, operation: pending.operation },
       }));
@@ -251,6 +263,7 @@ export class EdgeTransport implements FentarisTransport {
       pending.reject(edgeError(code, value.error.message, {
         details: value.error.details ? { ...value.error.details, requestId: value.requestId } : { requestId: value.requestId },
       }));
+      this.emit("edge.request.failed", value, { durationMs: Date.now() - pending.startedAt, outcome: code });
       return;
     }
     if (!value.result || typeof value.result !== "object") {
@@ -260,6 +273,7 @@ export class EdgeTransport implements FentarisTransport {
       return;
     }
     pending.resolve(value.result);
+    this.emit("edge.request.completed", value, { durationMs: Date.now() - pending.startedAt, outcome: "success" });
   }
 
   private finish(requestId: string): void {
@@ -293,6 +307,26 @@ export class EdgeTransport implements FentarisTransport {
       reason,
     };
     await this.channel.send(message).catch(() => undefined);
+  }
+
+  private emit(
+    name: "edge.request.started" | "edge.request.completed" | "edge.request.timeout" | "edge.request.cancelled" | "edge.request.failed",
+    request: Pick<EdgeMcpRequestEnvelope, "requestId" | "operation" | "route">,
+    extra: { durationMs?: number; outcome?: string },
+  ): void {
+    void this.telemetry?.emit({
+      name,
+      durationMs: extra.durationMs,
+      outcome: extra.outcome,
+      subjectId: request.route.subjectId,
+      targetName: request.route.targetName,
+      deploymentId: request.route.deploymentId,
+      edgeNodeId: request.route.edgeNodeId,
+      connectionGeneration: request.route.connectionGeneration,
+      downstreamSessionId: request.route.downstreamSessionId,
+      requestId: request.requestId,
+      metadata: { operation: request.operation },
+    }).catch(() => undefined);
   }
 }
 

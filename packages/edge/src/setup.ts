@@ -9,6 +9,7 @@ import {
   type SetupField,
   type SetupFieldAccess,
   type SetupSchema,
+  type EdgeTelemetry,
 } from "@fentaris/core";
 import type { CredentialStore, JsonStore } from "./platform.js";
 
@@ -120,6 +121,7 @@ export interface LocalSetupManagerOptions {
   readonly now?: () => number;
   readonly grantId?: () => string;
   readonly onGrantRevoked?: (grantId: string, deploymentIds: readonly string[]) => void | Promise<void>;
+  readonly telemetry?: EdgeTelemetry;
 }
 
 /** Local setup/grant reconciliation and launch-plan compilation. */
@@ -151,6 +153,7 @@ export class LocalSetupManager {
       if (!await this.options.provider.approveWorkload(requirement)) {
         const denied = stateFor(requirement, "denied", {}, {}, Object.keys(requirement.schema.fields));
         await this.save({ ...database, grants, states: { ...database.states, [requirement.deploymentId]: denied } });
+        await this.emitTransition(denied);
         return denied;
       }
       approved.add(requirement.recipe.digest);
@@ -203,6 +206,7 @@ export class LocalSetupManager {
         approvedRecipeDigests: [...approved],
       });
       await Promise.all(retired.map((grant) => this.deleteGrant(grant)));
+      await this.emitTransition(state);
       return state;
     } catch (error) {
       await Promise.all(created.map((grant) => this.deleteGrant(grant)));
@@ -316,6 +320,10 @@ export class LocalSetupManager {
     }
     await this.save({ ...database, grants, states });
     await this.options.onGrantRevoked?.(grantId, affected);
+    for (const deploymentId of affected) {
+      const state = states[deploymentId];
+      if (state) await this.emitTransition(state);
+    }
   }
 
   private async createGrant(
@@ -371,6 +379,20 @@ export class LocalSetupManager {
 
   private save(database: LocalGrantDatabase): Promise<void> {
     return this.options.store.save(database);
+  }
+
+  private async emitTransition(state: LocalSetupState): Promise<void> {
+    await this.options.telemetry?.emit({
+      name: "edge.setup.transition",
+      deploymentId: state.deploymentId,
+      outcome: state.status,
+      metadata: {
+        desiredStateVersion: state.desiredStateVersion,
+        recipeDigest: state.recipeDigest,
+        setupSchemaVersion: state.setupSchemaVersion,
+        missingFields: state.missingFields,
+      },
+    }).catch(() => undefined);
   }
 }
 

@@ -5,6 +5,8 @@ description: "Run, validate, build, and inspect Fentaris projects from the comma
 
 The `fentaris` CLI creates project scaffolds, runs local development, checks project health, stores local secrets, and builds project output.
 
+The separately installed `fentaris-edge` CLI enrolls and operates a governed edge device.
+
 ## Quick Start
 
 ```bash theme={null}
@@ -29,6 +31,34 @@ fentaris secrets set --help
 ```
 
 ## Commands
+
+### `fentaris-edge login`
+
+Start browser/device authorization, create or load the protected device key, enroll the device, connect to the gateway, and process pending setup.
+
+```bash theme={null}
+FENTARIS_EDGE_CONTROL_PLANE_URL="https://fentaris.example" fentaris-edge login
+```
+
+### `fentaris-edge status`
+
+Print connection, desired deployment, readiness, and blocked-action summaries. Output redacts local paths, secrets, credentials, tokens, and full environments.
+
+```bash theme={null}
+fentaris-edge status
+```
+
+### `fentaris-edge disconnect`
+
+Close the outbound edge channel and stop workloads according to local shutdown policy.
+
+### `fentaris-edge revoke`
+
+Revoke the enrolled device and delete its local identity and credentials.
+
+<Note>
+  `fentaris-edge` has no `add` command. MCP definitions, setup schemas, targets, and assignments are managed by the Fentaris application.
+</Note>
 
 ### `fentaris init [project-name]`
 

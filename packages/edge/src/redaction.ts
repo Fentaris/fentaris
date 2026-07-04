@@ -1,18 +1,8 @@
-const SENSITIVE_KEYS = /authorization|credential|privateKey|secret|token|environment|env|path|directory|file/i;
+import { redactEdgeProtocolValue } from "@fentaris/core";
 
 /** Recursively redact credentials, secrets, full environments, and private paths. */
-export function redactEdgeValue(value: unknown, key = ""): unknown {
-  if (SENSITIVE_KEYS.test(key)) return "[REDACTED]";
-  if (Array.isArray(value)) return value.map((entry) => redactEdgeValue(entry));
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([entryKey, entry]) => [
-        entryKey,
-        redactEdgeValue(entry, entryKey),
-      ]),
-    );
-  }
-  return value;
+export function redactEdgeValue(value: unknown): unknown {
+  return redactEdgeProtocolValue(value);
 }
 
 export function safeEdgeError(error: unknown): { name: string; message: string } {

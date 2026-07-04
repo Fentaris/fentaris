@@ -55,6 +55,17 @@ Fallback API key used by runtime health checks when a guest or admin key is not 
 FENTARIS_API_KEY=...
 ```
 
+### `FENTARIS_EDGE_CONTROL_PLANE_URL`
+
+Control-plane base URL used by `fentaris-edge login` for device authorization and enrollment.
+
+```bash theme={null}
+export FENTARIS_EDGE_CONTROL_PLANE_URL="https://fentaris.example"
+fentaris-edge login
+```
+
+Use HTTPS. The enrolled gateway URL must use `wss://`; `ws://` is accepted only for loopback development.
+
 ### Upstream Credential Variables
 
 Servers can also read arbitrary environment variables through credential sources.
@@ -74,3 +85,4 @@ The exact variable name depends on the project code and upstream server.
 * [Quickstart](/getting-started/quickstart)
 * [Config file](/reference/config-file)
 * [CLI Usage](/reference/cli)
+* [Set Up an Edge Device](/guides/edge-device)

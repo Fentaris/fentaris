@@ -8,7 +8,9 @@ import {
   type EdgeMcpOperation,
   type EdgeMcpRequestEnvelope,
   type EdgeMcpResultEnvelope,
+  type EdgeTelemetry,
 } from "@fentaris/core";
+import path from "node:path";
 import {
   type CompiledLocalLaunchPlan,
   type DesiredSetupRequirement,
@@ -61,6 +63,7 @@ export interface EdgeWorkloadSupervisorOptions {
     recipeDigest: string,
     manifest: LocalMcpCapabilityManifest,
   ) => void | Promise<void>;
+  readonly telemetry?: EdgeTelemetry;
   readonly now?: () => number;
 }
 
@@ -119,6 +122,7 @@ export class EdgeWorkloadSupervisor {
       this.desired.delete(deploymentId);
       this.blocked.delete(deploymentId);
       results.push({ deploymentId, status: "removed" });
+      await this.emitLifecycle(deploymentId, "removed");
     }
     for (const deployment of deployments) {
       const deploymentId = deployment.requirement.deploymentId;
@@ -127,6 +131,7 @@ export class EdgeWorkloadSupervisor {
         this.blocked.add(deploymentId);
         await this.stopDeployment(deploymentId);
         results.push({ deploymentId, status: "blocked", reason: "local-deny" });
+        await this.emitLifecycle(deploymentId, "blocked-local-deny");
         continue;
       }
       const state = await this.options.setup.ingest(deployment.requirement);
@@ -134,9 +139,11 @@ export class EdgeWorkloadSupervisor {
         this.blocked.add(deploymentId);
         await this.stopDeployment(deploymentId);
         results.push({ deploymentId, status: "blocked", reason: `setup-${state.status}` });
+        await this.emitLifecycle(deploymentId, `blocked-setup-${state.status}`);
       } else {
         this.blocked.delete(deploymentId);
         results.push({ deploymentId, status: "ready" });
+        await this.emitLifecycle(deploymentId, "ready");
       }
     }
     return results;
@@ -296,6 +303,7 @@ export class EdgeWorkloadSupervisor {
       lastUsedAt: this.now(),
     };
     this.workloads.set(key, record);
+    await this.emitLifecycle(deploymentId, "started", sessionId);
     return record;
   }
 
@@ -317,6 +325,40 @@ export class EdgeWorkloadSupervisor {
     } catch {
       await record.workload.forceKill();
     }
+    await this.emitLifecycle(record.deploymentId, "stopped", record.sessionId);
+  }
+
+  private async emitLifecycle(deploymentId: string, outcome: string, sessionId?: string): Promise<void> {
+    await this.options.telemetry?.emit({
+      name: "edge.workload.lifecycle",
+      deploymentId,
+      downstreamSessionId: sessionId,
+      outcome,
+    }).catch(() => undefined);
+  }
+}
+
+export interface ExecutableAllowlistPolicyOptions {
+  readonly executables?: readonly string[];
+  readonly packages?: readonly string[];
+}
+
+/** Exact executable/package allowlist suitable for local edge launch policy. */
+export class ExecutableAllowlistPolicy implements EdgeWorkloadPolicy {
+  private readonly executables: ReadonlySet<string>;
+  private readonly packages: ReadonlySet<string>;
+
+  constructor(options: ExecutableAllowlistPolicyOptions) {
+    this.executables = new Set(options.executables ?? []);
+    this.packages = new Set(options.packages ?? []);
+  }
+
+  allow(plan: CompiledLocalLaunchPlan): boolean {
+    const executable = path.basename(plan.command);
+    if (this.executables.has(plan.command) || this.executables.has(executable)) return true;
+    if (!["npx", "pnpm", "yarn", "bunx"].includes(executable)) return false;
+    const packageName = plan.args.find((argument) => !argument.startsWith("-"));
+    return packageName !== undefined && this.packages.has(packageName);
   }
 }
 
