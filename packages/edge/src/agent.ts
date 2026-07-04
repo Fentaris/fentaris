@@ -1,6 +1,14 @@
 import { randomBytes, sign } from "node:crypto";
 import { hostname } from "node:os";
-import { EDGE_PROTOCOL_VERSION, type EdgeHelloAckMessage } from "@fentaris/core";
+import path from "node:path";
+import {
+  EDGE_PROTOCOL_VERSION,
+  edgeError,
+  parseEdgeProtocolMessage,
+  type EdgeAgentMessage,
+  type EdgeControlPlaneMessage,
+  type EdgeHelloAckMessage,
+} from "@fentaris/core";
 import {
   EdgeEnrollmentService,
   HttpDeviceAuthorizationProvider,
@@ -9,17 +17,30 @@ import {
   type EdgeConnection,
   type EdgeConnectionClient,
 } from "./enrollment.js";
-import { nodeEdgePlatform, type EdgePlatform } from "./platform.js";
+import {
+  ProtectedJsonStore,
+  nodeEdgePlatform,
+  type EdgePlatform,
+} from "./platform.js";
+import {
+  EdgeAgentRuntime,
+  type EdgeConnectionRuntime,
+  type EdgeRuntimeSummary,
+  type EdgeRuntimeSummaryProvider,
+} from "./runtime.js";
+import {
+  LocalSetupManager,
+  NodeTerminalSetupPrompter,
+  TerminalSetupProvider,
+  type LocalGrantDatabase,
+} from "./setup.js";
+import {
+  EdgeWorkloadSupervisor,
+  ExecutableAllowlistPolicy,
+} from "./supervisor.js";
+import { StdioEdgeWorkloadFactory } from "./stdioWorkload.js";
 
-export interface EdgeRuntimeSummary {
-  readonly desiredDeployments: number;
-  readonly readyDeployments: number;
-  readonly blockedDeployments: number;
-}
-
-export interface EdgeRuntimeSummaryProvider {
-  summary(): Promise<EdgeRuntimeSummary>;
-}
+export type { EdgeRuntimeSummary, EdgeRuntimeSummaryProvider } from "./runtime.js";
 
 export interface EdgeAgentStatus extends EdgeRuntimeSummary {
   readonly enrolled: boolean;
@@ -34,6 +55,7 @@ export interface EdgeAgentOptions {
   enrollment: EdgeEnrollmentService;
   connection: EdgeConnectionClient;
   platform: EdgePlatform;
+  runtime?: EdgeConnectionRuntime;
   runtimeSummary?: EdgeRuntimeSummaryProvider;
 }
 
@@ -60,6 +82,11 @@ export class EdgeAgent {
       accessToken: credentials.accessToken,
       publicKey: credentials.keyPair.publicKey,
       privateKey: credentials.keyPair.privateKey,
+      runtime: this.options.runtime,
+    });
+    const active = this.active;
+    void active.closed?.finally(() => {
+      if (this.active === active) this.active = undefined;
     });
   }
 
@@ -97,6 +124,7 @@ export class EdgeAgent {
   async revoke(): Promise<void> {
     await this.options.enrollment.revokeRemote();
     await this.disconnect();
+    await this.options.runtime?.clearLocalState?.();
     await this.options.enrollment.clearLocalIdentity();
   }
 }
@@ -113,9 +141,38 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
     const socket = this.webSocketFactory(url.toString());
     const nonce = randomBytes(32).toString("base64url");
     const proof = sign(null, Buffer.from(`${input.edgeNodeId}.${nonce}`), input.privateKey).toString("base64url");
-    const ack = await new Promise<EdgeHelloAckMessage>((resolve, reject) => {
-      const onError = () => reject(new Error("Unable to establish the edge gateway connection"));
-      socket.addEventListener("error", onError, { once: true });
+    let ack: EdgeHelloAckMessage | undefined;
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+    let runtimeDisconnected = false;
+    let resolveClosed!: () => void;
+    const closed = new Promise<void>((resolve) => {
+      resolveClosed = resolve;
+    });
+    const disconnectRuntime = async () => {
+      if (runtimeDisconnected) return;
+      runtimeDisconnected = true;
+      if (heartbeat) clearInterval(heartbeat);
+      try {
+        await input.runtime?.disconnected();
+      } finally {
+        resolveClosed();
+      }
+    };
+    const send = async (message: EdgeAgentMessage) => {
+      if (socket.readyState !== WebSocket.OPEN) {
+        throw edgeError("EDGE_UNAVAILABLE", "Edge gateway connection is closed.");
+      }
+      socket.send(JSON.stringify(message));
+    };
+    let processing = Promise.resolve();
+    const authenticated = new Promise<EdgeHelloAckMessage>((resolve, reject) => {
+      const fail = (error: unknown) => {
+        reject(error);
+        socket.close(4403, "edge protocol rejected");
+      };
+      socket.addEventListener("error", () => {
+        if (!ack) reject(new Error("Unable to establish the edge gateway connection"));
+      });
       socket.addEventListener("open", () => {
         socket.send(JSON.stringify({
           version: EDGE_PROTOCOL_VERSION,
@@ -131,20 +188,67 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
         }));
       }, { once: true });
       socket.addEventListener("message", (event) => {
-        try {
-          const message = JSON.parse(String(event.data)) as EdgeHelloAckMessage;
-          if (message.kind !== "edge.hello.ack") throw new Error("Unexpected edge gateway handshake response");
-          resolve(message);
-        } catch (error) {
-          reject(error);
-        }
+        processing = processing.then(async () => {
+          const message = parseEdgeProtocolMessage(String(event.data));
+          if (!ack) {
+            if (message.kind !== "edge.hello.ack") {
+              throw edgeError("EDGE_PROTOCOL", "Unexpected edge gateway handshake response.");
+            }
+            if (message.tenantId !== input.tenantId || message.edgeNodeId !== input.edgeNodeId) {
+              throw edgeError("EDGE_PROTOCOL", "Edge gateway acknowledged a different device identity.");
+            }
+            ack = message;
+            await input.runtime?.connected({
+              claims: {
+                tenantId: message.tenantId,
+                edgeNodeId: message.edgeNodeId,
+                connectionGeneration: message.connectionGeneration,
+              },
+              send,
+            });
+            heartbeat = setInterval(() => {
+              if (!ack || socket.readyState !== WebSocket.OPEN) return;
+              void send({
+                version: EDGE_PROTOCOL_VERSION,
+                kind: "edge.heartbeat",
+                tenantId: ack.tenantId,
+                edgeNodeId: ack.edgeNodeId,
+                connectionGeneration: ack.connectionGeneration,
+                sentAt: Date.now(),
+              }).catch(() => socket.close(1011, "edge heartbeat failed"));
+            }, 10_000);
+            heartbeat.unref?.();
+            resolve(message);
+            return;
+          }
+          if (message.kind === "edge.hello.ack" || message.kind === "edge.hello") {
+            throw edgeError("EDGE_PROTOCOL", "Unexpected edge handshake frame after authentication.");
+          }
+          if (
+            message.kind !== "edge.desired-state"
+            && message.kind !== "mcp.request"
+            && message.kind !== "mcp.cancel"
+          ) {
+            throw edgeError("EDGE_PROTOCOL", "Unexpected message kind from the edge control plane.");
+          }
+          await input.runtime?.handle(message as Exclude<EdgeControlPlaneMessage, { kind: "edge.hello.ack" }>);
+        }).catch(fail);
+      });
+      socket.addEventListener("close", () => {
+        void disconnectRuntime();
+        if (!ack) reject(edgeError("EDGE_UNAVAILABLE", "Edge socket closed during authentication."));
       }, { once: true });
     });
+    const authenticatedAck = await authenticated;
     return {
-      connectedAt: ack.serverTime,
+      connectedAt: authenticatedAck.serverTime,
+      closed,
       close: () => new Promise<void>((resolve) => {
-        if (socket.readyState === WebSocket.CLOSED) return resolve();
-        socket.addEventListener("close", () => resolve(), { once: true });
+        if (socket.readyState === WebSocket.CLOSED) {
+          void disconnectRuntime().then(resolve);
+          return;
+        }
+        closed.then(resolve);
         socket.close(1000, "local disconnect");
       }),
     };
@@ -155,6 +259,8 @@ export interface DefaultAgentOptions {
   readonly controlPlaneUrl: string;
   readonly platform?: EdgePlatform;
   readonly onVerification: (request: DeviceAuthorizationRequest) => void | Promise<void>;
+  readonly executableAllowlist?: readonly string[];
+  readonly packageAllowlist?: readonly string[];
 }
 
 export function createDefaultEdgeAgent(options: DefaultAgentOptions): EdgeAgent {
@@ -166,10 +272,38 @@ export function createDefaultEdgeAgent(options: DefaultAgentOptions): EdgeAgent 
     callbacks: { onVerification: options.onVerification },
     hostnameLabel: hostname,
   });
+  const runtimeRef: { current?: EdgeAgentRuntime } = {};
+  const setup = new LocalSetupManager({
+    store: new ProtectedJsonStore<LocalGrantDatabase>(path.join(platform.paths.dataDir, "grants.json")),
+    credentials: platform.credentialStore,
+    provider: new TerminalSetupProvider(new NodeTerminalSetupPrompter()),
+    onGrantRevoked: async (_grantId, deploymentIds) => {
+      const activeSupervisor = supervisor;
+      await Promise.all(deploymentIds.map((deploymentId) => activeSupervisor.blockDeployment(deploymentId)));
+    },
+  });
+  const supervisor = new EdgeWorkloadSupervisor({
+    setup,
+    factory: new StdioEdgeWorkloadFactory(),
+    executablePolicy: new ExecutableAllowlistPolicy({
+      executables: options.executableAllowlist ?? environmentList("FENTARIS_EDGE_ALLOWED_EXECUTABLES"),
+      packages: options.packageAllowlist ?? environmentList("FENTARIS_EDGE_ALLOWED_PACKAGES"),
+    }),
+    reportCapabilityManifest: (deploymentId, recipeDigest, manifest) => {
+      if (!runtimeRef.current) {
+        throw edgeError("EDGE_UNAVAILABLE", "Edge runtime is not initialized.");
+      }
+      return runtimeRef.current.reportCapabilityManifest(deploymentId, recipeDigest, manifest);
+    },
+  });
+  const runtime = new EdgeAgentRuntime({ setup, supervisor });
+  runtimeRef.current = runtime;
   return new EdgeAgent({
     enrollment,
     connection: new WebSocketEdgeConnectionClient(),
     platform,
+    runtime,
+    runtimeSummary: runtime,
   });
 }
 
@@ -177,3 +311,9 @@ function isLoopback(host: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
+function environmentList(name: string): string[] {
+  return (process.env[name] ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}

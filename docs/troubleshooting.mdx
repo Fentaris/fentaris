@@ -133,7 +133,9 @@ Run `fentaris-edge status`, complete the local prompt, and retry with the same d
 
 ### Edge command is denied
 
-The local executable/package allowlist rejected the recipe. Add the exact executable or package and renew local consent.
+The local executable/package allowlist rejected the recipe. Add the exact
+executable or package to `FENTARIS_EDGE_ALLOWED_EXECUTABLES` or
+`FENTARIS_EDGE_ALLOWED_PACKAGES`, reconnect the agent, and renew local consent.
 
 <Warning>
   Do not allow a generic shell executable to bypass the allowlist. Approve the concrete MCP executable or package.

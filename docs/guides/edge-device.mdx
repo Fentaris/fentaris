@@ -10,10 +10,16 @@ Use `fentaris-edge` on the device that owns the filesystem, credentials, or loca
 ```bash theme={null}
 pnpm add -g @fentaris/edge
 export FENTARIS_EDGE_CONTROL_PLANE_URL="https://fentaris.example"
+export FENTARIS_EDGE_ALLOWED_EXECUTABLES="filesystem-mcp"
 fentaris-edge login
 ```
 
 Open the displayed verification URL and enter the user code. Login creates a random device keypair, proves possession, enrolls the device, starts synchronization, and prompts for pending local setup.
+
+The local executable allowlist is deny-by-default. Set
+`FENTARIS_EDGE_ALLOWED_EXECUTABLES` for direct executables or
+`FENTARIS_EDGE_ALLOWED_PACKAGES` for packages launched through `npx`, `pnpm`,
+`yarn`, or `bunx`. Values are comma-separated exact names.
 
 <Note>
   The hostname is a display label, not device identity. Copying non-secret config without the protected key cannot authenticate another installation as the device.
@@ -61,7 +67,10 @@ Status reports connection, desired deployments, readiness, and blocked counts. I
 fentaris-edge revoke
 ```
 
-Revocation removes the server-side device authorization, stops the local connection, and deletes local identity state. Grant or workload denial is also sticky: replaying desired state cannot restart it until local consent is renewed.
+Revocation removes the server-side device authorization, stops the local
+connection, and deletes local identity, grants, and setup secrets. Grant or
+workload denial is also sticky: replaying desired state cannot restart it until
+local consent is renewed.
 
 ## Placement Examples
 
@@ -113,11 +122,12 @@ An existing session is pinned to its original connection generation. Start a new
 
 ### Command is denied
 
-Add the exact executable or package to the local allowlist, then renew consent for the recipe digest. Do not allow a shell interpreter as a generic workaround.
+Add the exact executable or package to `FENTARIS_EDGE_ALLOWED_EXECUTABLES` or
+`FENTARIS_EDGE_ALLOWED_PACKAGES`, reconnect the agent, then renew consent for
+the recipe digest. Do not allow a shell interpreter as a generic workaround.
 
 ## Related Documentation
 
 * [Edge Execution](/concepts/edge-execution)
 * [Edge API Reference](/reference/edge)
 * [Troubleshooting](/troubleshooting)
-

@@ -1,12 +1,18 @@
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { verify } from "node:crypto";
+import { generateKeyPairSync, verify } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
+import {
+  EDGE_PROTOCOL_VERSION,
+  compileLaunchRecipe,
+  createSetupSchema,
+} from "@fentaris/core";
 import {
   EdgeAgent,
   EdgeEnrollmentService,
   ProtectedJsonStore,
+  WebSocketEdgeConnectionClient,
   runEdgeCli,
   type CredentialStore,
   type DeviceAuthorizationProvider,
@@ -17,6 +23,24 @@ import {
   type JsonStore,
   type StoredDeviceKeyPair,
 } from "../src/index.js";
+
+class FakeWebSocket extends EventTarget {
+  readyState = WebSocket.CONNECTING;
+  readonly sent: string[] = [];
+  send(frame: string) { this.sent.push(frame); }
+  open() {
+    this.readyState = WebSocket.OPEN;
+    this.dispatchEvent(new Event("open"));
+  }
+  receive(message: unknown) {
+    this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(message) }));
+  }
+  close() {
+    if (this.readyState === WebSocket.CLOSED) return;
+    this.readyState = WebSocket.CLOSED;
+    this.dispatchEvent(new Event("close"));
+  }
+}
 
 class MemoryStore<T> implements JsonStore<T> {
   value?: T;
@@ -237,6 +261,63 @@ describe("edge agent and CLI", () => {
     expect(errors[0]).not.toContain("/Users/alice/private");
     expect(errors[0]).not.toContain("xyz");
   });
+
+  it("keeps processing control-plane frames after the WebSocket handshake", async () => {
+    const keyPair = generateKeyPairSync("ed25519", {
+      publicKeyEncoding: { type: "spki", format: "pem" },
+      privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    });
+    const socket = new FakeWebSocket();
+    const runtime = {
+      connected: vi.fn(),
+      handle: vi.fn(),
+      disconnected: vi.fn(),
+      summary: async () => ({ desiredDeployments: 0, readyDeployments: 0, blockedDeployments: 0 }),
+    };
+    const client = new WebSocketEdgeConnectionClient(() => socket as unknown as WebSocket);
+    const pending = client.connect({
+      gatewayUrl: "ws://127.0.0.1:4001/edge",
+      edgeNodeId: "node-1",
+      tenantId: "tenant-1",
+      deviceCredential: "credential",
+      accessToken: "token",
+      publicKey: keyPair.publicKey,
+      privateKey: keyPair.privateKey,
+      runtime,
+    });
+    socket.open();
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(1));
+    socket.receive({
+      version: EDGE_PROTOCOL_VERSION,
+      kind: "edge.hello.ack",
+      tenantId: "tenant-1",
+      edgeNodeId: "node-1",
+      connectionGeneration: 2,
+      protocolVersion: EDGE_PROTOCOL_VERSION,
+      serverTime: 100,
+    });
+    const connection = await pending;
+    expect(runtime.connected).toHaveBeenCalledOnce();
+
+    const schema = createSetupSchema({});
+    socket.receive({
+      version: EDGE_PROTOCOL_VERSION,
+      kind: "edge.desired-state",
+      tenantId: "tenant-1",
+      edgeNodeId: "node-1",
+      connectionGeneration: 2,
+      desiredVersion: 1,
+      deployments: [{
+        deploymentId: "fixture",
+        serverName: "fixture",
+        recipe: compileLaunchRecipe({ command: "fixture" }, schema),
+        setupSchema: schema,
+      }],
+    });
+    await vi.waitFor(() => expect(runtime.handle).toHaveBeenCalledOnce());
+    await connection.close();
+    expect(runtime.disconnected).toHaveBeenCalledOnce();
+  });
 });
 
 describe("protected file storage", () => {
@@ -255,4 +336,3 @@ describe("protected file storage", () => {
     }
   });
 });
-

@@ -193,6 +193,11 @@ export class StdioTransport implements FentarisTransport {
     return client.complete(params);
   }
 
+  /** Return the initialized upstream capability declaration. @pk */
+  async serverCapabilities(): Promise<ReturnType<Client["getServerCapabilities"]>> {
+    return (await this.getClient()).getServerCapabilities();
+  }
+
   /**
    * Close the underlying client connection.
    * @pk

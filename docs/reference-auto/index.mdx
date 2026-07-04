@@ -9635,7 +9635,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **close**(): `Promise`\<`void`\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:200
+Defined in: packages/core/src/transports/client/StdioTransport.ts:205
 
 Close the underlying client connection.
 
@@ -9980,6 +9980,18 @@ fields without exposing the full options object.
 #### Returns
 
 `RuntimeValueToken`[]
+
+### serverCapabilities()
+
+> **serverCapabilities**(): `Promise`\<\{ `completions?`: `object`; `experimental?`: \{\[`key`: `string`\]: `object`; \}; `extensions?`: \{\[`key`: `string`\]: `object`; \}; `logging?`: `object`; `prompts?`: \{ `listChanged?`: `boolean`; \}; `resources?`: \{ `listChanged?`: `boolean`; `subscribe?`: `boolean`; \}; `tasks?`: \{\[`key`: `string`\]: `unknown`; `cancel?`: `object`; `list?`: `object`; `requests?`: \{\[`key`: `string`\]: `unknown`; `tools?`: \{\[`key`: `string`\]: `unknown`; `call?`: `object`; \}; \}; \}; `tools?`: \{ `listChanged?`: `boolean`; \}; \} \| `undefined`\>
+
+Defined in: packages/core/src/transports/client/StdioTransport.ts:197
+
+Return the initialized upstream capability declaration.
+
+#### Returns
+
+`Promise`\<\{ `completions?`: `object`; `experimental?`: \{\[`key`: `string`\]: `object`; \}; `extensions?`: \{\[`key`: `string`\]: `object`; \}; `logging?`: `object`; `prompts?`: \{ `listChanged?`: `boolean`; \}; `resources?`: \{ `listChanged?`: `boolean`; `subscribe?`: `boolean`; \}; `tasks?`: \{\[`key`: `string`\]: `unknown`; `cancel?`: `object`; `list?`: `object`; `requests?`: \{\[`key`: `string`\]: `unknown`; `tools?`: \{\[`key`: `string`\]: `unknown`; `call?`: `object`; \}; \}; \}; `tools?`: \{ `listChanged?`: `boolean`; \}; \} \| `undefined`\>
 
 ### toLaunchRecipe()
 
@@ -11970,7 +11982,7 @@ Runtime profiler, event, sink, and runtime error APIs.
 
 > **parseEdgeProtocolMessage**(`frame`): `EdgeProtocolMessage`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:126
+Defined in: packages/core/src/edge/controlProtocol.ts:129
 
 Parse a JSON edge frame and reject unsupported/malformed protocol shells.
 
@@ -12506,7 +12518,7 @@ Serialize a secrets manifest to JSON.
 
 > **stdio**(`options`): `StdioTransport`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:288
+Defined in: packages/core/src/transports/client/StdioTransport.ts:293
 
 Create a stdio upstream transport.
 
@@ -13480,7 +13492,7 @@ Defined in: packages/core/src/edge/capabilityCache.ts:15
 
 @fentaris/core / EdgeCapabilityManifestMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:76
+Defined in: packages/core/src/edge/controlProtocol.ts:79
 
 Common trusted routing claims carried by edge control messages.
 
@@ -13494,7 +13506,7 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:16
+Defined in: packages/core/src/edge/controlProtocol.ts:17
 
 #### Inherited from
 
@@ -13504,13 +13516,13 @@ Defined in: packages/core/src/edge/controlProtocol.ts:16
 
 > `readonly` **deploymentId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:79
+Defined in: packages/core/src/edge/controlProtocol.ts:82
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:15
+Defined in: packages/core/src/edge/controlProtocol.ts:16
 
 #### Inherited from
 
@@ -13520,43 +13532,43 @@ Defined in: packages/core/src/edge/controlProtocol.ts:15
 
 > `readonly` **kind**: `"edge.capability-manifest"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:78
+Defined in: packages/core/src/edge/controlProtocol.ts:81
 
 ### prompts
 
 > `readonly` **prompts**: readonly `unknown`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:84
+Defined in: packages/core/src/edge/controlProtocol.ts:87
 
 ### recipeDigest
 
 > `readonly` **recipeDigest**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:80
+Defined in: packages/core/src/edge/controlProtocol.ts:83
 
 ### resources
 
 > `readonly` **resources**: readonly `unknown`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:82
+Defined in: packages/core/src/edge/controlProtocol.ts:85
 
 ### resourceTemplates
 
 > `readonly` **resourceTemplates**: readonly `unknown`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:83
+Defined in: packages/core/src/edge/controlProtocol.ts:86
 
 ### supportsCompletion
 
 > `readonly` **supportsCompletion**: `boolean`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:85
+Defined in: packages/core/src/edge/controlProtocol.ts:88
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:14
+Defined in: packages/core/src/edge/controlProtocol.ts:15
 
 #### Inherited from
 
@@ -13566,13 +13578,13 @@ Defined in: packages/core/src/edge/controlProtocol.ts:14
 
 > `readonly` **tools**: readonly `unknown`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:81
+Defined in: packages/core/src/edge/controlProtocol.ts:84
 
 ### version
 
 > `readonly` **version**: `1`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:77
+Defined in: packages/core/src/edge/controlProtocol.ts:80
 
   </Accordion>
 
@@ -13862,7 +13874,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:70
 
 @fentaris/core / EdgeDesiredDeployment
 
-Defined in: packages/core/src/edge/controlProtocol.ts:43
+Defined in: packages/core/src/edge/controlProtocol.ts:44
 
 ## Properties
 
@@ -13870,31 +13882,39 @@ Defined in: packages/core/src/edge/controlProtocol.ts:43
 
 > `readonly` **deploymentId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:44
+Defined in: packages/core/src/edge/controlProtocol.ts:45
 
 ### recipe
 
 > `readonly` **recipe**: `LaunchRecipe`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:46
+Defined in: packages/core/src/edge/controlProtocol.ts:47
 
 ### serverName
 
 > `readonly` **serverName**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:45
+Defined in: packages/core/src/edge/controlProtocol.ts:46
+
+### setupSchema
+
+> `readonly` **setupSchema**: `SetupSchema`
+
+Defined in: packages/core/src/edge/controlProtocol.ts:49
+
+Complete unresolved setup schema collected locally by the edge agent.
 
 ### setupSchemaVersion?
 
 > `readonly` `optional` **setupSchemaVersion?**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:47
+Defined in: packages/core/src/edge/controlProtocol.ts:50
 
 ### subjectIds?
 
 > `readonly` `optional` **subjectIds?**: readonly `string`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:48
+Defined in: packages/core/src/edge/controlProtocol.ts:51
 
   </Accordion>
 
@@ -13902,7 +13922,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:48
 
 @fentaris/core / EdgeDesiredStateAckMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:58
+Defined in: packages/core/src/edge/controlProtocol.ts:61
 
 Common trusted routing claims carried by edge control messages.
 
@@ -13916,13 +13936,13 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` `optional` **blockedDeploymentIds?**: readonly `string`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:63
+Defined in: packages/core/src/edge/controlProtocol.ts:66
 
 ### connectionGeneration
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:16
+Defined in: packages/core/src/edge/controlProtocol.ts:17
 
 #### Inherited from
 
@@ -13932,13 +13952,13 @@ Defined in: packages/core/src/edge/controlProtocol.ts:16
 
 > `readonly` **desiredVersion**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:61
+Defined in: packages/core/src/edge/controlProtocol.ts:64
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:15
+Defined in: packages/core/src/edge/controlProtocol.ts:16
 
 #### Inherited from
 
@@ -13948,19 +13968,19 @@ Defined in: packages/core/src/edge/controlProtocol.ts:15
 
 > `readonly` **kind**: `"edge.desired-state.ack"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:60
+Defined in: packages/core/src/edge/controlProtocol.ts:63
 
 ### status
 
 > `readonly` **status**: `"applied"` \| `"blocked"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:62
+Defined in: packages/core/src/edge/controlProtocol.ts:65
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:14
+Defined in: packages/core/src/edge/controlProtocol.ts:15
 
 #### Inherited from
 
@@ -13970,7 +13990,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:14
 
 > `readonly` **version**: `1`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:59
+Defined in: packages/core/src/edge/controlProtocol.ts:62
 
   </Accordion>
 
@@ -13978,7 +13998,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:59
 
 @fentaris/core / EdgeDesiredStateMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:51
+Defined in: packages/core/src/edge/controlProtocol.ts:54
 
 Common trusted routing claims carried by edge control messages.
 
@@ -13992,7 +14012,7 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:16
+Defined in: packages/core/src/edge/controlProtocol.ts:17
 
 #### Inherited from
 
@@ -14002,19 +14022,19 @@ Defined in: packages/core/src/edge/controlProtocol.ts:16
 
 > `readonly` **deployments**: readonly `EdgeDesiredDeployment`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:55
+Defined in: packages/core/src/edge/controlProtocol.ts:58
 
 ### desiredVersion
 
 > `readonly` **desiredVersion**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:54
+Defined in: packages/core/src/edge/controlProtocol.ts:57
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:15
+Defined in: packages/core/src/edge/controlProtocol.ts:16
 
 #### Inherited from
 
@@ -14024,13 +14044,13 @@ Defined in: packages/core/src/edge/controlProtocol.ts:15
 
 > `readonly` **kind**: `"edge.desired-state"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:53
+Defined in: packages/core/src/edge/controlProtocol.ts:56
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:14
+Defined in: packages/core/src/edge/controlProtocol.ts:15
 
 #### Inherited from
 
@@ -14040,7 +14060,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:14
 
 > `readonly` **version**: `1`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:52
+Defined in: packages/core/src/edge/controlProtocol.ts:55
 
   </Accordion>
 
@@ -14696,7 +14716,7 @@ Defined in: packages/core/src/edge/observability.ts:52
 
 @fentaris/core / EdgeHeartbeatMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:36
+Defined in: packages/core/src/edge/controlProtocol.ts:37
 
 Common trusted routing claims carried by edge control messages.
 
@@ -14710,7 +14730,7 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:16
+Defined in: packages/core/src/edge/controlProtocol.ts:17
 
 #### Inherited from
 
@@ -14720,7 +14740,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:16
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:15
+Defined in: packages/core/src/edge/controlProtocol.ts:16
 
 #### Inherited from
 
@@ -14730,25 +14750,25 @@ Defined in: packages/core/src/edge/controlProtocol.ts:15
 
 > `readonly` **kind**: `"edge.heartbeat"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:38
+Defined in: packages/core/src/edge/controlProtocol.ts:39
 
 ### load?
 
 > `readonly` `optional` **load?**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:40
+Defined in: packages/core/src/edge/controlProtocol.ts:41
 
 ### sentAt
 
 > `readonly` **sentAt**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:39
+Defined in: packages/core/src/edge/controlProtocol.ts:40
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:14
+Defined in: packages/core/src/edge/controlProtocol.ts:15
 
 #### Inherited from
 
@@ -14758,7 +14778,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:14
 
 > `readonly` **version**: `1`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:37
+Defined in: packages/core/src/edge/controlProtocol.ts:38
 
   </Accordion>
 
@@ -14766,7 +14786,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:37
 
 @fentaris/core / EdgeHelloAckMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:29
+Defined in: packages/core/src/edge/controlProtocol.ts:30
 
 Common trusted routing claims carried by edge control messages.
 
@@ -14780,7 +14800,7 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:16
+Defined in: packages/core/src/edge/controlProtocol.ts:17
 
 #### Inherited from
 
@@ -14790,7 +14810,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:16
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:15
+Defined in: packages/core/src/edge/controlProtocol.ts:16
 
 #### Inherited from
 
@@ -14800,25 +14820,25 @@ Defined in: packages/core/src/edge/controlProtocol.ts:15
 
 > `readonly` **kind**: `"edge.hello.ack"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:31
+Defined in: packages/core/src/edge/controlProtocol.ts:32
 
 ### protocolVersion
 
 > `readonly` **protocolVersion**: `1`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:32
+Defined in: packages/core/src/edge/controlProtocol.ts:33
 
 ### serverTime
 
 > `readonly` **serverTime**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:33
+Defined in: packages/core/src/edge/controlProtocol.ts:34
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:14
+Defined in: packages/core/src/edge/controlProtocol.ts:15
 
 #### Inherited from
 
@@ -14828,7 +14848,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:14
 
 > `readonly` **version**: `1`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:30
+Defined in: packages/core/src/edge/controlProtocol.ts:31
 
   </Accordion>
 
@@ -14836,7 +14856,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:30
 
 @fentaris/core / EdgeHelloMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:19
+Defined in: packages/core/src/edge/controlProtocol.ts:20
 
 ## Properties
 
@@ -14844,43 +14864,43 @@ Defined in: packages/core/src/edge/controlProtocol.ts:19
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:23
+Defined in: packages/core/src/edge/controlProtocol.ts:24
 
 ### kind
 
 > `readonly` **kind**: `"edge.hello"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:21
+Defined in: packages/core/src/edge/controlProtocol.ts:22
 
 ### nonce
 
 > `readonly` **nonce**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:25
+Defined in: packages/core/src/edge/controlProtocol.ts:26
 
 ### proof
 
 > `readonly` **proof**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:26
+Defined in: packages/core/src/edge/controlProtocol.ts:27
 
 ### supportedVersions
 
 > `readonly` **supportedVersions**: readonly `number`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:24
+Defined in: packages/core/src/edge/controlProtocol.ts:25
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:22
+Defined in: packages/core/src/edge/controlProtocol.ts:23
 
 ### version
 
 > `readonly` **version**: `1`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:20
+Defined in: packages/core/src/edge/controlProtocol.ts:21
 
   </Accordion>
 
@@ -14888,7 +14908,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:20
 
 @fentaris/core / EdgeLifecycleMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:88
+Defined in: packages/core/src/edge/controlProtocol.ts:91
 
 Common trusted routing claims carried by edge control messages.
 
@@ -14902,7 +14922,7 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:16
+Defined in: packages/core/src/edge/controlProtocol.ts:17
 
 #### Inherited from
 
@@ -14912,19 +14932,19 @@ Defined in: packages/core/src/edge/controlProtocol.ts:16
 
 > `readonly` `optional` **deploymentId?**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:99
+Defined in: packages/core/src/edge/controlProtocol.ts:102
 
 ### downstreamSessionId?
 
 > `readonly` `optional` **downstreamSessionId?**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:100
+Defined in: packages/core/src/edge/controlProtocol.ts:103
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:15
+Defined in: packages/core/src/edge/controlProtocol.ts:16
 
 #### Inherited from
 
@@ -14934,31 +14954,31 @@ Defined in: packages/core/src/edge/controlProtocol.ts:15
 
 > `readonly` **event**: `"connected"` \| `"disconnected"` \| `"setup-pending"` \| `"setup-ready"` \| `"workload-started"` \| `"workload-stopped"` \| `"workload-failed"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:91
+Defined in: packages/core/src/edge/controlProtocol.ts:94
 
 ### kind
 
 > `readonly` **kind**: `"edge.lifecycle"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:90
+Defined in: packages/core/src/edge/controlProtocol.ts:93
 
 ### metadata?
 
 > `readonly` `optional` **metadata?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: packages/core/src/edge/controlProtocol.ts:102
+Defined in: packages/core/src/edge/controlProtocol.ts:105
 
 ### occurredAt
 
 > `readonly` **occurredAt**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:101
+Defined in: packages/core/src/edge/controlProtocol.ts:104
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:14
+Defined in: packages/core/src/edge/controlProtocol.ts:15
 
 #### Inherited from
 
@@ -14968,7 +14988,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:14
 
 > `readonly` **version**: `1`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:89
+Defined in: packages/core/src/edge/controlProtocol.ts:92
 
   </Accordion>
 
@@ -15234,7 +15254,7 @@ Defined in: packages/core/src/edge/protocol.ts:25
 
 @fentaris/core / EdgeProtocolClaims
 
-Defined in: packages/core/src/edge/controlProtocol.ts:13
+Defined in: packages/core/src/edge/controlProtocol.ts:14
 
 Common trusted routing claims carried by edge control messages.
 
@@ -15254,19 +15274,19 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:16
+Defined in: packages/core/src/edge/controlProtocol.ts:17
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:15
+Defined in: packages/core/src/edge/controlProtocol.ts:16
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:14
+Defined in: packages/core/src/edge/controlProtocol.ts:15
 
   </Accordion>
 
@@ -15426,7 +15446,7 @@ Registered execution targets, keyed by name.
 
 @fentaris/core / EdgeSetupStatusMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:66
+Defined in: packages/core/src/edge/controlProtocol.ts:69
 
 Common trusted routing claims carried by edge control messages.
 
@@ -15440,7 +15460,7 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:16
+Defined in: packages/core/src/edge/controlProtocol.ts:17
 
 #### Inherited from
 
@@ -15450,13 +15470,13 @@ Defined in: packages/core/src/edge/controlProtocol.ts:16
 
 > `readonly` **deploymentId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:69
+Defined in: packages/core/src/edge/controlProtocol.ts:72
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:15
+Defined in: packages/core/src/edge/controlProtocol.ts:16
 
 #### Inherited from
 
@@ -15466,37 +15486,37 @@ Defined in: packages/core/src/edge/controlProtocol.ts:15
 
 > `readonly` `optional` **grantRefs?**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: packages/core/src/edge/controlProtocol.ts:73
+Defined in: packages/core/src/edge/controlProtocol.ts:76
 
 ### kind
 
 > `readonly` **kind**: `"edge.setup-status"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:68
+Defined in: packages/core/src/edge/controlProtocol.ts:71
 
 ### recipeDigest
 
 > `readonly` **recipeDigest**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:70
+Defined in: packages/core/src/edge/controlProtocol.ts:73
 
 ### setupSchemaVersion
 
 > `readonly` **setupSchemaVersion**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:71
+Defined in: packages/core/src/edge/controlProtocol.ts:74
 
 ### status
 
 > `readonly` **status**: `"denied"` \| `"pending"` \| `"ready"` \| `"revoked"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:72
+Defined in: packages/core/src/edge/controlProtocol.ts:75
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:14
+Defined in: packages/core/src/edge/controlProtocol.ts:15
 
 #### Inherited from
 
@@ -15506,7 +15526,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:14
 
 > `readonly` **version**: `1`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:67
+Defined in: packages/core/src/edge/controlProtocol.ts:70
 
   </Accordion>
 
@@ -18609,7 +18629,7 @@ Device selector discriminator.
 
 > **EdgeAgentMessage** = `EdgeHeartbeatMessage` \| `EdgeDesiredStateAckMessage` \| `EdgeSetupStatusMessage` \| `EdgeCapabilityManifestMessage` \| `EdgeLifecycleMessage` \| `EdgeMcpResultEnvelope` \| `EdgeMcpErrorEnvelope`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:106
+Defined in: packages/core/src/edge/controlProtocol.ts:109
 
 Messages accepted from an edge after hello.
 
@@ -18649,7 +18669,7 @@ Defined in: packages/core/src/edge/capabilityCache.ts:35
 
 > **EdgeControlPlaneMessage** = `EdgeHelloAckMessage` \| `EdgeDesiredStateMessage` \| `EdgeMcpRequestEnvelope` \| `EdgeMcpCancelEnvelope`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:116
+Defined in: packages/core/src/edge/controlProtocol.ts:119
 
 Messages sent by the control plane after hello.
 
@@ -18709,7 +18729,7 @@ Messages sent from the control plane to an edge connection.
 
 > **EdgeProtocolMessage** = `EdgeHelloMessage` \| `EdgeAgentMessage` \| `EdgeControlPlaneMessage`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:123
+Defined in: packages/core/src/edge/controlProtocol.ts:126
 
 All versioned edge protocol messages.
 
@@ -25737,7 +25757,7 @@ Current normalized edge MCP envelope version.
 
 > `const` **EDGE\_PROTOCOL\_VERSION**: `1` = `1`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:10
+Defined in: packages/core/src/edge/controlProtocol.ts:11
 
 Current edge control-plane protocol version.
 
@@ -28843,7 +28863,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **close**(): `Promise`\<`void`\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:200
+Defined in: packages/core/src/transports/client/StdioTransport.ts:205
 
 Close the underlying client connection.
 
@@ -29189,6 +29209,18 @@ fields without exposing the full options object.
 
 `RuntimeValueToken`[]
 
+### serverCapabilities()
+
+> **serverCapabilities**(): `Promise`\<\{ `completions?`: `object`; `experimental?`: \{\[`key`: `string`\]: `object`; \}; `extensions?`: \{\[`key`: `string`\]: `object`; \}; `logging?`: `object`; `prompts?`: \{ `listChanged?`: `boolean`; \}; `resources?`: \{ `listChanged?`: `boolean`; `subscribe?`: `boolean`; \}; `tasks?`: \{\[`key`: `string`\]: `unknown`; `cancel?`: `object`; `list?`: `object`; `requests?`: \{\[`key`: `string`\]: `unknown`; `tools?`: \{\[`key`: `string`\]: `unknown`; `call?`: `object`; \}; \}; \}; `tools?`: \{ `listChanged?`: `boolean`; \}; \} \| `undefined`\>
+
+Defined in: packages/core/src/transports/client/StdioTransport.ts:197
+
+Return the initialized upstream capability declaration.
+
+#### Returns
+
+`Promise`\<\{ `completions?`: `object`; `experimental?`: \{\[`key`: `string`\]: `object`; \}; `extensions?`: \{\[`key`: `string`\]: `object`; \}; `logging?`: `object`; `prompts?`: \{ `listChanged?`: `boolean`; \}; `resources?`: \{ `listChanged?`: `boolean`; `subscribe?`: `boolean`; \}; `tasks?`: \{\[`key`: `string`\]: `unknown`; `cancel?`: `object`; `list?`: `object`; `requests?`: \{\[`key`: `string`\]: `unknown`; `tools?`: \{\[`key`: `string`\]: `unknown`; `call?`: `object`; \}; \}; \}; `tools?`: \{ `listChanged?`: `boolean`; \}; \} \| `undefined`\>
+
 ### toLaunchRecipe()
 
 > **toLaunchRecipe**(`schema?`): `LaunchRecipe`
@@ -29247,7 +29279,7 @@ Return a copy with merged environment variables.
 
 > **stdio**(`options`): `StdioTransport`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:288
+Defined in: packages/core/src/transports/client/StdioTransport.ts:293
 
 Create a stdio upstream transport.
 

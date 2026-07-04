@@ -19,10 +19,10 @@
   ],
   "scripts": {
     "dev": "tsc --watch",
-    "prepare": "tsc",
-    "build": "pnpm run clean && tsc",
+    "prepare": "tsc --build --force",
+    "build": "pnpm run clean && tsc --build --force",
     "test": "vitest run --dir test",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
     "@fentaris/core": "workspace:*"

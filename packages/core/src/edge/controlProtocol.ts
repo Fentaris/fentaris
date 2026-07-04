@@ -1,4 +1,5 @@
 import type { LaunchRecipe } from "./recipe.js";
+import type { SetupSchema } from "./setup.js";
 import type {
   EdgeMcpCancelEnvelope,
   EdgeMcpErrorEnvelope,
@@ -44,6 +45,8 @@ export interface EdgeDesiredDeployment {
   readonly deploymentId: string;
   readonly serverName: string;
   readonly recipe: LaunchRecipe;
+  /** Complete unresolved setup schema collected locally by the edge agent. */
+  readonly setupSchema: SetupSchema;
   readonly setupSchemaVersion?: number;
   readonly subjectIds?: readonly string[];
 }
@@ -139,4 +142,3 @@ export function parseEdgeProtocolMessage(frame: string): EdgeProtocolMessage {
   }
   return value as EdgeProtocolMessage;
 }
-

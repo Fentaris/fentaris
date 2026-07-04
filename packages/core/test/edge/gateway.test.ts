@@ -11,6 +11,7 @@ import {
   InMemoryEdgeDeviceRegistry,
   InMemoryEdgeSetupStatusStore,
   compileLaunchRecipe,
+  createSetupSchema,
   type EdgeDesiredStateMessage,
   type EdgeGatewayAuthenticator,
   type EdgeGatewaySocket,
@@ -115,6 +116,7 @@ function desiredState(version: number): EdgeDesiredStateMessage {
       deploymentId: "fixture",
       serverName: "fixture",
       recipe: compileLaunchRecipe({ command: "fixture" }),
+      setupSchema: createSetupSchema({}),
     }],
   };
 }
@@ -292,4 +294,3 @@ describe("EdgeWebSocketGateway", () => {
     expect(seen).toEqual(["hello"]);
   });
 });
-

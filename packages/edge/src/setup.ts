@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { lstat, realpath } from "node:fs/promises";
 import path from "node:path";
+import { emitKeypressEvents } from "node:readline";
+import { createInterface } from "node:readline/promises";
 import {
   LAUNCH_RECIPE_VERSION,
   edgeError,
@@ -46,6 +48,26 @@ export interface LocalSetupProvider {
 export interface TerminalSetupPrompter {
   confirm(message: string): Promise<boolean>;
   input(message: string, options?: { secret?: boolean }): Promise<string>;
+}
+
+/** Interactive terminal prompter that suppresses local secret echo on a TTY. */
+export class NodeTerminalSetupPrompter implements TerminalSetupPrompter {
+  async confirm(message: string): Promise<boolean> {
+    const value = (await this.input(`${message} [y/N]:`)).trim().toLowerCase();
+    return value === "y" || value === "yes";
+  }
+
+  async input(message: string, options?: { secret?: boolean }): Promise<string> {
+    if (options?.secret && process.stdin.isTTY) {
+      return hiddenInput(message);
+    }
+    const prompt = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      return await prompt.question(`${message} `);
+    } finally {
+      prompt.close();
+    }
+  }
 }
 
 /** Initial terminal setup provider with explicit workload and resource consent. */
@@ -216,6 +238,13 @@ export class LocalSetupManager {
 
   async status(deploymentId: string): Promise<LocalSetupState | undefined> {
     return (await this.database()).states[deploymentId];
+  }
+
+  /** Delete every local grant, setup state, and protected setup secret. */
+  async clear(): Promise<void> {
+    const database = await this.database();
+    await Promise.all(Object.values(database.grants).map((grant) => this.deleteGrant(grant)));
+    await this.options.store.delete();
   }
 
   async compileLaunchPlan(requirement: DesiredSetupRequirement): Promise<CompiledLocalLaunchPlan> {
@@ -476,4 +505,38 @@ function canonicalize(value: unknown): unknown {
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, child]) => [key, canonicalize(child)]),
   );
+}
+
+function hiddenInput(message: string): Promise<string> {
+  process.stdout.write(`${message} `);
+  emitKeypressEvents(process.stdin);
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  return new Promise<string>((resolve, reject) => {
+    let value = "";
+    const onKeypress = (character: string, key: { name?: string; ctrl?: boolean }) => {
+      if (key.ctrl && key.name === "c") {
+        finish();
+        reject(new Error("Terminal input cancelled"));
+        return;
+      }
+      if (key.name === "return" || key.name === "enter") {
+        finish();
+        resolve(value);
+        return;
+      }
+      if (key.name === "backspace") {
+        value = value.slice(0, -1);
+        return;
+      }
+      if (character && !key.ctrl) value += character;
+    };
+    const finish = () => {
+      process.stdin.off("keypress", onKeypress);
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+      process.stdout.write("\n");
+    };
+    process.stdin.on("keypress", onKeypress);
+  });
 }

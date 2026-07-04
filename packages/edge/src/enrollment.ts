@@ -1,5 +1,6 @@
 import { generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import type { EdgeLocalConfig, EdgePlatform, StoredDeviceKeyPair } from "./platform.js";
+import type { EdgeConnectionRuntime } from "./runtime.js";
 
 export interface DeviceAuthorizationRequest {
   readonly deviceCode: string;
@@ -50,6 +51,7 @@ export interface EdgeEnrollmentClient {
 
 export interface EdgeConnection {
   readonly connectedAt: number;
+  readonly closed?: Promise<void>;
   close(): Promise<void>;
 }
 
@@ -62,6 +64,7 @@ export interface EdgeConnectionClient {
     accessToken: string;
     publicKey: string;
     privateKey: string;
+    runtime?: EdgeConnectionRuntime;
   }): Promise<EdgeConnection>;
 }
 
@@ -269,4 +272,3 @@ async function postJson<T>(url: string, body: unknown, bearer?: string): Promise
   if (!response.ok) throw new Error(`Edge control-plane request failed with HTTP ${response.status}`);
   return response.json() as Promise<T>;
 }
-

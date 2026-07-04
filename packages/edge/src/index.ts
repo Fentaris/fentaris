@@ -58,9 +58,17 @@ export type {
 export { redactEdgeValue, safeEdgeError } from "./redaction.js";
 export {
   LocalSetupManager,
+  NodeTerminalSetupPrompter,
   TerminalSetupProvider,
 } from "./setup.js";
 export { EdgeWorkloadSupervisor, ExecutableAllowlistPolicy } from "./supervisor.js";
+export { StdioEdgeWorkloadFactory } from "./stdioWorkload.js";
+export { EdgeAgentRuntime } from "./runtime.js";
+export type {
+  EdgeAgentRuntimeOptions,
+  EdgeConnectionRuntime,
+  EdgeRuntimeConnection,
+} from "./runtime.js";
 export type {
   DeploymentReconcileResult,
   EdgeWorkload,

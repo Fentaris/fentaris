@@ -37,8 +37,13 @@ fentaris secrets set --help
 Start browser/device authorization, create or load the protected device key, enroll the device, connect to the gateway, and process pending setup.
 
 ```bash theme={null}
-FENTARIS_EDGE_CONTROL_PLANE_URL="https://fentaris.example" fentaris-edge login
+FENTARIS_EDGE_CONTROL_PLANE_URL="https://fentaris.example" \
+FENTARIS_EDGE_ALLOWED_EXECUTABLES="filesystem-mcp" \
+fentaris-edge login
 ```
+
+The executable and package allowlists are deny-by-default. See
+[Environment Variables](/reference/environment-variables) for configuration.
 
 ### `fentaris-edge status`
 
@@ -54,7 +59,8 @@ Close the outbound edge channel and stop workloads according to local shutdown p
 
 ### `fentaris-edge revoke`
 
-Revoke the enrolled device and delete its local identity and credentials.
+Revoke the enrolled device and delete its local identity, credentials, grants,
+and setup secrets.
 
 <Note>
   `fentaris-edge` has no `add` command. MCP definitions, setup schemas, targets, and assignments are managed by the Fentaris application.

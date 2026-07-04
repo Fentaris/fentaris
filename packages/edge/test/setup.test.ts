@@ -161,6 +161,9 @@ describe("LocalSetupManager", () => {
       ],
       env: { TOKEN: "local-secret" },
     });
+    await fixture.manager.clear();
+    expect(fixture.store.value).toBeUndefined();
+    expect(fixture.credentials.values.size).toBe(0);
   });
 
   it("rejects stale setup, invalid scalar values, denied consent, and code payloads", async () => {
