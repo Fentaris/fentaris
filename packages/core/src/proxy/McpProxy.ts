@@ -1375,8 +1375,17 @@ export class McpProxy {
     const bindings = this.serverCatalog.resolve({ user: resolvedUser, subject: resolvedSubject, operation: "tools:list" });
     const results = await Promise.all(
       bindings.map(async ({ server }) => {
+        const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
+          operation: "tools:list",
+          serverName: server.name,
+          targetKind: "tool",
+          raw: params,
+          user: resolvedUser,
+          subject: resolvedSubject,
+          identity,
+        });
         const { user: userForServer } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
-        const result = await server.listTools(params, userForServer);
+        const result = await server.withProxyContext(context, () => server.listTools(params, userForServer));
         const tools = this.groups.length > 0
           ? filterToolsByGroupPolicies(result.tools, server.name, userGroups)
           : this.globalPolicy ? filterToolsByPolicy(result.tools, server.name, this.globalPolicy) : result.tools;

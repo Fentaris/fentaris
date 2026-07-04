@@ -41,7 +41,7 @@
 
 ## 5. Target-Aware MCP Dispatch
 
-- [ ] 5.1 Make proxy-context-aware transport execution an explicit contract available to every MCP capability operation.
+- [x] 5.1 Make proxy-context-aware transport execution an explicit contract available to every MCP capability operation.
 - [ ] 5.2 Add a target-aware dispatcher that invokes the configured transport for cloud placement and the edge transport for edge placement without replacing the catalog server.
 - [ ] 5.3 Compile and validate cloud launch recipes, rejecting unresolved edge-only inputs before process startup or dispatch.
 - [ ] 5.4 Define normalized edge MCP request/result/error/cancellation envelopes for tools, resources, templates, prompts, completion, and ping.

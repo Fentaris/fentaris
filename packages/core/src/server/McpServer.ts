@@ -79,10 +79,6 @@ type UserAwareTransport = FentarisTransport & {
   withUser(user: UserContext): FentarisTransport;
 };
 
-type ProxyContextAwareTransport = FentarisTransport & {
-  withProxyContext<T>(context: ProxyContext, run: () => Promise<T>): Promise<T>;
-};
-
 /**
  * MCP server wrapper with optional per-user env injection.
  * @pk
@@ -226,7 +222,7 @@ export class McpServer {
    */
   async withProxyContext<T>(context: ProxyContext, run: () => Promise<T>): Promise<T> {
     const transport = this.transportFor(context.user);
-    if (!isProxyContextAwareTransport(transport)) {
+    if (!transport.withProxyContext) {
       return run();
     }
 
@@ -365,10 +361,6 @@ function isEnvAwareTransport(transport: FentarisTransport): transport is EnvAwar
 
 function isUserAwareTransport(transport: FentarisTransport): transport is UserAwareTransport {
   return "withUser" in transport && typeof transport.withUser === "function";
-}
-
-function isProxyContextAwareTransport(transport: FentarisTransport): transport is ProxyContextAwareTransport {
-  return "withProxyContext" in transport && typeof transport.withProxyContext === "function";
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {
