@@ -60,13 +60,14 @@ export {
   LocalSetupManager,
   TerminalSetupProvider,
 } from "./setup.js";
-export { EdgeWorkloadSupervisor } from "./supervisor.js";
+export { EdgeWorkloadSupervisor, ExecutableAllowlistPolicy } from "./supervisor.js";
 export type {
   DeploymentReconcileResult,
   EdgeWorkload,
   EdgeWorkloadFactory,
   EdgeWorkloadPolicy,
   EdgeWorkloadSupervisorOptions,
+  ExecutableAllowlistPolicyOptions,
   LocalMcpClient,
   LocalMcpCapabilityManifest,
   SupervisedDesiredDeployment,

@@ -102,28 +102,28 @@
 
 ## 11. Observability, Health, and Security Hardening
 
-- [ ] 11.1 Add normalized edge error codes for placement ambiguity, unauthorized target, setup required, edge unavailable, capacity, protocol, workload, and grant failures.
-- [ ] 11.2 Emit structured events for target resolution, session binding, connection generations, desired-state reconciliation, setup transitions, workload lifecycle, request duration, timeout, cancellation, and failure.
-- [ ] 11.3 Add health contexts and built-in checks for edge gateway, target resolution, device/pool availability, deployment readiness, and capability cache age.
-- [ ] 11.4 Add centralized redaction for device credentials, local paths, secrets, environment values, authorization fields, and edge protocol payloads.
-- [ ] 11.5 Add configurable executable/package allowlists and require explicit local consent for new recipe digests.
-- [ ] 11.6 Add adversarial tests for cross-tenant routing, cross-user routing, session fixation, stale connection takeover, recipe tampering, secret/path leakage, and unauthorized process launch.
+- [x] 11.1 Add normalized edge error codes for placement ambiguity, unauthorized target, setup required, edge unavailable, capacity, protocol, workload, and grant failures.
+- [x] 11.2 Emit structured events for target resolution, session binding, connection generations, desired-state reconciliation, setup transitions, workload lifecycle, request duration, timeout, cancellation, and failure.
+- [x] 11.3 Add health contexts and built-in checks for edge gateway, target resolution, device/pool availability, deployment readiness, and capability cache age.
+- [x] 11.4 Add centralized redaction for device credentials, local paths, secrets, environment values, authorization fields, and edge protocol payloads.
+- [x] 11.5 Add configurable executable/package allowlists and require explicit local consent for new recipe digests.
+- [x] 11.6 Add adversarial tests for cross-tenant routing, cross-user routing, session fixation, stale connection takeover, recipe tampering, secret/path leakage, and unauthorized process launch.
 
 ## 12. End-to-End Verification
 
-- [ ] 12.1 Add a fixture MCP requiring a runtime folder input and exposing tool, resource, prompt, and completion capabilities.
-- [ ] 12.2 Add an end-to-end test from authenticated downstream MCP client through Fentaris, edge gateway, agent, local fixture MCP, and back.
-- [ ] 12.3 Verify a cloud-hosted client can operate on the explicitly granted filesystem of a remote edge device.
-- [ ] 12.4 Verify different users resolve the same MCP namespace to different personal devices without cross-device data access.
-- [ ] 12.5 Verify group and user placement precedence, shared pools, ambiguous group rejection, edge disconnect, reconnect, cancellation, and session cleanup end to end.
-- [ ] 12.6 Run focused core and edge tests, repository typecheck, lint, full recursive test suite, and production build.
+- [x] 12.1 Add a fixture MCP requiring a runtime folder input and exposing tool, resource, prompt, and completion capabilities.
+- [x] 12.2 Add an end-to-end test from authenticated downstream MCP client through Fentaris, edge gateway, agent, local fixture MCP, and back.
+- [x] 12.3 Verify a cloud-hosted client can operate on the explicitly granted filesystem of a remote edge device.
+- [x] 12.4 Verify different users resolve the same MCP namespace to different personal devices without cross-device data access.
+- [x] 12.5 Verify group and user placement precedence, shared pools, ambiguous group rejection, edge disconnect, reconnect, cancellation, and session cleanup end to end.
+- [x] 12.6 Run focused core and edge tests, repository typecheck, lint, full recursive test suite, and production build.
 
 ## 13. Documentation and Release
 
-- [ ] 13.1 Document the definition/setup/target/placement model and explain why target bindings do not grant MCP access.
-- [ ] 13.2 Add reference documentation for `app.target`, `edge(...)`, runtime inputs, setup fields, `.target(...)`, `app.user(...)`, stores, gateway adapters, and edge errors/events.
-- [ ] 13.3 Add an onboarding guide covering edge installation, login, device selection, local consent, status, revocation, and troubleshooting.
-- [ ] 13.4 Add examples for a personal filesystem edge, group-scoped personal devices, a shared worker pool, and cloud fallback.
-- [ ] 13.5 Document managed multi-instance adapter requirements, protocol/version compatibility, security boundaries, and single-process reference limitations.
-- [ ] 13.6 Regenerate typed API reference and verify documentation links, snippets, commands, and configuration names.
-- [ ] 13.7 Add a minor Changeset for the additive `@fentaris/core` APIs and new `@fentaris/edge` package.
+- [x] 13.1 Document the definition/setup/target/placement model and explain why target bindings do not grant MCP access.
+- [x] 13.2 Add reference documentation for `app.target`, `edge(...)`, runtime inputs, setup fields, `.target(...)`, `app.user(...)`, stores, gateway adapters, and edge errors/events.
+- [x] 13.3 Add an onboarding guide covering edge installation, login, device selection, local consent, status, revocation, and troubleshooting.
+- [x] 13.4 Add examples for a personal filesystem edge, group-scoped personal devices, a shared worker pool, and cloud fallback.
+- [x] 13.5 Document managed multi-instance adapter requirements, protocol/version compatibility, security boundaries, and single-process reference limitations.
+- [x] 13.6 Regenerate typed API reference and verify documentation links, snippets, commands, and configuration names.
+- [x] 13.7 Add a minor Changeset for the additive `@fentaris/core` APIs and new `@fentaris/edge` package.

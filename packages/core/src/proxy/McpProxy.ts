@@ -100,6 +100,7 @@ import {
   EdgeSessionPinner,
   type DeviceResolver,
   type EdgeCapabilityCache,
+  type EdgeTelemetry,
   type ExecutionTarget,
   type PlacementBindingModel,
   type PlacementResolution,
@@ -286,6 +287,8 @@ export type EdgeRuntimeOptions = {
   transport?: FentarisTransport;
   /** Validated per-deployment manifest cache used by edge discovery. @pk */
   capabilityCache?: EdgeCapabilityCache;
+  /** Structured, redacted edge lifecycle telemetry. @pk */
+  telemetry?: EdgeTelemetry;
 };
 
 /**

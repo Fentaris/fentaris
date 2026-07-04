@@ -445,6 +445,7 @@ export {
   EdgeTransport,
   EdgeWebSocketGateway,
   EdgeCapabilityCache,
+  EdgeTelemetry,
   EDGE_MCP_ENVELOPE_VERSION,
   EDGE_PROTOCOL_VERSION,
   InMemoryEdgeCapabilityManifestStore,

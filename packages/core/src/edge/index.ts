@@ -204,6 +204,19 @@ export {
   EdgeCapabilityCache,
   InMemoryEdgeCapabilityCacheStore,
 } from "./capabilityCache.js";
+
+export {
+  EdgeTelemetry,
+  edgeHealth,
+  redactEdgeProtocolValue,
+} from "./observability.js";
+export type {
+  EdgeHealthOptions,
+  EdgeHealthProbeResult,
+  EdgeRuntimeEvent,
+  EdgeRuntimeEventName,
+  EdgeTelemetrySink,
+} from "./observability.js";
 export type {
   EdgeCapabilityCacheStore,
   EdgeCapabilityChangeListener,
