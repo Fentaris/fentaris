@@ -99,6 +99,7 @@ import {
   PlacementResolver,
   EdgeSessionPinner,
   type DeviceResolver,
+  type EdgeCapabilityCache,
   type ExecutionTarget,
   type PlacementBindingModel,
   type PlacementResolution,
@@ -283,6 +284,8 @@ export type EdgeRuntimeOptions = {
   sessionBindingListener?: SessionBindingListener;
   /** Virtual edge transport used after an edge target has been pinned. @pk */
   transport?: FentarisTransport;
+  /** Validated per-deployment manifest cache used by edge discovery. @pk */
+  capabilityCache?: EdgeCapabilityCache;
 };
 
 /**
@@ -808,6 +811,21 @@ export class McpProxy {
         deploymentId: server.name,
       };
       return server.withProxyContext(context, cloud);
+    }
+
+    if (this.edgeOptions?.capabilityCache && isDiscoveryOperation(context.operation)) {
+      const tenantId = metadataString(metadata, "tenantId")
+        ?? (typeof context.subject?.metadata?.tenantId === "string" ? context.subject.metadata.tenantId : undefined)
+        ?? "default";
+      context.execution = {
+        kind: "edge-cache",
+        targetName: placement.targetName,
+        deploymentId: server.name,
+        tenantId,
+      };
+      const discovery = this.edgeOptions.capabilityCache.discoveryTransport(tenantId, server.name);
+      const run = () => edge(discovery);
+      return discovery.withProxyContext ? discovery.withProxyContext(context, run) : run();
     }
 
     const sessionId = context.transport.sessionId;
@@ -3625,6 +3643,13 @@ function metadataString(metadata: Record<string, unknown> | undefined, key: stri
 function metadataNumber(metadata: Record<string, unknown> | undefined, key: string): number | undefined {
   const value = metadata?.[key];
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
+}
+
+function isDiscoveryOperation(operation: ProxyContext["operation"]): boolean {
+  return operation === "tools:list"
+    || operation === "resources:list"
+    || operation === "resource-templates:list"
+    || operation === "prompts:list";
 }
 
 function serverNameFromProxyTool(toolName: string): string {

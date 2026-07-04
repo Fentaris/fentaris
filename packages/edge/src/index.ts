@@ -68,6 +68,7 @@ export type {
   EdgeWorkloadPolicy,
   EdgeWorkloadSupervisorOptions,
   LocalMcpClient,
+  LocalMcpCapabilityManifest,
   SupervisedDesiredDeployment,
 } from "./supervisor.js";
 export type {

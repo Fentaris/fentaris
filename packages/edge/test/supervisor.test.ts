@@ -51,6 +51,15 @@ class ClientStub implements LocalMcpClient {
   readonly calls: EdgeMcpOperation[] = [];
   result: unknown = { content: [{ type: "text", text: "ok" }] };
   waitForAbort = false;
+  async capabilityManifest() {
+    return {
+      tools: [{ name: "status" }],
+      resources: [],
+      resourceTemplates: [],
+      prompts: [],
+      supportsCompletion: false,
+    };
+  }
   async request(operation: EdgeMcpOperation, _params: unknown, signal: AbortSignal): Promise<unknown> {
     this.calls.push(operation);
     if (!this.waitForAbort) return this.result;
@@ -111,6 +120,7 @@ function supervisor(options: {
   idleLeaseMs?: number;
   maxOutputBytes?: number;
   allow?: boolean;
+  reportCapabilityManifest?: ReturnType<typeof vi.fn>;
 } = {}) {
   const setup = options.setup ?? new SetupStub();
   const created = factory();
@@ -125,13 +135,15 @@ function supervisor(options: {
     idleLeaseMs: options.idleLeaseMs,
     maxOutputBytes: options.maxOutputBytes,
     executablePolicy: options.allow === undefined ? undefined : { allow: async () => options.allow! },
+    reportCapabilityManifest: options.reportCapabilityManifest,
   });
   return { instance, setup, created };
 }
 
 describe("EdgeWorkloadSupervisor", () => {
   it("reconciles desired deployments and creates one idempotent workload per deployment/session", async () => {
-    const fixture = supervisor();
+    const reportCapabilityManifest = vi.fn();
+    const fixture = supervisor({ reportCapabilityManifest });
     await expect(fixture.instance.reconcile([{ requirement: requirement() }])).resolves.toEqual([
       { deploymentId: "fixture", status: "ready" },
     ]);
@@ -143,6 +155,11 @@ describe("EdgeWorkloadSupervisor", () => {
     expect(first.kind).toBe("mcp.result");
     expect(duplicate.kind).toBe("mcp.result");
     expect(fixture.created.edgeFactory.start).toHaveBeenCalledOnce();
+    expect(reportCapabilityManifest).toHaveBeenCalledWith(
+      "fixture",
+      requirement().recipe.digest,
+      expect.objectContaining({ tools: [{ name: "status" }] }),
+    );
 
     await fixture.instance.handleRequest(request({ requestId: "three", sessionId: "session-2" }));
     expect(fixture.created.edgeFactory.start).toHaveBeenCalledTimes(2);

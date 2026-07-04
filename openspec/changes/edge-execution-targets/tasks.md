@@ -93,12 +93,12 @@
 
 ## 10. Capability Discovery and Readiness
 
-- [ ] 10.1 Capture local MCP capability manifests after successful initialization and report them with deployment and recipe digests.
-- [ ] 10.2 Validate and cache capability manifests through the control-plane store without creating per-device MCP names.
-- [ ] 10.3 Return no edge capabilities and actionable readiness diagnostics before the first successful manifest.
-- [ ] 10.4 Preserve cached discovery names while a previously ready edge is offline and fail attempted operations with `EDGE_UNAVAILABLE`.
-- [ ] 10.5 Invalidate manifests when recipe or relevant capability state changes and integrate with existing list-change notification seams where available.
-- [ ] 10.6 Add discovery tests for initial setup, ready devices, offline cached devices, recipe changes, two subjects on different devices, and capability name stability.
+- [x] 10.1 Capture local MCP capability manifests after successful initialization and report them with deployment and recipe digests.
+- [x] 10.2 Validate and cache capability manifests through the control-plane store without creating per-device MCP names.
+- [x] 10.3 Return no edge capabilities and actionable readiness diagnostics before the first successful manifest.
+- [x] 10.4 Preserve cached discovery names while a previously ready edge is offline and fail attempted operations with `EDGE_UNAVAILABLE`.
+- [x] 10.5 Invalidate manifests when recipe or relevant capability state changes and integrate with existing list-change notification seams where available.
+- [x] 10.6 Add discovery tests for initial setup, ready devices, offline cached devices, recipe changes, two subjects on different devices, and capability name stability.
 
 ## 11. Observability, Health, and Security Hardening
 

@@ -17,6 +17,15 @@ import {
 
 export interface LocalMcpClient {
   request(operation: EdgeMcpOperation, params: unknown, signal: AbortSignal): Promise<unknown>;
+  capabilityManifest?(): Promise<LocalMcpCapabilityManifest>;
+}
+
+export interface LocalMcpCapabilityManifest {
+  readonly tools: readonly unknown[];
+  readonly resources: readonly unknown[];
+  readonly resourceTemplates: readonly unknown[];
+  readonly prompts: readonly unknown[];
+  readonly supportsCompletion: boolean;
 }
 
 export interface EdgeWorkload {
@@ -47,6 +56,11 @@ export interface EdgeWorkloadSupervisorOptions {
   readonly shutdownTimeoutMs?: number;
   readonly idleLeaseMs?: number;
   readonly maxOutputBytes?: number;
+  readonly reportCapabilityManifest?: (
+    deploymentId: string,
+    recipeDigest: string,
+    manifest: LocalMcpCapabilityManifest,
+  ) => void | Promise<void>;
   readonly now?: () => number;
 }
 
@@ -270,6 +284,10 @@ export class EdgeWorkloadSupervisor {
       () => startup.abort(),
       "Edge workload startup timed out",
     );
+    if (workload.client.capabilityManifest && this.options.reportCapabilityManifest) {
+      const manifest = await workload.client.capabilityManifest();
+      await this.options.reportCapabilityManifest(deploymentId, plan.recipeDigest, manifest);
+    }
     const record: WorkloadRecord = {
       key,
       deploymentId,

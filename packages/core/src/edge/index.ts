@@ -199,6 +199,17 @@ export type {
   EdgeGatewaySocket,
   EdgeWebSocketGatewayOptions,
 } from "./gateway.js";
+
+export {
+  EdgeCapabilityCache,
+  InMemoryEdgeCapabilityCacheStore,
+} from "./capabilityCache.js";
+export type {
+  EdgeCapabilityCacheStore,
+  EdgeCapabilityChangeListener,
+  EdgeCapabilityManifest,
+  EdgeDiscoveryState,
+} from "./capabilityCache.js";
 export type {
   EdgeMcpCancelEnvelope,
   EdgeMcpErrorEnvelope,

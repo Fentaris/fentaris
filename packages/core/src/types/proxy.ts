@@ -71,6 +71,12 @@ export type ProxyExecutionContext =
       deploymentId: string;
     }
   | {
+      kind: "edge-cache";
+      targetName: string;
+      deploymentId: string;
+      tenantId: string;
+    }
+  | {
       kind: "edge";
       targetName: string;
       deploymentId: string;
