@@ -1,7 +1,7 @@
 import {
   EDGE_PROTOCOL_VERSION,
   edgeError,
-  parseLaunchRecipe,
+  validateLaunchRecipe,
   validateSetupSchema,
   type EdgeAgentMessage,
   type EdgeCapabilityManifestMessage,
@@ -50,6 +50,7 @@ export interface EdgeAgentRuntimeOptions {
 export class EdgeAgentRuntime implements EdgeConnectionRuntime {
   private connection?: EdgeRuntimeConnection;
   private desiredVersion = 0;
+  private reconcileQueue = Promise.resolve();
   private statuses = new Map<string, "ready" | "blocked">();
 
   constructor(private readonly options: EdgeAgentRuntimeOptions) {}
@@ -62,7 +63,7 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
     this.assertTrustedRoute(message);
     switch (message.kind) {
       case "edge.desired-state":
-        await this.reconcile(message);
+        await this.enqueueReconcile(message);
         return;
       case "mcp.request":
         await this.send(await this.options.supervisor.handleRequest(message));
@@ -82,6 +83,7 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
     await this.options.supervisor.shutdown();
     await this.options.setup.clear();
     this.desiredVersion = 0;
+    this.reconcileQueue = Promise.resolve();
     this.statuses.clear();
   }
 
@@ -123,7 +125,7 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
       });
     }
     const deployments = message.deployments.map((deployment) => {
-      const recipe = parseLaunchRecipe(JSON.stringify(deployment.recipe));
+      const recipe = validateLaunchRecipe(deployment.recipe);
       const diagnostics = validateSetupSchema(deployment.setupSchema)
         .filter((diagnostic) => diagnostic.severity === "error");
       if (diagnostics.length > 0) {
@@ -182,6 +184,12 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
       status: blockedDeploymentIds.length === 0 ? "applied" : "blocked",
       ...(blockedDeploymentIds.length > 0 ? { blockedDeploymentIds } : {}),
     });
+  }
+
+  private enqueueReconcile(message: EdgeDesiredStateMessage): Promise<void> {
+    const pending = this.reconcileQueue.then(() => this.reconcile(message));
+    this.reconcileQueue = pending.catch(() => undefined);
+    return pending;
   }
 
   private assertTrustedRoute(

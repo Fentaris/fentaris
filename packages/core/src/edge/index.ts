@@ -94,6 +94,7 @@ export {
   LAUNCH_RECIPE_VERSION,
   parseLaunchRecipe,
   serializeLaunchRecipe,
+  validateLaunchRecipe,
 } from "./recipe.js";
 export type { LaunchRecipe } from "./recipe.js";
 

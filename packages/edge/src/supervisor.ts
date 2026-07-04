@@ -180,7 +180,7 @@ export class EdgeWorkloadSupervisor {
           () => controller.abort(),
           "Edge MCP operation timed out",
         );
-        const bytes = Buffer.byteLength(JSON.stringify(result));
+        const bytes = jsonByteLength(result);
         if (bytes > this.limits.maxOutputBytes) {
           throw edgeError("EDGE_CAPACITY", "Edge MCP result exceeds the configured output limit.", {
             details: { bytes, limit: this.limits.maxOutputBytes },
@@ -381,6 +381,67 @@ function errorEnvelope(request: EdgeMcpRequestEnvelope, error: unknown): EdgeMcp
       ...(isEdgeError(error) && error.details ? { details: error.details } : {}),
     },
   };
+}
+
+function jsonByteLength(value: unknown): number {
+  const bytes = jsonValueByteLength(value, "", new Set(), "top");
+  if (bytes === undefined) {
+    throw new TypeError("Edge MCP result is not JSON serializable.");
+  }
+  return bytes;
+}
+
+function jsonValueByteLength(
+  value: unknown,
+  key: string,
+  seen: Set<object>,
+  position: "top" | "object" | "array",
+): number | undefined {
+  if (value && typeof value === "object" && "toJSON" in value && typeof value.toJSON === "function") {
+    value = value.toJSON(key);
+  }
+  switch (typeof value) {
+    case "string":
+      return Buffer.byteLength(JSON.stringify(value));
+    case "number":
+      return Number.isFinite(value) ? Buffer.byteLength(JSON.stringify(value)) : 4;
+    case "boolean":
+      return value ? 4 : 5;
+    case "undefined":
+    case "function":
+    case "symbol":
+      return position === "array" ? 4 : undefined;
+    case "bigint":
+      throw new TypeError("Edge MCP result is not JSON serializable.");
+    case "object":
+      if (value === null) return 4;
+      if (seen.has(value)) {
+        throw new TypeError("Edge MCP result contains a circular reference.");
+      }
+      seen.add(value);
+      try {
+        if (Array.isArray(value)) {
+          let bytes = 2;
+          for (let index = 0; index < value.length; index += 1) {
+            if (index > 0) bytes += 1;
+            bytes += jsonValueByteLength(value[index], String(index), seen, "array") ?? 4;
+          }
+          return bytes;
+        }
+        let bytes = 2;
+        let first = true;
+        for (const [childKey, child] of Object.entries(value as Record<string, unknown>)) {
+          const childBytes = jsonValueByteLength(child, childKey, seen, "object");
+          if (childBytes === undefined) continue;
+          if (!first) bytes += 1;
+          bytes += Buffer.byteLength(JSON.stringify(childKey)) + 1 + childBytes;
+          first = false;
+        }
+        return bytes;
+      } finally {
+        seen.delete(value);
+      }
+  }
 }
 
 async function withTimeout<T>(

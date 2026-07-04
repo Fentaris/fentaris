@@ -116,10 +116,15 @@ export function parseLaunchRecipe(data: string): LaunchRecipe {
   } catch {
     throw edgeError("EDGE_PROTOCOL", "malformed launch recipe payload");
   }
-  if (!parsed || typeof parsed !== "object") {
+  return validateLaunchRecipe(parsed);
+}
+
+/** Validate an already-decoded launch recipe object. @pk */
+export function validateLaunchRecipe(value: unknown): LaunchRecipe {
+  if (!value || typeof value !== "object") {
     throw edgeError("EDGE_PROTOCOL", "launch recipe payload is not an object");
   }
-  const candidate = parsed as Record<string, unknown>;
+  const candidate = value as Record<string, unknown>;
   if (candidate.version !== LAUNCH_RECIPE_VERSION) {
     throw edgeError("EDGE_PROTOCOL", `unsupported launch recipe version ${String(candidate.version)}`);
   }

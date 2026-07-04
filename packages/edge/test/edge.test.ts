@@ -26,6 +26,7 @@ import {
 
 class FakeWebSocket extends EventTarget {
   readyState = WebSocket.CONNECTING;
+  throwOnClose = false;
   readonly sent: string[] = [];
   send(frame: string) { this.sent.push(frame); }
   open() {
@@ -36,6 +37,7 @@ class FakeWebSocket extends EventTarget {
     this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(message) }));
   }
   close() {
+    if (this.throwOnClose) throw new Error("close failed");
     if (this.readyState === WebSocket.CLOSED) return;
     this.readyState = WebSocket.CLOSED;
     this.dispatchEvent(new Event("close"));
@@ -317,6 +319,79 @@ describe("edge agent and CLI", () => {
     await vi.waitFor(() => expect(runtime.handle).toHaveBeenCalledOnce());
     await connection.close();
     expect(runtime.disconnected).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the WebSocket frame queue resolved after a frame handler failure", async () => {
+    const keyPair = generateKeyPairSync("ed25519", {
+      publicKeyEncoding: { type: "spki", format: "pem" },
+      privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    });
+    const socket = new FakeWebSocket();
+    const runtime = {
+      connected: vi.fn(),
+      handle: vi.fn()
+        .mockRejectedValueOnce(new Error("boom"))
+        .mockResolvedValueOnce(undefined),
+      disconnected: vi.fn(),
+      summary: async () => ({ desiredDeployments: 0, readyDeployments: 0, blockedDeployments: 0 }),
+    };
+    const client = new WebSocketEdgeConnectionClient(() => socket as unknown as WebSocket);
+    const pending = client.connect({
+      gatewayUrl: "ws://127.0.0.1:4001/edge",
+      edgeNodeId: "node-1",
+      tenantId: "tenant-1",
+      deviceCredential: "credential",
+      accessToken: "token",
+      publicKey: keyPair.publicKey,
+      privateKey: keyPair.privateKey,
+      runtime,
+    });
+    socket.open();
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(1));
+    socket.receive({
+      version: EDGE_PROTOCOL_VERSION,
+      kind: "edge.hello.ack",
+      tenantId: "tenant-1",
+      edgeNodeId: "node-1",
+      connectionGeneration: 2,
+      protocolVersion: EDGE_PROTOCOL_VERSION,
+      serverTime: 100,
+    });
+    await pending;
+
+    const schema = createSetupSchema({});
+    const recipe = compileLaunchRecipe({ command: "fixture" }, schema);
+    socket.throwOnClose = true;
+    socket.receive({
+      version: EDGE_PROTOCOL_VERSION,
+      kind: "edge.desired-state",
+      tenantId: "tenant-1",
+      edgeNodeId: "node-1",
+      connectionGeneration: 2,
+      desiredVersion: 1,
+      deployments: [{
+        deploymentId: "first",
+        serverName: "first",
+        recipe,
+        setupSchema: schema,
+      }],
+    });
+    socket.receive({
+      version: EDGE_PROTOCOL_VERSION,
+      kind: "edge.desired-state",
+      tenantId: "tenant-1",
+      edgeNodeId: "node-1",
+      connectionGeneration: 2,
+      desiredVersion: 2,
+      deployments: [{
+        deploymentId: "second",
+        serverName: "second",
+        recipe,
+        setupSchema: schema,
+      }],
+    });
+
+    await vi.waitFor(() => expect(runtime.handle).toHaveBeenCalledTimes(2));
   });
 });
 

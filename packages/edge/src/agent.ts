@@ -168,7 +168,11 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
     const authenticated = new Promise<EdgeHelloAckMessage>((resolve, reject) => {
       const fail = (error: unknown) => {
         reject(error);
-        socket.close(4403, "edge protocol rejected");
+        try {
+          socket.close(4403, "edge protocol rejected");
+        } catch {
+          void disconnectRuntime();
+        }
       };
       socket.addEventListener("error", () => {
         if (!ack) reject(new Error("Unable to establish the edge gateway connection"));
@@ -189,50 +193,54 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
       }, { once: true });
       socket.addEventListener("message", (event) => {
         processing = processing.then(async () => {
-          const message = parseEdgeProtocolMessage(String(event.data));
-          if (!ack) {
-            if (message.kind !== "edge.hello.ack") {
-              throw edgeError("EDGE_PROTOCOL", "Unexpected edge gateway handshake response.");
+          try {
+            const message = parseEdgeProtocolMessage(String(event.data));
+            if (!ack) {
+              if (message.kind !== "edge.hello.ack") {
+                throw edgeError("EDGE_PROTOCOL", "Unexpected edge gateway handshake response.");
+              }
+              if (message.tenantId !== input.tenantId || message.edgeNodeId !== input.edgeNodeId) {
+                throw edgeError("EDGE_PROTOCOL", "Edge gateway acknowledged a different device identity.");
+              }
+              ack = message;
+              await input.runtime?.connected({
+                claims: {
+                  tenantId: message.tenantId,
+                  edgeNodeId: message.edgeNodeId,
+                  connectionGeneration: message.connectionGeneration,
+                },
+                send,
+              });
+              heartbeat = setInterval(() => {
+                if (!ack || socket.readyState !== WebSocket.OPEN) return;
+                void send({
+                  version: EDGE_PROTOCOL_VERSION,
+                  kind: "edge.heartbeat",
+                  tenantId: ack.tenantId,
+                  edgeNodeId: ack.edgeNodeId,
+                  connectionGeneration: ack.connectionGeneration,
+                  sentAt: Date.now(),
+                }).catch(() => socket.close(1011, "edge heartbeat failed"));
+              }, 10_000);
+              heartbeat.unref?.();
+              resolve(message);
+              return;
             }
-            if (message.tenantId !== input.tenantId || message.edgeNodeId !== input.edgeNodeId) {
-              throw edgeError("EDGE_PROTOCOL", "Edge gateway acknowledged a different device identity.");
+            if (message.kind === "edge.hello.ack" || message.kind === "edge.hello") {
+              throw edgeError("EDGE_PROTOCOL", "Unexpected edge handshake frame after authentication.");
             }
-            ack = message;
-            await input.runtime?.connected({
-              claims: {
-                tenantId: message.tenantId,
-                edgeNodeId: message.edgeNodeId,
-                connectionGeneration: message.connectionGeneration,
-              },
-              send,
-            });
-            heartbeat = setInterval(() => {
-              if (!ack || socket.readyState !== WebSocket.OPEN) return;
-              void send({
-                version: EDGE_PROTOCOL_VERSION,
-                kind: "edge.heartbeat",
-                tenantId: ack.tenantId,
-                edgeNodeId: ack.edgeNodeId,
-                connectionGeneration: ack.connectionGeneration,
-                sentAt: Date.now(),
-              }).catch(() => socket.close(1011, "edge heartbeat failed"));
-            }, 10_000);
-            heartbeat.unref?.();
-            resolve(message);
-            return;
+            if (
+              message.kind !== "edge.desired-state"
+              && message.kind !== "mcp.request"
+              && message.kind !== "mcp.cancel"
+            ) {
+              throw edgeError("EDGE_PROTOCOL", "Unexpected message kind from the edge control plane.");
+            }
+            await input.runtime?.handle(message as Exclude<EdgeControlPlaneMessage, { kind: "edge.hello.ack" }>);
+          } catch (error) {
+            fail(error);
           }
-          if (message.kind === "edge.hello.ack" || message.kind === "edge.hello") {
-            throw edgeError("EDGE_PROTOCOL", "Unexpected edge handshake frame after authentication.");
-          }
-          if (
-            message.kind !== "edge.desired-state"
-            && message.kind !== "mcp.request"
-            && message.kind !== "mcp.cancel"
-          ) {
-            throw edgeError("EDGE_PROTOCOL", "Unexpected message kind from the edge control plane.");
-          }
-          await input.runtime?.handle(message as Exclude<EdgeControlPlaneMessage, { kind: "edge.hello.ack" }>);
-        }).catch(fail);
+        });
       });
       socket.addEventListener("close", () => {
         void disconnectRuntime();

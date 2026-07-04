@@ -439,6 +439,7 @@ export {
   isEdgeError,
   isRuntimeValueToken,
   parseLaunchRecipe,
+  validateLaunchRecipe,
   PlacementResolver,
   detectStaticPlacementOverlaps,
   EdgeSessionPinner,

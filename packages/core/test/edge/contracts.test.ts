@@ -16,6 +16,7 @@ import {
   parseLaunchRecipe,
   runtime,
   serializeLaunchRecipe,
+  validateLaunchRecipe,
   validateDeviceSelector,
   validateSetupSchema,
 } from "../../src/index.js";
@@ -205,6 +206,7 @@ describe("launch recipe compilation and serialization", () => {
     const parsed = parseLaunchRecipe(serializeLaunchRecipe(recipe));
     expect(parsed).toEqual(recipe);
     expect(parsed.digest).toBe(recipe.digest);
+    expect(validateLaunchRecipe(recipe)).toEqual(recipe);
   });
 
   it("collectRecipeRuntimeRefs deduplicates and sorts", () => {
@@ -218,6 +220,7 @@ describe("launch recipe compilation and serialization", () => {
     const tampered = JSON.parse(serializeLaunchRecipe(recipe)) as LaunchRecipe;
     tampered.command = "evil";
     expect(() => parseLaunchRecipe(JSON.stringify(tampered))).toThrow();
+    expect(() => validateLaunchRecipe(tampered)).toThrow();
   });
 
   it("parseLaunchRecipe rejects unsupported versions and malformed payloads", () => {

@@ -5,6 +5,7 @@ import {
   compileLaunchRecipe,
   createSetupSchema,
   type EdgeAgentMessage,
+  type EdgeDesiredStateMessage,
   type EdgeMcpRequestEnvelope,
 } from "@fentaris/core";
 import {
@@ -151,5 +152,78 @@ describe("EdgeAgentRuntime", () => {
     })).rejects.toMatchObject({ code: "EDGE_PROTOCOL" });
     await runtime.disconnected();
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("serializes concurrent desired-state reconciliation", async () => {
+    const schema = createSetupSchema({});
+    const recipe = compileLaunchRecipe({ command: "fixture" }, schema);
+    const messages = (desiredVersion: number, deploymentId: string): EdgeDesiredStateMessage => ({
+      version: EDGE_PROTOCOL_VERSION,
+      kind: "edge.desired-state",
+      tenantId: "tenant-1",
+      edgeNodeId: "node-1",
+      connectionGeneration: 4,
+      desiredVersion,
+      deployments: [{
+        deploymentId,
+        serverName: deploymentId,
+        recipe,
+        setupSchema: schema,
+      }],
+    });
+    let releaseFirst!: () => void;
+    const supervisor = {
+      reconcile: vi.fn(async (deployments: Parameters<EdgeWorkloadSupervisor["reconcile"]>[0]) => {
+        const desiredVersion = deployments[0]?.requirement.desiredStateVersion;
+        if (desiredVersion === 2) {
+          await new Promise<void>((resolve) => {
+            releaseFirst = resolve;
+          });
+        }
+        return deployments.map(({ requirement }) => ({
+          deploymentId: requirement.deploymentId,
+          status: "ready" as const,
+        }));
+      }),
+      handleRequest: vi.fn(),
+      handleCancel: vi.fn(),
+      shutdown: vi.fn(),
+    };
+    const setup = {
+      status: vi.fn(async () => undefined),
+      clear: vi.fn(),
+    };
+    const sent: EdgeAgentMessage[] = [];
+    const runtime = new EdgeAgentRuntime({
+      setup: setup as unknown as LocalSetupManager,
+      supervisor: supervisor as unknown as EdgeWorkloadSupervisor,
+    });
+    runtime.connected({
+      claims: {
+        tenantId: "tenant-1",
+        edgeNodeId: "node-1",
+        connectionGeneration: 4,
+      },
+      send: async (message) => { sent.push(message); },
+    });
+
+    const first = runtime.handle(messages(2, "old"));
+    await vi.waitFor(() => expect(supervisor.reconcile).toHaveBeenCalledOnce());
+    const second = runtime.handle(messages(3, "new"));
+    await Promise.resolve();
+    expect(supervisor.reconcile).toHaveBeenCalledOnce();
+    releaseFirst();
+    await Promise.all([first, second]);
+
+    expect(supervisor.reconcile).toHaveBeenCalledTimes(2);
+    expect(sent).toEqual([
+      expect.objectContaining({ kind: "edge.desired-state.ack", desiredVersion: 2 }),
+      expect.objectContaining({ kind: "edge.desired-state.ack", desiredVersion: 3 }),
+    ]);
+    expect(await runtime.summary()).toEqual({
+      desiredDeployments: 1,
+      readyDeployments: 1,
+      blockedDeployments: 0,
+    });
   });
 });
