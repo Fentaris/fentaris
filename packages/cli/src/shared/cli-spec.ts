@@ -123,6 +123,7 @@ export const cliSpec: CliCommandSpec = {
       options: [
         { name: "offline", description: "Skip checks that require local external services." },
         { name: "strict", description: "Treat warnings as failures." },
+        { name: "json", description: "Output project checks as JSON." },
         { name: "verbose", description: "List passed checks in addition to issues." },
         { name: "help", short: "h", description: "Print help" },
       ],

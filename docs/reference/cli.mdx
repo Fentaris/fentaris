@@ -109,12 +109,17 @@ Validate the project configuration and local files.
 
 ```bash theme={null}
 fentaris check
+fentaris check --offline --json
 ```
 
 Options:
 
 * `--offline` - skip network and runtime checks.
 * `--strict` - fail when warnings are present.
+* `--json` - print machine-readable project check results.
+* `--verbose` - list passed checks in human-readable output. This flag has no effect with `--json`.
+
+`--json` writes one JSON document with a `results` array. Each result includes its group, label, status, and detail, plus a hint or metadata when available. Exit codes remain unchanged: failures return `1`, and warnings return `1` when combined with `--strict`.
 
 <Tip>
   Use `fentaris check --offline` in fast local workflows or CI jobs without network access.
