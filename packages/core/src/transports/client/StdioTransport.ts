@@ -38,6 +38,13 @@ export type StdioTransportOptions = {
   command: string;
   args?: Array<string | RuntimeValueToken>;
   env?: Record<string, string | RuntimeValueToken>;
+  /**
+   * Explicit cloud-side resolutions for runtime references. These values are
+   * used only for local cloud process launch and are never serialized into an
+   * edge launch recipe.
+   * @pk
+   */
+  runtimeValues?: Record<string, string>;
   stderr?: "inherit" | "pipe" | "overlapped" | "ignore";
   clientName?: string;
   clientVersion?: string;
@@ -89,6 +96,12 @@ export class StdioTransport implements FentarisTransport {
       if (isRuntimeValueToken(value)) tokens.push(value);
     }
     return tokens;
+  }
+
+  /** Runtime references that have no explicit cloud-side value. @pk */
+  unresolvedCloudRuntimeRefs(): string[] {
+    const values = this.options.runtimeValues ?? {};
+    return [...new Set(this.runtimeValueTokens().map((token) => token.ref).filter((ref) => values[ref] === undefined))].sort();
   }
 
   /**
@@ -256,6 +269,10 @@ export class StdioTransport implements FentarisTransport {
       return value;
     }
     if (isRuntimeValueToken(value)) {
+      const resolved = this.options.runtimeValues?.[value.ref];
+      if (resolved !== undefined) {
+        return resolved;
+      }
       throw edgeError("EDGE_UNRESOLVED_RUNTIME_INPUT", `Stdio cloud launch cannot resolve ${describeRuntimeValueToken(value)}`, {
         details: { ref: value.ref },
       });

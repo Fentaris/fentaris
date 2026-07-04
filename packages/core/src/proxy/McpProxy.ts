@@ -90,6 +90,7 @@ import { resolveFentarisConfig } from "../config/resolve.js";
 import { LocalCapabilityRegistry } from "../local/declarations.js";
 import {
   createSetupSchema,
+  edgeError,
   validateSetupSchema,
   cloud as cloudTarget,
   detectStaticPlacementOverlaps,
@@ -126,6 +127,7 @@ import type {
   ToolCallHookFilter,
 } from "../types/middleware.js";
 import type { ProxyOperationResult } from "../types/mcp-operation.js";
+import type { FentarisTransport } from "../types/transport.js";
 import type { ErrorMapper, IdentityStrategy, Policy, PolicyDecision, RateLimiter, Registry } from "../types/policy.js";
 import type {
   ProxyContext,
@@ -279,6 +281,8 @@ export type EdgeRuntimeOptions = {
   sessionBindingExpiry?: SessionBindingExpiryOptions;
   /** Removal listener for session-target bindings. @pk */
   sessionBindingListener?: SessionBindingListener;
+  /** Virtual edge transport used after an edge target has been pinned. @pk */
+  transport?: FentarisTransport;
 };
 
 /**
@@ -760,9 +764,104 @@ export class McpProxy {
     const pinner = this.edgeSessionPinner();
     if (!pinner) {
       const placement = this.resolvePlacement(request);
+      if (placement.kind === "edge") {
+        throw edgeError("EDGE_UNAVAILABLE", "Edge placement requires a configured device resolver.", {
+          details: { targetName: placement.targetName },
+        });
+      }
       return { kind: "cloud", targetName: "cloud", placement };
     }
     return pinner.pin(request);
+  }
+
+  /**
+   * Dispatch an already-visible and already-authorized server operation to its
+   * cloud transport or pinned edge transport. Placement never participates in
+   * catalog visibility or policy decisions.
+   */
+  private async dispatchTargetOperation<T>(
+    server: McpServer,
+    context: ProxyContext,
+    cloud: () => Promise<T>,
+    edge: (transport: FentarisTransport) => Promise<T>,
+  ): Promise<T> {
+    const metadata = context.auth.metadata;
+    const groupIds = context.subject
+      ? (this.subjectIndex?.groupsFor(context.subject.id) ?? []).map((group) => group.id)
+      : [];
+    const placementRequest: PlacementRequest = {
+      serverName: server.name,
+      groupIds,
+      ...(context.subject?.id ?? context.user.id
+        ? { subjectId: context.subject?.id ?? context.user.id }
+        : {}),
+      ...(metadataString(metadata, "target") ?? metadataString(metadata, "requestedTarget")
+        ? { requestedTarget: metadataString(metadata, "target") ?? metadataString(metadata, "requestedTarget") }
+        : {}),
+    };
+    const placement = this.resolvePlacement(placementRequest);
+    if (placement.kind === "cloud") {
+      this.assertCloudLaunchReady(server);
+      context.execution = {
+        kind: "cloud",
+        targetName: placement.targetName,
+        deploymentId: server.name,
+      };
+      return server.withProxyContext(context, cloud);
+    }
+
+    const sessionId = context.transport.sessionId;
+    if (!sessionId) {
+      throw edgeError("EDGE_UNAVAILABLE", "Edge execution requires a downstream MCP session.", {
+        details: { targetName: placement.targetName, serverName: server.name },
+      });
+    }
+    const edgeTransport = this.edgeOptions?.transport;
+    if (!edgeTransport) {
+      throw edgeError("EDGE_UNAVAILABLE", "No edge transport is configured for the selected target.", {
+        details: { targetName: placement.targetName, serverName: server.name },
+      });
+    }
+    const pin = await this.pinSessionTarget({
+      ...placementRequest,
+      sessionId,
+      ...(metadataString(metadata, "requestedDeviceId")
+        ? { requestedDeviceId: metadataString(metadata, "requestedDeviceId") }
+        : {}),
+      ...(metadataString(metadata, "tenantId") ? { tenantId: metadataString(metadata, "tenantId") } : {}),
+      ...(metadataNumber(metadata, "connectionGeneration") !== undefined
+        ? { connectionGeneration: metadataNumber(metadata, "connectionGeneration") }
+        : {}),
+    });
+    if (pin.kind !== "edge") {
+      throw edgeError("EDGE_PROTOCOL", "Edge placement unexpectedly resolved to cloud during pinning.", {
+        details: { targetName: placement.targetName, serverName: server.name },
+      });
+    }
+    context.execution = {
+      kind: "edge",
+      targetName: pin.targetName,
+      deploymentId: server.name,
+      edgeNodeId: pin.binding.edgeNodeId,
+      connectionGeneration: pin.binding.connectionGeneration,
+      reused: pin.reused,
+    };
+    const run = () => edge(edgeTransport);
+    return edgeTransport.withProxyContext ? edgeTransport.withProxyContext(context, run) : run();
+  }
+
+  /** Compile and validate a cloud stdio recipe before dispatch can start it. */
+  private assertCloudLaunchReady(server: McpServer): void {
+    if (!(server.transport instanceof StdioTransport)) {
+      return;
+    }
+    const recipe = server.transport.toLaunchRecipe(this.setupSchemas.get(server.name));
+    const unresolved = server.transport.unresolvedCloudRuntimeRefs();
+    if (unresolved.length > 0) {
+      throw edgeError("EDGE_UNRESOLVED_RUNTIME_INPUT", `Cloud launch for "${server.name}" has unresolved runtime inputs.`, {
+        details: { serverName: server.name, refs: unresolved, recipeDigest: recipe.digest },
+      });
+    }
   }
 
   /** Remove every session-target binding for a downstream session. @pk */
@@ -1385,7 +1484,12 @@ export class McpProxy {
           identity,
         });
         const { user: userForServer } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
-        const result = await server.withProxyContext(context, () => server.listTools(params, userForServer));
+        const result = await this.dispatchTargetOperation(
+          server,
+          context,
+          () => server.listTools(params, userForServer),
+          (transport) => transport.listTools(params),
+        );
         const tools = this.groups.length > 0
           ? filterToolsByGroupPolicies(result.tools, server.name, userGroups)
           : this.globalPolicy ? filterToolsByPolicy(result.tools, server.name, this.globalPolicy) : result.tools;
@@ -1567,7 +1671,15 @@ export class McpProxy {
             return Promise.resolve(new ResponseController().deny(`Unknown MCP server "${serverName}"`));
           }
 
-          return server.withProxyContext(context, () => this.forwardToolCall(params, upstreamUser, server));
+          return this.dispatchTargetOperation(
+            server,
+            context,
+            () => this.forwardToolCall(params, upstreamUser, server),
+            (transport) => server.runIsolated(upstreamUser, () => transport.callTool({
+              ...params,
+              name: toolName,
+            })),
+          );
         }));
       const response = context.res.applyInjections(result);
       this.writeAutoLog("success", log, request, context, startedAt, response);
@@ -1697,7 +1809,12 @@ export class McpProxy {
           const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
           context.credentialSources = credentialSource ? [credentialSource] : undefined;
           context.credentials.sources = context.credentialSources ?? [];
-          const upstream = await server.withProxyContext(context, () => server.listResources(params, userForServer));
+          const upstream = await this.dispatchTargetOperation(
+            server,
+            context,
+            () => server.listResources(params, userForServer),
+            (transport) => transport.listResources?.(params) ?? Promise.resolve({ resources: [] }),
+          );
           return {
             resources: upstream.resources.filter((resource) =>
               isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
@@ -1764,7 +1881,17 @@ export class McpProxy {
       context.credentials.sources = context.credentialSources ?? [];
       const result = await this.dispatchOperationRoutes(
         context,
-        async () => server.withProxyContext(context, () => server.readResource({ ...params, uri }, userForServer)),
+        async () => this.dispatchTargetOperation(
+          server,
+          context,
+          () => server.readResource({ ...params, uri }, userForServer),
+          (transport) => {
+            if (!transport.readResource) {
+              throw edgeError("EDGE_PROTOCOL", `Edge transport does not support resources for "${server.name}".`);
+            }
+            return transport.readResource({ ...params, uri });
+          },
+        ),
       ) as ReadResourceResult;
 
       return {
@@ -1816,7 +1943,12 @@ export class McpProxy {
           const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
           context.credentialSources = credentialSource ? [credentialSource] : undefined;
           context.credentials.sources = context.credentialSources ?? [];
-          const upstream = await server.withProxyContext(context, () => server.listResourceTemplates(params, userForServer));
+          const upstream = await this.dispatchTargetOperation(
+            server,
+            context,
+            () => server.listResourceTemplates(params, userForServer),
+            (transport) => transport.listResourceTemplates?.(params) ?? Promise.resolve({ resourceTemplates: [] }),
+          );
           return {
             resourceTemplates: upstream.resourceTemplates.filter((template) =>
               isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
@@ -1876,7 +2008,12 @@ export class McpProxy {
           const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
           context.credentialSources = credentialSource ? [credentialSource] : undefined;
           context.credentials.sources = context.credentialSources ?? [];
-          const upstream = await server.withProxyContext(context, () => server.listPrompts(params, userForServer));
+          const upstream = await this.dispatchTargetOperation(
+            server,
+            context,
+            () => server.listPrompts(params, userForServer),
+            (transport) => transport.listPrompts?.(params) ?? Promise.resolve({ prompts: [] }),
+          );
           return {
             prompts: upstream.prompts.filter((prompt) =>
               isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
@@ -1943,7 +2080,17 @@ export class McpProxy {
       context.credentials.sources = context.credentialSources ?? [];
       return this.dispatchOperationRoutes(
         context,
-        async () => server.withProxyContext(context, () => server.getPrompt({ ...params, name: promptName }, userForServer)),
+        async () => this.dispatchTargetOperation(
+          server,
+          context,
+          () => server.getPrompt({ ...params, name: promptName }, userForServer),
+          (transport) => {
+            if (!transport.getPrompt) {
+              throw edgeError("EDGE_PROTOCOL", `Edge transport does not support prompts for "${server.name}".`);
+            }
+            return transport.getPrompt({ ...params, name: promptName });
+          },
+        ),
       ) as Promise<GetPromptResult>;
     }) as Promise<GetPromptResult>;
   }
@@ -1990,7 +2137,17 @@ export class McpProxy {
       context.credentials.sources = context.credentialSources ?? [];
       return this.dispatchOperationRoutes(
         context,
-        async () => server.withProxyContext(context, () => server.complete(routed.params, userForServer)),
+        async () => this.dispatchTargetOperation(
+          server,
+          context,
+          () => server.complete(routed.params, userForServer),
+          (transport) => {
+            if (!transport.complete) {
+              throw edgeError("EDGE_PROTOCOL", `Edge transport does not support completions for "${server.name}".`);
+            }
+            return transport.complete(routed.params);
+          },
+        ),
       ) as Promise<CompleteResult>;
     }) as Promise<CompleteResult>;
   }
@@ -3458,6 +3615,16 @@ function toUpstreamEnv(binding: ServerCredentialBinding, credential: string): Re
 
 function isRecord(value: unknown): value is Record<string, string> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function metadataString(metadata: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function metadataNumber(metadata: Record<string, unknown> | undefined, key: string): number | undefined {
+  const value = metadata?.[key];
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
 }
 
 function serverNameFromProxyTool(toolName: string): string {

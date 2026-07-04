@@ -124,15 +124,20 @@ export class McpServer {
    * @pk
    */
   async callTool(params: CallToolRequest["params"], user: UserContext = {}): Promise<CallToolResult> {
-    if (!this.isolation) {
-      return this.transportFor(user).callTool(params);
-    }
+    return this.runIsolated(user, () => this.transportFor(user).callTool(params));
+  }
 
-    return this.isolation.queue(
-      user.id ?? "anonymous",
-      () => this.transportFor(user).callTool(params),
-      this.isolationTimeout,
-    );
+  /**
+   * Apply this server's configured isolation to an alternative transport path.
+   * Used by target-aware edge dispatch so placement does not bypass existing
+   * concurrency and timeout governance.
+   * @internal
+   */
+  async runIsolated(user: UserContext, run: () => Promise<CallToolResult>): Promise<CallToolResult> {
+    if (!this.isolation) {
+      return run();
+    }
+    return this.isolation.queue(user.id ?? "anonymous", run, this.isolationTimeout);
   }
 
   /**

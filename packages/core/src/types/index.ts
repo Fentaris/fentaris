@@ -75,6 +75,7 @@ export type {
   ProxyEventHandler,
   ProxyEventName,
   ProxyEventPayload,
+  ProxyExecutionContext,
   ProxyExposureHandle,
   ProxyExposureTransport,
   ProxyOperationHandler,

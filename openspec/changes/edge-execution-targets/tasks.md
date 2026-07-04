@@ -42,12 +42,12 @@
 ## 5. Target-Aware MCP Dispatch
 
 - [x] 5.1 Make proxy-context-aware transport execution an explicit contract available to every MCP capability operation.
-- [ ] 5.2 Add a target-aware dispatcher that invokes the configured transport for cloud placement and the edge transport for edge placement without replacing the catalog server.
-- [ ] 5.3 Compile and validate cloud launch recipes, rejecting unresolved edge-only inputs before process startup or dispatch.
-- [ ] 5.4 Define normalized edge MCP request/result/error/cancellation envelopes for tools, resources, templates, prompts, completion, and ping.
-- [ ] 5.5 Implement `EdgeTransport` request correlation, deadlines, cancellation, late-result rejection, and structured error mapping.
-- [ ] 5.6 Preserve existing policy, middleware, operation routing, response transformation, profiler, and audit behavior around edge-dispatched operations.
-- [ ] 5.7 Add transport tests for every MCP operation, cancellation, timeout, malformed response, unavailable edge, and unchanged public name mapping.
+- [x] 5.2 Add a target-aware dispatcher that invokes the configured transport for cloud placement and the edge transport for edge placement without replacing the catalog server.
+- [x] 5.3 Compile and validate cloud launch recipes, rejecting unresolved edge-only inputs before process startup or dispatch.
+- [x] 5.4 Define normalized edge MCP request/result/error/cancellation envelopes for tools, resources, templates, prompts, completion, and ping.
+- [x] 5.5 Implement `EdgeTransport` request correlation, deadlines, cancellation, late-result rejection, and structured error mapping.
+- [x] 5.6 Preserve existing policy, middleware, operation routing, response transformation, profiler, and audit behavior around edge-dispatched operations.
+- [x] 5.7 Add transport tests for every MCP operation, cancellation, timeout, malformed response, unavailable edge, and unchanged public name mapping.
 
 ## 6. Edge Control-Plane and Gateway Contracts
 

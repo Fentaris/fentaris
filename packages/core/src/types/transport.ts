@@ -1,4 +1,4 @@
-import type { CallToolRequest, CallToolResult, ListToolsRequest, ListToolsResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolRequest, CallToolResult, EmptyResult, ListToolsRequest, ListToolsResult } from "@modelcontextprotocol/sdk/types.js";
 import type {
   CompleteParams,
   CompleteResponse,
@@ -38,5 +38,6 @@ export type FentarisTransport = {
   listPrompts?(params?: ListPromptsParams): Promise<ListPromptsResponse>;
   getPrompt?(params: GetPromptParams): Promise<GetPromptResponse>;
   complete?(params: CompleteParams): Promise<CompleteResponse>;
+  ping?(): Promise<EmptyResult>;
   close(): Promise<void>;
 };

@@ -142,3 +142,21 @@ export type {
   SessionPinRequest,
   SessionPinResult,
 } from "./sessionPinning.js";
+
+export { EdgeTransport } from "./EdgeTransport.js";
+export type { EdgeTransportChannel, EdgeTransportOptions } from "./EdgeTransport.js";
+
+export {
+  EDGE_MCP_ENVELOPE_VERSION,
+  isEdgeMcpInboundEnvelope,
+} from "./protocol.js";
+export type {
+  EdgeMcpCancelEnvelope,
+  EdgeMcpErrorEnvelope,
+  EdgeMcpInboundEnvelope,
+  EdgeMcpOperation,
+  EdgeMcpOutboundEnvelope,
+  EdgeMcpRequestEnvelope,
+  EdgeMcpResultEnvelope,
+  EdgeMcpRoute,
+} from "./protocol.js";

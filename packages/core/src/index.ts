@@ -145,7 +145,7 @@ export type {
  * MCP proxy options.
  * @pk
  */
-export type { AutoLogOptions, IdentityResolverOptions, McpProxyOptions, McpProxyStartOptions, McpProxyStopOptions, PlacementBindingConfig } from "./proxy/index.js";
+export type { AutoLogOptions, EdgeRuntimeOptions, IdentityResolverOptions, McpProxyOptions, McpProxyStartOptions, McpProxyStopOptions, PlacementBindingConfig } from "./proxy/index.js";
 /**
  * MCP server wrapper.
  * @pk
@@ -267,6 +267,7 @@ export type {
   ProxyEventFilter,
   ProxyEventHandler,
   ProxyEventName,
+  ProxyExecutionContext,
   ProxyExposureHandle,
   ProxyExposureTransport,
   ProxyRuntime,
@@ -441,6 +442,8 @@ export {
   PlacementResolver,
   detectStaticPlacementOverlaps,
   EdgeSessionPinner,
+  EdgeTransport,
+  EDGE_MCP_ENVELOPE_VERSION,
   InMemorySessionBindingStore,
   runtime,
   runtimeValueRef,
@@ -449,6 +452,7 @@ export {
   serializeLaunchRecipe,
   validateDeviceSelector,
   validateSetupSchema,
+  isEdgeMcpInboundEnvelope,
 } from "./edge/index.js";
 export type {
   BooleanSetupField,
@@ -478,6 +482,16 @@ export type {
   PlacementSource,
   ConnectionGeneration,
   EdgeSessionPinnerInputs,
+  EdgeTransportChannel,
+  EdgeTransportOptions,
+  EdgeMcpCancelEnvelope,
+  EdgeMcpErrorEnvelope,
+  EdgeMcpInboundEnvelope,
+  EdgeMcpOperation,
+  EdgeMcpOutboundEnvelope,
+  EdgeMcpRequestEnvelope,
+  EdgeMcpResultEnvelope,
+  EdgeMcpRoute,
   SessionBindingExpiryOptions,
   SessionBindingListener,
   SessionBindingRemovalReason,

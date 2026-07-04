@@ -57,7 +57,27 @@ export type ProxyTransportContext = {
   type?: "http" | "stdio" | "sse" | "unknown";
   sessionId?: string;
   requestId?: string;
+  /** Absolute epoch deadline propagated to upstream/edge execution. @pk */
+  deadline?: number;
+  /** Downstream cancellation signal propagated to upstream/edge execution. @pk */
+  signal?: AbortSignal;
 };
+
+/** Selected execution target and pinned edge route for one operation. @pk */
+export type ProxyExecutionContext =
+  | {
+      kind: "cloud";
+      targetName: string;
+      deploymentId: string;
+    }
+  | {
+      kind: "edge";
+      targetName: string;
+      deploymentId: string;
+      edgeNodeId: string;
+      connectionGeneration: number;
+      reused: boolean;
+    };
 
 /**
  * Normalized authentication metadata exposed through the unified context.
@@ -142,6 +162,7 @@ export type ProxyContext = MiddlewareContext & {
   operation: ProxyOperation;
   requestId?: string;
   transport: ProxyTransportContext;
+  execution?: ProxyExecutionContext;
   auth: ProxyAuthContext;
   policy: ProxyPolicyContext;
   credentials: {
