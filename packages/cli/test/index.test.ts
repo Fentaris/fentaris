@@ -411,6 +411,18 @@ describe("command routing helpers", () => {
     });
   });
 
+  it("parses check JSON output", () => {
+    expect(parseCommand(["check", "--offline", "--strict", "--json", "--verbose"])).toEqual({
+      kind: "ok",
+      path: ["check"],
+      command: {
+        name: "check",
+        args: [],
+        options: { offline: true, strict: true, json: true, verbose: true },
+      },
+    });
+  });
+
   it("parses short utility flags", () => {
     expect(parseCommand(["-v"])).toEqual({
       kind: "version",
@@ -442,8 +454,10 @@ describe("command routing helpers", () => {
   it("routes contextual command help", async () => {
     const check = runtime("/tmp");
     await expect(main(["check", "--help"], check)).resolves.toBe(0);
-    expect(vi.mocked(check.out.log).mock.calls.flat().join("\n")).toContain("Usage: ");
-    expect(vi.mocked(check.out.log).mock.calls.flat().join("\n")).toContain("fentaris check [OPTIONS]");
+    const checkOutput = vi.mocked(check.out.log).mock.calls.flat().join("\n");
+    expect(checkOutput).toContain("Usage: ");
+    expect(checkOutput).toContain("fentaris check [OPTIONS]");
+    expect(checkOutput).toContain("--json");
 
     const secretsSet = runtime("/tmp");
     await expect(main(["secrets", "set", "--help"], secretsSet)).resolves.toBe(0);
@@ -941,6 +955,75 @@ describe("project commands", () => {
     await expect(main(["check", "--offline"], rt)).resolves.toBe(0);
     await expect(main(["check", "--offline", "--strict"], rt)).resolves.toBe(0);
     await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
+  });
+
+  it("prints project checks as JSON without human-readable formatting", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+
+    await expect(main(["check", "--offline", "--json", "--verbose"], rt)).resolves.toBe(0);
+
+    expect(rt.out.log).toHaveBeenCalledTimes(1);
+    const output = String(vi.mocked(rt.out.log).mock.calls[0]?.[0]);
+    const payload = JSON.parse(output) as {
+      results: Array<Record<string, unknown>>;
+    };
+    expect(payload.results).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        group: "Files",
+        label: "package.json",
+        status: "pass",
+        detail: "Found",
+      }),
+    ]));
+    expect(payload.results.every((result) => !("fix" in result))).toBe(true);
+    expect(output).not.toContain("Project Check");
+    expect(output).not.toContain("\u001b[");
+  });
+
+  it("prints JSON before returning failure and strict-warning exit codes", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    await rm(join(dir, "README.md"));
+    const failureRuntime = runtime(dir, { pnpm: true, git: true, docker: true });
+
+    await expect(main(["check", "--offline", "--json"], failureRuntime)).resolves.toBe(1);
+
+    const failurePayload = JSON.parse(String(vi.mocked(failureRuntime.out.log).mock.calls[0]?.[0])) as {
+      results: Array<{ label: string; status: string }>;
+    };
+    expect(failurePayload.results).toContainEqual(expect.objectContaining({
+      label: "README.md",
+      status: "fail",
+    }));
+
+    await writeFile(join(dir, "README.md"), "# Demo\n");
+    await writeFile(join(dir, "src", "index.ts"), "console.log('open proxy');\n");
+    const warningRuntime = runtime(dir, { pnpm: true, git: true, docker: true });
+
+    await expect(main(["check", "--offline", "--strict", "--json"], warningRuntime)).resolves.toBe(1);
+
+    const warningPayload = JSON.parse(String(vi.mocked(warningRuntime.out.log).mock.calls[0]?.[0])) as {
+      results: Array<{ label: string; status: string; hint?: string }>;
+    };
+    expect(warningPayload.results).toContainEqual(expect.objectContaining({
+      label: "proxy policy",
+      status: "warn",
+      hint: expect.stringContaining("Fentaris denies proxy calls by default."),
+    }));
+  });
+
+  it("keeps the human-readable project check output by default", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+
+    await expect(main(["check", "--offline"], rt)).resolves.toBe(0);
+
+    const output = vi.mocked(rt.out.log).mock.calls.flat().join("\n");
+    expect(output).toContain("Project Check");
+    expect(output).toContain("All checks passed");
   });
 
   it("warns during check when the entrypoint has no explicit proxy policy controls", async () => {
