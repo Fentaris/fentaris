@@ -83,13 +83,13 @@
 
 ## 9. Edge Workload Supervisor
 
-- [ ] 9.1 Implement desired-deployment reconciliation that starts, updates, blocks, and removes only cloud-defined MCP workloads.
-- [ ] 9.2 Implement one supervised MCP process/client per `{ deployment, downstream session }` with idempotent creation.
-- [ ] 9.3 Enforce approved recipe digest, executable/package policy hooks, setup readiness, startup deadline, idle lease, operation deadline, output limits, and concurrency quotas.
-- [ ] 9.4 Implement graceful process shutdown followed by forced termination and orphan cleanup on session end, desired-state removal, disconnect, or expiry.
-- [ ] 9.5 Connect supervised local MCP clients to edge protocol request, response, error, cancellation, and ping handling.
-- [ ] 9.6 Make local deny, workload revocation, and grant revocation override replayed desired state until renewed consent.
-- [ ] 9.7 Add supervisor tests for session isolation, duplicate desired state, concurrent sessions, startup failure, quotas, cancellation, forced termination, revocation, and orphan cleanup.
+- [x] 9.1 Implement desired-deployment reconciliation that starts, updates, blocks, and removes only cloud-defined MCP workloads.
+- [x] 9.2 Implement one supervised MCP process/client per `{ deployment, downstream session }` with idempotent creation.
+- [x] 9.3 Enforce approved recipe digest, executable/package policy hooks, setup readiness, startup deadline, idle lease, operation deadline, output limits, and concurrency quotas.
+- [x] 9.4 Implement graceful process shutdown followed by forced termination and orphan cleanup on session end, desired-state removal, disconnect, or expiry.
+- [x] 9.5 Connect supervised local MCP clients to edge protocol request, response, error, cancellation, and ping handling.
+- [x] 9.6 Make local deny, workload revocation, and grant revocation override replayed desired state until renewed consent.
+- [x] 9.7 Add supervisor tests for session isolation, duplicate desired state, concurrent sessions, startup failure, quotas, cancellation, forced termination, revocation, and orphan cleanup.
 
 ## 10. Capability Discovery and Readiness
 
