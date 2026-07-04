@@ -79,10 +79,6 @@ type UserAwareTransport = FentarisTransport & {
   withUser(user: UserContext): FentarisTransport;
 };
 
-type ProxyContextAwareTransport = FentarisTransport & {
-  withProxyContext<T>(context: ProxyContext, run: () => Promise<T>): Promise<T>;
-};
-
 /**
  * MCP server wrapper with optional per-user env injection.
  * @pk
@@ -91,7 +87,8 @@ export class McpServer {
   readonly name: string;
   readonly displayName: string;
 
-  private readonly transport: FentarisTransport;
+  /** The transport backing this server; exposed for edge recipe/validation. @pk */
+  readonly transport: FentarisTransport;
   private readonly auth?: McpServerAuth;
   private readonly env?: EnvResolver;
   private readonly isolation?: Isolation;
@@ -127,15 +124,20 @@ export class McpServer {
    * @pk
    */
   async callTool(params: CallToolRequest["params"], user: UserContext = {}): Promise<CallToolResult> {
-    if (!this.isolation) {
-      return this.transportFor(user).callTool(params);
-    }
+    return this.runIsolated(user, () => this.transportFor(user).callTool(params));
+  }
 
-    return this.isolation.queue(
-      user.id ?? "anonymous",
-      () => this.transportFor(user).callTool(params),
-      this.isolationTimeout,
-    );
+  /**
+   * Apply this server's configured isolation to an alternative transport path.
+   * Used by target-aware edge dispatch so placement does not bypass existing
+   * concurrency and timeout governance.
+   * @internal
+   */
+  async runIsolated(user: UserContext, run: () => Promise<CallToolResult>): Promise<CallToolResult> {
+    if (!this.isolation) {
+      return run();
+    }
+    return this.isolation.queue(user.id ?? "anonymous", run, this.isolationTimeout);
   }
 
   /**
@@ -225,7 +227,7 @@ export class McpServer {
    */
   async withProxyContext<T>(context: ProxyContext, run: () => Promise<T>): Promise<T> {
     const transport = this.transportFor(context.user);
-    if (!isProxyContextAwareTransport(transport)) {
+    if (!transport.withProxyContext) {
       return run();
     }
 
@@ -364,10 +366,6 @@ function isEnvAwareTransport(transport: FentarisTransport): transport is EnvAwar
 
 function isUserAwareTransport(transport: FentarisTransport): transport is UserAwareTransport {
   return "withUser" in transport && typeof transport.withUser === "function";
-}
-
-function isProxyContextAwareTransport(transport: FentarisTransport): transport is ProxyContextAwareTransport {
-  return "withProxyContext" in transport && typeof transport.withProxyContext === "function";
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {

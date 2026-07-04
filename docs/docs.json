@@ -60,7 +60,8 @@
               "concepts/servers-and-transports",
               "concepts/identity-and-auth",
               "concepts/policies",
-              "concepts/observability"
+              "concepts/observability",
+              "concepts/edge-execution"
             ]
           },
           {
@@ -80,7 +81,8 @@
               "guides/error-handling",
               "guides/governance-auth",
               "guides/telegram-approval",
-              "guides/security"
+              "guides/security",
+              "guides/edge-device"
             ]
           },
           "troubleshooting",
@@ -97,6 +99,7 @@
               "reference/logger",
               "reference/extension-api",
               "reference/types",
+              "reference/edge",
               "reference-auto/index",
               "reference-auto/status"
             ]

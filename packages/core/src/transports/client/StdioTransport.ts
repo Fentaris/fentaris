@@ -19,16 +19,32 @@ import type {
   ReadResourceRequest,
   ReadResourceResult,
 } from "@modelcontextprotocol/sdk/types.js";
+import { isRuntimeValueToken, describeRuntimeValueToken, type RuntimeValueToken } from "../../edge/runtimeInput.js";
+import { compileLaunchRecipe, type LaunchRecipe } from "../../edge/recipe.js";
+import { edgeError } from "../../edge/errors.js";
+import type { SetupSchema } from "../../edge/setup.js";
 import type { FentarisTransport } from "../../types/transport.js";
 
 /**
  * Options for the stdio transport.
+ *
+ * Argument and environment entries may be plain strings (existing behavior) or
+ * runtime-value tokens (`runtime.input(...)` / `runtime.secret(...)`) that are
+ * resolved before process launch on a cloud target, or serialized into a
+ * recipe for edge launch. A plain-string configuration remains unchanged.
  * @pk
  */
 export type StdioTransportOptions = {
   command: string;
-  args?: string[];
-  env?: Record<string, string>;
+  args?: Array<string | RuntimeValueToken>;
+  env?: Record<string, string | RuntimeValueToken>;
+  /**
+   * Explicit cloud-side resolutions for runtime references. These values are
+   * used only for local cloud process launch and are never serialized into an
+   * edge launch recipe.
+   * @pk
+   */
+  runtimeValues?: Record<string, string>;
   stderr?: "inherit" | "pipe" | "overlapped" | "ignore";
   clientName?: string;
   clientVersion?: string;
@@ -53,6 +69,39 @@ export class StdioTransport implements FentarisTransport {
     }
 
     this.options = options;
+  }
+
+  /**
+   * Compile this transport's declaration into a serializable launch recipe bound
+   * to an optional setup schema. Cloud/edge validation uses this to reconcile
+   * runtime-value references against declared setup fields.
+   * @pk
+   */
+  toLaunchRecipe(schema?: SetupSchema): LaunchRecipe {
+    return compileLaunchRecipe(this.options, schema);
+  }
+
+  /**
+   * Return every runtime-value token declared in arguments and environment.
+   * Used by configuration validation to reconcile references against setup
+   * fields without exposing the full options object.
+   * @pk
+   */
+  runtimeValueTokens(): RuntimeValueToken[] {
+    const tokens: RuntimeValueToken[] = [];
+    for (const value of this.options.args ?? []) {
+      if (isRuntimeValueToken(value)) tokens.push(value);
+    }
+    for (const value of Object.values(this.options.env ?? {})) {
+      if (isRuntimeValueToken(value)) tokens.push(value);
+    }
+    return tokens;
+  }
+
+  /** Runtime references that have no explicit cloud-side value. @pk */
+  unresolvedCloudRuntimeRefs(): string[] {
+    const values = this.options.runtimeValues ?? {};
+    return [...new Set(this.runtimeValueTokens().map((token) => token.ref).filter((ref) => values[ref] === undefined))].sort();
   }
 
   /**
@@ -144,6 +193,11 @@ export class StdioTransport implements FentarisTransport {
     return client.complete(params);
   }
 
+  /** Return the initialized upstream capability declaration. @pk */
+  async serverCapabilities(): Promise<ReturnType<Client["getServerCapabilities"]>> {
+    return (await this.getClient()).getServerCapabilities();
+  }
+
   /**
    * Close the underlying client connection.
    * @pk
@@ -184,13 +238,51 @@ export class StdioTransport implements FentarisTransport {
     await client.connect(
       new StdioClientTransport({
         command: this.options.command,
-        args: this.options.args ?? [],
-        env: this.options.env,
+        args: this.resolveCloudLaunchArgs(this.options.args ?? []),
+        env: this.resolveCloudLaunchEnv(this.options.env),
         stderr: this.options.stderr ?? "inherit",
       }),
     );
 
     return client;
+  }
+
+  /**
+   * Resolve recipe arguments to plain strings for cloud execution. Throws a
+   * normalized `EDGE_UNRESOLVED_RUNTIME_INPUT` error for any runtime-value
+   * token without a cloud-side resolution; this is the cloud-launch backstop
+   * for the explicit recipe validation performed before dispatch.
+   * @pk
+   */
+  private resolveCloudLaunchArgs(args: Array<string | RuntimeValueToken>): string[] {
+    return args.map((value) => this.coerceCloudLaunchValue(value));
+  }
+
+  private resolveCloudLaunchEnv(env?: Record<string, string | RuntimeValueToken>): Record<string, string> | undefined {
+    if (!env) {
+      return undefined;
+    }
+    const resolved: Record<string, string> = {};
+    for (const [key, value] of Object.entries(env)) {
+      resolved[key] = this.coerceCloudLaunchValue(value);
+    }
+    return resolved;
+  }
+
+  private coerceCloudLaunchValue(value: string | RuntimeValueToken): string {
+    if (typeof value === "string") {
+      return value;
+    }
+    if (isRuntimeValueToken(value)) {
+      const resolved = this.options.runtimeValues?.[value.ref];
+      if (resolved !== undefined) {
+        return resolved;
+      }
+      throw edgeError("EDGE_UNRESOLVED_RUNTIME_INPUT", `Stdio cloud launch cannot resolve ${describeRuntimeValueToken(value)}`, {
+        details: { ref: value.ref },
+      });
+    }
+    throw new TypeError("invalid stdio launch value");
   }
 }
 

@@ -1,0 +1,151 @@
+---
+title: "Edge API Reference"
+description: "Reference for targets, setup, routing, adapters, protocol, errors, events, and agent commands."
+---
+
+Use these APIs to declare governed edge placement and replace reference single-process infrastructure in managed deployments.
+
+## Quick Start
+
+```ts theme={null}
+import { edge, runtime, stdio } from "@fentaris/core";
+
+app.mcp("custom", {
+  transport: stdio({
+    command: "custom-server",
+    args: ["--workspace", runtime.input("workspace")],
+    env: { API_TOKEN: runtime.secret("token") },
+  }),
+});
+
+app.mcp("custom").setup({
+  workspace: edge.folder({ access: "read-write" }),
+  token: edge.secret(),
+});
+```
+
+## Targets and Selectors
+
+### `app.target(name, target)`
+
+Registers a reusable logical target. `cloud` is built in and reserved.
+
+### `edge(options)`
+
+Creates an edge target with a device selector and optional pool strategy.
+
+Selectors:
+
+* `edge.sessionDevice()`
+* `edge.userDefaultDevice()`
+* `edge.namedDevice(alias)`
+* `edge.pool(name)`
+* `selector.or(fallback)`
+
+Pool strategies are `least-loaded`, `round-robin`, and `random`.
+
+### `.target(name)`
+
+Available on global, group, and user MCP handles:
+
+```ts theme={null}
+app.mcp("custom").target("cloud");
+app.group("developers").mcp("custom").target("personal");
+app.user("alice").mcp("custom").target("personal");
+```
+
+`app.user(id)` records subject-scoped configuration. It does not create or authenticate an identity.
+
+## Runtime Inputs and Setup
+
+Use `runtime.input(name)` for local/scalar values and `runtime.secret(name)` for secrets.
+
+Setup builders:
+
+* `edge.folder({ access })`
+* `edge.file({ access })`
+* `edge.secret()`
+* `edge.string()`
+* `edge.boolean()`
+* `edge.number({ min, max })`
+* `edge.select({ options })`
+
+Cloud execution rejects unresolved runtime tokens with `EDGE_UNRESOLVED_RUNTIME_INPUT`. `StdioTransportOptions.runtimeValues` can provide explicit cloud-side string values.
+
+## Core Runtime Adapters
+
+`McpProxyOptions.edge` accepts:
+
+* `deviceResolver`
+* `sessionBindingStore`
+* `sessionBindingExpiry`
+* `sessionBindingListener`
+* `transport`
+* `capabilityCache`
+* `telemetry`
+
+Reference implementations include `EdgeTransport`, `EdgeWebSocketGateway`, `InMemorySessionBindingStore`, control-plane stores, and `EdgeCapabilityCache`.
+
+<Warning>
+  In-memory stores and the gateway active-socket map are single-process references. Multi-instance deployments require shared session bindings, device/desired/setup/manifest stores, and a distributed `EdgeChannelBroker`.
+</Warning>
+
+## Agent APIs
+
+`@fentaris/edge` exports:
+
+* `EdgeAgent` and `EdgeEnrollmentService`
+* `LocalSetupManager` and `TerminalSetupProvider`
+* `EdgeWorkloadSupervisor`
+* `ExecutableAllowlistPolicy`
+* platform, credential, process, and connection adapter contracts
+
+The initial process model is one local MCP process/client per `{ deployment, downstream session }`.
+
+## Protocol Compatibility
+
+`EDGE_PROTOCOL_VERSION` and `EDGE_MCP_ENVELOPE_VERSION` are currently `1`. Hello negotiates a mutually supported protocol version. Every accepted connection is bound to tenant, edge node, credential, protocol version, and a monotonically increasing connection generation.
+
+Messages cover hello, heartbeat, desired state, setup status, capability manifests, lifecycle, MCP requests/results/errors, and cancellation.
+
+Servers must reject routing claims that do not match server-side device, deployment, subject, target, and session state.
+
+## Errors
+
+Stable edge codes:
+
+* `EDGE_PLACEMENT_AMBIGUOUS`
+* `EDGE_UNAUTHORIZED_TARGET`
+* `EDGE_SETUP_REQUIRED`
+* `EDGE_UNAVAILABLE`
+* `EDGE_CAPACITY`
+* `EDGE_PROTOCOL`
+* `EDGE_WORKLOAD`
+* `EDGE_GRANT`
+* `EDGE_UNRESOLVED_RUNTIME_INPUT`
+
+## Events and Health
+
+`EdgeTelemetry` emits structured redacted events for target resolution, session binding, connection generations, desired-state reconciliation, setup, workloads, request duration, timeout, cancellation, and failure.
+
+`edgeHealth(...)` adds checks for gateway, target resolution, device/pool availability, deployment readiness, and capability cache age.
+
+Sensitive metadata is removed by `redactEdgeProtocolValue(...)` before telemetry reaches its sink.
+
+## Agent CLI
+
+```bash theme={null}
+fentaris-edge login
+fentaris-edge status
+fentaris-edge disconnect
+fentaris-edge revoke
+```
+
+There is no MCP add/configuration command. Definitions and assignments remain controlled by Fentaris.
+
+## Related Documentation
+
+* [Edge Execution](/concepts/edge-execution)
+* [Set Up an Edge Device](/guides/edge-device)
+* [Observability](/concepts/observability)
+

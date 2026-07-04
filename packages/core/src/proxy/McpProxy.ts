@@ -88,6 +88,32 @@ import { ResponseController } from "../types/middleware.js";
 import { FentarisConfigError, assertValidFentarisConfig, validateFentarisConfig, type FentarisDiagnostic } from "../config/index.js";
 import { resolveFentarisConfig } from "../config/resolve.js";
 import { LocalCapabilityRegistry } from "../local/declarations.js";
+import {
+  createSetupSchema,
+  edgeError,
+  validateSetupSchema,
+  cloud as cloudTarget,
+  detectStaticPlacementOverlaps,
+  isValidTargetName,
+  validateDeviceSelector,
+  PlacementResolver,
+  EdgeSessionPinner,
+  type DeviceResolver,
+  type EdgeCapabilityCache,
+  type EdgeTelemetry,
+  type ExecutionTarget,
+  type PlacementBindingModel,
+  type PlacementResolution,
+  type PlacementRequest,
+  type SessionBindingExpiryOptions,
+  type SessionBindingListener,
+  type SessionBindingStore,
+  type SetupFieldDescriptor,
+  type SetupSchema,
+} from "../edge/index.js";
+import type { SessionPinRequest, SessionPinResult } from "../edge/index.js";
+import type { LaunchRecipe } from "../edge/recipe.js";
+import { StdioTransport } from "../transports/client/StdioTransport.js";
 import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
 import type { CredentialSourceMetadata, IdentityMetadata, ResolvedSubject, UserContext } from "../types/shared.js";
 import type {
@@ -103,6 +129,7 @@ import type {
   ToolCallHookFilter,
 } from "../types/middleware.js";
 import type { ProxyOperationResult } from "../types/mcp-operation.js";
+import type { FentarisTransport } from "../types/transport.js";
 import type { ErrorMapper, IdentityStrategy, Policy, PolicyDecision, RateLimiter, Registry } from "../types/policy.js";
 import type {
   ProxyContext,
@@ -117,6 +144,7 @@ import type {
   ProxyMcpDeclarationOptions,
   ProxyMcpHandle,
   ProxyLocalHandle,
+  ProxyUserHandle,
   ProxyOperationHandler,
   ProxyToolHandler,
   ProxyToolPattern,
@@ -181,6 +209,26 @@ type FluentGroupDeclaration = {
   policy?: string | Policy;
 };
 
+type PlacementScope = "global" | "group" | "user";
+
+/** A placement binding declared through fluent or constructor-style config. @pk */
+export type PlacementBindingConfig = {
+  /** Server name the binding applies to. @pk */
+  serverName: string;
+  /** Scope of the binding. @pk */
+  scope: PlacementScope;
+  /** Group id for group-scoped bindings. @pk */
+  groupId?: string;
+  /** User id for user-scoped bindings. @pk */
+  userId?: string;
+  /** Registered or built-in target name. @pk */
+  targetName: string;
+};
+
+type PlacementBinding = PlacementBindingConfig;
+
+const CLOUD_TARGET_NAME = "cloud";
+
 /**
  * Options for creating an MCP proxy server.
  * @pk
@@ -207,6 +255,40 @@ export type McpProxyOptions = {
   errorMapper?: ErrorMapper;
   name?: string;
   version?: string;
+  /** Constructor-style execution-target declarations. @pk */
+  targets?: Record<string, ExecutionTarget>;
+  /** Constructor-style per-server setup schemas. @pk */
+  setup?: Record<string, Record<string, SetupFieldDescriptor> | SetupSchema>;
+  /** Constructor-style placement bindings. @pk */
+  placements?: PlacementBindingConfig[];
+  /**
+   * Edge execution wiring: control-plane device resolver, replaceable
+   * session-binding store, expiry, and removal listener. When omitted, edge
+   * targets cannot be pinned and the runtime behaves as cloud-only.
+   * @pk
+   */
+  edge?: EdgeRuntimeOptions;
+};
+
+/**
+ * Edge runtime wiring supplied to {@link McpProxyOptions.edge}.
+ * @pk
+ */
+export type EdgeRuntimeOptions = {
+  /** Control-plane device resolver used to pin edge targets. @pk */
+  deviceResolver?: DeviceResolver;
+  /** Replaceable session-binding store; defaults to in-memory. @pk */
+  sessionBindingStore?: SessionBindingStore;
+  /** Expiry configuration for the default in-memory binding store. @pk */
+  sessionBindingExpiry?: SessionBindingExpiryOptions;
+  /** Removal listener for session-target bindings. @pk */
+  sessionBindingListener?: SessionBindingListener;
+  /** Virtual edge transport used after an edge target has been pinned. @pk */
+  transport?: FentarisTransport;
+  /** Validated per-deployment manifest cache used by edge discovery. @pk */
+  capabilityCache?: EdgeCapabilityCache;
+  /** Structured, redacted edge lifecycle telemetry. @pk */
+  telemetry?: EdgeTelemetry;
 };
 
 /**
@@ -289,8 +371,16 @@ export class McpProxy {
   private runtimeValidationConfig: McpProxyOptions;
   private readonly namedPolicies = new Map<string, GovernancePolicy>();
   private readonly fluentGroups = new Map<string, FluentGroupDeclaration>();
+  private readonly targets = new Map<string, ExecutionTarget>();
+  private readonly setupSchemas = new Map<string, SetupSchema>();
+  private readonly placementBindings: PlacementBinding[] = [];
+  private readonly fluentUsers = new Set<string>();
+  private readonly edgeOptions?: EdgeRuntimeOptions;
+  private edgeSessionPinnerCache?: EdgeSessionPinner;
   private httpServer: HttpServer | null = null;
   private readonly exposureHandles = new Set<ProxyExposureHandle>();
+
+  private static readonly BUILTIN_TARGET_NAMES = new Set<string>([CLOUD_TARGET_NAME]);
 
   /**
    * Create a new MCP proxy instance.
@@ -338,9 +428,35 @@ export class McpProxy {
       groups: this.groups,
       defaults: { credentials: this.defaultCredentials },
     };
+    this.edgeOptions = options.edge;
 
     for (const server of this.serverCatalog.allServers()) {
       this.serverByName.set(server.name, server);
+    }
+
+    // Normalize constructor-style target, setup, and placement declarations
+    // into the same internal model the fluent API uses. @pk
+    if (options.targets) {
+      for (const [name, target] of Object.entries(options.targets)) {
+        if (!isValidTargetName(name) || McpProxy.BUILTIN_TARGET_NAMES.has(name)) {
+          continue;
+        }
+        this.targets.set(name, target.kind === "cloud" ? cloudTarget : target);
+      }
+    }
+    if (options.setup) {
+      for (const [serverName, schema] of Object.entries(options.setup)) {
+        if (!this.serverByName.has(serverName)) {
+          continue;
+        }
+        const built = "version" in schema && "fields" in schema ? (schema as SetupSchema) : createSetupSchema(schema as Record<string, SetupFieldDescriptor>);
+        this.setupSchemas.set(serverName, built);
+      }
+    }
+    if (options.placements) {
+      for (const binding of options.placements) {
+        this.registerPlacementBinding(binding);
+      }
     }
   }
 
@@ -505,6 +621,354 @@ export class McpProxy {
   group(groupId: string): ProxyGroupHandle {
     this.fluentGroup(groupId);
     return new McpProxyGroupHandle(this, groupId);
+  }
+
+  /**
+   * Register or retrieve a reusable named execution target. Target bindings
+   * describe where an MCP runs and never grant MCP capability access. The
+   * built-in `cloud` target always executes the configured transport on the
+   * Fentaris host and need not be registered.
+   * @pk
+   */
+  target(name: string, target?: ExecutionTarget): this {
+    if (!isValidTargetName(name)) {
+      throw new FentarisConfigError([
+        {
+          severity: "error",
+          code: "FENTARIS_CONFIG_TARGET_INVALID_NAME",
+          title: "Invalid execution target name",
+          message: `Execution target name "${name}" is not a valid identifier.`,
+          path: ["proxy", "target", name],
+          hint: "Use lowercase letters, digits, and hyphens; start with a letter or digit; 1-63 characters.",
+        },
+      ]);
+    }
+    if (McpProxy.BUILTIN_TARGET_NAMES.has(name)) {
+      throw new FentarisConfigError([
+        {
+          severity: "error",
+          code: "FENTARIS_CONFIG_TARGET_RESERVED",
+          title: "Reserved execution target name",
+          message: `Execution target name "${name}" is reserved.`,
+          path: ["proxy", "target", name],
+          hint: "Choose a different name; \"cloud\" is always available as the implicit target.",
+        },
+      ]);
+    }
+    if (target === undefined) {
+      return this; // retrieval-only form `app.target(name)` is not supported; ignore harmlessly
+    }
+    if (!target || (target.kind !== "cloud" && target.kind !== "edge")) {
+      throw new FentarisConfigError([
+        {
+          severity: "error",
+          code: "FENTARIS_CONFIG_TARGET_INVALID",
+          title: "Invalid execution target",
+          message: `Execution target "${name}" is not a cloud or edge target.`,
+          path: ["proxy", "target", name],
+        },
+      ]);
+    }
+    if (this.targets.has(name)) {
+      throw new FentarisConfigError([
+        {
+          severity: "error",
+          code: "FENTARIS_CONFIG_TARGET_DUPLICATE",
+          title: "Duplicate execution target",
+          message: `Execution target "${name}" is already declared.`,
+          path: ["proxy", "target", name],
+          hint: "Reuse the named target via app.mcp(name).target(name).",
+        },
+      ]);
+    }
+    const stored = target.kind === "cloud" ? cloudTarget : target;
+    this.targets.set(name, stored);
+    this.runtimeValidationConfig = { ...this.runtimeValidationConfig };
+    return this;
+  }
+
+  /** Resolve a registered or built-in target by name. @pk */
+  resolveTarget(name: string): ExecutionTarget {
+    const known = this.targets.get(name);
+    if (known) {
+      return known;
+    }
+    if (McpProxy.BUILTIN_TARGET_NAMES.has(name)) {
+      return cloudTarget;
+    }
+    throw new FentarisConfigError([
+      {
+        severity: "error",
+        code: "FENTARIS_CONFIG_TARGET_UNKNOWN",
+        title: "Unknown execution target",
+        message: `Execution target "${name}" is not registered.`,
+        path: ["proxy", "target", name],
+        hint: "Declare it with app.target(name, edge(...)) or use the built-in \"cloud\" target.",
+      },
+    ]);
+  }
+
+  /**
+   * Build a {@link PlacementResolver} over the registered targets and
+   * normalized placement bindings. The resolver never grants capability
+   * access; callers must have already established server-catalog visibility
+   * and policy authorization before relying on its result.
+   * @pk
+   */
+  placementResolver(): PlacementResolver {
+    return new PlacementResolver({
+      targets: this.targets,
+      bindings: this.placementBindings as readonly PlacementBindingModel[],
+    });
+  }
+
+  /**
+   * Resolve a placement for an already-authorized request. Intended to be
+   * called at dispatch time, after server-catalog visibility and policy
+   * authorization have established that the subject may use the server.
+   * Throws `EDGE_UNAUTHORIZED_TARGET` for an ineligible explicit selection and
+   * `EDGE_PLACEMENT_AMBIGUOUS` for unresolved runtime group overlap.
+   * @pk
+   */
+  resolvePlacement(request: PlacementRequest): PlacementResolution {
+    return this.placementResolver().resolve(request);
+  }
+
+  /**
+   * Lazily build (and cache) the edge session pinner over the registered
+   * targets, normalized bindings, and configured device resolver. Returns
+   * `undefined` when no device resolver is configured (cloud-only runtime).
+   * @pk
+   */
+  edgeSessionPinner(): EdgeSessionPinner | undefined {
+    if (!this.edgeOptions?.deviceResolver) {
+      return undefined;
+    }
+    if (!this.edgeSessionPinnerCache) {
+      const pinner = new EdgeSessionPinner({
+        targets: this.targets,
+        bindings: this.placementBindings as readonly PlacementBindingModel[],
+        deviceResolver: this.edgeOptions.deviceResolver,
+        store: this.edgeOptions.sessionBindingStore,
+        expiry: this.edgeOptions.sessionBindingExpiry,
+      });
+      if (this.edgeOptions.sessionBindingListener) {
+        pinner.addListener(this.edgeOptions.sessionBindingListener);
+      }
+      this.edgeSessionPinnerCache = pinner;
+    }
+    return this.edgeSessionPinnerCache;
+  }
+
+  /**
+   * Lazily resolve and pin a downstream session to one eligible edge device
+   * per logical target before the first edge-dependent operation. Cloud
+   * targets return without pinning. Throws normalized edge errors.
+   * @pk
+   */
+  async pinSessionTarget(request: SessionPinRequest): Promise<SessionPinResult> {
+    const pinner = this.edgeSessionPinner();
+    if (!pinner) {
+      const placement = this.resolvePlacement(request);
+      if (placement.kind === "edge") {
+        throw edgeError("EDGE_UNAVAILABLE", "Edge placement requires a configured device resolver.", {
+          details: { targetName: placement.targetName },
+        });
+      }
+      return { kind: "cloud", targetName: "cloud", placement };
+    }
+    return pinner.pin(request);
+  }
+
+  /**
+   * Dispatch an already-visible and already-authorized server operation to its
+   * cloud transport or pinned edge transport. Placement never participates in
+   * catalog visibility or policy decisions.
+   */
+  private async dispatchTargetOperation<T>(
+    server: McpServer,
+    context: ProxyContext,
+    cloud: () => Promise<T>,
+    edge: (transport: FentarisTransport) => Promise<T>,
+  ): Promise<T> {
+    const metadata = context.auth.metadata;
+    const groupIds = context.subject
+      ? (this.subjectIndex?.groupsFor(context.subject.id) ?? []).map((group) => group.id)
+      : [];
+    const placementRequest: PlacementRequest = {
+      serverName: server.name,
+      groupIds,
+      ...(context.subject?.id ?? context.user.id
+        ? { subjectId: context.subject?.id ?? context.user.id }
+        : {}),
+      ...(metadataString(metadata, "target") ?? metadataString(metadata, "requestedTarget")
+        ? { requestedTarget: metadataString(metadata, "target") ?? metadataString(metadata, "requestedTarget") }
+        : {}),
+    };
+    const placement = this.resolvePlacement(placementRequest);
+    await this.edgeOptions?.telemetry?.emit({
+      name: "edge.target.resolved",
+      subjectId: context.subject?.id ?? context.user.id,
+      tenantId: metadataString(metadata, "tenantId"),
+      targetName: placement.targetName,
+      deploymentId: server.name,
+      downstreamSessionId: context.transport.sessionId,
+      outcome: placement.kind,
+      metadata: { source: placement.source },
+    }).catch(() => undefined);
+    if (placement.kind === "cloud") {
+      this.assertCloudLaunchReady(server);
+      context.execution = {
+        kind: "cloud",
+        targetName: placement.targetName,
+        deploymentId: server.name,
+      };
+      return server.withProxyContext(context, cloud);
+    }
+
+    if (this.edgeOptions?.capabilityCache && isDiscoveryOperation(context.operation)) {
+      const tenantId = metadataString(metadata, "tenantId")
+        ?? (typeof context.subject?.metadata?.tenantId === "string" ? context.subject.metadata.tenantId : undefined)
+        ?? "default";
+      context.execution = {
+        kind: "edge-cache",
+        targetName: placement.targetName,
+        deploymentId: server.name,
+        tenantId,
+      };
+      const discovery = this.edgeOptions.capabilityCache.discoveryTransport(tenantId, server.name);
+      const run = () => edge(discovery);
+      return discovery.withProxyContext ? discovery.withProxyContext(context, run) : run();
+    }
+
+    const sessionId = context.transport.sessionId;
+    if (!sessionId) {
+      throw edgeError("EDGE_UNAVAILABLE", "Edge execution requires a downstream MCP session.", {
+        details: { targetName: placement.targetName, serverName: server.name },
+      });
+    }
+    const edgeTransport = this.edgeOptions?.transport;
+    if (!edgeTransport) {
+      throw edgeError("EDGE_UNAVAILABLE", "No edge transport is configured for the selected target.", {
+        details: { targetName: placement.targetName, serverName: server.name },
+      });
+    }
+    const pin = await this.pinSessionTarget({
+      ...placementRequest,
+      sessionId,
+      ...(metadataString(metadata, "requestedDeviceId")
+        ? { requestedDeviceId: metadataString(metadata, "requestedDeviceId") }
+        : {}),
+      ...(metadataString(metadata, "tenantId") ? { tenantId: metadataString(metadata, "tenantId") } : {}),
+      ...(metadataNumber(metadata, "connectionGeneration") !== undefined
+        ? { connectionGeneration: metadataNumber(metadata, "connectionGeneration") }
+        : {}),
+    });
+    if (pin.kind !== "edge") {
+      throw edgeError("EDGE_PROTOCOL", "Edge placement unexpectedly resolved to cloud during pinning.", {
+        details: { targetName: placement.targetName, serverName: server.name },
+      });
+    }
+    context.execution = {
+      kind: "edge",
+      targetName: pin.targetName,
+      deploymentId: server.name,
+      edgeNodeId: pin.binding.edgeNodeId,
+      connectionGeneration: pin.binding.connectionGeneration,
+      reused: pin.reused,
+    };
+    await this.edgeOptions?.telemetry?.emit({
+      name: "edge.session.bound",
+      subjectId: context.subject?.id ?? context.user.id,
+      tenantId: metadataString(metadata, "tenantId"),
+      targetName: pin.targetName,
+      deploymentId: server.name,
+      edgeNodeId: pin.binding.edgeNodeId,
+      connectionGeneration: pin.binding.connectionGeneration,
+      downstreamSessionId: sessionId,
+      outcome: pin.reused ? "reused" : "created",
+    }).catch(() => undefined);
+    const run = () => edge(edgeTransport);
+    return edgeTransport.withProxyContext ? edgeTransport.withProxyContext(context, run) : run();
+  }
+
+  /** Compile and validate a cloud stdio recipe before dispatch can start it. */
+  private assertCloudLaunchReady(server: McpServer): void {
+    if (!(server.transport instanceof StdioTransport)) {
+      return;
+    }
+    const recipe = server.transport.toLaunchRecipe(this.setupSchemas.get(server.name));
+    const unresolved = server.transport.unresolvedCloudRuntimeRefs();
+    if (unresolved.length > 0) {
+      throw edgeError("EDGE_UNRESOLVED_RUNTIME_INPUT", `Cloud launch for "${server.name}" has unresolved runtime inputs.`, {
+        details: { serverName: server.name, refs: unresolved, recipeDigest: recipe.digest },
+      });
+    }
+  }
+
+  /** Remove every session-target binding for a downstream session. @pk */
+  async endEdgeSession(sessionId: string): Promise<void> {
+    await this.edgeSessionPinner()?.endSession(sessionId);
+  }
+
+  /** Remove every session-target binding on runtime shutdown. @pk */
+  async shutdownEdgeSessions(): Promise<void> {
+    await this.edgeSessionPinner()?.shutdown();
+    this.edgeSessionPinnerCache = undefined;
+  }
+
+  /** Register a setup schema for a server. @pk */
+  registerServerSetup(serverName: string, schema: Record<string, SetupFieldDescriptor> | SetupSchema): void {
+    if (!this.serverByName.has(serverName)) {
+      throw new FentarisConfigError([
+        {
+          severity: "error",
+          code: "FENTARIS_CONFIG_HANDLE_UNKNOWN_SERVER",
+          title: "Setup schema references an unknown server",
+          message: `Setup schema for "${serverName}" does not match a configured upstream MCP server.`,
+          path: ["proxy", "mcp", serverName, "setup"],
+        },
+      ]);
+    }
+    const built = "version" in schema && "fields" in schema ? (schema as SetupSchema) : createSetupSchema(schema as Record<string, SetupFieldDescriptor>);
+    this.setupSchemas.set(serverName, built);
+  }
+
+  /** Record a placement binding unless a conflicting one already exists. @pk */
+  registerPlacementBinding(binding: PlacementBinding): void {
+    const existing = this.placementBindings.find(
+      (entry) =>
+        entry.serverName === binding.serverName &&
+        entry.scope === binding.scope &&
+        entry.groupId === binding.groupId &&
+        entry.userId === binding.userId &&
+        entry.targetName === binding.targetName,
+    );
+    if (existing) {
+      return;
+    }
+    this.placementBindings.push(binding);
+  }
+
+  /**
+   * Retrieve a user-scoped MCP handle. Records placement bindings without
+   * creating or authenticating a subject.
+   * @pk
+   */
+  user(userId: string): ProxyUserHandle {
+    if (typeof userId !== "string" || userId.trim() === "") {
+      throw new FentarisConfigError([
+        {
+          severity: "error",
+          code: "FENTARIS_CONFIG_USER_ID_EMPTY",
+          title: "Empty user id",
+          message: "app.user(id) requires a non-empty subject id.",
+          path: ["proxy", "user"],
+        },
+      ]);
+    }
+    this.fluentUsers.add(userId);
+    return new McpProxyUserHandle(this, userId);
   }
 
   /**
@@ -687,6 +1151,236 @@ export class McpProxy {
     this.materializeLocalNamespaces();
     this.refreshDerivedGovernanceState({ validate: true });
     assertValidFentarisConfig(this.runtimeValidationConfig);
+    const edgeDiagnostics = this.validateEdgeConfiguration();
+    if (edgeDiagnostics.length > 0) {
+      throw new FentarisConfigError(edgeDiagnostics);
+    }
+  }
+
+  /**
+   * Validate fluent and constructor-style target, setup, and placement
+   * declarations: unresolved user handles, missing targets, duplicate
+   * conflicting bindings, incompatible setup fields, undeclared runtime
+   * references, unused required fields, and unsafe secret defaults. Target
+   * bindings never grant MCP capability access.
+   * @pk
+   */
+  validateEdgeConfiguration(): FentarisDiagnostic[] {
+    const diagnostics: FentarisDiagnostic[] = [];
+
+    // Unresolved user handles: a user-scoped binding whose subject has no
+    // corresponding declared user in any group. We cannot know at config time
+    // whether an identity strategy will resolve it, so flag only the missing
+    // declared-subject case as a warning. @pk
+    const declaredUserIds = new Set<string>();
+    for (const group of this.groups) {
+      for (const user of group.users) {
+        declaredUserIds.add(user.id);
+      }
+    }
+    for (const userId of this.fluentUsers) {
+      if (!declaredUserIds.has(userId)) {
+        const hasBinding = this.placementBindings.some((binding) => binding.userId === userId);
+        if (hasBinding) {
+          diagnostics.push({
+            severity: "warning",
+            code: "FENTARIS_CONFIG_USER_UNRESOLVED",
+            title: "Unresolved user handle",
+            message: `app.user("${userId}") records placement bindings but no declared subject resolves this id.`,
+            path: ["proxy", "user", userId],
+            hint: "Ensure an identity strategy or declared group user resolves this subject before relying on its bindings.",
+          });
+        }
+      }
+    }
+
+    // Missing targets and duplicate conflicting bindings. @pk
+    const conflictKey = (binding: PlacementBinding) =>
+      `${binding.serverName}|${binding.scope}|${binding.groupId ?? ""}|${binding.userId ?? ""}`;
+    const seen = new Map<string, string>();
+    for (const binding of this.placementBindings) {
+      const path = ["proxy", "placement", binding.serverName, binding.scope, binding.groupId ?? binding.userId ?? "global"];
+      if (!this.serverByName.has(binding.serverName)) {
+        diagnostics.push({
+          severity: "error",
+          code: "FENTARIS_CONFIG_PLACEMENT_UNKNOWN_SERVER",
+          title: "Placement binding references an unknown server",
+          message: `Placement binding for "${binding.serverName}" does not match a configured upstream MCP server.`,
+          path,
+        });
+        continue;
+      }
+      if (!this.targets.has(binding.targetName) && !McpProxy.BUILTIN_TARGET_NAMES.has(binding.targetName)) {
+        diagnostics.push({
+          severity: "error",
+          code: "FENTARIS_CONFIG_PLACEMENT_UNKNOWN_TARGET",
+          title: "Placement binding references an unknown target",
+          message: `Execution target "${binding.targetName}" is not registered.`,
+          path,
+          hint: "Declare it with app.target(name, edge(...)) or use the built-in \"cloud\" target.",
+        });
+      }
+      const key = conflictKey(binding);
+      const previous = seen.get(key);
+      if (previous !== undefined && previous !== binding.targetName) {
+        diagnostics.push({
+          severity: "error",
+          code: "FENTARIS_CONFIG_PLACEMENT_DUPLICATE",
+          title: "Conflicting placement binding",
+          message: `Server "${binding.serverName}" has multiple target bindings (${previous}, ${binding.targetName}) for the same ${binding.scope} scope.`,
+          path,
+        });
+      } else if (previous === undefined) {
+        seen.set(key, binding.targetName);
+      }
+    }
+
+    // Setup schema validation and runtime-reference reconciliation. @pk
+    for (const [serverName, schema] of this.setupSchemas) {
+      const server = this.serverByName.get(serverName);
+      const schemaPath = ["proxy", "mcp", serverName, "setup"];
+      for (const diag of validateSetupSchema(schema)) {
+        diagnostics.push({
+          severity: diag.severity,
+          code: diag.code,
+          title: "Setup schema validation",
+          message: diag.message,
+          path: diag.field ? [...schemaPath, diag.field] : schemaPath,
+        });
+      }
+      if (!server) {
+        continue;
+      }
+      const recipe = this.serverLaunchRecipe(serverName);
+      if (!recipe) {
+        continue;
+      }
+      const fieldMap = schema.fields;
+      const referenced = new Set(recipe.setupFieldRefs);
+
+      // Undeclared runtime references: a token references a field not in the schema. @pk
+      for (const ref of referenced) {
+        if (!fieldMap[ref]) {
+          diagnostics.push({
+            severity: "error",
+            code: "EDGE_SETUP_UNDECLARED_REFERENCE",
+            title: "Undeclared runtime reference",
+            message: `Runtime reference "${ref}" used by "${serverName}" is not declared in its setup schema.`,
+            path: schemaPath,
+            hint: `Add a matching setup field for "${ref}".`,
+          });
+        }
+      }
+
+      // Incompatible setup fields: a secret runtime reference must map to a secret field. @pk
+      const secretRefs = this.collectSecretRuntimeRefs(server);
+      for (const ref of secretRefs) {
+        const field = fieldMap[ref];
+        if (field && field.kind !== "secret") {
+          diagnostics.push({
+            severity: "error",
+            code: "EDGE_SETUP_INCOMPATIBLE_FIELD",
+            title: "Incompatible setup field",
+            message: `Runtime secret reference "${ref}" is bound to a non-secret ${field.kind} field.`,
+            path: [...schemaPath, ref],
+          });
+        }
+      }
+
+      // Unused required fields: a required field not referenced by the recipe. @pk
+      for (const [fieldName, field] of Object.entries(fieldMap)) {
+        if (field.required && !referenced.has(fieldName) && field.kind !== "secret") {
+          diagnostics.push({
+            severity: "warning",
+            code: "EDGE_SETUP_UNUSED_REQUIRED",
+            title: "Unused required setup field",
+            message: `Required setup field "${fieldName}" is not referenced by the launch recipe.`,
+            path: [...schemaPath, fieldName],
+          });
+        }
+      }
+    }
+
+    // Statically overlapping group bindings with different targets are an
+    // actionable configuration error at startup. Dynamic overlap that cannot
+    // be known at startup is left to runtime EDGE_PLACEMENT_AMBIGUOUS errors.
+    // @pk
+    const staticSubjectGroups = new Map<string, string[]>();
+    for (const group of this.groups) {
+      for (const user of group.users) {
+        const list = staticSubjectGroups.get(user.id);
+        if (list) {
+          list.push(group.id);
+        } else {
+          staticSubjectGroups.set(user.id, [group.id]);
+        }
+      }
+    }
+    const userBindingKeys = new Set<string>();
+    for (const binding of this.placementBindings) {
+      if (binding.scope === "user" && binding.userId !== undefined) {
+        userBindingKeys.add(`${binding.serverName}|${binding.userId}`);
+      }
+    }
+    for (const overlap of detectStaticPlacementOverlaps({
+      subjectGroups: staticSubjectGroups,
+      bindings: this.placementBindings as readonly PlacementBindingModel[],
+      userBindings: userBindingKeys,
+    })) {
+      diagnostics.push({
+        severity: "error",
+        code: "FENTARIS_CONFIG_PLACEMENT_AMBIGUOUS",
+        title: "Overlapping group placement bindings",
+        message: `Subject "${overlap.subjectId}" belongs to groups binding "${overlap.serverName}" to different targets (${overlap.targets.join(", ")}).`,
+        path: ["proxy", "placement", overlap.serverName],
+        hint: "Add an app.user(subjectId).mcp(name).target(...) binding or align the group target declarations.",
+      });
+    }
+
+    // Validate edge target device selectors. @pk
+    for (const [name, target] of this.targets) {
+      if (target.kind === "edge") {
+        const selectorErrors = validateDeviceSelector(target.device);
+        for (const message of selectorErrors) {
+          diagnostics.push({
+            severity: "error",
+            code: "FENTARIS_CONFIG_TARGET_INVALID_SELECTOR",
+            title: "Invalid edge device selector",
+            message: `Target "${name}": ${message}`,
+            path: ["proxy", "target", name],
+          });
+        }
+      }
+    }
+
+    return diagnostics;
+  }
+
+  /** Compile a launch recipe for a registered server, if it uses stdio. @pk */
+  private serverLaunchRecipe(serverName: string): LaunchRecipe | undefined {
+    const server = this.serverByName.get(serverName);
+    if (!server) {
+      return undefined;
+    }
+    const transport = server.transport;
+    if (transport instanceof StdioTransport) {
+      const schema = this.setupSchemas.get(serverName);
+      return transport.toLaunchRecipe(schema);
+    }
+    return undefined;
+  }
+
+  /** Collect runtime secret references used by a server's stdio transport. @pk */
+  private collectSecretRuntimeRefs(server: McpServer): string[] {
+    const transport = server.transport;
+    if (!(transport instanceof StdioTransport)) {
+      return [];
+    }
+    const refs: string[] = [];
+    for (const token of transport.runtimeValueTokens()) {
+      if (token.kind === "secret") refs.push(token.ref);
+    }
+    return [...new Set(refs)];
   }
 
   private assertDeferredPolicyServerVisibilityValid(): void {
@@ -726,6 +1420,8 @@ export class McpProxy {
       this.exposureHandles.clear();
       this.httpServer = null;
       await Promise.all(this.serverCatalog.allServers().map((server) => server.close()));
+      // Remove every session-target binding and notify dependent workloads. @pk
+      await this.shutdownEdgeSessions();
     }, { shutdownTimeoutMs: options.shutdownTimeoutMs ?? this.lifecycleDefaults.shutdownTimeoutMs });
     await this.emitRuntimeEvent(createRuntimeEvent({
       name: "runtime.stop",
@@ -820,8 +1516,22 @@ export class McpProxy {
     const bindings = this.serverCatalog.resolve({ user: resolvedUser, subject: resolvedSubject, operation: "tools:list" });
     const results = await Promise.all(
       bindings.map(async ({ server }) => {
+        const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
+          operation: "tools:list",
+          serverName: server.name,
+          targetKind: "tool",
+          raw: params,
+          user: resolvedUser,
+          subject: resolvedSubject,
+          identity,
+        });
         const { user: userForServer } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
-        const result = await server.listTools(params, userForServer);
+        const result = await this.dispatchTargetOperation(
+          server,
+          context,
+          () => server.listTools(params, userForServer),
+          (transport) => transport.listTools(params),
+        );
         const tools = this.groups.length > 0
           ? filterToolsByGroupPolicies(result.tools, server.name, userGroups)
           : this.globalPolicy ? filterToolsByPolicy(result.tools, server.name, this.globalPolicy) : result.tools;
@@ -1003,7 +1713,15 @@ export class McpProxy {
             return Promise.resolve(new ResponseController().deny(`Unknown MCP server "${serverName}"`));
           }
 
-          return server.withProxyContext(context, () => this.forwardToolCall(params, upstreamUser, server));
+          return this.dispatchTargetOperation(
+            server,
+            context,
+            () => this.forwardToolCall(params, upstreamUser, server),
+            (transport) => server.runIsolated(upstreamUser, () => transport.callTool({
+              ...params,
+              name: toolName,
+            })),
+          );
         }));
       const response = context.res.applyInjections(result);
       this.writeAutoLog("success", log, request, context, startedAt, response);
@@ -1133,7 +1851,12 @@ export class McpProxy {
           const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
           context.credentialSources = credentialSource ? [credentialSource] : undefined;
           context.credentials.sources = context.credentialSources ?? [];
-          const upstream = await server.withProxyContext(context, () => server.listResources(params, userForServer));
+          const upstream = await this.dispatchTargetOperation(
+            server,
+            context,
+            () => server.listResources(params, userForServer),
+            (transport) => transport.listResources?.(params) ?? Promise.resolve({ resources: [] }),
+          );
           return {
             resources: upstream.resources.filter((resource) =>
               isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
@@ -1200,7 +1923,17 @@ export class McpProxy {
       context.credentials.sources = context.credentialSources ?? [];
       const result = await this.dispatchOperationRoutes(
         context,
-        async () => server.withProxyContext(context, () => server.readResource({ ...params, uri }, userForServer)),
+        async () => this.dispatchTargetOperation(
+          server,
+          context,
+          () => server.readResource({ ...params, uri }, userForServer),
+          (transport) => {
+            if (!transport.readResource) {
+              throw edgeError("EDGE_PROTOCOL", `Edge transport does not support resources for "${server.name}".`);
+            }
+            return transport.readResource({ ...params, uri });
+          },
+        ),
       ) as ReadResourceResult;
 
       return {
@@ -1252,7 +1985,12 @@ export class McpProxy {
           const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
           context.credentialSources = credentialSource ? [credentialSource] : undefined;
           context.credentials.sources = context.credentialSources ?? [];
-          const upstream = await server.withProxyContext(context, () => server.listResourceTemplates(params, userForServer));
+          const upstream = await this.dispatchTargetOperation(
+            server,
+            context,
+            () => server.listResourceTemplates(params, userForServer),
+            (transport) => transport.listResourceTemplates?.(params) ?? Promise.resolve({ resourceTemplates: [] }),
+          );
           return {
             resourceTemplates: upstream.resourceTemplates.filter((template) =>
               isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
@@ -1312,7 +2050,12 @@ export class McpProxy {
           const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
           context.credentialSources = credentialSource ? [credentialSource] : undefined;
           context.credentials.sources = context.credentialSources ?? [];
-          const upstream = await server.withProxyContext(context, () => server.listPrompts(params, userForServer));
+          const upstream = await this.dispatchTargetOperation(
+            server,
+            context,
+            () => server.listPrompts(params, userForServer),
+            (transport) => transport.listPrompts?.(params) ?? Promise.resolve({ prompts: [] }),
+          );
           return {
             prompts: upstream.prompts.filter((prompt) =>
               isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
@@ -1379,7 +2122,17 @@ export class McpProxy {
       context.credentials.sources = context.credentialSources ?? [];
       return this.dispatchOperationRoutes(
         context,
-        async () => server.withProxyContext(context, () => server.getPrompt({ ...params, name: promptName }, userForServer)),
+        async () => this.dispatchTargetOperation(
+          server,
+          context,
+          () => server.getPrompt({ ...params, name: promptName }, userForServer),
+          (transport) => {
+            if (!transport.getPrompt) {
+              throw edgeError("EDGE_PROTOCOL", `Edge transport does not support prompts for "${server.name}".`);
+            }
+            return transport.getPrompt({ ...params, name: promptName });
+          },
+        ),
       ) as Promise<GetPromptResult>;
     }) as Promise<GetPromptResult>;
   }
@@ -1426,7 +2179,17 @@ export class McpProxy {
       context.credentials.sources = context.credentialSources ?? [];
       return this.dispatchOperationRoutes(
         context,
-        async () => server.withProxyContext(context, () => server.complete(routed.params, userForServer)),
+        async () => this.dispatchTargetOperation(
+          server,
+          context,
+          () => server.complete(routed.params, userForServer),
+          (transport) => {
+            if (!transport.complete) {
+              throw edgeError("EDGE_PROTOCOL", `Edge transport does not support completions for "${server.name}".`);
+            }
+            return transport.complete(routed.params);
+          },
+        ),
       ) as Promise<CompleteResult>;
     }) as Promise<CompleteResult>;
   }
@@ -1524,6 +2287,10 @@ export class McpProxy {
       policy: this.globalPolicy,
     });
     await emitProxyEvent(this.eventHandlers, "session:end", { ctx: proxyContext });
+    // Release session-target bindings and notify dependent workloads. @pk
+    if (context.sessionId) {
+      await this.endEdgeSession(context.sessionId);
+    }
   }
 
   private materializeLocalNamespaces(): void {
@@ -2674,11 +3441,16 @@ export function createProxy(options: McpProxyOptions = {}): McpProxy {
 export const fentaris = createProxy;
 
 class McpProxyMcpHandle implements ProxyMcpHandle {
+  private readonly scope: PlacementScope;
+
   constructor(
     private readonly proxy: McpProxy,
     readonly name: string,
     private readonly groupId?: string,
-  ) {}
+    private readonly userId?: string,
+  ) {
+    this.scope = userId !== undefined ? "user" : groupId !== undefined ? "group" : "global";
+  }
 
   use(handler: ProxyMiddleware): ProxyMcpHandle;
   use(handler: LegacyMiddleware): ProxyMcpHandle;
@@ -2710,6 +3482,24 @@ class McpProxyMcpHandle implements ProxyMcpHandle {
       throw new Error(`Missing handler for proxy event "${eventName}"`);
     }
     this.proxy.registerServerEvent(this.name, eventName, filter, handler, this.groupId);
+    return this;
+  }
+
+  setup(schema: Record<string, SetupFieldDescriptor> | SetupSchema): ProxyMcpHandle {
+    this.proxy.registerServerSetup(this.name, schema);
+    return this;
+  }
+
+  target(targetName: string): ProxyMcpHandle {
+    // Defer target resolution to configuration validation so fluent and
+    // constructor-style declarations surface unknown targets consistently. @pk
+    this.proxy.registerPlacementBinding({
+      serverName: this.name,
+      scope: this.scope,
+      ...(this.groupId !== undefined ? { groupId: this.groupId } : {}),
+      ...(this.userId !== undefined ? { userId: this.userId } : {}),
+      targetName,
+    });
     return this;
   }
 
@@ -2772,6 +3562,26 @@ class McpProxyGroupHandle implements ProxyGroupHandle {
     }
     this.proxy.registerGroupEvent(this.id, eventName, filter, handler);
     return this;
+  }
+}
+
+/**
+ * Scoped user handle returned by `proxy.user(id)`. Records placement bindings
+ * without creating or authenticating a subject.
+ * @pk
+ */
+class McpProxyUserHandle implements ProxyUserHandle {
+  constructor(
+    private readonly proxy: McpProxy,
+    readonly id: string,
+  ) {}
+
+  mcp(name: string): ProxyMcpHandle {
+    return new McpProxyMcpHandle(this.proxy, name, undefined, this.id);
+  }
+
+  server(name: string): ProxyMcpHandle {
+    return this.mcp(name);
   }
 }
 
@@ -2847,6 +3657,23 @@ function toUpstreamEnv(binding: ServerCredentialBinding, credential: string): Re
 
 function isRecord(value: unknown): value is Record<string, string> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function metadataString(metadata: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function metadataNumber(metadata: Record<string, unknown> | undefined, key: string): number | undefined {
+  const value = metadata?.[key];
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
+}
+
+function isDiscoveryOperation(operation: ProxyContext["operation"]): boolean {
+  return operation === "tools:list"
+    || operation === "resources:list"
+    || operation === "resource-templates:list"
+    || operation === "prompts:list";
 }
 
 function serverNameFromProxyTool(toolName: string): string {

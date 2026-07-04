@@ -35,6 +35,7 @@ import type {
 import type { Policy, PolicyDecision } from "./policy.js";
 import type { McpServerOptions } from "../server/index.js";
 import type { User } from "../governance/index.js";
+import type { SetupFieldDescriptor, SetupSchema } from "../edge/index.js";
 import type {
   LocalCompletionHandler,
   LocalCompletionReference,
@@ -56,7 +57,33 @@ export type ProxyTransportContext = {
   type?: "http" | "stdio" | "sse" | "unknown";
   sessionId?: string;
   requestId?: string;
+  /** Absolute epoch deadline propagated to upstream/edge execution. @pk */
+  deadline?: number;
+  /** Downstream cancellation signal propagated to upstream/edge execution. @pk */
+  signal?: AbortSignal;
 };
+
+/** Selected execution target and pinned edge route for one operation. @pk */
+export type ProxyExecutionContext =
+  | {
+      kind: "cloud";
+      targetName: string;
+      deploymentId: string;
+    }
+  | {
+      kind: "edge-cache";
+      targetName: string;
+      deploymentId: string;
+      tenantId: string;
+    }
+  | {
+      kind: "edge";
+      targetName: string;
+      deploymentId: string;
+      edgeNodeId: string;
+      connectionGeneration: number;
+      reused: boolean;
+    };
 
 /**
  * Normalized authentication metadata exposed through the unified context.
@@ -141,6 +168,7 @@ export type ProxyContext = MiddlewareContext & {
   operation: ProxyOperation;
   requestId?: string;
   transport: ProxyTransportContext;
+  execution?: ProxyExecutionContext;
   auth: ProxyAuthContext;
   policy: ProxyPolicyContext;
   credentials: {
@@ -257,8 +285,33 @@ export type ProxyMcpHandle = {
   operation(operation: ProxyOperation, handler: ProxyOperationHandler): ProxyMcpHandle;
   on(eventName: ProxyEventName, handler: ProxyEventHandler): ProxyMcpHandle;
   on(eventName: ProxyEventName, filter: ProxyEventFilter, handler: ProxyEventHandler): ProxyMcpHandle;
+  /**
+   * Declare the setup schema describing runtime references required to launch
+   * this MCP. Target bindings do not grant MCP access.
+   * @pk
+   */
+  setup(schema: Record<string, SetupFieldDescriptor> | SetupSchema): ProxyMcpHandle;
+  /**
+   * Bind this MCP to a named execution target for the current scope
+   * (global, group, or user). `"cloud"` is the implicit built-in target.
+   * @pk
+   */
+  target(targetName: string): ProxyMcpHandle;
   ping(): Promise<HealthCheckResult>;
   health(): Promise<HealthCheckResult>;
+};
+
+/**
+ * Scoped user handle returned by `proxy.user(id)`. Records placement bindings
+ * without creating or authenticating a subject.
+ * @pk
+ */
+export type ProxyUserHandle = {
+  readonly id: string;
+  /** Register or retrieve a scoped upstream MCP handle for this user. @pk */
+  mcp(name: string): ProxyMcpHandle;
+  /** Alias for `mcp(name)`. @pk */
+  server(name: string): ProxyMcpHandle;
 };
 
 export type {
