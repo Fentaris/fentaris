@@ -1,5 +1,18 @@
 # @fentaris/cli
 
+## 1.3.0
+
+### Minor Changes
+
+- 8d844aa: Add machine-readable project diagnostics with `fentaris check --json` for CI and agent-driven workflows.
+- 3d0ca93: Add a guided `fentaris auth` menu, interactive API-key setup with user discovery and redacted confirmation, and auth command support for SDK-only projects.
+
+### Patch Changes
+
+- 43998a5: Load `FENTARIS_AUTH_KEY` from the discovered project `.env` for local secrets and API-key commands before prompting.
+- Updated dependencies [f355a29]
+  - @fentaris/core@2.2.0
+
 ## 1.2.1
 
 ### Patch Changes

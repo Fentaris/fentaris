@@ -1,6 +1,6 @@
 {
   "name": "@fentaris/core",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "description": "Fentaris MCP Proxy - Core",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
