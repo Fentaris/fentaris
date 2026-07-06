@@ -121,7 +121,7 @@ Defined in: packages/core/src/errors/errors.ts:19
 
 @fentaris/core / DeviceSelectorBuilder
 
-Defined in: packages/core/src/edge/target.ts:50
+Defined in: packages/core/src/edge/target.ts:60
 
 Composable device selector builder. Own enumerable fields are serializable;
 the DeviceSelectorBuilder.or method lives on the prototype and is
@@ -137,7 +137,7 @@ omitted by `JSON.stringify`.
 
 > `readonly` `optional` **alias?**: `string`
 
-Defined in: packages/core/src/edge/target.ts:52
+Defined in: packages/core/src/edge/target.ts:62
 
 Alias for a `named` selector.
 
@@ -149,7 +149,7 @@ Alias for a `named` selector.
 
 > `readonly` `optional` **pool?**: `string`
 
-Defined in: packages/core/src/edge/target.ts:53
+Defined in: packages/core/src/edge/target.ts:63
 
 Pool name for a `pool` selector.
 
@@ -161,7 +161,7 @@ Pool name for a `pool` selector.
 
 > `readonly` `optional` **selectors?**: readonly `DeviceSelector`[]
 
-Defined in: packages/core/src/edge/target.ts:55
+Defined in: packages/core/src/edge/target.ts:65
 
 Ordered selectors for a `fallback` selector; first eligible wins.
 
@@ -173,7 +173,7 @@ Ordered selectors for a `fallback` selector; first eligible wins.
 
 > `readonly` `optional` **strategy?**: `TargetSelectionStrategy`
 
-Defined in: packages/core/src/edge/target.ts:54
+Defined in: packages/core/src/edge/target.ts:64
 
 Selection strategy for a `pool` selector.
 
@@ -185,7 +185,7 @@ Selection strategy for a `pool` selector.
 
 > `readonly` **type**: `DeviceSelectorType`
 
-Defined in: packages/core/src/edge/target.ts:51
+Defined in: packages/core/src/edge/target.ts:61
 
 #### Implementation of
 
@@ -197,7 +197,7 @@ Defined in: packages/core/src/edge/target.ts:51
 
 > **or**(`other`): `DeviceSelectorBuilder`
 
-Defined in: packages/core/src/edge/target.ts:98
+Defined in: packages/core/src/edge/target.ts:108
 
 Compose a fallback: resolve `this` first, then `other` if not eligible.
 
@@ -215,7 +215,7 @@ Compose a fallback: resolve `this` first, then `other` if not eligible.
 
 > **toJSON**(): `DeviceSelector`
 
-Defined in: packages/core/src/edge/target.ts:103
+Defined in: packages/core/src/edge/target.ts:113
 
 Return a plain serializable selector object without prototype methods.
 
@@ -227,7 +227,7 @@ Return a plain serializable selector object without prototype methods.
 
 > `static` **named**(`alias`): `DeviceSelectorBuilder`
 
-Defined in: packages/core/src/edge/target.ts:82
+Defined in: packages/core/src/edge/target.ts:92
 
 Resolve a control-plane named alias to a device.
 
@@ -245,7 +245,7 @@ Resolve a control-plane named alias to a device.
 
 > `static` **pool**(`name`, `strategy?`): `DeviceSelectorBuilder`
 
-Defined in: packages/core/src/edge/target.ts:90
+Defined in: packages/core/src/edge/target.ts:100
 
 Resolve one eligible device from a shared pool using `strategy`.
 
@@ -267,7 +267,7 @@ Resolve one eligible device from a shared pool using `strategy`.
 
 > `static` **session**(): `DeviceSelectorBuilder`
 
-Defined in: packages/core/src/edge/target.ts:72
+Defined in: packages/core/src/edge/target.ts:82
 
 Select the device requested during downstream session establishment.
 
@@ -279,7 +279,7 @@ Select the device requested during downstream session establishment.
 
 > `static` **userDefault**(): `DeviceSelectorBuilder`
 
-Defined in: packages/core/src/edge/target.ts:77
+Defined in: packages/core/src/edge/target.ts:87
 
 Select the subject's configured default device.
 
@@ -10907,7 +10907,7 @@ Runtime profiler, event, sink, and runtime error APIs.
 
 > **createSetupSchema**(`fields`, `version?`): `SetupSchema`
 
-Defined in: packages/core/src/edge/setup.ts:252
+Defined in: packages/core/src/edge/setup.ts:259
 
 Build a SetupSchema from keyed field descriptors. Field names are
 assigned from the object keys and must be valid identifiers.
@@ -11198,30 +11198,6 @@ Compare required manifest entries against stored secret refs.
 ## Returns
 
 `SecretsManifestDiff`
-
-  </Accordion>
-
-  <Accordion title="Core exports: functions/edge">
-
-@fentaris/core / edge
-
-> **edge**(`options`): `EdgeExecutionTarget`
-
-Defined in: packages/core/src/edge/target.ts:152
-
-Build an edge execution target. Also serves as the namespace for device
-selector builders (edge.sessionDevice, edge.userDefaultDevice,
-edge.namedDevice, edge.pool) and setup field builders.
-
-## Parameters
-
-### options
-
-`EdgeTargetOptions`
-
-## Returns
-
-`EdgeExecutionTarget`
 
   </Accordion>
 
@@ -11606,7 +11582,7 @@ Check whether a capability is allowed by a permission set.
 
 > **isCloudTarget**(`target`): `target is CloudExecutionTarget`
 
-Defined in: packages/core/src/edge/target.ts:174
+Defined in: packages/core/src/edge/target.ts:194
 
 Type guard for a cloud target.
 
@@ -11672,7 +11648,7 @@ Return true when an unknown value is a structurally valid terminal envelope.
 
 > **isEdgeTarget**(`target`): `target is EdgeExecutionTarget`
 
-Defined in: packages/core/src/edge/target.ts:179
+Defined in: packages/core/src/edge/target.ts:199
 
 Type guard for an edge target.
 
@@ -12684,7 +12660,7 @@ Helper to declare a user.
 
 > **validateDeviceSelector**(`selector`): `string`[]
 
-Defined in: packages/core/src/edge/target.ts:192
+Defined in: packages/core/src/edge/target.ts:212
 
 Validate a device selector structure and return collected diagnostic messages.
 
@@ -12726,13 +12702,35 @@ Validate Fentaris configuration and return structured diagnostics.
 
   </Accordion>
 
+  <Accordion title="Core exports: functions/validateLaunchRecipe">
+
+@fentaris/core / validateLaunchRecipe
+
+> **validateLaunchRecipe**(`value`): `LaunchRecipe`
+
+Defined in: packages/core/src/edge/recipe.ts:123
+
+Validate an already-decoded launch recipe object.
+
+## Parameters
+
+### value
+
+`unknown`
+
+## Returns
+
+`LaunchRecipe`
+
+  </Accordion>
+
   <Accordion title="Core exports: functions/validateSetupSchema">
 
 @fentaris/core / validateSetupSchema
 
 > **validateSetupSchema**(`schema`): `SetupDiagnostic`[]
 
-Defined in: packages/core/src/edge/setup.ts:277
+Defined in: packages/core/src/edge/setup.ts:284
 
 Validate a setup schema and return diagnostics. Rejects unsafe secret
 defaults, incompatible cloud-visible flags on sensitive fields, select
@@ -12874,7 +12872,7 @@ Whether the field must be supplied. Defaults to `true`.
 
 @fentaris/core / CloudExecutionTarget
 
-Defined in: packages/core/src/edge/target.ts:119
+Defined in: packages/core/src/edge/target.ts:129
 
 Cloud execution target: run the configured transport on the Fentaris host.
 
@@ -12884,7 +12882,7 @@ Cloud execution target: run the configured transport on the Fentaris host.
 
 > `readonly` **kind**: `"cloud"`
 
-Defined in: packages/core/src/edge/target.ts:120
+Defined in: packages/core/src/edge/target.ts:130
 
   </Accordion>
 
@@ -13078,7 +13076,7 @@ Tenant id, if known.
 
 @fentaris/core / DeviceSelector
 
-Defined in: packages/core/src/edge/target.ts:32
+Defined in: packages/core/src/edge/target.ts:42
 
 A serializable, composable device selector. Selector instances carry an `or`
 method on the prototype (not serialized) but expose only data fields through
@@ -13090,7 +13088,7 @@ method on the prototype (not serialized) but expose only data fields through
 
 > `readonly` `optional` **alias?**: `string`
 
-Defined in: packages/core/src/edge/target.ts:35
+Defined in: packages/core/src/edge/target.ts:45
 
 Alias for a `named` selector.
 
@@ -13098,7 +13096,7 @@ Alias for a `named` selector.
 
 > `readonly` `optional` **pool?**: `string`
 
-Defined in: packages/core/src/edge/target.ts:37
+Defined in: packages/core/src/edge/target.ts:47
 
 Pool name for a `pool` selector.
 
@@ -13106,7 +13104,7 @@ Pool name for a `pool` selector.
 
 > `readonly` `optional` **selectors?**: readonly `DeviceSelector`[]
 
-Defined in: packages/core/src/edge/target.ts:41
+Defined in: packages/core/src/edge/target.ts:51
 
 Ordered selectors for a `fallback` selector; first eligible wins.
 
@@ -13114,7 +13112,7 @@ Ordered selectors for a `fallback` selector; first eligible wins.
 
 > `readonly` `optional` **strategy?**: `TargetSelectionStrategy`
 
-Defined in: packages/core/src/edge/target.ts:39
+Defined in: packages/core/src/edge/target.ts:49
 
 Selection strategy for a `pool` selector.
 
@@ -13122,7 +13120,7 @@ Selection strategy for a `pool` selector.
 
 > `readonly` **type**: `DeviceSelectorType`
 
-Defined in: packages/core/src/edge/target.ts:33
+Defined in: packages/core/src/edge/target.ts:43
 
   </Accordion>
 
@@ -14404,7 +14402,7 @@ Defined in: node\_modules/.pnpm/typescript@6.0.3/node\_modules/typescript/lib/li
 
 @fentaris/core / EdgeExecutionTarget
 
-Defined in: packages/core/src/edge/target.ts:124
+Defined in: packages/core/src/edge/target.ts:134
 
 Edge execution target: run on an enrolled device selected by `device`.
 
@@ -14414,7 +14412,7 @@ Edge execution target: run on an enrolled device selected by `device`.
 
 > `readonly` **device**: `DeviceSelector`
 
-Defined in: packages/core/src/edge/target.ts:127
+Defined in: packages/core/src/edge/target.ts:137
 
 Device selector for this target.
 
@@ -14422,13 +14420,13 @@ Device selector for this target.
 
 > `readonly` **kind**: `"edge"`
 
-Defined in: packages/core/src/edge/target.ts:125
+Defined in: packages/core/src/edge/target.ts:135
 
 ### strategy?
 
 > `readonly` `optional` **strategy?**: `TargetSelectionStrategy`
 
-Defined in: packages/core/src/edge/target.ts:129
+Defined in: packages/core/src/edge/target.ts:139
 
 Selection strategy for pool selectors declared on the target.
 
@@ -15586,7 +15584,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:55
 
 @fentaris/core / EdgeTargetOptions
 
-Defined in: packages/core/src/edge/target.ts:136
+Defined in: packages/core/src/edge/target.ts:146
 
 Options for edge.
 
@@ -15596,7 +15594,7 @@ Options for edge.
 
 > **device**: `DeviceSelector`
 
-Defined in: packages/core/src/edge/target.ts:138
+Defined in: packages/core/src/edge/target.ts:148
 
 Device selector for the target.
 
@@ -15604,7 +15602,7 @@ Device selector for the target.
 
 > `optional` **strategy?**: `TargetSelectionStrategy`
 
-Defined in: packages/core/src/edge/target.ts:140
+Defined in: packages/core/src/edge/target.ts:150
 
 Selection strategy for pool resolution.
 
@@ -15929,7 +15927,7 @@ Whether the field must be supplied. Defaults to `true`.
 
 @fentaris/core / FileSystemFieldOptions
 
-Defined in: packages/core/src/edge/setup.ts:121
+Defined in: packages/core/src/edge/setup.ts:128
 
 Builder options for folder/file fields.
 
@@ -15939,25 +15937,25 @@ Builder options for folder/file fields.
 
 > `readonly` `optional` **access?**: `SetupFieldAccess`
 
-Defined in: packages/core/src/edge/setup.ts:122
+Defined in: packages/core/src/edge/setup.ts:129
 
 ### description?
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: packages/core/src/edge/setup.ts:125
+Defined in: packages/core/src/edge/setup.ts:132
 
 ### label?
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: packages/core/src/edge/setup.ts:124
+Defined in: packages/core/src/edge/setup.ts:131
 
 ### required?
 
 > `readonly` `optional` **required?**: `boolean`
 
-Defined in: packages/core/src/edge/setup.ts:123
+Defined in: packages/core/src/edge/setup.ts:130
 
   </Accordion>
 
@@ -16194,7 +16192,7 @@ Recipe serialization version.
 
 @fentaris/core / NumberFieldOptions
 
-Defined in: packages/core/src/edge/setup.ts:143
+Defined in: packages/core/src/edge/setup.ts:150
 
 Builder options for a number field.
 
@@ -16208,7 +16206,7 @@ Builder options for a number field.
 
 > `readonly` `optional` **cloudVisible?**: `boolean`
 
-Defined in: packages/core/src/edge/setup.ts:133
+Defined in: packages/core/src/edge/setup.ts:140
 
 #### Inherited from
 
@@ -16218,13 +16216,13 @@ Defined in: packages/core/src/edge/setup.ts:133
 
 > `readonly` `optional` **default?**: `number`
 
-Defined in: packages/core/src/edge/setup.ts:144
+Defined in: packages/core/src/edge/setup.ts:151
 
 ### description?
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: packages/core/src/edge/setup.ts:132
+Defined in: packages/core/src/edge/setup.ts:139
 
 #### Inherited from
 
@@ -16234,7 +16232,7 @@ Defined in: packages/core/src/edge/setup.ts:132
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: packages/core/src/edge/setup.ts:131
+Defined in: packages/core/src/edge/setup.ts:138
 
 #### Inherited from
 
@@ -16244,19 +16242,19 @@ Defined in: packages/core/src/edge/setup.ts:131
 
 > `readonly` `optional` **max?**: `number`
 
-Defined in: packages/core/src/edge/setup.ts:146
+Defined in: packages/core/src/edge/setup.ts:153
 
 ### min?
 
 > `readonly` `optional` **min?**: `number`
 
-Defined in: packages/core/src/edge/setup.ts:145
+Defined in: packages/core/src/edge/setup.ts:152
 
 ### required?
 
 > `readonly` `optional` **required?**: `boolean`
 
-Defined in: packages/core/src/edge/setup.ts:130
+Defined in: packages/core/src/edge/setup.ts:137
 
 #### Inherited from
 
@@ -16973,7 +16971,7 @@ Name of the setup field this token resolves to.
 
 @fentaris/core / ScalarFieldOptions
 
-Defined in: packages/core/src/edge/setup.ts:129
+Defined in: packages/core/src/edge/setup.ts:136
 
 Builder options for simple scalar fields.
 
@@ -16988,25 +16986,25 @@ Builder options for simple scalar fields.
 
 > `readonly` `optional` **cloudVisible?**: `boolean`
 
-Defined in: packages/core/src/edge/setup.ts:133
+Defined in: packages/core/src/edge/setup.ts:140
 
 ### description?
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: packages/core/src/edge/setup.ts:132
+Defined in: packages/core/src/edge/setup.ts:139
 
 ### label?
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: packages/core/src/edge/setup.ts:131
+Defined in: packages/core/src/edge/setup.ts:138
 
 ### required?
 
 > `readonly` `optional` **required?**: `boolean`
 
-Defined in: packages/core/src/edge/setup.ts:130
+Defined in: packages/core/src/edge/setup.ts:137
 
   </Accordion>
 
@@ -17191,7 +17189,7 @@ Whether the field must be supplied. Defaults to `true`.
 
 @fentaris/core / SelectFieldOptions
 
-Defined in: packages/core/src/edge/setup.ts:137
+Defined in: packages/core/src/edge/setup.ts:144
 
 Builder options for a select field.
 
@@ -17205,7 +17203,7 @@ Builder options for a select field.
 
 > `readonly` `optional` **cloudVisible?**: `boolean`
 
-Defined in: packages/core/src/edge/setup.ts:133
+Defined in: packages/core/src/edge/setup.ts:140
 
 #### Inherited from
 
@@ -17215,13 +17213,13 @@ Defined in: packages/core/src/edge/setup.ts:133
 
 > `readonly` `optional` **default?**: `string`
 
-Defined in: packages/core/src/edge/setup.ts:139
+Defined in: packages/core/src/edge/setup.ts:146
 
 ### description?
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: packages/core/src/edge/setup.ts:132
+Defined in: packages/core/src/edge/setup.ts:139
 
 #### Inherited from
 
@@ -17231,7 +17229,7 @@ Defined in: packages/core/src/edge/setup.ts:132
 
 > `readonly` `optional` **label?**: `string`
 
-Defined in: packages/core/src/edge/setup.ts:131
+Defined in: packages/core/src/edge/setup.ts:138
 
 #### Inherited from
 
@@ -17241,13 +17239,13 @@ Defined in: packages/core/src/edge/setup.ts:131
 
 > `readonly` **options**: readonly (`string` \| `SelectOption`)[]
 
-Defined in: packages/core/src/edge/setup.ts:138
+Defined in: packages/core/src/edge/setup.ts:145
 
 ### required?
 
 > `readonly` `optional` **required?**: `boolean`
 
-Defined in: packages/core/src/edge/setup.ts:130
+Defined in: packages/core/src/edge/setup.ts:137
 
 #### Inherited from
 
@@ -17846,7 +17844,7 @@ Logical execution-target name the binding pins.
 
 @fentaris/core / SetupDiagnostic
 
-Defined in: packages/core/src/edge/setup.ts:240
+Defined in: packages/core/src/edge/setup.ts:247
 
 A diagnostic produced by setup schema validation.
 
@@ -17856,25 +17854,25 @@ A diagnostic produced by setup schema validation.
 
 > `readonly` **code**: `"EDGE_PLACEMENT_AMBIGUOUS"` \| `"EDGE_UNAUTHORIZED_TARGET"` \| `"EDGE_UNAVAILABLE"` \| `"EDGE_CAPACITY"` \| `"EDGE_PROTOCOL"` \| `"EDGE_WORKLOAD"` \| `"EDGE_GRANT"` \| `"EDGE_UNRESOLVED_RUNTIME_INPUT"` \| `` `EDGE_SETUP_${string}` ``
 
-Defined in: packages/core/src/edge/setup.ts:242
+Defined in: packages/core/src/edge/setup.ts:249
 
 ### field?
 
 > `readonly` `optional` **field?**: `string`
 
-Defined in: packages/core/src/edge/setup.ts:243
+Defined in: packages/core/src/edge/setup.ts:250
 
 ### message
 
 > `readonly` **message**: `string`
 
-Defined in: packages/core/src/edge/setup.ts:244
+Defined in: packages/core/src/edge/setup.ts:251
 
 ### severity
 
 > `readonly` **severity**: `"error"` \| `"warning"`
 
-Defined in: packages/core/src/edge/setup.ts:241
+Defined in: packages/core/src/edge/setup.ts:248
 
   </Accordion>
 
@@ -17882,7 +17880,7 @@ Defined in: packages/core/src/edge/setup.ts:241
 
 @fentaris/core / SetupSchema
 
-Defined in: packages/core/src/edge/setup.ts:113
+Defined in: packages/core/src/edge/setup.ts:120
 
 A normalized, versioned setup schema.
 
@@ -17892,7 +17890,7 @@ A normalized, versioned setup schema.
 
 > `readonly` **fields**: `Readonly`\<`Record`\<`string`, `SetupField`\>\>
 
-Defined in: packages/core/src/edge/setup.ts:117
+Defined in: packages/core/src/edge/setup.ts:124
 
 Fields keyed by name.
 
@@ -17900,7 +17898,7 @@ Fields keyed by name.
 
 > `readonly` **version**: `number`
 
-Defined in: packages/core/src/edge/setup.ts:115
+Defined in: packages/core/src/edge/setup.ts:122
 
 Schema version; bumped on incompatible field changes.
 
@@ -18617,7 +18615,7 @@ Defined in: packages/core/src/types/shared.ts:50
 
 > **DeviceSelectorType** = `"session"` \| `"user-default"` \| `"named"` \| `"pool"` \| `"fallback"`
 
-Defined in: packages/core/src/edge/target.ts:19
+Defined in: packages/core/src/edge/target.ts:29
 
 Device selector discriminator.
 
@@ -18893,7 +18891,7 @@ Defined in: packages/core/src/types/policy.ts:141
 
 > **ExecutionTarget** = `CloudExecutionTarget` \| `EdgeExecutionTarget`
 
-Defined in: packages/core/src/edge/target.ts:133
+Defined in: packages/core/src/edge/target.ts:143
 
 A reusable execution target declaration.
 
@@ -24960,7 +24958,7 @@ Filesystem access level for folder/file grants.
 
 @fentaris/core / SetupFieldDescriptor
 
-> **SetupFieldDescriptor** = `Omit`\<`SetupField`, `"name"`\>
+> **SetupFieldDescriptor** = `Omit`\<`FolderSetupField`, `"name"`\> \| `Omit`\<`FileSetupField`, `"name"`\> \| `Omit`\<`SecretSetupField`, `"name"`\> \| `Omit`\<`StringSetupField`, `"name"`\> \| `Omit`\<`BooleanSetupField`, `"name"`\> \| `Omit`\<`NumberSetupField`, `"name"`\> \| `Omit`\<`SelectSetupField`, `"name"`\>
 
 Defined in: packages/core/src/edge/setup.ts:110
 
@@ -25349,7 +25347,7 @@ Defined in: packages/core/src/types/shared.ts:28
 
 > **TargetKind** = `"cloud"` \| `"edge"`
 
-Defined in: packages/core/src/edge/target.ts:13
+Defined in: packages/core/src/edge/target.ts:23
 
 Execution target kind.
 
@@ -25361,7 +25359,7 @@ Execution target kind.
 
 > **TargetSelectionStrategy** = `"least-loaded"` \| `"random"` \| `"round-robin"` \| `"sticky"`
 
-Defined in: packages/core/src/edge/target.ts:16
+Defined in: packages/core/src/edge/target.ts:26
 
 Strategy for selecting one device from a shared pool.
 
@@ -25721,9 +25719,185 @@ Permission helper for approval callbacks.
 
 > `const` **cloud**: `CloudExecutionTarget`
 
-Defined in: packages/core/src/edge/target.ts:144
+Defined in: packages/core/src/edge/target.ts:154
 
 The implicit built-in cloud target.
+
+  </Accordion>
+
+  <Accordion title="Core exports: variables/edge">
+
+@fentaris/core / edge
+
+> `const` **edge**: (`options`) => `EdgeExecutionTarget` & `object`
+
+Defined in: packages/core/src/edge/target.ts:162
+
+Build an edge execution target. Also serves as the namespace for device
+selector builders (edge.sessionDevice, edge.userDefaultDevice,
+edge.namedDevice, edge.pool) and setup field builders.
+
+## Type Declaration
+
+### boolean
+
+> **boolean**: (`options?`) => `Omit`\<`BooleanSetupField`, `"name"`\> = `setupBoolean`
+
+Build a boolean field.
+
+#### Parameters
+
+##### options?
+
+`ScalarFieldOptions` & `object`
+
+#### Returns
+
+`Omit`\<`BooleanSetupField`, `"name"`\>
+
+### file
+
+> **file**: (`options?`) => `Omit`\<`FileSetupField`, `"name"`\> = `setupFile`
+
+Build a file grant field.
+
+#### Parameters
+
+##### options?
+
+`FileSystemFieldOptions`
+
+#### Returns
+
+`Omit`\<`FileSetupField`, `"name"`\>
+
+### folder
+
+> **folder**: (`options?`) => `Omit`\<`FolderSetupField`, `"name"`\> = `setupFolder`
+
+Build a folder grant field.
+
+#### Parameters
+
+##### options?
+
+`FileSystemFieldOptions`
+
+#### Returns
+
+`Omit`\<`FolderSetupField`, `"name"`\>
+
+### namedDevice
+
+> **namedDevice**: (`alias`) => `DeviceSelectorBuilder`
+
+#### Parameters
+
+##### alias
+
+`string`
+
+#### Returns
+
+`DeviceSelectorBuilder`
+
+### number
+
+> **number**: (`options?`) => `Omit`\<`NumberSetupField`, `"name"`\> = `setupNumber`
+
+Build a number field.
+
+#### Parameters
+
+##### options?
+
+`NumberFieldOptions`
+
+#### Returns
+
+`Omit`\<`NumberSetupField`, `"name"`\>
+
+### pool
+
+> **pool**: (`name`, `strategy?`) => `DeviceSelectorBuilder`
+
+#### Parameters
+
+##### name
+
+`string`
+
+##### strategy?
+
+`TargetSelectionStrategy`
+
+#### Returns
+
+`DeviceSelectorBuilder`
+
+### secret
+
+> **secret**: (`options?`) => `Omit`\<`SecretSetupField`, `"name"`\> = `setupSecret`
+
+Build a secret field. Secrets are always required and never cloud-visible.
+
+#### Parameters
+
+##### options?
+
+`Omit`\<`ScalarFieldOptions`, `"cloudVisible"`\>
+
+#### Returns
+
+`Omit`\<`SecretSetupField`, `"name"`\>
+
+### select
+
+> **select**: (`options`) => `Omit`\<`SelectSetupField`, `"name"`\> = `setupSelect`
+
+Build a select field with a closed value set.
+
+#### Parameters
+
+##### options
+
+`SelectFieldOptions`
+
+#### Returns
+
+`Omit`\<`SelectSetupField`, `"name"`\>
+
+### sessionDevice
+
+> **sessionDevice**: () => `DeviceSelectorBuilder`
+
+#### Returns
+
+`DeviceSelectorBuilder`
+
+### string
+
+> **string**: (`options?`) => `Omit`\<`StringSetupField`, `"name"`\> = `setupString`
+
+Build a free-form string field.
+
+#### Parameters
+
+##### options?
+
+`ScalarFieldOptions` & `object`
+
+#### Returns
+
+`Omit`\<`StringSetupField`, `"name"`\>
+
+### userDefaultDevice
+
+> **userDefaultDevice**: () => `DeviceSelectorBuilder`
+
+#### Returns
+
+`DeviceSelectorBuilder`
 
   </Accordion>
 
