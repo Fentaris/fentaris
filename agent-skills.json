@@ -1,0 +1,14 @@
+{
+  "name": "demo-project",
+  "version": "0.0.0",
+  "agentSkills": {
+    "dependencies": {
+      "fix-pr-issues": "file:/Users/gabry848/Desktop/fentaris/fentaris/.pi/skills/fix-pr-issues",
+      "fentaris-dev-pr-agent-coordination": "file:/Users/gabry848/Desktop/fentaris/fentaris/.codex/skills/fentaris-dev-pr-agent-coordination",
+      "fentaris-pr-release-workflow": "file:/Users/gabry848/Desktop/fentaris/fentaris/.codex/skills/fentaris-pr-release-workflow",
+      "fentaris-dev-pr-workflow": "file:/Users/gabry848/Desktop/fentaris/fentaris/.codex/skills/fentaris-dev-pr-workflow",
+      "fentaris-docs-style": "file:/Users/gabry848/Desktop/fentaris/fentaris/.codex/skills/fentaris-docs-style"
+    },
+    "devDependencies": {}
+  }
+}
