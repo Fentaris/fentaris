@@ -303,6 +303,38 @@ describe("command routing helpers", () => {
     });
   });
 
+  it("parses agent-native tools commands and filters", () => {
+    expect(parseCommand(["tools", "list", "--mcp", "github", "--as", "user:alice", "--limit", "10", "--json"])).toEqual({
+      kind: "ok",
+      path: ["tools", "list"],
+      command: {
+        name: "tools",
+        args: ["list"],
+        options: { mcp: "github", as: "user:alice", limit: "10", json: true },
+      },
+    });
+
+    expect(parseCommand(["tools", "schema", "github__create_issue", "--input", "--output", "--json"])).toEqual({
+      kind: "ok",
+      path: ["tools", "schema"],
+      command: {
+        name: "tools",
+        args: ["schema", "github__create_issue"],
+        options: { input: true, output: true, json: true },
+      },
+    });
+
+    expect(parseCommand(["tools", "auth", "status", "--mcp", "github", "--as", "user:alice", "--json"])).toEqual({
+      kind: "ok",
+      path: ["tools", "auth", "status"],
+      command: {
+        name: "tools",
+        args: ["auth", "status"],
+        options: { mcp: "github", as: "user:alice", json: true },
+      },
+    });
+  });
+
   it("parses dash-prefixed and inline option values", () => {
     expect(parseCommand(["secrets", "set", "github.token", "--value", "-secret-value"])).toEqual({
       kind: "ok",

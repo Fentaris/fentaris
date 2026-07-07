@@ -130,6 +130,25 @@ export {
   formatFentarisDiagnostics,
   validateFentarisConfig,
 } from "./config/index.js";
+/**
+ * Agent-native tool discovery helpers.
+ * @pk
+ */
+export { AgentToolDiscoveryService, ToolDiscoveryError, failure as agentJsonFailure, success as agentJsonSuccess } from "./tools/index.js";
+export type {
+  AgentJsonEnvelope,
+  AgentJsonFailure,
+  AgentJsonNextAction,
+  AgentJsonSuccess,
+  AgentJsonWarning,
+  AgentPagination,
+  AuthStatus,
+  CompactToolMetadata,
+  DetailedToolMetadata,
+  DiscoveryMetadata,
+  SchemaInspection,
+  ToolDiscoveryOptions,
+} from "./tools/index.js";
 export type {
   FentarisConfigPath,
   FentarisConfigValidationOptions,
@@ -145,7 +164,17 @@ export type {
  * MCP proxy options.
  * @pk
  */
-export type { AutoLogOptions, EdgeRuntimeOptions, IdentityResolverOptions, McpProxyOptions, McpProxyStartOptions, McpProxyStopOptions, PlacementBindingConfig } from "./proxy/index.js";
+export type {
+  AutoLogOptions,
+  EdgeRuntimeOptions,
+  FentarisCliMcpAccountConfig,
+  FentarisCliOptions,
+  IdentityResolverOptions,
+  McpProxyOptions,
+  McpProxyStartOptions,
+  McpProxyStopOptions,
+  PlacementBindingConfig,
+} from "./proxy/index.js";
 /**
  * MCP server wrapper.
  * @pk

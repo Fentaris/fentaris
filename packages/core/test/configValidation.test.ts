@@ -197,6 +197,37 @@ describe("config validation", () => {
     expect(result.diagnostics.map((entry) => entry.code)).not.toContain("FENTARIS_CONFIG_CREDENTIAL_MISSING");
   });
 
+  it("validates CLI MCP account selector defaults and allowed entries", () => {
+    const valid = validateFentarisConfig({
+      servers: [mcp("github", { transport: new TestTransport() })],
+      cli: {
+        mcpAccounts: {
+          github: { default: "user:alice", allowed: ["user:alice", "group:support"] },
+        },
+      },
+    });
+    expect(valid.valid).toBe(true);
+
+    const invalid = validateFentarisConfig({
+      servers: [mcp("github", { transport: new TestTransport() })],
+      cli: {
+        mcpAccounts: {
+          github: { default: "user:alice", allowed: ["group:support"] },
+          empty: { default: "", allowed: [] },
+          malformed: { default: "alice", allowed: ["alice"] },
+        },
+      },
+    });
+
+    expect(invalid.valid).toBe(false);
+    expect(invalid.diagnostics.map((entry) => entry.code)).toEqual(expect.arrayContaining([
+      "FENTARIS_CONFIG_CLI_MCP_ACCOUNT_DEFAULT_NOT_ALLOWED",
+      "FENTARIS_CONFIG_CLI_MCP_ACCOUNT_DEFAULT_MISSING",
+      "FENTARIS_CONFIG_CLI_MCP_ACCOUNT_ALLOWED_EMPTY",
+      "FENTARIS_CONFIG_CLI_MCP_ACCOUNT_SELECTOR_INVALID",
+    ]));
+  });
+
   it("throws structured diagnostics for invalid scoped handles", () => {
     const proxy = createProxy({
       servers: [mcp("global", { transport: new TestTransport() })],

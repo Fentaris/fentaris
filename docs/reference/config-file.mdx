@@ -129,6 +129,45 @@ Supported fields:
 
 If `entrypoint` is omitted, `fentaris secrets manifest` checks `src/index.ts`, `src/main.ts`, and `index.ts`. Pass `--entrypoint <path>` when the file uses another name.
 
+## Application Config: `cli.mcpAccounts`
+
+Agent-native tool discovery commands read `cli.mcpAccounts` from the Fentaris application config exported by the project entrypoint. Each MCP key declares the default selector and the selectors an agent may request with `--as`.
+
+```ts theme={null}
+import { defineFentarisConfig, mcp, policy } from "@fentaris/core";
+
+export default defineFentarisConfig({
+  servers: [
+    mcp("github", {
+      transport: githubTransport,
+    }),
+  ],
+  policy: policy("default").mcp("github").allow("*"),
+  cli: {
+    mcpAccounts: {
+      github: {
+        default: "user:alice",
+        allowed: ["user:alice", "group:support"],
+      },
+    },
+  },
+});
+```
+
+### `cli.mcpAccounts.<mcp>.default`
+
+Default account selector used when `fentaris tools ... --mcp <mcp>` omits `--as`.
+
+The selector must be present in `allowed`.
+
+### `cli.mcpAccounts.<mcp>.allowed`
+
+Selectors the CLI may use for the MCP. Values use `user:<id>` or `group:<id>`.
+
+<Note>
+  `cli.mcpAccounts` bounds CLI discovery choices. It is not a security boundary by itself; effective access still comes from Fentaris policy and credential resolution.
+</Note>
+
 ## Legacy Filename
 
 The CLI can still discover `fentaris.config.json`, but generated projects use `fentaris.json`.

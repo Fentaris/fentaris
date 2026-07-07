@@ -61,6 +61,7 @@ export function validateFentarisConfig(config: McpProxyOptions, options: Fentari
     validatePolicyVisibility(group.policy, visibleServersForGroup(group, servers), ["groups", index, "policy"], diagnostics, requirePolicyServerVisibility);
   }
   validateIdentity(config, groups, diagnostics);
+  validateCliMcpAccounts(config, diagnostics);
   validateCredentialReferences(config, groups, diagnostics);
   validateTransportContracts(servers, ["servers"], diagnostics);
   for (const [groupIndex, group] of groups.entries()) {
@@ -72,6 +73,83 @@ export function validateFentarisConfig(config: McpProxyOptions, options: Fentari
   }
 
   return toValidationResult(diagnostics);
+}
+
+function validateCliMcpAccounts(config: McpProxyOptions, diagnostics: FentarisDiagnostic[]): void {
+  const accounts = config.cli?.mcpAccounts;
+  if (accounts === undefined) {
+    return;
+  }
+  if (!accounts || typeof accounts !== "object" || Array.isArray(accounts)) {
+    diagnostics.push(diagnostic("error", "FENTARIS_CONFIG_CLI_MCP_ACCOUNTS_INVALID", "CLI MCP accounts must be an object", "Configure cli.mcpAccounts as an object keyed by MCP server name.", {
+      path: ["cli", "mcpAccounts"],
+    }));
+    return;
+  }
+
+  for (const [mcpKey, entry] of Object.entries(accounts)) {
+    const path = ["cli", "mcpAccounts", mcpKey];
+    if (!mcpKey.trim()) {
+      diagnostics.push(diagnostic("error", "FENTARIS_CONFIG_CLI_MCP_ACCOUNT_EMPTY_KEY", "CLI MCP account key cannot be empty", "Use the configured MCP server name as the account key.", { path }));
+    }
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      diagnostics.push(diagnostic("error", "FENTARIS_CONFIG_CLI_MCP_ACCOUNT_INVALID", "CLI MCP account entry is invalid", "Each entry must define default and allowed selectors.", { path }));
+      continue;
+    }
+
+    const account = entry as { default?: unknown; allowed?: unknown };
+    const defaultSelector = account.default;
+    const allowed = account.allowed;
+    if (typeof defaultSelector !== "string" || !defaultSelector.trim()) {
+      diagnostics.push(diagnostic("error", "FENTARIS_CONFIG_CLI_MCP_ACCOUNT_DEFAULT_MISSING", "CLI MCP account default is missing", `MCP "${mcpKey}" must define a non-empty default selector.`, {
+        path: [...path, "default"],
+        hint: "Use selectors such as user:alice or group:support.",
+      }));
+    } else if (!isValidMcpAccountSelector(defaultSelector)) {
+      diagnostics.push(invalidSelectorDiagnostic(defaultSelector, [...path, "default"]));
+    }
+
+    if (!Array.isArray(allowed) || allowed.length === 0) {
+      diagnostics.push(diagnostic("error", "FENTARIS_CONFIG_CLI_MCP_ACCOUNT_ALLOWED_EMPTY", "CLI MCP account allowed list is empty", `MCP "${mcpKey}" must list one or more allowed selectors.`, {
+        path: [...path, "allowed"],
+        hint: "Include the default selector in allowed.",
+      }));
+      continue;
+    }
+
+    const allowedSelectors = allowed.filter((selector): selector is string => typeof selector === "string");
+    for (const [index, selector] of allowed.entries()) {
+      if (typeof selector !== "string" || !selector.trim()) {
+        diagnostics.push(diagnostic("error", "FENTARIS_CONFIG_CLI_MCP_ACCOUNT_ALLOWED_INVALID", "CLI MCP account selector is invalid", `Allowed selector for MCP "${mcpKey}" must be a non-empty string.`, {
+          path: [...path, "allowed", index],
+          hint: "Use selectors such as user:alice or group:support.",
+        }));
+        continue;
+      }
+      if (!isValidMcpAccountSelector(selector)) {
+        diagnostics.push(invalidSelectorDiagnostic(selector, [...path, "allowed", index]));
+      }
+    }
+
+    if (typeof defaultSelector === "string" && defaultSelector.trim() && allowedSelectors.length > 0 && !allowedSelectors.includes(defaultSelector)) {
+      diagnostics.push(diagnostic("error", "FENTARIS_CONFIG_CLI_MCP_ACCOUNT_DEFAULT_NOT_ALLOWED", "CLI MCP account default is not allowed", `Default selector "${defaultSelector}" for MCP "${mcpKey}" is not present in allowed.`, {
+        path: [...path, "default"],
+        related: [{ path: [...path, "allowed"], message: "Allowed selectors for this MCP." }],
+        suggestions: [{ title: "Add the default selector to allowed", message: `Include "${defaultSelector}" in cli.mcpAccounts.${mcpKey}.allowed.` }],
+      }));
+    }
+  }
+}
+
+function isValidMcpAccountSelector(selector: string): boolean {
+  return /^(user|group):[A-Za-z0-9._@-]+$/u.test(selector);
+}
+
+function invalidSelectorDiagnostic(selector: string, path: Array<string | number>): FentarisDiagnostic {
+  return diagnostic("error", "FENTARIS_CONFIG_CLI_MCP_ACCOUNT_SELECTOR_INVALID", "CLI MCP account selector is invalid", `Selector "${selector}" is not valid.`, {
+    path,
+    hint: "Use selectors such as user:alice or group:support.",
+  });
 }
 
 /**
