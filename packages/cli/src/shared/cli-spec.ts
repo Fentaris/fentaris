@@ -78,6 +78,7 @@ export const cliSpec: CliCommandSpec = {
       commands: [
         { name: "auth", summary: "Manage local identity authentication." },
         { name: "secrets", summary: "Manage local credentials and secret manifests." },
+        { name: "tools", summary: "Discover effective MCP tools for configured accounts." },
       ],
     },
   ],
@@ -309,5 +310,127 @@ export const cliSpec: CliCommandSpec = {
         },
       },
     },
+    tools: {
+      name: "tools",
+      path: ["tools"],
+      description: "Discover effective MCP tools for configured accounts.",
+      usage: "fentaris tools [OPTIONS] [COMMAND]",
+      commandGroups: [
+        {
+          title: "Commands",
+          commands: [
+            { name: "list", summary: "List effective tools." },
+            { name: "search", summary: "Search effective tools." },
+            { name: "get", summary: "Inspect one tool." },
+            { name: "schema", summary: "Inspect one tool schema." },
+            { name: "auth", summary: "Inspect tool account authentication." },
+          ],
+        },
+      ],
+      options: [{ name: "help", short: "h", description: "Print help" }],
+      commands: {
+        list: {
+          name: "list",
+          path: ["tools", "list"],
+          description: "List effective MCP tools.",
+          usage: "fentaris tools list [OPTIONS]",
+          options: toolDiscoveryOptions(),
+        },
+        search: {
+          name: "search",
+          path: ["tools", "search"],
+          description: "Search effective MCP tools.",
+          usage: "fentaris tools search [OPTIONS] <query>",
+          arguments: [{ name: "query", required: true, description: "Search query." }],
+          options: toolDiscoveryOptions(),
+        },
+        get: {
+          name: "get",
+          path: ["tools", "get"],
+          description: "Inspect one effective MCP tool.",
+          usage: "fentaris tools get [OPTIONS] <tool>",
+          arguments: [{ name: "tool", required: true, description: "Proxied tool name, for example github__create_issue." }],
+          options: toolDiscoveryOptions(),
+        },
+        schema: {
+          name: "schema",
+          path: ["tools", "schema"],
+          description: "Inspect one effective MCP tool schema.",
+          usage: "fentaris tools schema [OPTIONS] <tool>",
+          arguments: [{ name: "tool", required: true, description: "Proxied tool name, for example github__create_issue." }],
+          options: [
+            ...toolDiscoveryOptions(),
+            { name: "input", description: "Return the input schema." },
+            { name: "output", description: "Return the output schema." },
+          ],
+        },
+        auth: {
+          name: "auth",
+          path: ["tools", "auth"],
+          description: "Inspect tool account authentication.",
+          usage: "fentaris tools auth [OPTIONS] [COMMAND]",
+          commandGroups: [
+            {
+              title: "Commands",
+              commands: [
+                { name: "list", summary: "List configured MCP account selectors." },
+                { name: "status", summary: "Inspect one MCP account selector." },
+                { name: "login", summary: "Start or describe login for one selector." },
+              ],
+            },
+          ],
+          options: [{ name: "help", short: "h", description: "Print help" }],
+          commands: {
+            list: {
+              name: "list",
+              path: ["tools", "auth", "list"],
+              description: "List configured MCP account selectors.",
+              usage: "fentaris tools auth list [OPTIONS]",
+              options: [{ name: "json", description: "Output a JSON envelope." }, { name: "help", short: "h", description: "Print help" }],
+            },
+            status: {
+              name: "status",
+              path: ["tools", "auth", "status"],
+              description: "Inspect one MCP account selector.",
+              usage: "fentaris tools auth status --mcp <MCP> --as <SELECTOR> [OPTIONS]",
+              options: authDiscoveryOptions(),
+            },
+            login: {
+              name: "login",
+              path: ["tools", "auth", "login"],
+              description: "Start or describe login for one selector.",
+              usage: "fentaris tools auth login --mcp <MCP> --as <SELECTOR> [OPTIONS]",
+              options: authDiscoveryOptions(),
+            },
+          },
+        },
+      },
+    },
   },
 };
+
+function toolDiscoveryOptions(): CliOptionSpec[] {
+  return [
+    { name: "json", description: "Output a JSON envelope." },
+    { name: "compact", description: "Return compact metadata." },
+    { name: "limit", valueName: "N", description: "Maximum number of tools to return. [default: 20]" },
+    { name: "cursor", valueName: "CURSOR", description: "Pagination cursor from a prior response." },
+    { name: "max-tokens", valueName: "N", description: "Best-effort output token budget." },
+    { name: "mcp", valueName: "MCP", description: "Filter to one MCP server." },
+    { name: "as", valueName: "SELECTOR", description: "Use a configured account selector such as user:alice or group:support." },
+    { name: "include", valueName: "TEXT", description: "Only include tools matching text. Comma-separated values are accepted." },
+    { name: "exclude", valueName: "TEXT", description: "Exclude tools matching text. Comma-separated values are accepted." },
+    { name: "refresh", description: "Bypass cached discovery data where supported." },
+    { name: "no-start", description: "Do not start stdio MCP servers for discovery." },
+    { name: "help", short: "h", description: "Print help" },
+  ];
+}
+
+function authDiscoveryOptions(): CliOptionSpec[] {
+  return [
+    { name: "mcp", valueName: "MCP", description: "Configured MCP server name." },
+    { name: "as", valueName: "SELECTOR", description: "Configured account selector." },
+    { name: "json", description: "Output a JSON envelope." },
+    { name: "help", short: "h", description: "Print help" },
+  ];
+}

@@ -153,6 +153,77 @@ fentaris build
 
 The built proxy runs with `node dist/index.js` or the generated project's `npm start` script.
 
+### `fentaris tools list`
+
+List effective MCP tools for a configured account context.
+
+```bash theme={null}
+fentaris tools list --mcp github --as user:alice --compact --json
+```
+
+Options:
+
+* `--json` - print the agent-facing JSON envelope.
+* `--compact` - return compact metadata instead of detailed schema-oriented records.
+* `--limit <n>` - maximum tools returned. Default: `20`.
+* `--cursor <cursor>` - continue from a previous page.
+* `--max-tokens <n>` - apply a best-effort response budget and return narrowing guidance when truncated.
+* `--mcp <name>` - restrict discovery to one upstream MCP server.
+* `--as <selector>` - use a configured selector such as `user:alice` or `group:support`.
+* `--include <text>` - include only matching tools. Comma-separated values are accepted.
+* `--exclude <text>` - exclude matching tools. Comma-separated values are accepted.
+* `--refresh` - request fresh discovery metadata where supported.
+* `--no-start` - do not start stdio MCP servers during discovery.
+
+JSON responses include `ok`, `data`, `warnings`, and `nextActions`. Collection responses also include `pagination`.
+
+### `fentaris tools search <query>`
+
+Search effective tools without loading every schema.
+
+```bash theme={null}
+fentaris tools search issue --mcp github --as user:alice --limit 10 --json
+```
+
+The command supports the same discovery flags as `tools list` and returns follow-up commands for exact inspection.
+
+### `fentaris tools get <tool>`
+
+Inspect one tool's availability and metadata.
+
+```bash theme={null}
+fentaris tools get github__create_issue --json
+```
+
+The tool name is the proxied Fentaris name, for example `github__create_issue`.
+
+### `fentaris tools schema <tool>`
+
+Inspect one tool schema without returning unrelated schemas.
+
+```bash theme={null}
+fentaris tools schema github__create_issue --input --output --json
+```
+
+Options:
+
+* `--input` - include the input schema.
+* `--output` - include the output schema when the upstream MCP server declares one.
+
+If an output schema is unavailable, the JSON response reports explicit availability metadata instead of inventing a schema.
+
+### `fentaris tools auth`
+
+Inspect configured MCP account selectors and login state without printing secrets.
+
+```bash theme={null}
+fentaris tools auth list --json
+fentaris tools auth status --mcp github --as user:alice --json
+fentaris tools auth login --mcp github --as user:alice --json
+```
+
+`auth list` returns each configured MCP key, its default selector, allowed selectors, and non-sensitive status. `auth login` starts a supported login flow when available or returns machine-readable delegated login instructions.
+
 ### `fentaris auth`
 
 Open the guided local API-key menu:

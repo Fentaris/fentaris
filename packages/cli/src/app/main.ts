@@ -5,6 +5,7 @@ import { runDev } from "../commands/dev.js";
 import { runDoctor } from "../commands/doctor.js";
 import { runInit } from "../commands/init.js";
 import { runSecrets } from "../commands/secrets.js";
+import { runTools } from "../commands/tools.js";
 import { cliVersion } from "../shared/constants.js";
 import { parseCommand } from "../shared/parse.js";
 import type { CliCommand, Prompt, Runtime } from "../shared/types.js";
@@ -74,6 +75,11 @@ async function route(command: CliCommand, runtime: Runtime): Promise<void> {
 
   if (command.name === "secrets") {
     await runSecrets(command, runtime);
+    return;
+  }
+
+  if (command.name === "tools") {
+    await runTools(command, runtime);
     return;
   }
 

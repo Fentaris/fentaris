@@ -261,6 +261,8 @@ export type McpProxyOptions = {
   setup?: Record<string, Record<string, SetupFieldDescriptor> | SetupSchema>;
   /** Constructor-style placement bindings. @pk */
   placements?: PlacementBindingConfig[];
+  /** Agent-facing CLI configuration. @pk */
+  cli?: FentarisCliOptions;
   /**
    * Edge execution wiring: control-plane device resolver, replaceable
    * session-binding store, expiry, and removal listener. When omitted, edge
@@ -268,6 +270,26 @@ export type McpProxyOptions = {
    * @pk
    */
   edge?: EdgeRuntimeOptions;
+};
+
+/**
+ * Agent-facing CLI configuration embedded in Fentaris app config.
+ * @pk
+ */
+export type FentarisCliOptions = {
+  /** Configured MCP account selectors available to CLI discovery/auth commands. @pk */
+  mcpAccounts?: Record<string, FentarisCliMcpAccountConfig>;
+};
+
+/**
+ * CLI account selector configuration for one MCP server.
+ * @pk
+ */
+export type FentarisCliMcpAccountConfig = {
+  /** Default selector used when `--as` is omitted for this MCP. @pk */
+  default: string;
+  /** Selectors the CLI may use for this MCP. @pk */
+  allowed: string[];
 };
 
 /**
