@@ -1,5 +1,7 @@
-## ADDED Requirements
+## Purpose
 
+Define the structural layout of the `@fentaris/core` package so that the runtime is organized by domain rather than a flat source tree, while preserving public API compatibility and enabling incremental, verifiable migration.
+## Requirements
 ### Requirement: Domain-oriented core layout
 
 `@fentaris/core` SHALL organize runtime source code into domain-owned folders instead of a mostly flat source tree.
@@ -15,18 +17,19 @@
 - **THEN** its primary implementation belongs to a domain folder that owns that concern rather than being added to a large generic module by default
 
 ### Requirement: Public API compatibility
-
-`@fentaris/core` SHALL preserve existing top-level public exports through the package entrypoint during the architecture migration.
+`@fentaris/core` SHALL preserve existing top-level public exports through the package entrypoint during the architecture migration and SHALL expose new public app-level governance APIs through the same package entrypoint.
 
 #### Scenario: Existing consumer imports core symbols
-
 - **WHEN** existing consumer code imports public symbols from `@fentaris/core`
 - **THEN** those imports continue to resolve without requiring new subpath imports
 
 #### Scenario: Implementation files move
-
 - **WHEN** an implementation moves from a flat source file into a domain folder
 - **THEN** `packages/core/src/index.ts` continues to export the same public symbol names
+
+#### Scenario: Consumer uses app-level governance API
+- **WHEN** consumer code imports `fentaris`, `user`, and related governance symbols from `@fentaris/core`
+- **THEN** the consumer can declare policies and groups through `app.policy(...)` and `app.group(...)` without requiring new subpath imports
 
 ### Requirement: Dedicated test tree
 
@@ -116,3 +119,4 @@ The architecture migration SHALL be implemented in phases that can be verified i
 
 - **WHEN** tests or build fail after a migration phase
 - **THEN** the phase can be isolated and corrected without requiring unrelated architectural moves to be reverted
+
