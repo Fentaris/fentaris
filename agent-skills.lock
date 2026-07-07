@@ -117,3 +117,16 @@ skills:
     fetchedAt: '2026-07-07T13:13:26.823Z'
     provenance:
       type: local
+  fentaris-cli-command-standards:
+    specifier: local:imported/fentaris-cli-command-standards
+    resolved: local:imported/fentaris-cli-command-standards
+    integrity: sha256:56d001462cfaab33a759f6f167fdc1219ad19a56209061fbf7036175925fe4ff
+    name: fentaris-cli-command-standards
+    canonicalPath: /Users/gabry848/.skillctl/skills/fentaris-cli-command-standards
+    fetchedAt: '2026-07-07T15:51:29.058Z'
+    provenance:
+      type: local
+      migratedFrom: project-scan
+      originalSource: .codex/skills/fentaris-cli-command-standards
+      originalPath: .codex/skills/fentaris-cli-command-standards
+      adapter: codex
