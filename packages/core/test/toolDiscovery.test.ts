@@ -86,6 +86,14 @@ describe("agent-native tool discovery", () => {
       output: { available: true, schema: { type: "object" } },
     });
     expect(JSON.stringify(result)).not.toContain("close_issue");
+
+    const defaultResult = await service.schema("github__create_issue", { mcp: "github" });
+    expect(defaultResult.ok).toBe(true);
+    expect(defaultResult.ok && defaultResult.data).toEqual({
+      name: "github__create_issue",
+      mcp: "github",
+      upstreamName: "create_issue",
+    });
   });
 
   it("adds pagination and narrowing guidance for max-token truncation", async () => {

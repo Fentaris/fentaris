@@ -169,7 +169,7 @@ export class AgentToolDiscoveryService {
       if (!tool) {
         throw new ToolDiscoveryError("FENTARIS_TOOL_NOT_FOUND", `Tool "${toolName}" was not found for the selected context.`);
       }
-      const includeInput = options.input !== false || options.output !== true;
+      const includeInput = options.input === true;
       const includeOutput = options.output === true;
       return success({
         name: tool.compact.name,
