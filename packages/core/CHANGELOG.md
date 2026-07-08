@@ -1,5 +1,16 @@
 # @fentaris/core
 
+## 2.3.0
+
+### Minor Changes
+
+- e46a7ba: Add agent-native MCP tool discovery and auth inspection. Core now validates `cli.mcpAccounts` selectors and exposes `AgentToolDiscoveryService` with stable JSON envelopes, policy-filtered effective tool listing, search, detail, schema inspection, account status, login affordances, pagination, and response budgeting. The CLI adds `fentaris tools list/search/get/schema` and `fentaris tools auth list/status/login`.
+
+### Patch Changes
+
+- e39be45: Expose the typed Edge setup builders on the public `edge` namespace and preserve each setup descriptor's discriminated field type.
+- b81f061: Return `requires-login` for agent tool auth status when an MCP server declares credential requirements.
+
 ## 2.2.0
 
 ### Minor Changes
