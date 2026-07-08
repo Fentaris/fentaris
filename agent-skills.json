@@ -1,0 +1,23 @@
+{
+  "name": "demo-project",
+  "version": "0.0.0",
+  "agentSkills": {
+    "dependencies": {
+      "fix-pr-issues": "local:imported/fix-pr-issues",
+      "fentaris-pr-release-workflow": "local:imported/fentaris-pr-release-workflow",
+      "fentaris-dev-pr-workflow": "local:imported/fentaris-dev-pr-workflow",
+      "fentaris-docs-style": "local:imported/fentaris-docs-style",
+      "fentaris-dev-pr-agent-coordination": "local:imported/fentaris-dev-pr-agent-coordination",
+      "openspec-apply-change": "local:imported/openspec-apply-change",
+      "source-command-opsx-apply": "local:imported/source-command-opsx-apply",
+      "source-command-opsx-archive": "local:imported/source-command-opsx-archive",
+      "source-command-opsx-explore": "local:imported/source-command-opsx-explore",
+      "source-command-opsx-propose": "local:imported/source-command-opsx-propose",
+      "openspec-archive-change": "local:imported/openspec-archive-change",
+      "openspec-explore": "local:imported/openspec-explore",
+      "openspec-propose": "local:imported/openspec-propose",
+      "fentaris-cli-command-standards": "local:imported/fentaris-cli-command-standards"
+    },
+    "devDependencies": {}
+  }
+}
