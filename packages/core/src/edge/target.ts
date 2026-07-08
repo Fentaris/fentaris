@@ -1,3 +1,13 @@
+import {
+  boolean as setupBoolean,
+  file as setupFile,
+  folder as setupFolder,
+  number as setupNumber,
+  secret as setupSecret,
+  select as setupSelect,
+  string as setupString,
+} from "./setup.js";
+
 /**
  * Reusable named execution targets and logical device selectors.
  *
@@ -149,26 +159,36 @@ export const cloud: CloudExecutionTarget = Object.freeze({ kind: "cloud" });
  * {@link edge.namedDevice}, {@link edge.pool}) and setup field builders.
  * @pk
  */
-export function edge(options: EdgeTargetOptions): EdgeExecutionTarget {
-  if (!options || typeof options !== "object") {
-    throw new TypeError("edge() requires an options object with a device selector");
-  }
-  const device = options.device instanceof DeviceSelectorBuilder ? options.device.toJSON() : options.device;
-  if (!device || typeof device.type !== "string") {
-    throw new TypeError("edge() requires a device selector");
-  }
-  return Object.freeze({
-    kind: "edge",
-    device,
-    ...(options.strategy ? { strategy: options.strategy } : {}),
-  });
-}
-
-// Device selector builders on the edge namespace. @pk
-edge.sessionDevice = (): DeviceSelectorBuilder => DeviceSelectorBuilder.session();
-edge.userDefaultDevice = (): DeviceSelectorBuilder => DeviceSelectorBuilder.userDefault();
-edge.namedDevice = (alias: string): DeviceSelectorBuilder => DeviceSelectorBuilder.named(alias);
-edge.pool = (name: string, strategy?: TargetSelectionStrategy): DeviceSelectorBuilder => DeviceSelectorBuilder.pool(name, strategy);
+export const edge = Object.assign(
+  function edge(options: EdgeTargetOptions): EdgeExecutionTarget {
+    if (!options || typeof options !== "object") {
+      throw new TypeError("edge() requires an options object with a device selector");
+    }
+    const device = options.device instanceof DeviceSelectorBuilder ? options.device.toJSON() : options.device;
+    if (!device || typeof device.type !== "string") {
+      throw new TypeError("edge() requires a device selector");
+    }
+    return Object.freeze({
+      kind: "edge",
+      device,
+      ...(options.strategy ? { strategy: options.strategy } : {}),
+    });
+  },
+  {
+    sessionDevice: (): DeviceSelectorBuilder => DeviceSelectorBuilder.session(),
+    userDefaultDevice: (): DeviceSelectorBuilder => DeviceSelectorBuilder.userDefault(),
+    namedDevice: (alias: string): DeviceSelectorBuilder => DeviceSelectorBuilder.named(alias),
+    pool: (name: string, strategy?: TargetSelectionStrategy): DeviceSelectorBuilder =>
+      DeviceSelectorBuilder.pool(name, strategy),
+    folder: setupFolder,
+    file: setupFile,
+    secret: setupSecret,
+    string: setupString,
+    boolean: setupBoolean,
+    number: setupNumber,
+    select: setupSelect,
+  },
+);
 
 /** Type guard for a cloud target. @pk */
 export function isCloudTarget(target: ExecutionTarget): target is CloudExecutionTarget {

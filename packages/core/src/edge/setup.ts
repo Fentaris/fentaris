@@ -107,7 +107,14 @@ export type SetupField =
   | SelectSetupField;
 
 /** A setup field descriptor before it is keyed into a schema. @pk */
-export type SetupFieldDescriptor = Omit<SetupField, "name">;
+export type SetupFieldDescriptor =
+  | Omit<FolderSetupField, "name">
+  | Omit<FileSetupField, "name">
+  | Omit<SecretSetupField, "name">
+  | Omit<StringSetupField, "name">
+  | Omit<BooleanSetupField, "name">
+  | Omit<NumberSetupField, "name">
+  | Omit<SelectSetupField, "name">;
 
 /** A normalized, versioned setup schema. @pk */
 export interface SetupSchema {
@@ -159,64 +166,64 @@ function common(
 }
 
 /** Build a folder grant field. @pk */
-export function folder(options?: FileSystemFieldOptions): FolderSetupField["kind"] extends never ? never : SetupFieldDescriptor {
+export function folder(options?: FileSystemFieldOptions): Omit<FolderSetupField, "name"> {
   return {
     kind: "folder",
     access: options?.access ?? "read-write",
     required: options?.required ?? true,
     ...(options?.label ? { label: options.label } : {}),
     ...(options?.description ? { description: options.description } : {}),
-  } as SetupFieldDescriptor;
+  };
 }
 
 /** Build a file grant field. @pk */
-export function file(options?: FileSystemFieldOptions): SetupFieldDescriptor {
+export function file(options?: FileSystemFieldOptions): Omit<FileSetupField, "name"> {
   return {
     kind: "file",
     access: options?.access ?? "read-write",
     required: options?.required ?? true,
     ...(options?.label ? { label: options.label } : {}),
     ...(options?.description ? { description: options.description } : {}),
-  } as SetupFieldDescriptor;
+  };
 }
 
 /** Build a secret field. Secrets are always required and never cloud-visible. @pk */
-export function secret(options?: Omit<ScalarFieldOptions, "cloudVisible">): SetupFieldDescriptor {
+export function secret(options?: Omit<ScalarFieldOptions, "cloudVisible">): Omit<SecretSetupField, "name"> {
   return {
     kind: "secret",
     required: options?.required ?? true,
     ...(options?.label ? { label: options.label } : {}),
     ...(options?.description ? { description: options.description } : {}),
-  } as SetupFieldDescriptor;
+  };
 }
 
 /** Build a free-form string field. @pk */
-export function string(options?: ScalarFieldOptions & { default?: string }): SetupFieldDescriptor {
+export function string(options?: ScalarFieldOptions & { default?: string }): Omit<StringSetupField, "name"> {
   return {
     ...common("string", options),
     kind: "string",
     ...(options?.default !== undefined ? { default: options.default } : {}),
-  } as SetupFieldDescriptor;
+  };
 }
 
 /** Build a boolean field. @pk */
-export function boolean(options?: ScalarFieldOptions & { default?: boolean }): SetupFieldDescriptor {
+export function boolean(options?: ScalarFieldOptions & { default?: boolean }): Omit<BooleanSetupField, "name"> {
   return {
     ...common("boolean", options),
     kind: "boolean",
     ...(options?.default !== undefined ? { default: options.default } : {}),
-  } as SetupFieldDescriptor;
+  };
 }
 
 /** Build a number field. @pk */
-export function number(options?: NumberFieldOptions): SetupFieldDescriptor {
+export function number(options?: NumberFieldOptions): Omit<NumberSetupField, "name"> {
   return {
     ...common("number", options),
     kind: "number",
     ...(options?.default !== undefined ? { default: options.default } : {}),
     ...(options?.min !== undefined ? { min: options.min } : {}),
     ...(options?.max !== undefined ? { max: options.max } : {}),
-  } as SetupFieldDescriptor;
+  };
 }
 
 function normalizeSelectOptions(options: readonly (string | SelectOption)[]): SelectOption[] {
@@ -224,7 +231,7 @@ function normalizeSelectOptions(options: readonly (string | SelectOption)[]): Se
 }
 
 /** Build a select field with a closed value set. @pk */
-export function select(options: SelectFieldOptions): SetupFieldDescriptor {
+export function select(options: SelectFieldOptions): Omit<SelectSetupField, "name"> {
   if (!Array.isArray(options.options) || options.options.length === 0) {
     throw new TypeError("select() requires a non-empty options array");
   }
@@ -233,7 +240,7 @@ export function select(options: SelectFieldOptions): SetupFieldDescriptor {
     kind: "select",
     options: normalizeSelectOptions(options.options),
     ...(options.default !== undefined ? { default: options.default } : {}),
-  } as SetupFieldDescriptor;
+  };
 }
 
 /** A diagnostic produced by setup schema validation. @pk */

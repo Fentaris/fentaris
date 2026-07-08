@@ -4,28 +4,6 @@
  * @pk
  */
 
-import { edge } from "./target.js";
-import * as setup from "./setup.js";
-
-// Attach setup field builders to the `edge` namespace so applications can call
-// `edge.folder()`, `edge.secret()`, etc. directly, matching the design where
-// `edge` is both a target builder and the setup/selector namespace. @pk
-(edge as unknown as {
-  folder: typeof setup.folder;
-  file: typeof setup.file;
-  secret: typeof setup.secret;
-  string: typeof setup.string;
-  boolean: typeof setup.boolean;
-  number: typeof setup.number;
-  select: typeof setup.select;
-}).folder = setup.folder;
-(edge as unknown as { file: typeof setup.file }).file = setup.file;
-(edge as unknown as { secret: typeof setup.secret }).secret = setup.secret;
-(edge as unknown as { string: typeof setup.string }).string = setup.string;
-(edge as unknown as { boolean: typeof setup.boolean }).boolean = setup.boolean;
-(edge as unknown as { number: typeof setup.number }).number = setup.number;
-(edge as unknown as { select: typeof setup.select }).select = setup.select;
-
 export {
   cloud,
   edge,
