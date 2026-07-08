@@ -1,5 +1,18 @@
 # @fentaris/cli
 
+## 1.4.0
+
+### Minor Changes
+
+- e46a7ba: Add agent-native MCP tool discovery and auth inspection. Core now validates `cli.mcpAccounts` selectors and exposes `AgentToolDiscoveryService` with stable JSON envelopes, policy-filtered effective tool listing, search, detail, schema inspection, account status, login affordances, pagination, and response budgeting. The CLI adds `fentaris tools list/search/get/schema` and `fentaris tools auth list/status/login`.
+
+### Patch Changes
+
+- Updated dependencies [e46a7ba]
+- Updated dependencies [e39be45]
+- Updated dependencies [b81f061]
+  - @fentaris/core@2.3.0
+
 ## 1.3.0
 
 ### Minor Changes
