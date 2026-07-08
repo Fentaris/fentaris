@@ -92,7 +92,7 @@ export type SchemaInspection = {
   output?: { available: boolean; schema?: unknown };
 };
 
-export type AuthStatus = "authenticated" | "requires-login" | "unsupported" | "unknown" | "blocked";
+export type AuthStatus = "authenticated" | "requires-login" | "unsupported" | "blocked";
 
 export type DiscoveryMetadata = {
   transportKind: "stdio" | "custom";
@@ -200,7 +200,7 @@ export class AgentToolDiscoveryService {
       return "unsupported";
     }
     const needsAuth = server.getCredentialBindings().length > 0 || Boolean(this.config.auth?.getBinding(mcp));
-    return needsAuth ? "unknown" : "authenticated";
+    return needsAuth ? "requires-login" : "authenticated";
   }
 
   authStatusEnvelope(mcp: string, selector: string): AgentJsonEnvelope<{ mcp: string; selector: string; status: AuthStatus; allowed: string[] }> {
@@ -283,7 +283,7 @@ export class AgentToolDiscoveryService {
       ...(tool.title ? { title: tool.title } : {}),
       ...(tool.description ? { description: tool.description } : {}),
       available: true,
-      authStatus: selector ? this.authStatus(serverName, selector) : "unknown",
+      authStatus: selector ? this.authStatus(serverName, selector) : "requires-login",
       schema: { input: tool.inputSchema ? "available" : "unavailable", output: outputSchema ? "available" : "unavailable" },
       discovery,
     };

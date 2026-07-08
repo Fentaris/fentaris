@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AgentToolDiscoveryService, StdioTransport, group, mcp, policy, user, type FentarisTransport } from "../src/index.js";
+import { AgentToolDiscoveryService, StdioTransport, credential, credentialEnv, group, mcp, policy, user, type FentarisTransport } from "../src/index.js";
 
 class ToolTransport implements FentarisTransport {
   constructor(private readonly tools: Array<Record<string, unknown>>) {}
@@ -139,6 +139,23 @@ describe("agent-native tool discovery", () => {
     expect(service.authStatusEnvelope("github", "group:unknown")).toMatchObject({
       ok: false,
       error: { code: "FENTARIS_AUTH_SELECTOR_NOT_ALLOWED" },
+    });
+  });
+
+  it("reports requires-login for servers with credential bindings", () => {
+    const service = new AgentToolDiscoveryService({
+      servers: [mcp("github", { transport: new ToolTransport([]), auth: { type: "bearer", credential: credential("github.token") } })],
+      defaults: { credentials: { "github.token": credentialEnv("GITHUB_TOKEN") } },
+      cli: { mcpAccounts: { github: { default: "user:alice", allowed: ["user:alice"] } } },
+    });
+
+    expect(service.authList()).toMatchObject({
+      ok: true,
+      data: [{ mcp: "github", statuses: [{ selector: "user:alice", status: "requires-login" }] }],
+    });
+    expect(service.authStatusEnvelope("github", "user:alice")).toMatchObject({
+      ok: true,
+      data: { status: "requires-login" },
     });
   });
 
