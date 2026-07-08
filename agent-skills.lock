@@ -1,120 +1,120 @@
 lockfileVersion: '1.0'
 skills:
-  openspec-apply-change:
-    specifier: /Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/openspec-apply-change
-    resolved: local:/Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/openspec-apply-change
-    integrity: sha256:94161007e4f4d62fdeb6e6e2ea9d0d354635d4d172afbf15239eeb11c181acb3
-    name: openspec-apply-change
-    canonicalPath: /Users/gabry848/.skillctl/skills/openspec-apply-change
-    fetchedAt: '2026-07-07T13:10:19.896Z'
-    provenance:
-      type: other
-  openspec-archive-change:
-    specifier: /Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/openspec-archive-change
-    resolved: local:/Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/openspec-archive-change
-    integrity: sha256:41ad865c54fe905d8a1826d2cccc2ea140cfa27cca694078f48ed0c2126f2481
-    name: openspec-archive-change
-    canonicalPath: /Users/gabry848/.skillctl/skills/openspec-archive-change
-    fetchedAt: '2026-07-07T13:10:19.897Z'
-    provenance:
-      type: other
-  openspec-explore:
-    specifier: /Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/openspec-explore
-    resolved: local:/Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/openspec-explore
-    integrity: sha256:bcd0492ff9441c2cb58ee2b2c651ca9267ebda224f1081e7b275055b75a9ebcf
-    name: openspec-explore
-    canonicalPath: /Users/gabry848/.skillctl/skills/openspec-explore
-    fetchedAt: '2026-07-07T13:10:19.898Z'
-    provenance:
-      type: other
-  openspec-propose:
-    specifier: /Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/openspec-propose
-    resolved: local:/Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/openspec-propose
-    integrity: sha256:4cb7a77963fcdb2f51e6b66dcb25c2bada9169a670b415a2b3d1be4fc51e137e
-    name: openspec-propose
-    canonicalPath: /Users/gabry848/.skillctl/skills/openspec-propose
-    fetchedAt: '2026-07-07T13:10:19.899Z'
-    provenance:
-      type: other
   source-command-opsx-apply:
-    specifier: /Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/source-command-opsx-apply
-    resolved: local:/Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/source-command-opsx-apply
+    specifier: local:imported/source-command-opsx-apply
+    resolved: local:imported/source-command-opsx-apply
     integrity: sha256:97137fb2eea45a42530c3f40c077e570e38d95afa321c72e4efc12f637327a55
     name: source-command-opsx-apply
-    canonicalPath: /Users/gabry848/.skillctl/skills/source-command-opsx-apply
-    fetchedAt: '2026-07-07T13:10:19.899Z'
+    canonicalPath: ~/.skillctl/skills/source-command-opsx-apply
+    fetchedAt: '2026-07-08T07:38:54.228Z'
     provenance:
-      type: other
+      type: local
   source-command-opsx-archive:
-    specifier: /Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/source-command-opsx-archive
-    resolved: local:/Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/source-command-opsx-archive
+    specifier: local:imported/source-command-opsx-archive
+    resolved: local:imported/source-command-opsx-archive
     integrity: sha256:0cd2d4505fcb4aca75e576a610629fa1971cb486a69916848b81ccc6767ae303
     name: source-command-opsx-archive
-    canonicalPath: /Users/gabry848/.skillctl/skills/source-command-opsx-archive
-    fetchedAt: '2026-07-07T13:10:19.900Z'
+    canonicalPath: ~/.skillctl/skills/source-command-opsx-archive
+    fetchedAt: '2026-07-08T07:38:54.287Z'
     provenance:
-      type: other
+      type: local
   source-command-opsx-explore:
-    specifier: /Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/source-command-opsx-explore
-    resolved: local:/Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/source-command-opsx-explore
+    specifier: local:imported/source-command-opsx-explore
+    resolved: local:imported/source-command-opsx-explore
     integrity: sha256:f154b216efc8d9939c34aaced75ba6a404d7166f3e47ea2a5a1b572a013b2061
     name: source-command-opsx-explore
-    canonicalPath: /Users/gabry848/.skillctl/skills/source-command-opsx-explore
-    fetchedAt: '2026-07-07T13:10:19.901Z'
+    canonicalPath: ~/.skillctl/skills/source-command-opsx-explore
+    fetchedAt: '2026-07-08T07:38:54.348Z'
     provenance:
-      type: other
+      type: local
   source-command-opsx-propose:
-    specifier: /Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/source-command-opsx-propose
-    resolved: local:/Users/gabry848/Desktop/fentaris/fentaris/.agents/skills/source-command-opsx-propose
+    specifier: local:imported/source-command-opsx-propose
+    resolved: local:imported/source-command-opsx-propose
     integrity: sha256:d871483bc8bad2bf9aa45ba3eca55a7a88fbc37d326e3ac6b9cfc28b6fae515f
     name: source-command-opsx-propose
-    canonicalPath: /Users/gabry848/.skillctl/skills/source-command-opsx-propose
-    fetchedAt: '2026-07-07T13:10:19.902Z'
-    provenance:
-      type: other
-  fentaris-dev-pr-agent-coordination:
-    specifier: /Users/gabry848/Desktop/fentaris/fentaris/.codex/skills/fentaris-dev-pr-agent-coordination
-    resolved: local:/Users/gabry848/Desktop/fentaris/fentaris/.codex/skills/fentaris-dev-pr-agent-coordination
-    integrity: sha256:9de37b3f37af2d780920330b7c681379761237e232248ecd83673014196c5233
-    name: fentaris-dev-pr-agent-coordination
-    canonicalPath: /Users/gabry848/.skillctl/skills/fentaris-dev-pr-agent-coordination
-    fetchedAt: '2026-07-07T13:13:19.545Z'
-    provenance:
-      type: local
-  fentaris-docs-style:
-    specifier: file:/Users/gabry848/Desktop/fentaris/fentaris/.codex/skills/fentaris-docs-style
-    resolved: local:/Users/gabry848/Desktop/fentaris/fentaris/.codex/skills/fentaris-docs-style
-    integrity: sha256:9a1268ef7c1c19fe340f5aa745fc76e028c777e5d3c29c1cca66a68bbf071bd6
-    name: fentaris-docs-style
-    canonicalPath: /Users/gabry848/.skillctl/skills/fentaris-docs-style
-    fetchedAt: '2026-07-07T13:13:24.185Z'
-    provenance:
-      type: local
-  fentaris-pr-release-workflow:
-    specifier: file:/Users/gabry848/Desktop/fentaris/fentaris/.codex/skills/fentaris-pr-release-workflow
-    resolved: local:/Users/gabry848/Desktop/fentaris/fentaris/.codex/skills/fentaris-pr-release-workflow
-    integrity: sha256:8e9374459224b49d2e0caf9ef07e525ac450a94bb3be520045a0363ecb625b19
-    name: fentaris-pr-release-workflow
-    canonicalPath: /Users/gabry848/.skillctl/skills/fentaris-pr-release-workflow
-    fetchedAt: '2026-07-07T13:13:24.177Z'
+    canonicalPath: ~/.skillctl/skills/source-command-opsx-propose
+    fetchedAt: '2026-07-08T07:38:54.411Z'
     provenance:
       type: local
   fix-pr-issues:
-    specifier: file:/Users/gabry848/Desktop/fentaris/fentaris/.pi/skills/fix-pr-issues
-    resolved: local:/Users/gabry848/Desktop/fentaris/fentaris/.pi/skills/fix-pr-issues
+    specifier: local:imported/fix-pr-issues
+    resolved: local:imported/fix-pr-issues
     integrity: sha256:9d39916c0cefd21969f6a8109fce804bd535860e1ad19f54b520d2ac4e674bd0
     name: fix-pr-issues
-    canonicalPath: /Users/gabry848/.skillctl/skills/fix-pr-issues
-    fetchedAt: '2026-07-07T13:13:26.816Z'
+    canonicalPath: ~/.skillctl/skills/fix-pr-issues
+    fetchedAt: '2026-07-08T07:38:10.460Z'
+    provenance:
+      type: local
+  fentaris-pr-release-workflow:
+    specifier: local:imported/fentaris-pr-release-workflow
+    resolved: local:imported/fentaris-pr-release-workflow
+    integrity: sha256:8e9374459224b49d2e0caf9ef07e525ac450a94bb3be520045a0363ecb625b19
+    name: fentaris-pr-release-workflow
+    canonicalPath: ~/.skillctl/skills/fentaris-pr-release-workflow
+    fetchedAt: '2026-07-08T07:38:10.525Z'
     provenance:
       type: local
   fentaris-dev-pr-workflow:
-    specifier: file:/Users/gabry848/Desktop/fentaris/fentaris/.codex/skills/fentaris-dev-pr-workflow
-    resolved: local:/Users/gabry848/Desktop/fentaris/fentaris/.codex/skills/fentaris-dev-pr-workflow
+    specifier: local:imported/fentaris-dev-pr-workflow
+    resolved: local:imported/fentaris-dev-pr-workflow
     integrity: sha256:91e7b871d618de9c8d0da3188e08edfc6e8fded2e2f010f81f1fe9ee6a8322cb
     name: fentaris-dev-pr-workflow
-    canonicalPath: /Users/gabry848/.skillctl/skills/fentaris-dev-pr-workflow
-    fetchedAt: '2026-07-07T13:13:26.823Z'
+    canonicalPath: ~/.skillctl/skills/fentaris-dev-pr-workflow
+    fetchedAt: '2026-07-08T07:38:10.589Z'
+    provenance:
+      type: local
+  fentaris-docs-style:
+    specifier: local:imported/fentaris-docs-style
+    resolved: local:imported/fentaris-docs-style
+    integrity: sha256:9a1268ef7c1c19fe340f5aa745fc76e028c777e5d3c29c1cca66a68bbf071bd6
+    name: fentaris-docs-style
+    canonicalPath: ~/.skillctl/skills/fentaris-docs-style
+    fetchedAt: '2026-07-08T07:38:10.658Z'
+    provenance:
+      type: local
+  fentaris-dev-pr-agent-coordination:
+    specifier: local:imported/fentaris-dev-pr-agent-coordination
+    resolved: local:imported/fentaris-dev-pr-agent-coordination
+    integrity: sha256:9de37b3f37af2d780920330b7c681379761237e232248ecd83673014196c5233
+    name: fentaris-dev-pr-agent-coordination
+    canonicalPath: ~/.skillctl/skills/fentaris-dev-pr-agent-coordination
+    fetchedAt: '2026-07-08T07:38:10.720Z'
+    provenance:
+      type: local
+  openspec-apply-change:
+    specifier: local:imported/openspec-apply-change
+    resolved: local:imported/openspec-apply-change
+    integrity: sha256:94161007e4f4d62fdeb6e6e2ea9d0d354635d4d172afbf15239eeb11c181acb3
+    name: openspec-apply-change
+    canonicalPath: ~/.skillctl/skills/openspec-apply-change
+    fetchedAt: '2026-07-08T07:38:10.786Z'
+    provenance:
+      type: local
+  openspec-archive-change:
+    specifier: local:imported/openspec-archive-change
+    resolved: local:imported/openspec-archive-change
+    integrity: sha256:41ad865c54fe905d8a1826d2cccc2ea140cfa27cca694078f48ed0c2126f2481
+    name: openspec-archive-change
+    canonicalPath: ~/.skillctl/skills/openspec-archive-change
+    fetchedAt: '2026-07-08T07:39:14.965Z'
+    provenance:
+      type: local
+  openspec-explore:
+    specifier: local:imported/openspec-explore
+    resolved: local:imported/openspec-explore
+    integrity: sha256:bcd0492ff9441c2cb58ee2b2c651ca9267ebda224f1081e7b275055b75a9ebcf
+    name: openspec-explore
+    canonicalPath: ~/.skillctl/skills/openspec-explore
+    fetchedAt: '2026-07-08T07:39:15.089Z'
+    provenance:
+      type: local
+  openspec-propose:
+    specifier: local:imported/openspec-propose
+    resolved: local:imported/openspec-propose
+    integrity: sha256:4cb7a77963fcdb2f51e6b66dcb25c2bada9169a670b415a2b3d1be4fc51e137e
+    name: openspec-propose
+    canonicalPath: ~/.skillctl/skills/openspec-propose
+    fetchedAt: '2026-07-08T07:39:15.209Z'
     provenance:
       type: local
   fentaris-cli-command-standards:
@@ -122,11 +122,7 @@ skills:
     resolved: local:imported/fentaris-cli-command-standards
     integrity: sha256:56d001462cfaab33a759f6f167fdc1219ad19a56209061fbf7036175925fe4ff
     name: fentaris-cli-command-standards
-    canonicalPath: /Users/gabry848/.skillctl/skills/fentaris-cli-command-standards
-    fetchedAt: '2026-07-07T15:51:29.058Z'
+    canonicalPath: ~/.skillctl/skills/fentaris-cli-command-standards
+    fetchedAt: '2026-07-08T07:39:15.333Z'
     provenance:
       type: local
-      migratedFrom: project-scan
-      originalSource: .codex/skills/fentaris-cli-command-standards
-      originalPath: .codex/skills/fentaris-cli-command-standards
-      adapter: codex
