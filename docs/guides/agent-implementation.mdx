@@ -1,0 +1,83 @@
+---
+title: "Agent implementation guide"
+description: "Rules and commands for coding agents that create or modify Fentaris projects."
+---
+
+Use this guide when Codex, Claude Code, or another coding agent is implementing a Fentaris project. The goal is to produce runnable code, leave secrets with the user, and verify the proxy before handoff.
+
+## Quick Start
+
+Read the docs index first, then inspect the local project:
+
+```bash theme={null}
+curl -s https://fentaris.mintlify.app/llms.txt
+ls
+test -f fentaris.json && cat fentaris.json
+```
+
+Prefer the high-level API for new code:
+
+```ts theme={null}
+import { fentaris, group, mcp, policy, stdio, user } from "@fentaris/core";
+```
+
+Run validation before handoff:
+
+```bash theme={null}
+fentaris check --offline
+fentaris doctor
+fentaris secrets manifest --check
+FENTARIS_API_KEY="<api-key>" fentaris doctor --runtime
+```
+
+## Implementation Rules
+
+Use `fentaris(...)`, `mcp(...)`, `stdio(...)`, `streamableHttp(...)`, `group(...)`, `user(...)`, and `policy(...)` for new projects. Use class constructors only when an existing project already uses them or when a low-level integration requires them.
+
+Do not invent, print, or commit real secrets. Leave `FENTARIS_AUTH_KEY`, raw API keys, and upstream tokens for the user unless they explicitly request disposable local values. When a project needs secrets, write the TypeScript credential references and hand off exact `fentaris auth` or `fentaris secrets` commands.
+
+Keep authorization durable. Put stable access control in `policy(...)` and group declarations. Use middleware, hooks, and local operation handlers for runtime checks, logging, validation, and side effects after policy has allowed a capability.
+
+## API Decision Table
+
+| Goal | Use | Avoid / note |
+| --- | --- | --- |
+| Declare an upstream MCP server | `app.mcp("name", options)` or `mcp("name", options)` | `app.group(...).mcp(...)` does not declare a server |
+| Add app-owned tools, resources, prompts, or completions | `app.local("name")` | Local namespace names must not collide with upstream server names |
+| Add static authorization | `policy("name").mcp("server").allow("tool")` | Middleware should not replace durable policy |
+| Add runtime argument checks | `app.mcp("server").tool(...)`, `app.local(...).tool(...)`, or middleware | Policy does not inspect arbitrary tool arguments |
+| Enable per-user API-key auth | `user(id, { apiKeys: [credentialJson("users.<id>.apiKeys.0")] })` plus `fentaris auth api-key add` | Do not generate or store raw API keys in app code |
+| Reference upstream credentials | `credential("github.token")`, `credentialJson(...)`, or `credentialEnv(...)` | Secret values stay outside committed TypeScript |
+| Store group-owned credentials | `group({ credentials: { "github.token": credentialJson(...) } })` plus `fentaris secrets set --group` | Match the CLI scope to the declaration scope |
+| Add local-only development access | `Policy.allowAll()` only in disposable examples | Production proxies should use least-privilege `policy(...)` rules |
+| Place work on an edge target | `app.target(...)` plus the target binding API documented for the edge flow | Target binding does not grant policy access |
+| Add group-scoped governance incrementally | `app.group(id).users(...).policy(...)` | Fluent group handles do not own credential sources |
+
+## Handoff Checklist
+
+Before returning the project, include:
+
+* files changed
+* commands run and their result
+* commands the user must run to provide secrets
+* MCP endpoint, usually `http://localhost:4000/mcp`
+* API key header, usually `x-fentaris-api-key`
+* expected allowed and denied test cases
+
+Use this handoff shape:
+
+```txt theme={null}
+Run:
+export FENTARIS_AUTH_KEY="<your-local-key>"
+fentaris auth api-key add alice --generate
+printf '%s' "$GITHUB_TOKEN" | fentaris secrets set github.token --group maintainers --value-stdin --non-interactive
+fentaris secrets manifest --check
+fentaris doctor --runtime
+```
+
+## Related Documentation
+
+* [Team-governed proxy](/guides/team-governed-proxy)
+* [Governance auth](/guides/governance-auth)
+* [Proxy setup](/guides/proxy-setup)
+* [API reference map](/reference-auto/api-map)
