@@ -6,6 +6,7 @@ import {
   isEdgeError,
   resolveDeviceSelector,
   requireDevice,
+  runtime,
   type DeviceResolution,
   type DeviceResolver,
   type DeviceResolverContext,
@@ -142,6 +143,20 @@ describe("group ambiguity rejection and convergence", () => {
 });
 
 describe("placement does not grant capability access", () => {
+  it("does not discover a policy-hidden group-scoped edge server through cloud fallback", async () => {
+    const proxy = new McpProxy({
+      servers: [runtimeInputServer("edge_demo")],
+      groups: [
+        group({ id: "developers", users: [user("alice")], policy: new Policy({ name: "developers" }) }),
+        group({ id: "maintainers", users: [user("marco")], policy: new Policy({ name: "maintainers" }).mcp("edge_demo").allow("echo") }),
+      ],
+    });
+    proxy.target("local-edge", edge({ device: edge.namedDevice("local-dev-machine") }));
+    proxy.group("maintainers").mcp("edge_demo").target("local-edge");
+
+    await expect(proxy.listTools(undefined, { id: "alice" })).resolves.toEqual({ tools: [] });
+  });
+
   it("the resolver exposes no capability enumeration and only returns a target name", () => {
     const r = resolver({ "personal-device": personalEdge }, [
       { serverName: "custom", scope: "global", targetName: "personal-device" },
@@ -237,6 +252,10 @@ function findDiagnostic(diagnostics: readonly FentarisDiagnostic[], code: string
 
 function stdioServer(name: string) {
   return new McpServer({ name, transport: new StdioTransport({ command: "node" }) });
+}
+
+function runtimeInputServer(name: string) {
+  return new McpServer({ name, transport: new StdioTransport({ command: "node", args: [runtime.input("deviceLabel")] }) });
 }
 
 describe("McpProxy placement integration", () => {
