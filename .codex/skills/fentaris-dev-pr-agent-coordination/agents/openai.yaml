@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fentaris Dev PR + Agent Coordination"
+  short_description: "Coordinate Fentaris dev changes before editing"
+  default_prompt: "Use $fentaris-dev-pr-agent-coordination to make this Fentaris change with Agent Coordination."
