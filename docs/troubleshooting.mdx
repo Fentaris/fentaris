@@ -87,6 +87,13 @@ Change `port` in `fentaris.json` or stop the conflicting process.
 
 `fentaris doctor --runtime` reached the endpoint but did not have a valid API key.
 
+Expected output:
+
+```txt theme={null}
+error Runtime endpoint requires API-key authentication.
+hint  Set FENTARIS_API_KEY or send x-fentaris-api-key from your MCP client.
+```
+
 ```bash theme={null}
 export FENTARIS_API_KEY=<api-key>
 fentaris doctor --runtime
@@ -97,6 +104,22 @@ Use this only for projects that enable API-key identity through the `x-fentaris-
 ### Tools list is empty
 
 The upstream server did not expose tools, or policy hides every tool for the current user.
+
+Expected output when policy hides every tool:
+
+```json theme={null}
+{
+  "ok": true,
+  "data": {
+    "tools": []
+  },
+  "warnings": [
+    {
+      "message": "No tools are visible for the selected account context."
+    }
+  ]
+}
+```
 
 Check the upstream transport first:
 
@@ -118,6 +141,20 @@ fentaris-edge status
 ### Edge call returns `EDGE_UNAVAILABLE`
 
 The selected device is offline, its connection generation changed, or the downstream session is pinned to an unavailable connection.
+
+Expected response shape:
+
+```json theme={null}
+{
+  "isError": true,
+  "content": [
+    {
+      "type": "text",
+      "text": "EDGE_UNAVAILABLE: selected edge target is not connected"
+    }
+  ]
+}
+```
 
 ```bash theme={null}
 fentaris-edge status
@@ -240,6 +277,13 @@ Use `--generate` instead of `--value-stdin` when the job can securely capture th
 ### Secrets manifest is missing or out of date
 
 `fentaris secrets manifest --check` fails when `.fentaris/secrets.manifest.json` does not match credential references in the project entrypoint.
+
+Expected output:
+
+```txt theme={null}
+error Secrets manifest is out of date.
+hint  Run fentaris secrets manifest and commit .fentaris/secrets.manifest.json.
+```
 
 ```bash theme={null}
 fentaris secrets manifest

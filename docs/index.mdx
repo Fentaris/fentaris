@@ -26,8 +26,22 @@ mode: "wide"
       <Card title="Tutorial" icon="map" href="/getting-started/tutorial">
         Walk through a full setup with middleware and hooks.
       </Card>
+      <Card title="Team example" icon="users" href="/guides/team-governed-proxy">
+        Copy a governed proxy with users, groups, policy, and secrets.
+      </Card>
+    </CardGroup>
+  </div>
+
+  <div className="px-6 lg:px-0 mt-4">
+    <CardGroup cols={3}>
       <Card title="Agent Skills" icon="bot" href="/getting-started/codex-skills">
         Let an agent guide setup and project changes.
+      </Card>
+      <Card title="Agent guide" icon="bot-message-square" href="/guides/agent-implementation">
+        Follow the implementation rules and validation checklist.
+      </Card>
+      <Card title="API map" icon="search" href="/reference-auto/api-map">
+        Navigate the generated API reference by domain.
       </Card>
     </CardGroup>
   </div>
@@ -115,11 +129,23 @@ mode: "wide"
   <Card title="Proxy setup" icon="router" href="/guides/proxy-setup">
     A production-shaped proxy configuration.
   </Card>
+  <Card title="Team-governed proxy" icon="users" href="/guides/team-governed-proxy">
+    A complete runnable project with expected allowed and denied outputs.
+  </Card>
   <Card title="CLI Usage" icon="terminal" href="/reference/cli">
     Run, validate, build, and inspect Fentaris projects.
   </Card>
+</CardGroup>
+
+<CardGroup cols={3}>
   <Card title="Observability" icon="activity" href="/guides/observability">
     Structured logs, health checks, and runtime profiler workflows.
+  </Card>
+  <Card title="Agent implementation" icon="bot-message-square" href="/guides/agent-implementation">
+    Decision table and handoff checklist for coding agents.
+  </Card>
+  <Card title="API reference map" icon="search" href="/reference-auto/api-map">
+    Shortcuts into the generated API reference.
   </Card>
 </CardGroup>
 
@@ -130,6 +156,7 @@ mode: "wide"
     <div>Fentaris is a centralized MCP proxy for routing, policy, auth, and observability.</div>
     <div>
       Useful links: <a href="/reference-auto/index">API Reference (Auto)</a>,
+      <a href="/reference-auto/api-map">API Reference Map</a>,
       <a href="/reference/cli">CLI Reference</a>,
       <a href="/getting-started/tutorial">Tutorial</a>.
     </div>
