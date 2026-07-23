@@ -165,6 +165,13 @@ The example has no upstream credential, so its committed manifest is empty:
 API-key hashes are stored separately in the encrypted local auth store. Commit
 the manifest; never commit `.fentaris/credentials.enc.json`.
 
+`credentialJson(...)` references API-key material in that encrypted auth store,
+not upstream secrets scanned into the manifest. The committed empty manifest is
+expected here: `fentaris auth api-key add` does not add `credentialJson` paths
+to `secrets.manifest.json`, so a later static `fentaris doctor` may warn that
+stored API-key hashes are "not listed in the secrets manifest". That warning is
+unrelated to this example's empty upstream-secret manifest.
+
 ## Install and validate
 
 ```bash theme={null}
