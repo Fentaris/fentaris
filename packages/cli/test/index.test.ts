@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile as execFileWithCallback, type SpawnOptions } from "node:child_process";
+import { createServer } from "node:http";
 import { PassThrough, Writable } from "node:stream";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -1143,6 +1144,40 @@ void app;
     const verboseOutput = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
     expect(verboseOutput).toContain("Passed");
     expect(verboseOutput).toContain("Node.js");
+  });
+
+  it("probes an already-running endpoint without reporting its port as a conflict", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ jsonrpc: "2.0", id: "doctor-initialize", result: {} }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") {
+      server.close();
+      throw new Error("Expected doctor test server to listen on a TCP port.");
+    }
+
+    const configPath = join(dir, "fentaris.json");
+    const config = JSON.parse(await readFile(configPath, "utf8")) as Record<string, unknown>;
+    config.port = address.port;
+    await writeFile(configPath, JSON.stringify(config));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+
+    try {
+      await expect(main(["doctor", "--runtime", "--verbose"], rt)).resolves.toBe(0);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => error ? reject(error) : resolve());
+      });
+    }
+
+    const output = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
+    expect(output).toContain("MCP initialize");
+    expect(output).toContain(`Endpoint responded at http://127.0.0.1:${address.port}/mcp`);
+    expect(output).not.toContain("Port is already in use");
   });
 
   it("points missing credential stores to secrets set when an auth key is configured", async () => {
