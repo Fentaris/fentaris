@@ -15,3 +15,6 @@ export const coreVersion = "2.0.0";
 // Default range expression used for the generated package.json. A caret range
 // lets users pick up compatible patches/minors of the pinned core.
 export const defaultCoreRange = `^${coreVersion}`;
+export const generatedTsxRange = "^4.23.1";
+export const generatedNodeTypesRange = "^25.9.1";
+export const generatedTypeScriptRange = "^6.0.3";

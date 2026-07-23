@@ -577,20 +577,29 @@ describe("project template", () => {
     expect(rendered.files[".gitignore"]).toContain(".fentaris/");
     expect(rendered.files[".gitignore"]).toContain("!.fentaris/secrets.manifest.json");
     expect(rendered.files["README.md"]).toContain("Quick start");
+    expect(rendered.files["README.md"]).toContain("Policy.allowAll()");
+    expect(rendered.files["README.md"]).toContain("local development only");
     expect(rendered.files["README.md"]).not.toContain("demo user");
     expect(rendered.files["README.md"]).not.toContain("Secrets workflow");
     expect(rendered.files["src/index.ts"]).toContain("https://mcp.specification.website/mcp");
     expect(rendered.files["src/index.ts"]).toContain("app.mcp(");
     expect(rendered.files["src/index.ts"]).toContain("policy: Policy.allowAll()");
+    expect(rendered.files["src/index.ts"]).toContain("Development-only");
     expect(rendered.files["src/index.ts"]).not.toContain("user:");
     expect(rendered.files["src/index.ts"]).not.toContain("credentialJson");
     expect(rendered.files["src/index.ts"]).not.toContain("policy(");
     expect(rendered.files["src/index.ts"]).not.toContain("profiler()");
 
-    const packageJson = JSON.parse(rendered.files["package.json"] ?? "{}") as { devDependencies?: Record<string, string> };
+    const packageJson = JSON.parse(rendered.files["package.json"] ?? "{}") as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    expect(packageJson.dependencies).toMatchObject({
+      tsx: "^4.23.1",
+    });
     expect(packageJson.devDependencies).toMatchObject({
-      "@types/node": "latest",
-      typescript: "latest",
+      "@types/node": "^25.9.1",
+      typescript: "^6.0.3",
     });
   });
 
