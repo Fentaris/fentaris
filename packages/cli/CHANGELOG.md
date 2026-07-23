@@ -1,5 +1,12 @@
 # @fentaris/cli
 
+## 1.4.2
+
+### Patch Changes
+
+- Updated dependencies [569938f]
+  - @fentaris/core@2.3.1
+
 ## 1.4.1
 
 ### Patch Changes

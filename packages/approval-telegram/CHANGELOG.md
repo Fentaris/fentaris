@@ -1,5 +1,12 @@
 # @fentaris/approval-telegram
 
+## 0.1.11
+
+### Patch Changes
+
+- Updated dependencies [569938f]
+  - @fentaris/core@2.3.1
+
 ## 0.1.10
 
 ### Patch Changes
