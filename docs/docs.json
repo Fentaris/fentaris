@@ -48,6 +48,7 @@
               "getting-started/quickstart",
               "getting-started/installation",
               "getting-started/codex-skills",
+              "getting-started/agent-implementation",
               "getting-started/setup",
               "getting-started/tutorial"
             ]
@@ -85,6 +86,13 @@
               "guides/edge-device"
             ]
           },
+          {
+            "group": "Examples",
+            "expanded": true,
+            "pages": [
+              "examples/team-governed-proxy"
+            ]
+          },
           "troubleshooting",
           {
             "group": "Reference",
@@ -100,6 +108,7 @@
               "reference/extension-api",
               "reference/types",
               "reference/edge",
+              "reference/api-map",
               "reference-auto/index",
               "reference-auto/status"
             ]

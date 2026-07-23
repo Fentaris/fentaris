@@ -1,0 +1,60 @@
+---
+title: "API map"
+description: "A curated index of Fentaris APIs by implementation task."
+---
+
+Use this page as the compact entrypoint to the generated API reference. The
+full TypeDoc output remains available at [API Reference (Auto)](/reference-auto/index).
+
+## Application and declarations
+
+| Task | Primary API | Guide |
+| --- | --- | --- |
+| Create an app boundary | `fentaris(...)` | [Proxy setup](/guides/proxy-setup) |
+| Declare an upstream | `app.mcp(...)`, `mcp(...)` | [Servers and transports](/concepts/servers-and-transports) |
+| Declare local capabilities | `app.local(...)` | [Extension API](/reference/extension-api) |
+| Start or stop the proxy | `app.start()`, `app.stop()` | [MCP proxy](/reference/mcp-proxy) |
+
+## Governance and identity
+
+| Task | Primary API | Guide |
+| --- | --- | --- |
+| Define allow/deny rules | `policy(...)`, `Policy` | [Policies](/concepts/policies) |
+| Define users | `user(...)`, `User` | [Identity and auth](/concepts/identity-and-auth) |
+| Define groups | `group(...)`, `app.group(...)` | [Governance auth](/guides/governance-auth) |
+| Reference API-key hashes | `credentialJson(...)` | [Governance auth](/guides/governance-auth) |
+| Reference upstream secrets | `credential(...)`, `bearer(...)` | [Security](/guides/security) |
+
+## Runtime behavior
+
+| Task | Primary API | Guide |
+| --- | --- | --- |
+| Add middleware | `app.use(...)`, scoped `.use(...)` | [Middleware](/guides/middleware) |
+| Route one tool | `.tool(...)` | [Middleware](/guides/middleware) |
+| Observe lifecycle events | `.on(...)`, app events | [Hooks](/guides/hooks) |
+| Emit structured logs | `ctx.log`, `jsonConsoleLogger(...)` | [Logger](/guides/logger) |
+| Require approval | `approval`, approval adapters | [Telegram approval](/guides/telegram-approval) |
+
+## Transports and placement
+
+| Task | Primary API | Guide |
+| --- | --- | --- |
+| Start a stdio upstream | `stdio(...)` | [Stdio transport](/reference/stdio-transport) |
+| Connect Streamable HTTP | `streamableHttp(...)` | [Servers and transports](/concepts/servers-and-transports) |
+| Add a custom integration | extension contracts | [Extension API](/reference/extension-api) |
+| Configure edge execution | targets and placement bindings | [Edge reference](/reference/edge) |
+
+## CLI and project operations
+
+| Task | Command |
+| --- | --- |
+| Generate a project | `fentaris init` |
+| Validate source/config | `fentaris check --offline` |
+| Diagnose environment | `fentaris doctor` |
+| Probe a running endpoint | `fentaris doctor --runtime` |
+| Manage API keys | `fentaris auth api-key` |
+| Manage credentials | `fentaris secrets` |
+| Inspect declared tools | `fentaris tools` |
+
+See the [CLI reference](/reference/cli) for flags, non-interactive usage, and
+machine-readable output.

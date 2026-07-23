@@ -1,0 +1,132 @@
+---
+title: "AI agent implementation guide"
+description: "A safe, repeatable workflow for coding agents that create or modify Fentaris applications."
+---
+
+Use this guide when Codex, Claude Code, Cursor, or another coding agent is
+implementing a Fentaris application. It complements the installable
+[Fentaris agent skills](/getting-started/codex-skills) with repository-level
+rules and verification steps.
+
+## Read first
+
+1. Read `/llms.txt` to find the current documentation pages.
+2. Inspect `fentaris.json`, `package.json`, the package-manager lockfile,
+   `src/index.ts`, `.fentaris/secrets.manifest.json`, and existing tests.
+3. Check the installed `@fentaris/core` and CLI versions before using
+   version-sensitive APIs.
+4. Prefer CLI help and current documentation over compiled package internals.
+
+For a new project, use `fentaris init` with explicit options. For an existing
+project, preserve its API style and make the smallest coherent change.
+
+## API decision table
+
+| Goal | Prefer | Avoid or note |
+| --- | --- | --- |
+| Declare an upstream MCP server | `app.mcp("name", options)` or constructor `mcp(...)` | `app.group(...).mcp(...)` scopes behavior; it does not declare the server |
+| Add app-owned tools, resources, or prompts | `app.local("name")` | Do not build a custom transport when the capability lives in the app |
+| Define durable static authorization | `policy(...).mcp(...).allow(...)` and `.deny(...)` | Middleware is not a replacement for a stable allow-list |
+| Check runtime arguments or tenant state | `.tool(...)` routes or middleware | Static policy cannot validate arbitrary input values |
+| Configure users and API-key identity | `user(..., { apiKeys: [credentialJson(...)] })` plus `fentaris auth api-key` | Never generate, encrypt, or persist raw client keys in app code |
+| Store upstream credentials | `credential(...)` references plus `fentaris secrets set` | Do not add plaintext `.env` values or shell interpolation to stdio commands |
+| Group users with policy and credentials | constructor `group({ ... })` | Fluent `app.group(...)` does not own credential sources |
+| Compose named groups and policies across modules | `app.policy(...)` and `app.group(...)` | Declare the named policy before startup |
+| Add request-aware logging | `ctx.log` and structured tags | Do not log arguments, API keys, bearer tokens, or decrypted secrets |
+| Place work on an edge target | `app.target(...)` plus an explicit target binding | Placement does not grant policy access |
+
+## Safe implementation workflow
+
+### 1. Resolve the runtime boundary
+
+Keep host, port, MCP path, entrypoint, package manager, and auth directory in
+`fentaris.json`. Keep the host on `127.0.0.1` unless the user explicitly chooses
+a protected shared boundary.
+
+OAuth 2.1 and `fentaris deploy` are not currently available. Use Fentaris API
+keys, trusted identity headers behind an authenticated gateway, or an existing
+auth boundary. Do not invent deploy commands.
+
+### 2. Declare capabilities with stable names
+
+Server and local namespace names become client-visible tool prefixes. Changing
+`github` to `source-control`, for example, changes
+`github__search_issues` to `source-control__search_issues`.
+
+Register an upstream before referencing it in policy:
+
+```ts theme={null}
+app.mcp("github", {
+  transport: streamableHttp({ url: "https://example.internal/mcp" }),
+});
+
+app.policy("support")
+  .mcp("github")
+  .allow("search_issues");
+```
+
+### 3. Fail closed
+
+Use explicit allow-list policies for shared projects. `Policy.allowAll()` is a
+local-development shortcut and must be labeled as such.
+
+Test both sides of each policy:
+
+- an allowed subject can discover and call the capability;
+- a denied subject cannot discover it;
+- a direct denied call fails before the upstream or local handler runs.
+
+### 4. Leave secret material to the user
+
+Agents may add credential references and an updated manifest, but must not
+invent or print real secret values.
+
+```bash theme={null}
+printf '%s' "$UPSTREAM_TOKEN" \
+  | fentaris secrets set upstream.token --value-stdin --non-interactive
+```
+
+For client API keys:
+
+```bash theme={null}
+fentaris auth api-key add alice --generate --non-interactive
+```
+
+The handoff should say where the user must provide values and what must not be
+committed.
+
+### 5. Validate in layers
+
+Run the narrowest checks first:
+
+```bash theme={null}
+fentaris check --offline --non-interactive
+fentaris doctor --non-interactive
+pnpm build
+```
+
+Start the proxy, then probe the actual MCP endpoint:
+
+```bash theme={null}
+fentaris dev
+FENTARIS_API_KEY="$CLIENT_API_KEY" fentaris doctor --runtime --non-interactive
+```
+
+Finally use MCP Inspector, MCPJam, or a session-aware curl flow to verify
+`tools/list` and representative `tools/call` requests for both allowed and
+denied users.
+
+## Required handoff
+
+An agent completing a Fentaris change should report:
+
+- files and namespaces changed;
+- endpoint and runtime assumptions;
+- auth, users, groups, policy, secrets, and logging added;
+- exact validation commands and their results;
+- remaining secret provisioning steps;
+- one expected allowed result and one expected denied result;
+- current limitations that materially affect the setup.
+
+See the complete [team-governed proxy](/examples/team-governed-proxy) for a
+project and test flow that follow these rules.
