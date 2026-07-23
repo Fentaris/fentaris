@@ -56,11 +56,17 @@ Proxy ready
 Listening on: http://127.0.0.1:4100/mcp
 ```
 
-In a second shell, keep the same `FENTARIS_AUTH_KEY` available for diagnostics:
+In a second shell, keep the same `FENTARIS_AUTH_KEY` available and export the
+same client API key used for the curl tests so doctor can authenticate:
 
 ```bash
+export FENTARIS_API_KEY="$READER_API_KEY"
 pnpm exec fentaris doctor --runtime --non-interactive
 ```
+
+`FENTARIS_AUTH_KEY` unlocks the local encrypted store; `FENTARIS_API_KEY` is
+the raw client key sent as `x-fentaris-api-key`. Without the latter, runtime
+probing returns HTTP 401 on this example.
 
 Expected result: the MCP initialize check passes for
 `http://127.0.0.1:4100/mcp`.

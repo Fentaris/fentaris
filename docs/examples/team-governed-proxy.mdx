@@ -65,6 +65,7 @@ const app = fentaris({
       id: "readers",
       users: [
         user("reader", {
+          displayName: "Read-only teammate",
           apiKeys: [credentialJson("users.reader.apiKeys.0")],
         }),
       ],
@@ -74,6 +75,7 @@ const app = fentaris({
       id: "maintainers",
       users: [
         user("maintainer", {
+          displayName: "Maintainer",
           apiKeys: [credentialJson("users.maintainer.apiKeys.0")],
         }),
       ],
@@ -82,6 +84,7 @@ const app = fentaris({
   ],
   servers: [
     mcp("specification", {
+      displayName: "Public MCP Specification",
       transport: streamableHttp({
         url: "https://mcp.specification.website/mcp",
       }),
@@ -90,16 +93,17 @@ const app = fentaris({
 });
 
 app.local("workspace")
-  .tool("status", { inputSchema: { type: "object" } }, (ctx) => ({
+  .tool("status", { inputSchema: { type: "object", additionalProperties: false } }, (ctx) => ({
     content: [{
       type: "text",
       text: JSON.stringify({
         status: "ready",
         subject: ctx.subject?.id ?? "anonymous",
+        groups: ctx.subject?.groups.map((member) => member.id) ?? [],
       }),
     }],
   }))
-  .tool("release_notes", { inputSchema: { type: "object" } }, () => ({
+  .tool("release_notes", { inputSchema: { type: "object", additionalProperties: false } }, () => ({
     content: [{
       type: "text",
       text: "Release notes are visible to maintainers only.",
@@ -108,10 +112,7 @@ app.local("workspace")
 
 app.use((ctx, next) => {
   ctx.log.setTag("subject", ctx.subject?.id ?? "anonymous");
-  ctx.log.setTag(
-    "groups",
-    ctx.subject?.groups.map((member) => member.id).join(",") ?? "",
-  );
+  ctx.log.setTag("groups", ctx.subject?.groups.map((member) => member.id).join(",") ?? "");
   return next();
 });
 
@@ -225,9 +226,11 @@ Expected behavior:
 
 ## Runtime validation
 
-With the proxy running:
+With the proxy running, export the same client API key used for the curl
+tests so doctor can send `x-fentaris-api-key`:
 
 ```bash theme={null}
+export FENTARIS_API_KEY="$READER_API_KEY"
 pnpm exec fentaris doctor --runtime --non-interactive
 ```
 
