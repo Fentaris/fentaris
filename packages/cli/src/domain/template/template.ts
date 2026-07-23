@@ -1,7 +1,15 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import semver from "semver";
-import { authDir, coreVersion, defaultCoreRange, remoteMcpUrl } from "../../shared/constants.js";
+import {
+  authDir,
+  coreVersion,
+  defaultCoreRange,
+  generatedNodeTypesRange,
+  generatedTsxRange,
+  generatedTypeScriptRange,
+  remoteMcpUrl,
+} from "../../shared/constants.js";
 import type { TemplateInput } from "../../shared/types.js";
 
 export function renderTemplate(input: TemplateInput): { files: Record<string, string> } {
@@ -22,11 +30,11 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
           },
           dependencies: {
             "@fentaris/core": coreRange,
-            tsx: "latest",
+            tsx: generatedTsxRange,
           },
           devDependencies: {
-            "@types/node": "latest",
-            typescript: "latest",
+            "@types/node": generatedNodeTypesRange,
+            typescript: generatedTypeScriptRange,
           },
         },
         null,
@@ -93,6 +101,7 @@ export function renderEntrypoint(): string {
   return `import { Policy, fentaris, streamableHttp } from "@fentaris/core";
 
 const app = fentaris({
+  // Development-only: replace this with an explicit policy before sharing the proxy.
   policy: Policy.allowAll(),
 });
 
@@ -131,6 +140,8 @@ ${input.packageManager} dev
 \`\`\`
 
 \`fentaris dev\` starts the project. The proxy listens on \`http://127.0.0.1:${input.port}${input.proxyPath}\` by default.
+
+The generated \`Policy.allowAll()\` policy is for local development only. Replace it with an explicit allow-list policy before sharing or exposing the proxy.
 
 The generated project pins \`@fentaris/core\` to \`${coreRange}\` (currently \`^${coreVersion}\` by default). Run \`${input.packageManager} outdated @fentaris/core\` to check for compatible updates, then \`${input.packageManager} update @fentaris/core\` to install them.
 
