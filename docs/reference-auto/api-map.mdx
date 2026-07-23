@@ -1,0 +1,106 @@
+---
+title: "API reference map"
+description: "A curated map for navigating the generated API reference."
+---
+
+The generated API reference is complete but large. Use this map to find the right domain before opening the full generated page.
+
+## Core App
+
+Search the generated reference for:
+
+* `fentaris()`
+* `McpProxy`
+* `start()`
+* `listen()`
+* `use()`
+
+Use these entries when you need the application boundary, lifecycle, middleware pipeline, or server registration surface.
+
+## Policy And Governance
+
+Search for:
+
+* `policy()`
+* `Policy`
+* `allow()`
+* `deny()`
+* `group()`
+* `user()`
+* `credentialJson()`
+
+Use this domain for users, groups, API-key references, allow and deny rules, sensitive permissions, and group-scoped configuration.
+
+## Auth And Secrets
+
+Search for:
+
+* `credential()`
+* `credentialEnv()`
+* `credentialJson()`
+* `bearer()`
+* `headerIdentityStrategy`
+
+Use this domain when wiring upstream credentials, API-key identity, trusted gateway identity, or local encrypted auth storage.
+
+## Transports
+
+Search for:
+
+* `stdio()`
+* `streamableHttp()`
+* `StdioTransport`
+* `StreamableHttpMcpTransport`
+* `FentarisTransport`
+
+Use this domain when connecting stdio MCP servers, remote Streamable HTTP servers, or custom transport adapters.
+
+## Local Capabilities
+
+Search for:
+
+* `local()`
+* `ProxyLocalHandle`
+* `tool()`
+* `resource()`
+* `resourceTemplate()`
+* `prompt()`
+* `completion()`
+
+Use this domain when the Fentaris app itself owns tools, resources, prompts, or completions.
+
+## Edge
+
+Search for:
+
+* `EdgeTransport`
+* `EdgeMcpOperation`
+* `target`
+* `capability`
+
+Use this domain for target placement, edge operation routing, and capability manifests.
+
+## Logging And Observability
+
+Search for:
+
+* `jsonConsoleLogger()`
+* `createLogger()`
+* `autoLog`
+* `Profiler`
+* `on("tool:success")`
+
+Use this domain for structured logs, operation events, profiler events, and audit metadata.
+
+## Full Generated Reference
+
+Open the full generated page when you need exact signatures:
+
+* [Generated API reference](/reference-auto/index)
+* [Autogen status](/reference-auto/status)
+
+## Related Documentation
+
+* [Extension API](/reference/extension-api)
+* [McpProxy reference](/reference/mcp-proxy)
+* [Types reference](/reference/types)

@@ -70,6 +70,8 @@
             "expanded": false,
             "pages": [
               "guides/proxy-setup",
+              "guides/team-governed-proxy",
+              "guides/agent-implementation",
               "guides/client-configs",
               "guides/middleware",
               "guides/hooks",
@@ -109,6 +111,7 @@
               "reference/types",
               "reference/edge",
               "reference/api-map",
+              "reference-auto/api-map",
               "reference-auto/index",
               "reference-auto/status"
             ]

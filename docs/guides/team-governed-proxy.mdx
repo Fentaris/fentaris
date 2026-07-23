@@ -1,0 +1,376 @@
+---
+title: "Team-governed proxy"
+description: "Build a runnable proxy with API-key users, groups, policy, upstream servers, local tools, and secrets."
+---
+
+Use this example when a team needs one Fentaris endpoint with separate reader, developer, and maintainer access. It includes a remote upstream MCP server, a stdio upstream MCP server, one local app-owned namespace, API-key identity, group-scoped credentials, and validation commands.
+
+## Quick Start
+
+Create the project:
+
+```bash theme={null}
+mkdir team-governed-proxy
+cd team-governed-proxy
+npm init -y
+npm i @fentaris/core @fentaris/cli
+mkdir -p src .fentaris demo-files
+printf '# Team-governed proxy\n' > README.md
+```
+
+Add package scripts:
+
+```json theme={null}
+{
+  "type": "module",
+  "scripts": {
+    "dev": "fentaris dev",
+    "check": "fentaris check --offline",
+    "doctor": "fentaris doctor"
+  },
+  "dependencies": {
+    "@fentaris/cli": "^1.0.0",
+    "@fentaris/core": "^2.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  }
+}
+```
+
+Create `fentaris.json`:
+
+```json theme={null}
+{
+  "name": "team-governed-proxy",
+  "packageManager": "npm",
+  "entrypoint": "src/index.ts",
+  "port": 4000,
+  "path": "/mcp",
+  "authDir": ".fentaris"
+}
+```
+
+Create `tsconfig.json`:
+
+```json theme={null}
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}
+```
+
+Create `.gitignore`:
+
+```txt theme={null}
+node_modules/
+dist/
+.env
+.env.*
+.fentaris/*
+!.fentaris/secrets.manifest.json
+.fentaris/build/
+*.log
+```
+
+Create `src/index.ts`:
+
+```ts theme={null}
+import {
+  bearer,
+  credential,
+  credentialJson,
+  fentaris,
+  group,
+  jsonConsoleLogger,
+  mcp,
+  policy,
+  stdio,
+  streamableHttp,
+  user,
+} from "@fentaris/core";
+
+const readerPolicy = policy("reader")
+  .mcp("workspace")
+  .allow("status")
+  .mcp("filesystem")
+  .allow("list_directory");
+
+const developerPolicy = policy("developer")
+  .mcp("workspace")
+  .allow("status")
+  .mcp("workspace")
+  .allow("deploy_plan")
+  .mcp("filesystem")
+  .allow("list_directory")
+  .mcp("github")
+  .allow("search_issues");
+
+const maintainerPolicy = policy("maintainer")
+  .mcp("workspace")
+  .allow("*")
+  .mcp("filesystem")
+  .allow("list_directory")
+  .mcp("github")
+  .allow("search_issues")
+  .mcp("github")
+  .allow("create_issue");
+
+const app = fentaris({
+  logger: jsonConsoleLogger(),
+  autoLog: true,
+  cli: {
+    mcpAccounts: {
+      workspace: {
+        default: "user:reader",
+        allowed: ["user:reader", "user:developer", "user:maintainer"],
+      },
+      filesystem: {
+        default: "user:reader",
+        allowed: ["user:reader", "user:developer", "user:maintainer"],
+      },
+      github: {
+        default: "user:developer",
+        allowed: ["user:developer", "user:maintainer"],
+      },
+    },
+  },
+  groups: [
+    group({
+      id: "readers",
+      users: [user("reader", { apiKeys: [credentialJson("users.reader.apiKeys.0")] })],
+      policy: readerPolicy,
+    }),
+    group({
+      id: "developers",
+      users: [user("developer", { apiKeys: [credentialJson("users.developer.apiKeys.0")] })],
+      credentials: {
+        "github.token": credentialJson("groups.developers.github.token"),
+      },
+      policy: developerPolicy,
+    }),
+    group({
+      id: "maintainers",
+      users: [user("maintainer", { apiKeys: [credentialJson("users.maintainer.apiKeys.0")] })],
+      credentials: {
+        "github.token": credentialJson("groups.maintainers.github.token"),
+      },
+      policy: maintainerPolicy,
+    }),
+  ],
+});
+
+app.mcp("filesystem", {
+  transport: stdio({
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "./demo-files"],
+  }),
+});
+
+app.mcp("github", {
+  transport: streamableHttp({ url: "https://github.example/mcp" }),
+  auth: bearer(credential("github.token")),
+});
+
+app.local("workspace")
+  .tool("status", { inputSchema: { type: "object" } }, (ctx) => ({
+    content: [
+      {
+        type: "text",
+        text: `subject=${ctx.subject?.id ?? "anonymous"}`,
+      },
+    ],
+  }))
+  .tool("deploy_plan", { inputSchema: { type: "object" } }, () => ({
+    content: [{ type: "text", text: "manual approval required before deploy" }],
+  }));
+
+app.use((ctx, next) => {
+  ctx.log.setTag("subject", ctx.subject?.id ?? "anonymous");
+  ctx.log.setTag("groups", ctx.subject?.groups.map((group) => group.id).join(",") ?? "");
+  return next();
+});
+
+await app.start();
+```
+
+## Secrets Manifest
+
+Create the manifest after the entrypoint exists:
+
+```bash theme={null}
+export FENTARIS_AUTH_KEY="<local-encryption-key>"
+fentaris secrets manifest
+```
+
+The generated `.fentaris/secrets.manifest.json` is a schema file, not a secret store. Its exact entries depend on the credential helpers in the entrypoint. It uses this shape:
+
+```json theme={null}
+{
+  "version": 1,
+  "references": [
+    {
+      "ref": "github.token",
+      "scope": "default"
+    }
+  ]
+}
+```
+
+Commit the generated manifest. Do not commit `.fentaris/credentials.enc.json`, raw API keys, upstream tokens, or `FENTARIS_AUTH_KEY`.
+
+## Provision Local Credentials
+
+Generate API keys and store upstream credentials:
+
+```bash theme={null}
+export FENTARIS_AUTH_KEY="<local-encryption-key>"
+
+fentaris auth api-key add reader --generate
+fentaris auth api-key add developer --generate
+fentaris auth api-key add maintainer --generate
+
+printf '%s' "$DEVELOPER_GITHUB_TOKEN" \
+  | fentaris secrets set github.token --group developers --value-stdin --non-interactive
+printf '%s' "$MAINTAINER_GITHUB_TOKEN" \
+  | fentaris secrets set github.token --group maintainers --value-stdin --non-interactive
+```
+
+Save each generated API key when it is printed. Fentaris stores only hashes in the encrypted local credential store.
+
+## Validate The Project
+
+Run local checks before connecting a client:
+
+```bash theme={null}
+npm run check
+npm run doctor
+fentaris secrets manifest --check
+fentaris secrets doctor
+```
+
+Expected successful shapes:
+
+```txt theme={null}
+fentaris check --offline
+ok  Project config is valid
+ok  Entrypoint was found
+ok  Policy does not use development-only allowAll()
+```
+
+```txt theme={null}
+fentaris secrets doctor
+ok  Required secrets are present
+ok  Secrets manifest is current
+ok  Sensitive credential files are not tracked
+```
+
+Start the proxy:
+
+```bash theme={null}
+npm run dev
+```
+
+In another shell, test runtime access:
+
+```bash theme={null}
+export FENTARIS_AUTH_KEY="<local-encryption-key>"
+export FENTARIS_API_KEY="<reader-api-key>"
+
+fentaris doctor --runtime
+fentaris tools list --as user:reader --compact --json
+fentaris tools get workspace__status --as user:reader --json
+```
+
+Expected reader discovery includes local status and filesystem list access, but not maintainer-only GitHub writes:
+
+```json theme={null}
+{
+  "ok": true,
+  "data": {
+    "tools": [
+      {
+        "name": "workspace__status"
+      },
+      {
+        "name": "filesystem__list_directory"
+      }
+    ]
+  },
+  "warnings": []
+}
+```
+
+Calling a hidden or denied tool should fail before dispatch:
+
+```bash theme={null}
+fentaris tools get github__create_issue --as user:reader --json
+```
+
+```json theme={null}
+{
+  "ok": false,
+  "error": {
+    "code": "FENTARIS_TOOL_NOT_FOUND",
+    "message": "Tool \"github__create_issue\" was not found for the selected context."
+  },
+  "warnings": [],
+  "nextActions": [
+    {
+      "label": "Search available tools",
+      "command": "fentaris tools search <query> --json"
+    }
+  ]
+}
+```
+
+Switch to the maintainer API key to inspect maintainer-only access:
+
+```bash theme={null}
+export FENTARIS_API_KEY="<maintainer-api-key>"
+fentaris tools get github__create_issue --as user:maintainer --json
+```
+
+## MCP Client Test
+
+For a direct JSON-RPC smoke test, call the running MCP endpoint with the API key header:
+
+```bash theme={null}
+curl -s http://localhost:4000/mcp \
+  -H 'content-type: application/json' \
+  -H "x-fentaris-api-key: $FENTARIS_API_KEY" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+```
+
+Expected shape:
+
+```json theme={null}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "tools": [
+      {
+        "name": "workspace__status"
+      }
+    ]
+  }
+}
+```
+
+## Related Documentation
+
+* [Agent implementation guide](/guides/agent-implementation)
+* [Governance auth](/guides/governance-auth)
+* [CLI Usage](/reference/cli)
+* [Troubleshooting](/troubleshooting)

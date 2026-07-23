@@ -1538,6 +1538,9 @@ export class McpProxy {
     const bindings = this.serverCatalog.resolve({ user: resolvedUser, subject: resolvedSubject, operation: "tools:list" });
     const results = await Promise.all(
       bindings.map(async ({ server }) => {
+        if (!this.shouldDiscoverToolsForServer(server.name, userGroups)) {
+          return [];
+        }
         const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
           operation: "tools:list",
           serverName: server.name,
@@ -1613,6 +1616,19 @@ export class McpProxy {
     }
 
     return { tools: this.filterVisibleProxyTools(tools, userGroups) };
+  }
+
+  private shouldDiscoverToolsForServer(serverName: string, userGroups: Group[]): boolean {
+    // Exact allow rules win over `*` deny when filtering tools, so any allow means
+    // the server still has at least one potentially visible tool. @pk
+    const hasVisibleTool = (policy: Policy): boolean =>
+      policy.getPermissions(serverName).some((permission) => permission.effect === "allow");
+
+    if (this.groups.length > 0) {
+      return userGroups.some((group) => hasVisibleTool(group.policy));
+    }
+
+    return this.globalPolicy ? hasVisibleTool(this.globalPolicy) : true;
   }
 
   /**
