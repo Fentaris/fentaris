@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import net from "node:net";
@@ -69,10 +68,10 @@ export async function getDoctorResults(runtime: Runtime, options: boolean | Doct
     results.push(...await proxyPolicyResults(project.discovery));
     results.push(...await packageResults(project.discovery));
     results.push(...await authResults(project.discovery, runtime, { strict: normalized.strict }));
-    results.push(await portResult(project.discovery.config.port));
-
     if (normalized.runtime) {
       results.push(await runtimeEndpointResult(project.discovery, runtime, normalized.timeoutMs));
+    } else {
+      results.push(await portResult(project.discovery.config.port));
     }
   } else if (normalized.runtime) {
     results.push({
@@ -609,35 +608,18 @@ async function authResults(project: ProjectDiscovery, runtime: Runtime | undefin
 }
 
 async function runtimeEndpointResult(project: ProjectDiscovery, runtime: Runtime, timeoutMs: number): Promise<HealthResult> {
-  const command = project.config.packageManager;
-  const args = packageScriptArgs(project.config.packageManager, "dev");
-  const child = spawn(command, args, {
-    cwd: project.root,
-    env: { ...process.env, ...runtime.env },
-    stdio: "ignore",
-  });
-  let spawnError: Error | undefined;
-  child.once("error", (error) => {
-    spawnError = error;
-  });
-
-  try {
-    const portOpen = await waitForPort(project.config.port, timeoutMs);
-    if (!portOpen) {
-      return {
-        group: "Runtime",
-        label: "dev server",
-        status: "fail",
-        detail: spawnError?.message ?? `Port ${project.config.port} did not open within ${timeoutMs}ms.`,
-        hint: `${command} ${args.join(" ")} did not expose the configured port in time.`,
-      };
-    }
-
-    const probe = await probeMcpEndpoint(project, runtime, timeoutMs);
-    return probe;
-  } finally {
-    child.kill("SIGTERM");
+  const portOpen = await waitForPort(project.config.port, timeoutMs);
+  if (!portOpen) {
+    return {
+      group: "Runtime",
+      label: "MCP endpoint",
+      status: "fail",
+      detail: `Port ${project.config.port} did not accept connections within ${timeoutMs}ms.`,
+      hint: `Start the project with ${project.config.packageManager} dev, then retry doctor --runtime.`,
+    };
   }
+
+  return probeMcpEndpoint(project, runtime, timeoutMs);
 }
 
 async function probeMcpEndpoint(project: ProjectDiscovery, runtime: Runtime, timeoutMs: number): Promise<HealthResult> {
@@ -917,13 +899,6 @@ function proxyPathField(raw: Record<string, unknown>, results: HealthResult[]): 
 
 function normalizeTimeout(value: number | undefined): number {
   return Number.isFinite(value) && value !== undefined && value > 0 ? value : 10_000;
-}
-
-function packageScriptArgs(packageManager: PackageManager, script: string): string[] {
-  if (packageManager === "npm") {
-    return ["run", script];
-  }
-  return script === "dev" ? ["dev"] : ["run", script];
 }
 
 function isPortAvailable(port: number): Promise<boolean> {

@@ -1,5 +1,87 @@
 # @fentaris/cli
 
+## 1.4.1
+
+### Patch Changes
+
+- e41e270: Make `doctor --runtime` probe the already-running MCP endpoint without spawning a
+  second development server or reporting the expected listening port as a conflict.
+- 6883648: Generate pnpm projects as self-contained workspace roots and allow the `esbuild`
+  postinstall required by `tsx`, preventing installs from attaching to an ancestor
+  workspace or stopping for build approval.
+- 0bebd92: Generate projects with compatible dependency ranges instead of floating `latest`
+  versions, and label the default allow-all policy as local-development-only in
+  both source code and project documentation.
+
+## 1.4.0
+
+### Minor Changes
+
+- e46a7ba: Add agent-native MCP tool discovery and auth inspection. Core now validates `cli.mcpAccounts` selectors and exposes `AgentToolDiscoveryService` with stable JSON envelopes, policy-filtered effective tool listing, search, detail, schema inspection, account status, login affordances, pagination, and response budgeting. The CLI adds `fentaris tools list/search/get/schema` and `fentaris tools auth list/status/login`.
+
+### Patch Changes
+
+- Updated dependencies [e46a7ba]
+- Updated dependencies [e39be45]
+- Updated dependencies [b81f061]
+  - @fentaris/core@2.3.0
+
+## 1.3.0
+
+### Minor Changes
+
+- 8d844aa: Add machine-readable project diagnostics with `fentaris check --json` for CI and agent-driven workflows.
+- 3d0ca93: Add a guided `fentaris auth` menu, interactive API-key setup with user discovery and redacted confirmation, and auth command support for SDK-only projects.
+
+### Patch Changes
+
+- 43998a5: Load `FENTARIS_AUTH_KEY` from the discovered project `.env` for local secrets and API-key commands before prompting.
+- Updated dependencies [f355a29]
+  - @fentaris/core@2.2.0
+
+## 1.2.1
+
+### Patch Changes
+
+- 673680d: Replace generated project guidance for the unavailable upgrade command with package-manager update instructions.
+- Updated dependencies [f46bdad]
+  - @fentaris/core@2.1.2
+
+## 1.2.0
+
+### Minor Changes
+
+- 5825770: `fentaris init` now pins `@fentaris/core` to a known version range (currently `^2.0.0`) instead of `latest`. This makes local SDK/CLI integration tests deterministic and prevents a generated project from silently running a different core than the one this CLI was released against. Pass `--core-version <range>` to override the default; semver ranges, dist tags, and `workspace:*`/`file:` references are all accepted.
+- f2571ec: Allow `fentaris secrets` commands to run in SDK-only projects by discovering `package.json` projects that depend on `@fentaris/core`, including optional `package.json` metadata and `--entrypoint` support for manifest generation.
+
+### Patch Changes
+
+- 99b9900: Fix `fentaris init --non-interactive` by supporting explicit scaffold inputs, including `--package-manager`, by failing early when the project name is missing, and by reporting unavailable explicit package managers before install runs.
+- 67f1cc1: Report a warning when `@fentaris/core` is declared but missing from `node_modules` so `fentaris doctor` shows the install step by default.
+
+## 1.1.1
+
+### Patch Changes
+
+- 4bad9fd: Build CLI output during local package installs so the `fentaris` binary is linked.
+- 80d865a: Accept empty Enter at the init package-manager prompt as the displayed default choice.
+- Updated dependencies [e889b9d]
+- Updated dependencies [40c6e9a]
+  - @fentaris/core@2.1.1
+
+## 1.1.0
+
+### Minor Changes
+
+- 3874e97: Add `fentaris auth api-key` commands for storing, listing, generating, and removing local downstream API keys, with hashed API-key management helpers on the local secrets backend.
+
+### Patch Changes
+
+- Updated dependencies [5a319c2]
+- Updated dependencies [3874e97]
+- Updated dependencies [bde0b12]
+  - @fentaris/core@2.1.0
+
 ## 1.0.0
 
 ### Major Changes
