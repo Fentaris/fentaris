@@ -259,6 +259,126 @@ fentaris secrets doctor
 
 Set each missing reference for the reported scope. Use `fentaris secrets list` to review reference names and status without printing values.
 
+## Command and output playbook
+
+These examples show the command, representative real output, the cause, and the
+next successful result. Secret values are intentionally omitted.
+
+### Runtime endpoint returns HTTP 401
+
+**Symptom**
+
+```bash theme={null}
+fentaris doctor --runtime --non-interactive
+```
+
+```txt theme={null}
+! MCP initialize  Endpoint returned HTTP 401.
+  → Runtime is reachable but authentication failed. Provide
+    FENTARIS_GUEST_API_KEY, FENTARIS_ADMIN_API_KEY, or FENTARIS_API_KEY.
+```
+
+**Cause:** the running proxy requires `x-fentaris-api-key`, but the doctor
+process did not receive a valid client key.
+
+**Verify and fix**
+
+```bash theme={null}
+FENTARIS_API_KEY="$CLIENT_API_KEY" \
+  fentaris doctor --runtime --non-interactive
+```
+
+**Expected result**
+
+```txt theme={null}
+✓ MCP initialize  Endpoint responded at http://127.0.0.1:4000/mcp
+```
+
+### Policy hides and denies a tool
+
+**Symptom:** `tools/list` for a reader omits a maintainer-only tool. Calling the
+hidden tool directly still fails closed:
+
+```json theme={null}
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "workspace__release_notes",
+    "arguments": {}
+  }
+}
+```
+
+```json theme={null}
+{
+  "result": {
+    "_meta": {
+      "error": {
+        "code": -32030,
+        "message": "not-permitted",
+        "policy": {
+          "matchedGroups": ["readers"],
+          "denialReason": "not-permitted"
+        }
+      }
+    },
+    "content": [{ "type": "text", "text": "not-permitted" }],
+    "isError": true
+  },
+  "jsonrpc": "2.0",
+  "id": 3
+}
+```
+
+**Cause:** the subject's group policy does not allow
+`workspace.release_notes`. This is expected behavior, not an upstream failure.
+
+**Verify and fix:** authenticate as a subject in a policy that explicitly
+allows the tool, or intentionally add the permission:
+
+```ts theme={null}
+policy("maintainers")
+  .mcp("workspace")
+  .allow("release_notes");
+```
+
+**Expected result:** the maintainer sees `workspace__release_notes` in
+`tools/list`, and `tools/call` reaches the handler.
+
+### Secrets manifest check reports drift
+
+**Symptom**
+
+```bash theme={null}
+fentaris secrets manifest --check --non-interactive
+```
+
+```txt theme={null}
+secrets.manifest.json is out of date. Run fentaris secrets manifest.
+```
+
+**Cause:** credential references in the entrypoint changed without updating
+the committed manifest.
+
+**Verify and fix**
+
+```bash theme={null}
+fentaris secrets manifest --non-interactive
+fentaris secrets manifest --check --non-interactive
+git diff -- .fentaris/secrets.manifest.json
+```
+
+**Expected result**
+
+```txt theme={null}
+✓ secrets.manifest.json matches entrypoint.
+```
+
+Review the diff before committing. A manifest contains reference names and
+scopes only; it must never contain credential values.
+
 ### Sensitive file is tracked by git
 
 `fentaris secrets doctor` fails when encrypted credential files or other sensitive auth paths are tracked by git.
