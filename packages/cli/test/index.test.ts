@@ -571,6 +571,7 @@ describe("project template", () => {
       "README.md",
       "fentaris.json",
       "package.json",
+      "pnpm-workspace.yaml",
       "src/index.ts",
       "tsconfig.json",
     ]);
@@ -579,6 +580,12 @@ describe("project template", () => {
     expect(rendered.files["README.md"]).toContain("Quick start");
     expect(rendered.files["README.md"]).not.toContain("demo user");
     expect(rendered.files["README.md"]).not.toContain("Secrets workflow");
+    expect(rendered.files["pnpm-workspace.yaml"]).toBe([
+      "packages: []",
+      "allowBuilds:",
+      "  esbuild: true",
+      "",
+    ].join("\n"));
     expect(rendered.files["src/index.ts"]).toContain("https://mcp.specification.website/mcp");
     expect(rendered.files["src/index.ts"]).toContain("app.mcp(");
     expect(rendered.files["src/index.ts"]).toContain("policy: Policy.allowAll()");
@@ -592,6 +599,19 @@ describe("project template", () => {
       "@types/node": "latest",
       typescript: "latest",
     });
+  });
+
+  it("only creates a pnpm workspace boundary for pnpm projects", () => {
+    for (const packageManager of ["npm", "bun"] as const) {
+      const rendered = renderTemplate({
+        projectName: "demo",
+        packageManager,
+        port: 4000,
+        proxyPath: "/mcp",
+      });
+
+      expect(rendered.files["pnpm-workspace.yaml"]).toBeUndefined();
+    }
   });
 
   it("allows the generated secrets manifest to be committed", async () => {

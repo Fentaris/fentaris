@@ -73,6 +73,16 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
         "*.log",
         "",
       ].join("\n"),
+      ...(input.packageManager === "pnpm"
+        ? {
+            "pnpm-workspace.yaml": [
+              "packages: []",
+              "allowBuilds:",
+              "  esbuild: true",
+              "",
+            ].join("\n"),
+          }
+        : {}),
       ".fentaris/secrets.manifest.json": JSON.stringify({ version: 1, references: [] }, null, 2),
       "src/index.ts": renderEntrypoint(),
     },
