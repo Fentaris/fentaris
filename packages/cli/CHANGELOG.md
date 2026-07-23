@@ -1,5 +1,18 @@
 # @fentaris/cli
 
+## 1.4.1
+
+### Patch Changes
+
+- e41e270: Make `doctor --runtime` probe the already-running MCP endpoint without spawning a
+  second development server or reporting the expected listening port as a conflict.
+- 6883648: Generate pnpm projects as self-contained workspace roots and allow the `esbuild`
+  postinstall required by `tsx`, preventing installs from attaching to an ancestor
+  workspace or stopping for build approval.
+- 0bebd92: Generate projects with compatible dependency ranges instead of floating `latest`
+  versions, and label the default allow-all policy as local-development-only in
+  both source code and project documentation.
+
 ## 1.4.0
 
 ### Minor Changes
