@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { ListToolsResult } from "@modelcontextprotocol/sdk/types.js";
 import {
   PlacementResolver,
   detectStaticPlacementOverlaps,
@@ -11,6 +12,7 @@ import {
   type DeviceResolver,
   type DeviceResolverContext,
   type FentarisDiagnostic,
+  type FentarisTransport,
   type PlacementBindingModel,
 } from "../../src/index.js";
 import type { ExecutionTarget } from "../../src/edge/target.js";
@@ -157,6 +159,32 @@ describe("placement does not grant capability access", () => {
     await expect(proxy.listTools(undefined, { id: "alice" })).resolves.toEqual({ tools: [] });
   });
 
+  it("still discovers a server when a * deny is paired with a specific allow", async () => {
+    const transport = new CountingToolTransport([
+      { name: "echo", inputSchema: { type: "object" } },
+      { name: "secret", inputSchema: { type: "object" } },
+    ]);
+    const proxy = new McpProxy({
+      servers: [new McpServer({ name: "edge_demo", transport })],
+      groups: [
+        group({
+          id: "developers",
+          users: [user("alice")],
+          policy: new Policy({ name: "developers" }).mcp("edge_demo").deny("*").mcp("edge_demo").allow("echo"),
+        }),
+      ],
+    });
+
+    await expect(proxy.listTools(undefined, { id: "alice" })).resolves.toEqual({
+      tools: [
+        expect.objectContaining({
+          name: "edge_demo__echo",
+        }),
+      ],
+    });
+    expect(transport.listTools).toHaveBeenCalledOnce();
+  });
+
   it("the resolver exposes no capability enumeration and only returns a target name", () => {
     const r = resolver({ "personal-device": personalEdge }, [
       { serverName: "custom", scope: "global", targetName: "personal-device" },
@@ -256,6 +284,20 @@ function stdioServer(name: string) {
 
 function runtimeInputServer(name: string) {
   return new McpServer({ name, transport: new StdioTransport({ command: "node", args: [runtime.input("deviceLabel")] }) });
+}
+
+class CountingToolTransport implements FentarisTransport {
+  readonly listTools = vi.fn(async (): Promise<ListToolsResult> => ({
+    tools: this.tools,
+  }));
+
+  constructor(private readonly tools: ListToolsResult["tools"]) {}
+
+  async callTool() {
+    return { content: [{ type: "text" as const, text: "ok" }] };
+  }
+
+  async close() {}
 }
 
 describe("McpProxy placement integration", () => {
