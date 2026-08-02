@@ -1,4 +1,13 @@
 import { edgeError } from "./errors.js";
+import {
+  EDGE_INVENTORY_SCHEMA_VERSION,
+  IN_MEMORY_EDGE_ADAPTER_DIAGNOSTICS,
+  type EdgeAdapterDiagnostics,
+  type EdgeManagedMetadata,
+  type EdgeObservedFacts,
+  type EdgePublicDeviceRef,
+  type EdgeUserMetadata,
+} from "./inventory.js";
 import type {
   EdgeCapabilityManifestMessage,
   EdgeDesiredStateAckMessage,
@@ -15,6 +24,52 @@ export interface EdgeDeviceRecord {
   readonly revoked: boolean;
   readonly connectionGeneration: number;
   readonly lastSeenAt?: number;
+  readonly inventorySchemaVersion?: typeof EDGE_INVENTORY_SCHEMA_VERSION;
+  readonly inventoryVersion?: number;
+  readonly user?: EdgeUserMetadata;
+  readonly observed?: EdgeObservedFacts;
+  readonly managed?: EdgeManagedMetadata;
+}
+
+/** Fully initialized durable inventory record. @pk */
+export interface EdgeInventoryRecord extends EdgeDeviceRecord {
+  readonly inventorySchemaVersion: typeof EDGE_INVENTORY_SCHEMA_VERSION;
+  readonly inventoryVersion: number;
+  readonly user: EdgeUserMetadata;
+  readonly managed: EdgeManagedMetadata;
+}
+
+/** Credential-free inventory record returned from list operations. @pk */
+export type EdgeInventoryListItem = Omit<EdgeInventoryRecord, "credentialId"> & {
+  readonly deviceRef: EdgePublicDeviceRef;
+};
+
+/** Authorization-scoped inventory list filters. @pk */
+export interface EdgeInventoryListOptions {
+  readonly name?: string;
+  readonly tags?: readonly string[];
+  readonly pool?: string;
+  readonly revoked?: boolean;
+  readonly limit?: number;
+  readonly cursor?: string;
+}
+
+/** Cursor-paginated credential-free inventory result. @pk */
+export interface EdgeInventoryListPage {
+  readonly items: readonly EdgeInventoryListItem[];
+  readonly nextCursor?: string;
+}
+
+/** Optimistic inventory mutation. Only explicitly supplied sections change. @pk */
+export interface EdgeInventoryUpdate {
+  readonly expectedInventoryVersion: number;
+  readonly name?: string;
+  readonly description?: string | null;
+  readonly tags?: readonly string[];
+  readonly observed?: EdgeObservedFacts | null;
+  readonly pools?: readonly string[];
+  readonly retainPreviousNameUntil?: number;
+  readonly updatedAt: number;
 }
 
 /** Authenticated active edge connection record. @pk */
@@ -30,8 +85,12 @@ export interface EdgeConnectionRecord {
 
 /** Replaceable device registry contract. @pk */
 export interface EdgeDeviceRegistry {
+  readonly diagnostics?: EdgeAdapterDiagnostics;
   get(tenantId: string, edgeNodeId: string): Promise<EdgeDeviceRecord | undefined>;
+  getByName(tenantId: string, name: string, at?: number): Promise<EdgeDeviceRecord | undefined>;
   put(device: EdgeDeviceRecord): Promise<void>;
+  updateInventory(tenantId: string, edgeNodeId: string, update: EdgeInventoryUpdate): Promise<EdgeInventoryRecord>;
+  list(tenantId: string, options?: EdgeInventoryListOptions): Promise<EdgeInventoryListPage>;
   updateConnection(
     tenantId: string,
     edgeNodeId: string,
@@ -78,6 +137,7 @@ export interface EdgeChannelBroker {
 
 /** Reference single-process device registry. Not suitable for multi-instance deployments. @pk */
 export class InMemoryEdgeDeviceRegistry implements EdgeDeviceRegistry {
+  readonly diagnostics = IN_MEMORY_EDGE_ADAPTER_DIAGNOSTICS;
   private readonly devices = new Map<string, EdgeDeviceRecord>();
 
   async get(tenantId: string, edgeNodeId: string): Promise<EdgeDeviceRecord | undefined> {
@@ -85,7 +145,88 @@ export class InMemoryEdgeDeviceRegistry implements EdgeDeviceRegistry {
   }
 
   async put(device: EdgeDeviceRecord): Promise<void> {
-    this.devices.set(key(device.tenantId, device.edgeNodeId), Object.freeze({ ...device }));
+    const initialized = initializeInventory(device);
+    this.assertNameAvailable(initialized.tenantId, initialized.user.name, initialized.edgeNodeId);
+    this.devices.set(key(device.tenantId, device.edgeNodeId), freezeInventory(initialized));
+  }
+
+  async getByName(tenantId: string, name: string, at = Date.now()): Promise<EdgeDeviceRecord | undefined> {
+    const normalized = normalizeEdgeDeviceName(name);
+    return [...this.devices.values()].find((candidate) => {
+      if (candidate.tenantId !== tenantId) return false;
+      const record = initializeInventory(candidate);
+      return normalizeEdgeDeviceName(record.user.name) === normalized
+        || record.managed.aliases.some((alias) => alias.normalizedName === normalized
+          && (alias.expiresAt === undefined || alias.expiresAt > at));
+    });
+  }
+
+  async updateInventory(tenantId: string, edgeNodeId: string, update: EdgeInventoryUpdate): Promise<EdgeInventoryRecord> {
+    const existingValue = await this.get(tenantId, edgeNodeId);
+    if (!existingValue || existingValue.revoked) {
+      throw edgeError("EDGE_UNAVAILABLE", "Edge device is unknown or revoked.");
+    }
+    const existing = initializeInventory(existingValue);
+    if (existing.inventoryVersion !== update.expectedInventoryVersion) {
+      throw edgeError("EDGE_INVENTORY_CONFLICT", "Edge inventory version is stale.", {
+        details: { expectedInventoryVersion: update.expectedInventoryVersion },
+      });
+    }
+    const name = update.name === undefined ? existing.user.name : validateEdgeDeviceName(update.name);
+    this.assertNameAvailable(tenantId, name, edgeNodeId);
+    const renamed = normalizeEdgeDeviceName(name) !== normalizeEdgeDeviceName(existing.user.name);
+    const aliases = renamed
+      ? [...existing.managed.aliases, {
+          name: existing.user.name,
+          normalizedName: normalizeEdgeDeviceName(existing.user.name),
+          retainedAt: update.updatedAt,
+          ...(update.retainPreviousNameUntil === undefined ? {} : { expiresAt: update.retainPreviousNameUntil }),
+        }]
+      : [...existing.managed.aliases];
+    const updated = freezeInventory({
+      ...existing,
+      inventoryVersion: existing.inventoryVersion + 1,
+      user: {
+        name,
+        description: update.description === undefined
+          ? existing.user.description
+          : update.description === null ? undefined : update.description,
+        tags: update.tags === undefined ? existing.user.tags : normalizeStringSet(update.tags),
+        updatedAt: update.updatedAt,
+      },
+      observed: update.observed === undefined
+        ? existing.observed
+        : update.observed === null ? undefined : update.observed,
+      managed: {
+        aliases,
+        pools: update.pools === undefined ? existing.managed.pools : normalizeStringSet(update.pools),
+        updatedAt: update.updatedAt,
+      },
+    });
+    this.devices.set(key(tenantId, edgeNodeId), updated);
+    return updated;
+  }
+
+  async list(tenantId: string, options: EdgeInventoryListOptions = {}): Promise<EdgeInventoryListPage> {
+    const limit = Math.max(1, Math.min(100, options.limit ?? 50));
+    const offset = decodeCursor(options.cursor);
+    const normalizedName = options.name === undefined ? undefined : normalizeEdgeDeviceName(options.name);
+    const tags = options.tags === undefined ? undefined : normalizeStringSet(options.tags);
+    const records = [...this.devices.values()]
+      .filter((record) => record.tenantId === tenantId)
+      .map(initializeInventory)
+      .filter((record) => options.revoked === undefined || record.revoked === options.revoked)
+      .filter((record) => normalizedName === undefined || normalizeEdgeDeviceName(record.user.name).includes(normalizedName))
+      .filter((record) => tags === undefined || tags.every((tag) => record.user.tags.includes(tag)))
+      .filter((record) => options.pool === undefined || record.managed.pools.includes(options.pool))
+      .sort((left, right) => normalizeEdgeDeviceName(left.user.name).localeCompare(normalizeEdgeDeviceName(right.user.name))
+        || left.edgeNodeId.localeCompare(right.edgeNodeId));
+    const page = records.slice(offset, offset + limit).map(toInventoryListItem);
+    const nextOffset = offset + page.length;
+    return Object.freeze({
+      items: Object.freeze(page),
+      ...(nextOffset < records.length ? { nextCursor: nextOffset.toString(36) } : {}),
+    });
   }
 
   async updateConnection(tenantId: string, edgeNodeId: string, generation: number, lastSeenAt: number): Promise<EdgeDeviceRecord> {
@@ -104,6 +245,19 @@ export class InMemoryEdgeDeviceRegistry implements EdgeDeviceRegistry {
   async revoke(tenantId: string, edgeNodeId: string): Promise<void> {
     const existing = await this.get(tenantId, edgeNodeId);
     if (existing) this.devices.set(key(tenantId, edgeNodeId), Object.freeze({ ...existing, revoked: true }));
+  }
+
+  private assertNameAvailable(tenantId: string, name: string, exceptEdgeNodeId: string): void {
+    const normalized = normalizeEdgeDeviceName(validateEdgeDeviceName(name));
+    for (const candidateValue of this.devices.values()) {
+      if (candidateValue.tenantId !== tenantId || candidateValue.edgeNodeId === exceptEdgeNodeId) continue;
+      const candidate = initializeInventory(candidateValue);
+      if (normalizeEdgeDeviceName(candidate.user.name) === normalized
+        || candidate.managed.aliases.some((alias) => alias.normalizedName === normalized
+          && (alias.expiresAt === undefined || alias.expiresAt > Date.now()))) {
+        throw edgeError("EDGE_NAME_CONFLICT", "Edge device name is already in use for this tenant.");
+      }
+    }
   }
 }
 
@@ -217,3 +371,66 @@ function key(...parts: string[]): string {
   return parts.join("\u0000");
 }
 
+/** Normalize a tenant-scoped public Edge name for collision checks. @pk */
+export function normalizeEdgeDeviceName(name: string): string {
+  return name.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase("en-US");
+}
+
+function validateEdgeDeviceName(name: string): string {
+  const trimmed = name.normalize("NFKC").trim().replace(/\s+/g, " ");
+  if (trimmed.length === 0 || trimmed.length > 80) {
+    throw edgeError("EDGE_PROTOCOL", "Edge device name must contain between 1 and 80 characters.");
+  }
+  return trimmed;
+}
+
+function initializeInventory(device: EdgeDeviceRecord): EdgeInventoryRecord {
+  const now = device.lastSeenAt ?? 0;
+  return {
+    ...device,
+    inventorySchemaVersion: EDGE_INVENTORY_SCHEMA_VERSION,
+    inventoryVersion: device.inventoryVersion ?? 1,
+    user: device.user ?? { name: device.edgeNodeId, tags: [], updatedAt: now },
+    managed: device.managed ?? { aliases: [], pools: [], updatedAt: now },
+  };
+}
+
+function freezeInventory(device: EdgeInventoryRecord): EdgeInventoryRecord {
+  return Object.freeze({
+    ...device,
+    user: Object.freeze({ ...device.user, tags: Object.freeze([...device.user.tags]) }),
+    ...(device.observed ? {
+      observed: Object.freeze({
+        ...device.observed,
+        executionFeatures: Object.freeze([...device.observed.executionFeatures]),
+      }),
+    } : {}),
+    managed: Object.freeze({
+      ...device.managed,
+      aliases: Object.freeze(device.managed.aliases.map((alias) => Object.freeze({ ...alias }))),
+      pools: Object.freeze([...device.managed.pools]),
+    }),
+  });
+}
+
+function normalizeStringSet(values: readonly string[]): readonly string[] {
+  return Object.freeze([...new Set(values.map((value) => value.normalize("NFKC").trim()).filter(Boolean))].sort());
+}
+
+function decodeCursor(cursor: string | undefined): number {
+  if (cursor === undefined) return 0;
+  if (!/^[0-9a-z]+$/.test(cursor)) throw edgeError("EDGE_PROTOCOL", "Edge inventory cursor is invalid.");
+  const value = Number.parseInt(cursor, 36);
+  if (!Number.isSafeInteger(value) || value < 0) throw edgeError("EDGE_PROTOCOL", "Edge inventory cursor is invalid.");
+  return value;
+}
+
+function toInventoryListItem(record: EdgeInventoryRecord): EdgeInventoryListItem {
+  const safe = Object.fromEntries(
+    Object.entries(record).filter(([entryKey]) => entryKey !== "credentialId"),
+  ) as Omit<EdgeInventoryRecord, "credentialId">;
+  return Object.freeze({
+    ...safe,
+    deviceRef: Object.freeze({ name: record.user.name, inventoryVersion: record.inventoryVersion }),
+  });
+}

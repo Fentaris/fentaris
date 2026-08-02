@@ -1,10 +1,10 @@
 ## 1. Inventory and Control-Plane Contracts
 
-- [ ] 1.1 Add versioned core types for attributed edge inventory metadata, public device references, presence, capacity, load, heartbeat freshness, and per-deployment readiness.
-- [ ] 1.2 Extend device registry contracts with tenant-scoped name uniqueness, optimistic inventory-version updates, alias retention, listing, filtering, and pagination without exposing credential material.
-- [ ] 1.3 Add replaceable presence, readiness, session-selection, and child-binding store contracts plus deterministic in-memory reference implementations.
-- [ ] 1.4 Add conformance tests covering inventory attribution, normalized name collisions, tenant isolation, stale versions, heartbeat expiry, revocation, and in-memory production-readiness warnings.
-- [ ] 1.5 Add control-plane enrollment and management service contracts for join, metadata update, list/get, disconnect, revoke, and service-safe machine responses.
+- [x] 1.1 Add versioned core types for attributed edge inventory metadata, public device references, presence, capacity, load, heartbeat freshness, and per-deployment readiness.
+- [x] 1.2 Extend device registry contracts with tenant-scoped name uniqueness, optimistic inventory-version updates, alias retention, listing, filtering, and pagination without exposing credential material.
+- [x] 1.3 Add replaceable presence, readiness, session-selection, and child-binding store contracts plus deterministic in-memory reference implementations.
+- [x] 1.4 Add conformance tests covering inventory attribution, normalized name collisions, tenant isolation, stale versions, heartbeat expiry, revocation, and in-memory production-readiness warnings.
+- [x] 1.5 Add control-plane enrollment and management service contracts for join, metadata update, list/get, disconnect, revoke, and service-safe machine responses.
 
 ## 2. Protocol Version 2 and Gateway Compatibility
 

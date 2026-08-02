@@ -166,8 +166,57 @@ export type {
   EdgeDesiredStateStore,
   EdgeDeviceRecord,
   EdgeDeviceRegistry,
+  EdgeInventoryListItem,
+  EdgeInventoryListOptions,
+  EdgeInventoryListPage,
+  EdgeInventoryRecord,
+  EdgeInventoryUpdate,
   EdgeSetupStatusStore,
 } from "./controlPlane.js";
+
+export { normalizeEdgeDeviceName } from "./controlPlane.js";
+
+export {
+  EDGE_INVENTORY_SCHEMA_VERSION,
+  IN_MEMORY_EDGE_ADAPTER_DIAGNOSTICS,
+  InMemoryEdgeChildBindingStore,
+  InMemoryEdgePresenceStore,
+  InMemoryEdgeReadinessStore,
+  InMemoryEdgeSessionSelectionStore,
+} from "./inventory.js";
+export type {
+  AttributedEdgeValue,
+  EdgeAdapterDiagnostics,
+  EdgeCapacitySnapshot,
+  EdgeChildBinding,
+  EdgeChildBindingStore,
+  EdgeDeploymentReadiness,
+  EdgeDeploymentReadinessStatus,
+  EdgeDeviceAlias,
+  EdgeHeartbeatFreshness,
+  EdgeLoadSnapshot,
+  EdgeManagedMetadata,
+  EdgeMetadataAuthority,
+  EdgeObservedFacts,
+  EdgePresence,
+  EdgePresenceStatus,
+  EdgePresenceStore,
+  EdgePublicDeviceRef,
+  EdgeReadinessStore,
+  EdgeSessionSelection,
+  EdgeSessionSelectionStore,
+  EdgeUserMetadata,
+} from "./inventory.js";
+
+export { DefaultEdgeControlPlaneService } from "./management.js";
+export type {
+  EdgeControlPlaneService,
+  EdgeJoinRequest,
+  EdgeManagedDeviceView,
+  EdgeManagementContext,
+  EdgeManagementPage,
+  EdgeManagementResult,
+} from "./management.js";
 
 export { EdgeWebSocketGateway } from "./gateway.js";
 export type {
