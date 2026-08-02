@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { type IncomingHttpHeaders, type IncomingMessage, type Server as HttpServer } from "node:http";
 import path from "node:path";
 import { compileToolPattern, matchesToolPattern, type RouteEntry } from "./routes.js";
@@ -98,12 +99,17 @@ import {
   validateDeviceSelector,
   PlacementResolver,
   EdgeSessionPinner,
+  EdgeChildBindingManager,
+  EdgeSingleCallCoordinator,
+  InMemoryEdgeChildBindingStore,
   EDGE_CONTROL_NAMESPACE,
   registerEdgeControlProvider,
   type DeviceResolver,
   type EdgeCapabilityCache,
   type EdgeTelemetry,
   type EdgeControlProviderOptions,
+  type EdgeControlInvocationRequest,
+  type EdgeTrustedChildRoute,
   type EdgeSessionSelectionStore,
   type ExecutionTarget,
   type PlacementBindingModel,
@@ -319,6 +325,8 @@ export type EdgeRuntimeOptions = {
   sessionSelectionStore?: EdgeSessionSelectionStore;
   /** Explicit opt-in configuration for the governed Edge Control provider. @pk */
   control?: ({ readonly enabled: true } & EdgeControlProviderOptions) | { readonly enabled?: false };
+  /** Optional managed child-binding manager for explicit orchestration. @pk */
+  childBindingManager?: EdgeChildBindingManager;
 };
 
 /**
@@ -407,6 +415,10 @@ export class McpProxy {
   private readonly fluentUsers = new Set<string>();
   private readonly edgeOptions?: EdgeRuntimeOptions;
   private edgeSessionPinnerCache?: EdgeSessionPinner;
+  private edgeChildBindingManagerCache?: EdgeChildBindingManager;
+  private edgeSingleCallCoordinatorCache?: EdgeSingleCallCoordinator;
+  private readonly edgeChildExecution = new AsyncLocalStorage<EdgeTrustedChildRoute>();
+  private readonly edgeChildParentSessions = new Set<string>();
   private httpServer: HttpServer | null = null;
   private readonly exposureHandles = new Set<ProxyExposureHandle>();
 
@@ -461,7 +473,18 @@ export class McpProxy {
     this.edgeOptions = options.edge;
 
     if (options.edge?.control?.enabled) {
-      registerEdgeControlProvider(this.localRegistry.namespace(EDGE_CONTROL_NAMESPACE), options.edge.control);
+      const configured = options.edge.control.invoker;
+      registerEdgeControlProvider(this.localRegistry.namespace(EDGE_CONTROL_NAMESPACE), {
+        ...options.edge.control,
+        invoker: {
+          call: (request) => configured?.call(request) ?? this.invokeEdgeControlCall(request),
+          callMany: (request) => configured?.callMany(request) ?? Promise.reject(edgeError(
+            "EDGE_UNAVAILABLE",
+            "Multi-device Edge orchestration is not configured.",
+            { details: { nextActions: ["Configure bounded Edge fan-out orchestration."] } },
+          )),
+        },
+      });
       this.materializeLocalNamespaces();
     }
 
@@ -837,6 +860,32 @@ export class McpProxy {
     cloud: () => Promise<T>,
     edge: (transport: FentarisTransport) => Promise<T>,
   ): Promise<T> {
+    const child = this.edgeChildExecution.getStore();
+    if (child) {
+      if (child.deploymentId !== server.name) {
+        throw edgeError("EDGE_PROTOCOL", "Trusted child route does not match the effective tool deployment.");
+      }
+      const edgeTransport = this.edgeOptions?.transport;
+      if (!edgeTransport) throw edgeError("EDGE_UNAVAILABLE", "No Edge transport is configured for explicit invocation.");
+      context.transport = {
+        ...context.transport,
+        sessionId: child.childSessionId,
+        requestId: child.childRequestId,
+        deadline: child.deadline,
+        signal: child.signal,
+      };
+      context.requestId = child.childRequestId;
+      context.execution = {
+        kind: "edge",
+        targetName: child.targetName,
+        deploymentId: child.deploymentId,
+        edgeNodeId: child.edgeNodeId,
+        connectionGeneration: child.connectionGeneration,
+        reused: false,
+      };
+      const run = () => edge(edgeTransport);
+      return edgeTransport.withProxyContext ? edgeTransport.withProxyContext(context, run) : run();
+    }
     const metadata = context.auth.metadata;
     const groupIds = context.subject
       ? (this.subjectIndex?.groupsFor(context.subject.id) ?? []).map((group) => group.id)
@@ -955,12 +1004,52 @@ export class McpProxy {
   /** Remove every session-target binding for a downstream session. @pk */
   async endEdgeSession(sessionId: string): Promise<void> {
     await this.edgeSessionPinner()?.endSession(sessionId);
+    await this.edgeChildBindingManagerCache?.endParent(sessionId);
+    this.edgeChildParentSessions.delete(sessionId);
   }
 
   /** Remove every session-target binding on runtime shutdown. @pk */
   async shutdownEdgeSessions(): Promise<void> {
     await this.edgeSessionPinner()?.shutdown();
+    await this.edgeChildBindingManagerCache?.shutdown([...this.edgeChildParentSessions]);
+    this.edgeChildParentSessions.clear();
     this.edgeSessionPinnerCache = undefined;
+    this.edgeSingleCallCoordinatorCache = undefined;
+    this.edgeChildBindingManagerCache = undefined;
+  }
+
+  private edgeChildBindingManager(): EdgeChildBindingManager {
+    if (!this.edgeChildBindingManagerCache) {
+      this.edgeChildBindingManagerCache = this.edgeOptions?.childBindingManager
+        ?? new EdgeChildBindingManager({ store: new InMemoryEdgeChildBindingStore() });
+    }
+    return this.edgeChildBindingManagerCache;
+  }
+
+  private edgeSingleCallCoordinator(): EdgeSingleCallCoordinator {
+    const control = this.edgeOptions?.control;
+    if (!control?.enabled) throw edgeError("EDGE_UNAVAILABLE", "Edge Control is not enabled.");
+    if (!this.edgeSingleCallCoordinatorCache) {
+      this.edgeSingleCallCoordinatorCache = new EdgeSingleCallCoordinator({
+        inventory: control.inventory,
+        children: this.edgeChildBindingManager(),
+        listTools: async (user, identity, subject) => (await this.listTools(undefined, user, identity, subject)).tools,
+        dispatch: (route, toolName, args, context) => {
+          this.edgeChildParentSessions.add(route.parentSessionId);
+          return this.edgeChildExecution.run(route, () => this.callTool(
+            { name: toolName, arguments: args },
+            context.user,
+            context.identity,
+            context.subject,
+          ));
+        },
+      });
+    }
+    return this.edgeSingleCallCoordinatorCache;
+  }
+
+  private invokeEdgeControlCall(request: EdgeControlInvocationRequest): Promise<CallToolResult> {
+    return this.edgeSingleCallCoordinator().call(request.context, request.arguments);
   }
 
   /** Register a setup schema for a server. @pk */

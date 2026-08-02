@@ -3,7 +3,7 @@
 import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { ProxyLocalHandle } from "../local/declarations.js";
 import type { ProxyContext } from "../types/proxy.js";
-import { edgeError } from "./errors.js";
+import { edgeError, isEdgeError } from "./errors.js";
 import type {
   EdgeInventoryQuery,
   EdgeInventoryService,
@@ -165,27 +165,27 @@ export function registerEdgeControlProvider(handle: ProxyLocalHandle, options: E
     title: "List eligible Edge devices",
     description: "List authorized Edge devices with bounded filters and cursor pagination.",
     inputSchema: EDGE_CONTROL_TOOL_SCHEMAS.list,
-  }, async (context, params) => result(await listDevices(context, params.arguments, options)));
+  }, (context, params) => guard(async () => result(await listDevices(context, params.arguments, options))));
   handle.tool("get", {
     title: "Inspect an Edge device",
     description: "Inspect one authorized Edge device by stable public name.",
     inputSchema: EDGE_CONTROL_TOOL_SCHEMAS.get,
-  }, async (context, params) => result(await getDevice(context, params.arguments, options)));
+  }, (context, params) => guard(async () => result(await getDevice(context, params.arguments, options))));
   handle.tool("select", {
     title: "Select an Edge device",
     description: "Select an eligible device for a logical target before the session target is pinned.",
     inputSchema: EDGE_CONTROL_TOOL_SCHEMAS.select,
-  }, async (context, params) => result(await selectDevice(context, params.arguments, options)));
+  }, (context, params) => guard(async () => result(await selectDevice(context, params.arguments, options))));
   handle.tool("call", {
     title: "Call a tool on one Edge device",
     description: "Invoke one effective MCP tool in an isolated child context on one device.",
     inputSchema: EDGE_CONTROL_TOOL_SCHEMAS.call,
-  }, (context, params) => invoke("call", context, params.arguments, options));
+  }, (context, params) => guard(() => invoke("call", context, params.arguments, options)));
   handle.tool("call_many", {
     title: "Call a tool on many Edge devices",
     description: "Invoke one effective MCP tool over a bounded set of devices.",
     inputSchema: EDGE_CONTROL_TOOL_SCHEMAS.call_many,
-  }, (context, params) => invoke("callMany", context, params.arguments, options));
+  }, (context, params) => guard(() => invoke("callMany", context, params.arguments, options)));
 }
 
 async function listDevices(context: ProxyContext, raw: unknown, options: EdgeControlProviderOptions): Promise<EdgeControlListResult> {
@@ -282,6 +282,22 @@ function result(value: object): CallToolResult {
     structuredContent: value as Record<string, unknown>,
     content: [{ type: "text", text: JSON.stringify(value) }],
   };
+}
+
+async function guard(run: () => Promise<CallToolResult>): Promise<CallToolResult> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!isEdgeError(error)) throw error;
+    const structured = Object.freeze({
+      error: Object.freeze({ code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) }),
+    });
+    return {
+      isError: true,
+      structuredContent: structured,
+      content: [{ type: "text", text: JSON.stringify(structured) }],
+    };
+  }
 }
 
 function object(value: unknown): Record<string, unknown> {

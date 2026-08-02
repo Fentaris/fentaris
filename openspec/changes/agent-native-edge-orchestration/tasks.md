@@ -60,12 +60,12 @@
 
 ## 8. Explicit Single-Edge Invocation
 
-- [ ] 8.1 Implement effective-tool lookup and current input-schema validation for explicit Edge calls, including exact next actions for schema inspection failures.
-- [ ] 8.2 Implement server-side public-device resolution and a trusted child proxy context that inherits identity, policy, deadlines, cancellation, trace metadata, and approval context.
-- [ ] 8.3 Re-enter the normal proxy call pipeline for `edge__call` so catalog visibility, policy, middleware, setup, transport limits, events, and result mapping remain enforced.
-- [ ] 8.4 Reject Edge Control recursion and prevent untrusted MCP output from overriding routing, device, status, or correlation fields.
-- [ ] 8.5 Release child bindings and local workloads on success, error, timeout, cancellation, parent-session end, and proxy shutdown.
-- [ ] 8.6 Add end-to-end tests for successful explicit calls, schema errors, hidden tools, denied devices, setup-required devices, timeout, malformed output, recursion, and parent-pin preservation.
+- [x] 8.1 Implement effective-tool lookup and current input-schema validation for explicit Edge calls, including exact next actions for schema inspection failures.
+- [x] 8.2 Implement server-side public-device resolution and a trusted child proxy context that inherits identity, policy, deadlines, cancellation, trace metadata, and approval context.
+- [x] 8.3 Re-enter the normal proxy call pipeline for `edge__call` so catalog visibility, policy, middleware, setup, transport limits, events, and result mapping remain enforced.
+- [x] 8.4 Reject Edge Control recursion and prevent untrusted MCP output from overriding routing, device, status, or correlation fields.
+- [x] 8.5 Release child bindings and local workloads on success, error, timeout, cancellation, parent-session end, and proxy shutdown.
+- [x] 8.6 Add end-to-end tests for successful explicit calls, schema errors, hidden tools, denied devices, setup-required devices, timeout, malformed output, recursion, and parent-pin preservation.
 
 ## 9. Multi-Edge Fan-Out Coordinator
 

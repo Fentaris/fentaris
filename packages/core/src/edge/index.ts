@@ -128,6 +128,13 @@ export {
   EDGE_CONTROL_TOOL_SCHEMAS,
   registerEdgeControlProvider,
 } from "./controlProvider.js";
+
+export { EdgeSingleCallCoordinator } from "./controlInvocation.js";
+export type {
+  EdgeSingleCallCoordinatorOptions,
+  EdgeSingleCallStructuredResult,
+  EdgeTrustedChildRoute,
+} from "./controlInvocation.js";
 export type {
   EdgeControlDeviceSummary,
   EdgeControlGetResult,
