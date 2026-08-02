@@ -98,9 +98,13 @@ import {
   validateDeviceSelector,
   PlacementResolver,
   EdgeSessionPinner,
+  EDGE_CONTROL_NAMESPACE,
+  registerEdgeControlProvider,
   type DeviceResolver,
   type EdgeCapabilityCache,
   type EdgeTelemetry,
+  type EdgeControlProviderOptions,
+  type EdgeSessionSelectionStore,
   type ExecutionTarget,
   type PlacementBindingModel,
   type PlacementResolution,
@@ -311,6 +315,10 @@ export type EdgeRuntimeOptions = {
   capabilityCache?: EdgeCapabilityCache;
   /** Structured, redacted edge lifecycle telemetry. @pk */
   telemetry?: EdgeTelemetry;
+  /** Durable store for agent-requested pre-pin selections. @pk */
+  sessionSelectionStore?: EdgeSessionSelectionStore;
+  /** Explicit opt-in configuration for the governed Edge Control provider. @pk */
+  control?: ({ readonly enabled: true } & EdgeControlProviderOptions) | { readonly enabled?: false };
 };
 
 /**
@@ -451,6 +459,11 @@ export class McpProxy {
       defaults: { credentials: this.defaultCredentials },
     };
     this.edgeOptions = options.edge;
+
+    if (options.edge?.control?.enabled) {
+      registerEdgeControlProvider(this.localRegistry.namespace(EDGE_CONTROL_NAMESPACE), options.edge.control);
+      this.materializeLocalNamespaces();
+    }
 
     for (const server of this.serverCatalog.allServers()) {
       this.serverByName.set(server.name, server);
@@ -631,6 +644,16 @@ export class McpProxy {
    * @pk
    */
   local(name: string): ProxyLocalHandle {
+    if (name === EDGE_CONTROL_NAMESPACE) {
+      throw new FentarisConfigError([{
+        severity: "error",
+        code: "FENTARIS_CONFIG_LOCAL_NAMESPACE_RESERVED",
+        title: "Reserved local namespace",
+        message: `Local namespace "${name}" is reserved for the opt-in Edge Control provider.`,
+        path: ["proxy", "local", name],
+        hint: "Enable edge.control or choose another local namespace.",
+      }]);
+    }
     const namespace = this.localRegistry.namespace(name);
     this.materializeLocalNamespaces();
     return namespace;
@@ -773,6 +796,7 @@ export class McpProxy {
         deviceResolver: this.edgeOptions.deviceResolver,
         store: this.edgeOptions.sessionBindingStore,
         expiry: this.edgeOptions.sessionBindingExpiry,
+        selectionStore: this.edgeOptions.sessionSelectionStore,
       });
       if (this.edgeOptions.sessionBindingListener) {
         pinner.addListener(this.edgeOptions.sessionBindingListener);

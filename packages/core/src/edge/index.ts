@@ -121,6 +121,22 @@ export {
   EdgeChildBindingManager,
   EdgeSessionSelectionService,
 } from "./sessionSelection.js";
+
+export {
+  EDGE_CONTROL_NAMESPACE,
+  EDGE_CONTROL_TOOL_NAMES,
+  EDGE_CONTROL_TOOL_SCHEMAS,
+  registerEdgeControlProvider,
+} from "./controlProvider.js";
+export type {
+  EdgeControlDeviceSummary,
+  EdgeControlGetResult,
+  EdgeControlInvocationRequest,
+  EdgeControlInvoker,
+  EdgeControlListResult,
+  EdgeControlProviderOptions,
+  EdgeControlSelectResult,
+} from "./controlProvider.js";
 export type {
   EdgeChildBindingAllocation,
   EdgeChildBindingCleanup,

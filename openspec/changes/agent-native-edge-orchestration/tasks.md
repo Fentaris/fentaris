@@ -51,12 +51,12 @@
 
 ## 7. Edge Control MCP Discovery Tools
 
-- [ ] 7.1 Register the reserved opt-in `edge` local capability provider through the normal scoped catalog and policy pipeline.
-- [ ] 7.2 Define stable schemas and structured result types for `edge__list`, `edge__get`, `edge__select`, `edge__call`, and `edge__call_many`.
-- [ ] 7.3 Implement `edge__list` with bounded filters, compact defaults, cursor pagination, freshness, warnings, and safe next actions.
-- [ ] 7.4 Implement `edge__get` with attributed metadata and policy-filtered deployment/tool readiness summaries.
-- [ ] 7.5 Implement `edge__select` using the session-selection service and return actionable errors for pinned, stale, unavailable, and unauthorized choices.
-- [ ] 7.6 Add discovery tests proving stable public schemas, explicit enablement, policy visibility, bounded output, non-enumerating errors, and no per-device upstream tool duplication.
+- [x] 7.1 Register the reserved opt-in `edge` local capability provider through the normal scoped catalog and policy pipeline.
+- [x] 7.2 Define stable schemas and structured result types for `edge__list`, `edge__get`, `edge__select`, `edge__call`, and `edge__call_many`.
+- [x] 7.3 Implement `edge__list` with bounded filters, compact defaults, cursor pagination, freshness, warnings, and safe next actions.
+- [x] 7.4 Implement `edge__get` with attributed metadata and policy-filtered deployment/tool readiness summaries.
+- [x] 7.5 Implement `edge__select` using the session-selection service and return actionable errors for pinned, stale, unavailable, and unauthorized choices.
+- [x] 7.6 Add discovery tests proving stable public schemas, explicit enablement, policy visibility, bounded output, non-enumerating errors, and no per-device upstream tool duplication.
 
 ## 8. Explicit Single-Edge Invocation
 
