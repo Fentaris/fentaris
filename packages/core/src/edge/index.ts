@@ -225,6 +225,24 @@ export type {
   EdgeManagementResult,
 } from "./management.js";
 
+export { EdgeInventoryService } from "./inventoryService.js";
+export type {
+  EdgeDispatchDeviceResolution,
+  EdgeInventoryAuthorizer,
+  EdgeInventoryContext,
+  EdgeInventoryQuery,
+  EdgeInventoryServiceOptions,
+  EdgePublicDeviceView,
+  EdgePublicInventoryPage,
+  EdgePublicReadinessSummary,
+  EdgeSelectionExplanation,
+  EdgeSelectionPreference,
+  EdgeSelectionRequest,
+  EdgeSelectionRequirements,
+  EdgeSelectionResult,
+  EdgeSelectionStrategy,
+} from "./inventoryService.js";
+
 export { EdgeWebSocketGateway } from "./gateway.js";
 export type {
   AuthenticatedEdgeIdentity,

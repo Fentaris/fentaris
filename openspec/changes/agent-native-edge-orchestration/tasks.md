@@ -16,11 +16,11 @@
 
 ## 3. Policy-Filtered Inventory and Selection
 
-- [ ] 3.1 Implement the inventory query service that composes identity, grants, policy, durable metadata, presence, readiness, capability manifests, and freshness into public device views.
-- [ ] 3.2 Implement authorization-safe filtering and cursor pagination for name, tag, observed feature, platform, pool, status, and deployment readiness.
-- [ ] 3.3 Implement declarative selection with hard requirements, ranked preferences, bounded candidate evaluation, deterministic tie-breaking, and redacted explanations.
-- [ ] 3.4 Revalidate eligibility and inventory freshness at dispatch so stale discovery results cannot bypass current policy, readiness, revocation, or capacity state.
-- [ ] 3.5 Add tests proving inaccessible devices cannot be enumerated through results, totals, cursors, errors, timing-sensitive branches, or selection explanations.
+- [x] 3.1 Implement the inventory query service that composes identity, grants, policy, durable metadata, presence, readiness, capability manifests, and freshness into public device views.
+- [x] 3.2 Implement authorization-safe filtering and cursor pagination for name, tag, observed feature, platform, pool, status, and deployment readiness.
+- [x] 3.3 Implement declarative selection with hard requirements, ranked preferences, bounded candidate evaluation, deterministic tie-breaking, and redacted explanations.
+- [x] 3.4 Revalidate eligibility and inventory freshness at dispatch so stale discovery results cannot bypass current policy, readiness, revocation, or capacity state.
+- [x] 3.5 Add tests proving inaccessible devices cannot be enumerated through results, totals, cursors, errors, timing-sensitive branches, or selection explanations.
 
 ## 4. Persistent Edge Agent Operation
 
