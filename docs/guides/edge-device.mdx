@@ -65,6 +65,41 @@ Status reports connection, desired deployments, readiness, and blocked counts. I
 
 `disconnect` closes the channel and stops workloads according to shutdown policy. Existing pinned sessions fail with `EDGE_UNAVAILABLE`; they do not move to another device.
 
+## Use Edge Control From an Agent
+
+After the application explicitly enables and governs Edge Control, an MCP client can discover eligible devices without knowing physical IDs:
+
+```json theme={null}
+{
+  "name": "edge__select",
+  "arguments": {
+    "target": "personal",
+    "selector": {
+      "requires": { "features": ["filesystem"], "platforms": ["darwin"] },
+      "prefer": ["lowest-load"]
+    }
+  }
+}
+```
+
+Call the effective tool normally after selection. Use `edge__call` only when the agent must name one device explicitly, and use `edge__call_many` for a bounded parallel operation. Fan-out accepts either `devices` or `selector`, never both.
+
+```json theme={null}
+{
+  "name": "edge__call_many",
+  "arguments": {
+    "selector": { "requires": { "pool": "build-workers", "features": ["xcode"] } },
+    "tool": "builder__check",
+    "arguments": { "project": "app" },
+    "concurrency": 2,
+    "deadlineMs": 60000,
+    "failurePolicy": "collect"
+  }
+}
+```
+
+The result contains one terminal entry per resolved device. `fail-fast` stops new work and cancels cancellable children; it does not roll back completed mutations.
+
 ## Revoke the Device
 
 ```bash theme={null}

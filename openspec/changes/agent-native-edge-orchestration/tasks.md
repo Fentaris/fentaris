@@ -97,9 +97,9 @@
 
 ## 12. Documentation, Release, and Final Verification
 
-- [ ] 12.1 Update concepts and Edge setup guides with zero-global-install join, persistent service operation, metadata attribution, transparent selection, explicit calls, and multi-edge examples.
-- [ ] 12.2 Update CLI, Edge API, environment-variable, configuration, troubleshooting, security, observability, and production-adapter reference documentation.
-- [ ] 12.3 Document the protocol-v1 compatibility matrix, `fentaris-edge` migration window, rollout order, rollback procedure, and limitations around mutation retry and stateful failover.
-- [ ] 12.4 Add example applications demonstrating personal-device transparent routing, declarative selection, shared pools, explicit single-edge calls, and bounded parallel fan-out.
-- [ ] 12.5 Run focused core, CLI, and edge tests; then run repository build, typecheck, lint, documentation generation, and strict OpenSpec validation.
-- [ ] 12.6 Add minor Changesets for compatible public additions to `@fentaris/core`, `@fentaris/cli`, and `@fentaris/edge`, with release notes emphasizing opt-in Edge Control behavior and legacy CLI compatibility.
+- [x] 12.1 Update concepts and Edge setup guides with zero-global-install join, persistent service operation, metadata attribution, transparent selection, explicit calls, and multi-edge examples.
+- [x] 12.2 Update CLI, Edge API, environment-variable, configuration, troubleshooting, security, observability, and production-adapter reference documentation.
+- [x] 12.3 Document the protocol-v1 compatibility matrix, `fentaris-edge` migration window, rollout order, rollback procedure, and limitations around mutation retry and stateful failover.
+- [x] 12.4 Add example applications demonstrating personal-device transparent routing, declarative selection, shared pools, explicit single-edge calls, and bounded parallel fan-out.
+- [x] 12.5 Run focused core, CLI, and edge tests; then run repository build, typecheck, lint, documentation generation, and strict OpenSpec validation.
+- [x] 12.6 Add minor Changesets for compatible public additions to `@fentaris/core`, `@fentaris/cli`, and `@fentaris/edge`, with release notes emphasizing opt-in Edge Control behavior and legacy CLI compatibility.

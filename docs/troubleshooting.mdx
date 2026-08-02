@@ -178,6 +178,26 @@ executable or package to `FENTARIS_EDGE_ALLOWED_EXECUTABLES` or
   Do not allow a generic shell executable to bypass the allowlist. Approve the concrete MCP executable or package.
 </Warning>
 
+### `edge__select` returns `EDGE_SESSION_PINNED`
+
+The logical target already has a transparent session pin. Fentaris will not move stateful work to another device. Start a new downstream MCP session, call `edge__select` before the first edge-dependent tool, then call the effective tool normally.
+
+### `edge__call` returns `EDGE_INPUT_INVALID`
+
+The supplied arguments do not match the effective tool's current input schema. Call `tools/list`, inspect that tool's `inputSchema`, and retry. The request is rejected before any edge workload starts.
+
+### `edge__call_many` returns `EDGE_CAPACITY`
+
+The device count, concurrency, deadline, selector candidate count, child bytes, or aggregate bytes exceeded an effective limit. Narrow the selector or lower the requested values. Client input cannot widen application limits.
+
+### Fan-out reports an indeterminate outcome
+
+The connection was lost after a mutating child may have been dispatched. Fentaris does not retry automatically because replay could duplicate side effects. Inspect the device or upstream system, reconcile state, and retry only when the operation has an application-level idempotency contract.
+
+### Production adapter health is degraded
+
+Run the configured Edge health checks and inspect `diagnoseEdgeProductionAdapters(...)`. Replace reference in-memory inventory, presence, readiness, selection, binding, channel, pool-selection, and result-correlation adapters with durable multi-instance implementations before rollout.
+
 ## App-Level Governance Diagnostics
 
 Fentaris validates fluent `app.policy(...)` and `app.group(...)` declarations before serving requests. Startup or the first governed operation fails with structured configuration diagnostics when the final proxy state is invalid.

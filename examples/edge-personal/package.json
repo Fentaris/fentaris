@@ -1,0 +1,11 @@
+{
+  "name": "fentaris-example-edge-personal",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fentaris/core": "workspace:*"
+  }
+}
