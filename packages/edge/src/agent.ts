@@ -99,6 +99,17 @@ export class EdgeAgent {
     await this.connect();
   }
 
+  async waitUntilDisconnected(): Promise<void> {
+    const active = this.active;
+    if (!active) return;
+    if (active.closed) await active.closed;
+    else await new Promise<void>(() => undefined);
+  }
+
+  isConnected(): boolean {
+    return this.active !== undefined;
+  }
+
   async status(): Promise<EdgeAgentStatus> {
     const config = await this.options.platform.configStore.load();
     const summary = await this.options.runtimeSummary?.summary() ?? {

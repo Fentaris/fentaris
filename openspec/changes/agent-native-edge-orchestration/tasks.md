@@ -24,12 +24,12 @@
 
 ## 4. Persistent Edge Agent Operation
 
-- [ ] 4.1 Refactor the edge agent into a long-running supervised runtime with singleton protection, explicit lifecycle states, graceful shutdown, and durable local status.
-- [ ] 4.2 Implement bounded exponential reconnect with jitter, transient/terminal error classification, backoff reset after stable connection, and desired-state reconciliation before accepting calls.
-- [ ] 4.3 Add an owner-protected local control channel using Unix sockets and Windows named pipes for status, reconnect, graceful stop, and setup-interaction handoff only.
-- [ ] 4.4 Add platform service-adapter contracts and launchd, systemd-user, and Windows per-user implementations with install, start, stop, restart, and uninstall operations.
-- [ ] 4.5 Add foreground fallback behavior for unsupported platforms or insufficient permissions without losing enrollment identity.
-- [ ] 4.6 Add lifecycle tests with fake service managers and integration tests for singleton enforcement, boot-style restart, reconnect, local channel authorization, and graceful workload cleanup.
+- [x] 4.1 Refactor the edge agent into a long-running supervised runtime with singleton protection, explicit lifecycle states, graceful shutdown, and durable local status.
+- [x] 4.2 Implement bounded exponential reconnect with jitter, transient/terminal error classification, backoff reset after stable connection, and desired-state reconciliation before accepting calls.
+- [x] 4.3 Add an owner-protected local control channel using Unix sockets and Windows named pipes for status, reconnect, graceful stop, and setup-interaction handoff only.
+- [x] 4.4 Add platform service-adapter contracts and launchd, systemd-user, and Windows per-user implementations with install, start, stop, restart, and uninstall operations.
+- [x] 4.5 Add foreground fallback behavior for unsupported platforms or insufficient permissions without losing enrollment identity.
+- [x] 4.6 Add lifecycle tests with fake service managers and integration tests for singleton enforcement, boot-style restart, reconnect, local channel authorization, and graceful workload cleanup.
 
 ## 5. Join and Operator CLI
 

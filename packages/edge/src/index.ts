@@ -64,6 +64,50 @@ export {
 export { EdgeWorkloadSupervisor, ExecutableAllowlistPolicy } from "./supervisor.js";
 export { StdioEdgeWorkloadFactory } from "./stdioWorkload.js";
 export { EdgeAgentRuntime } from "./runtime.js";
+export {
+  EdgePersistentAgent,
+  FileEdgeSingletonLock,
+  classifyReconnectError,
+  reconnectDelay,
+} from "./daemon.js";
+export type {
+  EdgePersistentAgentOptions,
+  EdgePersistentLifecycleState,
+  EdgePersistentStatus,
+  EdgeReconnectPolicy,
+  EdgeSingletonLease,
+  EdgeSingletonLock,
+} from "./daemon.js";
+export {
+  EdgeLocalControlServer,
+  callEdgeLocalControl,
+  createEdgeLocalControlCredential,
+  edgeLocalControlAddress,
+} from "./localControl.js";
+export type {
+  EdgeLocalControlCommand,
+  EdgeLocalControlEndpoint,
+  EdgeLocalControlRequest,
+  EdgeLocalControlResponse,
+  EdgeLocalControlServerOptions,
+} from "./localControl.js";
+export {
+  ForegroundEdgeServiceAdapter,
+  LaunchdEdgeServiceAdapter,
+  NodeEdgeServiceCommandRunner,
+  NodeEdgeServiceFiles,
+  SystemdUserEdgeServiceAdapter,
+  WindowsUserEdgeServiceAdapter,
+  edgeServiceAdapter,
+} from "./service.js";
+export type {
+  EdgeServiceAdapter,
+  EdgeServiceCommandRunner,
+  EdgeServiceDefinition,
+  EdgeServiceFiles,
+  EdgeServiceOperation,
+  EdgeServiceResult,
+} from "./service.js";
 export type {
   EdgeAgentRuntimeOptions,
   EdgeConnectionRuntime,
