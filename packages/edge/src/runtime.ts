@@ -8,6 +8,9 @@ import {
   type EdgeControlPlaneMessage,
   type EdgeDesiredStateMessage,
   type EdgeProtocolClaims,
+  type EdgeReadinessReport,
+  type EdgeCapacitySnapshot,
+  type EdgeLoadSnapshot,
 } from "@fentaris/core";
 import type { LocalSetupManager } from "./setup.js";
 import type {
@@ -30,12 +33,19 @@ export interface EdgeRuntimeConnection {
   send(message: EdgeAgentMessage): Promise<void>;
 }
 
+export interface EdgeAgentPresenceSnapshot {
+  readonly capacity?: EdgeCapacitySnapshot;
+  readonly load?: EdgeLoadSnapshot;
+  readonly readiness: readonly EdgeReadinessReport[];
+}
+
 /** Runtime callback surface consumed by the persistent WebSocket connection. */
 export interface EdgeConnectionRuntime extends EdgeRuntimeSummaryProvider {
   connected(connection: EdgeRuntimeConnection): void | Promise<void>;
   handle(message: Exclude<EdgeControlPlaneMessage, { kind: "edge.hello.ack" }>): void | Promise<void>;
   disconnected(): void | Promise<void>;
   clearLocalState?(): void | Promise<void>;
+  presenceSnapshot?(): EdgeAgentPresenceSnapshot | Promise<EdgeAgentPresenceSnapshot>;
 }
 
 export interface EdgeAgentRuntimeOptions {
@@ -98,6 +108,19 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
       desiredDeployments: this.statuses.size,
       readyDeployments,
       blockedDeployments,
+    };
+  }
+
+  async presenceSnapshot(): Promise<EdgeAgentPresenceSnapshot> {
+    const observedAt = Date.now();
+    return {
+      readiness: [...this.statuses.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([deploymentId, status]) => ({
+          deploymentId,
+          status: status === "ready" ? "ready" : "setup-required",
+          observedAt,
+        })),
     };
   }
 

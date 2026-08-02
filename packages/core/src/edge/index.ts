@@ -131,8 +131,12 @@ export {
 } from "./protocol.js";
 
 export {
+  EDGE_PROTOCOL_MIN_VERSION,
   EDGE_PROTOCOL_VERSION,
+  EDGE_SUPPORTED_PROTOCOL_VERSIONS,
   parseEdgeProtocolMessage,
+  selectHighestMutualEdgeProtocolVersion,
+  validateEdgePresenceReport,
 } from "./controlProtocol.js";
 export type {
   EdgeAgentMessage,
@@ -145,6 +149,9 @@ export type {
   EdgeHelloAckMessage,
   EdgeHelloMessage,
   EdgeLifecycleMessage,
+  EdgePresenceReportMessage,
+  EdgeProtocolVersion,
+  EdgeReadinessReport,
   EdgeProtocolClaims,
   EdgeProtocolMessage,
   EdgeSetupStatusMessage,

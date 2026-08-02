@@ -1,6 +1,7 @@
 import { generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import type { EdgeLocalConfig, EdgePlatform, StoredDeviceKeyPair } from "./platform.js";
 import type { EdgeConnectionRuntime } from "./runtime.js";
+import type { EdgeObservedFacts } from "@fentaris/core";
 
 export interface DeviceAuthorizationRequest {
   readonly deviceCode: string;
@@ -65,6 +66,7 @@ export interface EdgeConnectionClient {
     publicKey: string;
     privateKey: string;
     runtime?: EdgeConnectionRuntime;
+    observedFacts?: EdgeObservedFacts;
   }): Promise<EdgeConnection>;
 }
 

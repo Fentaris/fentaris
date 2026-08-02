@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { EdgeTransportChannel } from "./EdgeTransport.js";
 import {
-  EDGE_PROTOCOL_VERSION,
   parseEdgeProtocolMessage,
+  selectHighestMutualEdgeProtocolVersion,
   type EdgeAgentMessage,
   type EdgeDesiredStateMessage,
   type EdgeHelloMessage,
+  type EdgePresenceReportMessage,
   type EdgeProtocolMessage,
 } from "./controlProtocol.js";
 import type {
@@ -17,6 +18,7 @@ import type {
   EdgeDeviceRegistry,
   EdgeSetupStatusStore,
 } from "./controlPlane.js";
+import type { EdgePresenceStore, EdgeReadinessStore } from "./inventory.js";
 import { edgeError } from "./errors.js";
 import type { EdgeTelemetry } from "./observability.js";
 import type {
@@ -65,6 +67,8 @@ export interface EdgeWebSocketGatewayOptions {
   desiredStateStore: EdgeDesiredStateStore;
   setupStatusStore: EdgeSetupStatusStore;
   capabilityManifestStore: EdgeCapabilityManifestStore;
+  presenceStore?: EdgePresenceStore;
+  readinessStore?: EdgeReadinessStore;
   authorizer?: EdgeGatewayAuthorizer;
   handshakeTimeoutMs?: number;
   heartbeatTimeoutMs?: number;
@@ -221,6 +225,7 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel {
         await this.cleanup(active);
       }
     }
+    await this.options.presenceStore?.purgeStale(this.now());
     return expired;
   }
 
@@ -231,7 +236,8 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel {
     removeMessage: () => void,
     removeClose: () => void,
   ): Promise<ActiveConnection> {
-    if (!hello.supportedVersions.includes(EDGE_PROTOCOL_VERSION)) {
+    const protocolVersion = selectHighestMutualEdgeProtocolVersion(hello.supportedVersions);
+    if (protocolVersion === undefined) {
       throw edgeError("EDGE_PROTOCOL", "No compatible edge protocol version.");
     }
     const identity = await this.options.authenticator.authenticate(credential, hello);
@@ -250,7 +256,7 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel {
       edgeNodeId: identity.edgeNodeId,
       connectionId: this.connectionId(),
       connectionGeneration: generation,
-      protocolVersion: EDGE_PROTOCOL_VERSION,
+      protocolVersion,
       connectedAt: now,
       lastHeartbeatAt: now,
     };
@@ -271,17 +277,17 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel {
       outcome: "connected",
     });
     await this.sendFrame(active, {
-      version: EDGE_PROTOCOL_VERSION,
+      version: protocolVersion,
       kind: "edge.hello.ack",
       tenantId: identity.tenantId,
       edgeNodeId: identity.edgeNodeId,
       connectionGeneration: generation,
-      protocolVersion: EDGE_PROTOCOL_VERSION,
+      protocolVersion,
       serverTime: now,
     });
     const desired = await this.options.desiredStateStore.get(identity.tenantId, identity.edgeNodeId);
     if (desired) {
-      const message = { ...desired, connectionGeneration: generation };
+      const message: EdgeDesiredStateMessage = { ...desired, version: protocolVersion, connectionGeneration: generation };
       await this.authorize("outbound", active, message);
       await this.sendFrame(active, message);
     }
@@ -294,6 +300,9 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel {
       throw edgeError("EDGE_UNAVAILABLE", "Message arrived on an inactive edge connection.");
     }
     this.assertInboundClaims(active, message);
+    if (message.kind !== "mcp.result" && message.kind !== "mcp.error" && message.version !== active.record.protocolVersion) {
+      throw edgeError("EDGE_PROTOCOL", "Edge message does not use the negotiated protocol version.");
+    }
     await this.authorize("inbound", active, message);
     switch (message.kind) {
       case "edge.heartbeat":
@@ -303,6 +312,10 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel {
           active.record.connectionGeneration,
           this.now(),
         );
+        await this.persistHeartbeat(active, message);
+        return;
+      case "edge.presence":
+        await this.persistPresence(active, message);
         return;
       case "edge.desired-state.ack":
         await this.options.desiredStateStore.acknowledge(message);
@@ -372,6 +385,67 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel {
     return device;
   }
 
+  private async persistHeartbeat(
+    active: ActiveConnection,
+    message: Extract<EdgeAgentMessage, { kind: "edge.heartbeat" }>,
+  ): Promise<void> {
+    const current = await this.options.presenceStore?.get(active.record.tenantId, active.record.edgeNodeId);
+    if (!current) return;
+    const now = this.now();
+    await this.options.presenceStore?.put({
+      ...current,
+      heartbeat: {
+        lastHeartbeatAt: now,
+        staleAfterMs: this.options.heartbeatTimeoutMs,
+        evaluatedAt: now,
+        fresh: true,
+      },
+      status: "online",
+      ...(message.capacity ? { capacity: message.capacity } : {}),
+      ...(message.load && typeof message.load === "object" ? { load: message.load } : {}),
+    });
+  }
+
+  private async persistPresence(active: ActiveConnection, message: EdgePresenceReportMessage): Promise<void> {
+    if (active.record.protocolVersion !== 2) {
+      throw edgeError("EDGE_PROTOCOL", "Presence reports require protocol version 2.");
+    }
+    const device = await this.requireDevice(active.identity);
+    await this.options.deviceRegistry.updateInventory(active.record.tenantId, active.record.edgeNodeId, {
+      expectedInventoryVersion: device.inventoryVersion ?? 1,
+      observed: message.observed,
+      updatedAt: message.reportedAt,
+    });
+    const now = this.now();
+    await this.options.presenceStore?.put({
+      tenantId: active.record.tenantId,
+      edgeNodeId: active.record.edgeNodeId,
+      credentialId: active.identity.credentialId,
+      connectionId: active.record.connectionId,
+      connectionGeneration: active.record.connectionGeneration,
+      protocolVersion: active.record.protocolVersion,
+      connectedAt: active.record.connectedAt,
+      heartbeat: {
+        lastHeartbeatAt: now,
+        staleAfterMs: this.options.heartbeatTimeoutMs,
+        evaluatedAt: now,
+        fresh: true,
+      },
+      status: "online",
+      ...(message.capacity ? { capacity: message.capacity } : {}),
+      ...(message.load ? { load: message.load } : {}),
+    });
+    for (const readiness of message.readiness) {
+      await this.options.readinessStore?.put({
+        tenantId: active.record.tenantId,
+        edgeNodeId: active.record.edgeNodeId,
+        credentialId: active.identity.credentialId,
+        connectionGeneration: active.record.connectionGeneration,
+        ...readiness,
+      });
+    }
+  }
+
   private connectionForNode(edgeNodeId: string): ActiveConnection | undefined {
     const matches = [...this.active.values()].filter((entry) => entry.record.edgeNodeId === edgeNodeId);
     if (matches.length > 1) {
@@ -395,6 +469,11 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel {
     active.removeMessage();
     active.removeClose();
     await this.options.connectionStore.remove(
+      active.record.tenantId,
+      active.record.edgeNodeId,
+      active.record.connectionGeneration,
+    );
+    await this.options.presenceStore?.remove(
       active.record.tenantId,
       active.record.edgeNodeId,
       active.record.connectionGeneration,

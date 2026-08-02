@@ -1,13 +1,15 @@
 import { randomBytes, sign } from "node:crypto";
-import { hostname } from "node:os";
+import { arch, hostname, platform as operatingSystem } from "node:os";
 import path from "node:path";
 import {
   EDGE_PROTOCOL_VERSION,
+  EDGE_SUPPORTED_PROTOCOL_VERSIONS,
   edgeError,
   parseEdgeProtocolMessage,
   type EdgeAgentMessage,
   type EdgeControlPlaneMessage,
   type EdgeHelloAckMessage,
+  type EdgeObservedFacts,
 } from "@fentaris/core";
 import {
   EdgeEnrollmentService,
@@ -57,6 +59,7 @@ export interface EdgeAgentOptions {
   platform: EdgePlatform;
   runtime?: EdgeConnectionRuntime;
   runtimeSummary?: EdgeRuntimeSummaryProvider;
+  observedFacts?: () => EdgeObservedFacts;
 }
 
 /** Enrollment and connection lifecycle used by the CLI and embedders. */
@@ -83,6 +86,7 @@ export class EdgeAgent {
       publicKey: credentials.keyPair.publicKey,
       privateKey: credentials.keyPair.privateKey,
       runtime: this.options.runtime,
+      observedFacts: this.options.observedFacts?.() ?? defaultObservedFacts(),
     });
     const active = this.active;
     void active.closed?.finally(() => {
@@ -183,7 +187,7 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
           kind: "edge.hello",
           tenantId: input.tenantId,
           edgeNodeId: input.edgeNodeId,
-          supportedVersions: [EDGE_PROTOCOL_VERSION],
+          supportedVersions: EDGE_SUPPORTED_PROTOCOL_VERSIONS,
           nonce,
           proof,
           deviceCredential: input.deviceCredential,
@@ -211,16 +215,37 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
                 },
                 send,
               });
+              if (message.protocolVersion === 2) {
+                const snapshot = await input.runtime?.presenceSnapshot?.() ?? { readiness: [] };
+                const reportedAt = Date.now();
+                await send({
+                  version: 2,
+                  kind: "edge.presence",
+                  tenantId: message.tenantId,
+                  edgeNodeId: message.edgeNodeId,
+                  connectionGeneration: message.connectionGeneration,
+                  observed: input.observedFacts ?? defaultObservedFacts(reportedAt),
+                  ...snapshot,
+                  reportedAt,
+                });
+              }
               heartbeat = setInterval(() => {
                 if (!ack || socket.readyState !== WebSocket.OPEN) return;
-                void send({
-                  version: EDGE_PROTOCOL_VERSION,
-                  kind: "edge.heartbeat",
-                  tenantId: ack.tenantId,
-                  edgeNodeId: ack.edgeNodeId,
-                  connectionGeneration: ack.connectionGeneration,
-                  sentAt: Date.now(),
-                }).catch(() => socket.close(1011, "edge heartbeat failed"));
+                void (async () => {
+                  const snapshot = ack?.protocolVersion === 2
+                    ? await input.runtime?.presenceSnapshot?.() ?? { readiness: [] }
+                    : undefined;
+                  await send({
+                    version: ack!.protocolVersion,
+                    kind: "edge.heartbeat",
+                    tenantId: ack!.tenantId,
+                    edgeNodeId: ack!.edgeNodeId,
+                    connectionGeneration: ack!.connectionGeneration,
+                    sentAt: Date.now(),
+                    ...(snapshot?.capacity ? { capacity: snapshot.capacity } : {}),
+                    ...(snapshot?.load ? { load: snapshot.load } : {}),
+                  });
+                })().catch(() => socket.close(1011, "edge heartbeat failed"));
               }, 10_000);
               heartbeat.unref?.();
               resolve(message);
@@ -261,6 +286,16 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
       }),
     };
   }
+}
+
+function defaultObservedFacts(reportedAt = Date.now()): EdgeObservedFacts {
+  return {
+    platform: operatingSystem(),
+    architecture: arch(),
+    agentVersion: "0.1.0",
+    executionFeatures: ["mcp-stdio"],
+    reportedAt,
+  };
 }
 
 export interface DefaultAgentOptions {

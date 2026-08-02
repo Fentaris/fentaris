@@ -111,6 +111,8 @@ export type EdgeDeploymentReadinessStatus =
 export interface EdgeDeploymentReadiness {
   readonly tenantId: string;
   readonly edgeNodeId: string;
+  readonly credentialId?: string;
+  readonly connectionGeneration?: number;
   readonly deploymentId: string;
   readonly status: EdgeDeploymentReadinessStatus;
   readonly recipeVersion?: number;

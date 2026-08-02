@@ -300,6 +300,11 @@ describe("edge agent and CLI", () => {
     });
     const connection = await pending;
     expect(runtime.connected).toHaveBeenCalledOnce();
+    const hello = JSON.parse(socket.sent[0]!) as { supportedVersions: number[] };
+    expect(hello.supportedVersions).toEqual([2, 1]);
+    const report = JSON.parse(socket.sent[1]!) as Record<string, unknown>;
+    expect(report).toMatchObject({ kind: "edge.presence", version: 2 });
+    expect(JSON.stringify((report as { observed?: unknown }).observed)).not.toContain("node-1");
 
     const schema = createSetupSchema({});
     socket.receive({

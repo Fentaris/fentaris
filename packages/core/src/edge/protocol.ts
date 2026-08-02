@@ -23,6 +23,12 @@ export interface EdgeMcpRoute {
   readonly downstreamSessionId: string;
   readonly subjectId?: string;
   readonly targetName: string;
+  /** Trusted parent orchestration request, for explicit child calls only. @pk */
+  readonly parentRequestId?: string;
+  /** Trusted isolated child binding, for explicit child calls only. @pk */
+  readonly childBindingId?: string;
+  /** Trusted aggregate orchestration correlation, for fan-out only. @pk */
+  readonly orchestrationId?: string;
 }
 
 /** A normalized edge MCP request. @pk */
@@ -88,4 +94,3 @@ export function isEdgeMcpInboundEnvelope(value: unknown): value is EdgeMcpInboun
   const error = candidate.error as Record<string, unknown> | undefined;
   return Boolean(error && typeof error.code === "string" && typeof error.message === "string");
 }
-

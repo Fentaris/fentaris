@@ -9,6 +9,8 @@ import {
   InMemoryEdgeConnectionStore,
   InMemoryEdgeDesiredStateStore,
   InMemoryEdgeDeviceRegistry,
+  InMemoryEdgePresenceStore,
+  InMemoryEdgeReadinessStore,
   InMemoryEdgeSetupStatusStore,
   compileLaunchRecipe,
   createSetupSchema,
@@ -77,6 +79,8 @@ async function fixture(options: { authorize?: ReturnType<typeof vi.fn>; now?: ()
   const desired = new InMemoryEdgeDesiredStateStore();
   const setup = new InMemoryEdgeSetupStatusStore();
   const manifests = new InMemoryEdgeCapabilityManifestStore();
+  const presence = new InMemoryEdgePresenceStore();
+  const readiness = new InMemoryEdgeReadinessStore();
   const authenticator: EdgeGatewayAuthenticator = {
     authenticate: vi.fn(async (credential) => {
       if (credential !== "secret") throw new Error("bad credential");
@@ -90,11 +94,13 @@ async function fixture(options: { authorize?: ReturnType<typeof vi.fn>; now?: ()
     desiredStateStore: desired,
     setupStatusStore: setup,
     capabilityManifestStore: manifests,
+    presenceStore: presence,
+    readinessStore: readiness,
     ...(options.authorize ? { authorizer: { authorize: options.authorize } } : {}),
     ...(options.now ? { now: options.now } : {}),
     connectionId: () => "connection-1",
   });
-  return { gateway, devices, connections, desired, setup, manifests, authenticator };
+  return { gateway, devices, connections, desired, setup, manifests, presence, readiness, authenticator };
 }
 
 async function connect(gateway: EdgeWebSocketGateway, socket = new TestSocket()) {
@@ -122,6 +128,56 @@ function desiredState(version: number): EdgeDesiredStateMessage {
 }
 
 describe("EdgeWebSocketGateway", () => {
+  it("negotiates v1 for legacy agents and v2 for current agents", async () => {
+    const legacy = await fixture();
+    const legacySocket = new TestSocket();
+    const legacyPending = legacy.gateway.accept(legacySocket, "secret");
+    legacySocket.receive(hello({ version: 1, supportedVersions: [1] }));
+    expect((await legacyPending).protocolVersion).toBe(1);
+    expect(legacySocket.sent[0]).toMatchObject({ version: 1, protocolVersion: 1 });
+
+    const current = await fixture();
+    expect((await connect(current.gateway)).record.protocolVersion).toBe(2);
+  });
+
+  it("persists authenticated v2 facts, presence, readiness, and freshness", async () => {
+    let now = 100;
+    const { gateway, devices, presence, readiness } = await fixture({ now: () => now });
+    const { socket } = await connect(gateway);
+    socket.receive({
+      version: 2,
+      kind: "edge.presence",
+      tenantId: "tenant-1",
+      edgeNodeId: "node-1",
+      connectionGeneration: 1,
+      observed: { platform: "darwin", architecture: "arm64", agentVersion: "0.1.0", executionFeatures: ["mcp-stdio"], reportedAt: 99 },
+      capacity: { maxConcurrent: 4, available: 3, reportedAt: 99 },
+      load: { active: 1, queued: 0, utilization: 0.25, reportedAt: 99 },
+      readiness: [{ deploymentId: "filesystem", status: "ready", observedAt: 99 }],
+      reportedAt: 99,
+    });
+    await vi.waitFor(async () => {
+      expect((await devices.get("tenant-1", "node-1"))?.observed?.platform).toBe("darwin");
+      expect((await presence.get("tenant-1", "node-1"))?.credentialId).toBe("credential-1");
+      expect((await readiness.get("tenant-1", "node-1", "filesystem"))?.connectionGeneration).toBe(1);
+    });
+
+    now = 120;
+    socket.receive({
+      version: 2,
+      kind: "edge.heartbeat",
+      tenantId: "tenant-1",
+      edgeNodeId: "node-1",
+      connectionGeneration: 1,
+      sentAt: 119,
+      capacity: { maxConcurrent: 4, available: 2, reportedAt: 119 },
+      load: { active: 2, queued: 0, utilization: 0.5, reportedAt: 119 },
+    });
+    await vi.waitFor(async () => {
+      expect((await presence.get("tenant-1", "node-1"))?.heartbeat.lastHeartbeatAt).toBe(120);
+      expect((await presence.get("tenant-1", "node-1"))?.capacity?.available).toBe(2);
+    });
+  });
   it("authenticates hello, negotiates the protocol, tracks heartbeat, and reconciles desired-state acknowledgements", async () => {
     let now = 100;
     const authorize = vi.fn(async () => true);

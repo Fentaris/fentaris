@@ -8,11 +8,11 @@
 
 ## 2. Protocol Version 2 and Gateway Compatibility
 
-- [ ] 2.1 Define protocol-v2 messages and validators for observed platform facts, agent version, execution features, capacity/load, freshness, and orchestration child correlation.
-- [ ] 2.2 Implement highest-mutual-version negotiation while preserving version-1 transparent Edge execution and rejecting unsupported or malformed v2 fields.
-- [ ] 2.3 Extend the gateway to persist authenticated presence/fact reports, expire stale connections, and bind every update to tenant, device, credential, and connection generation.
-- [ ] 2.4 Extend the edge runtime to report bounded observed facts and dynamic capacity/readiness without treating hostname, description, or tags as identity or authorization.
-- [ ] 2.5 Add protocol and gateway tests for v1/v2 interoperability, stale generations, forged metadata, oversized reports, freshness expiry, and reconnect reconciliation.
+- [x] 2.1 Define protocol-v2 messages and validators for observed platform facts, agent version, execution features, capacity/load, freshness, and orchestration child correlation.
+- [x] 2.2 Implement highest-mutual-version negotiation while preserving version-1 transparent Edge execution and rejecting unsupported or malformed v2 fields.
+- [x] 2.3 Extend the gateway to persist authenticated presence/fact reports, expire stale connections, and bind every update to tenant, device, credential, and connection generation.
+- [x] 2.4 Extend the edge runtime to report bounded observed facts and dynamic capacity/readiness without treating hostname, description, or tags as identity or authorization.
+- [x] 2.5 Add protocol and gateway tests for v1/v2 interoperability, stale generations, forged metadata, oversized reports, freshness expiry, and reconnect reconciliation.
 
 ## 3. Policy-Filtered Inventory and Selection
 
