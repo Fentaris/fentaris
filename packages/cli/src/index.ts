@@ -7,6 +7,8 @@ import { renderEntrypoint, renderTemplate } from "./domain/template/template.js"
 import { defaultRuntime } from "./platform/runtime.js";
 import { parseCommand } from "./shared/parse.js";
 import type { Runtime } from "./shared/types.js";
+export { DefaultEdgeOperatorBackend, runEdge } from "./commands/edge.js";
+export type { EdgeCliEnvelope, EdgeCliNextAction, EdgeOperatorBackend, EdgeRemoteQuery } from "./commands/edge.js";
 
 export { discoverProject, discoverSecretsProject, ensureEmptyTargetDirectory, parseCommand, renderEntrypoint, renderTemplate, resolveProjectName, selectPackageManager };
 export type { Prompt, Runtime } from "./shared/types.js";

@@ -1,8 +1,13 @@
 #!/usr/bin/env node
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { createDefaultEdgeAgent, EdgeAgent, WebSocketEdgeConnectionClient } from "./agent.js";
-import { runEdgeCli, type EdgeCliIo } from "./cli.js";
+import { runEdgeCli, type EdgeCliIo, type EdgeCliOperations } from "./cli.js";
+import { EdgePersistentAgent, FileEdgeSingletonLock, type EdgePersistentStatus } from "./daemon.js";
+import { EdgeLocalControlServer, createEdgeLocalControlCredential, edgeLocalControlAddress } from "./localControl.js";
+import { ProtectedJsonStore, defaultEdgePaths, nodeEdgePlatform } from "./platform.js";
+import { edgeServiceAdapter } from "./service.js";
 
 export {
   EdgeAgent,
@@ -17,7 +22,7 @@ export type {
   EdgeRuntimeSummary,
   EdgeRuntimeSummaryProvider,
 } from "./agent.js";
-export type { EdgeCliIo } from "./cli.js";
+export type { EdgeCliIo, EdgeCliOperations } from "./cli.js";
 export {
   EdgeEnrollmentService,
   HttpDeviceAuthorizationProvider,
@@ -35,6 +40,7 @@ export type {
   EdgeEnrollmentResult,
   EdgeEnrollmentServiceOptions,
   EdgeLoginResult,
+  EdgeJoinMetadata,
   EnrollmentCallbacks,
 } from "./enrollment.js";
 export {
@@ -149,8 +155,12 @@ export async function main(
     out: (value: string) => console.log(value),
     error: (value: string) => console.error(value),
   };
+  const joinUrl = argv[0] === "join" && argv[1] && !argv[1].startsWith("-") ? argv[1] : undefined;
+  const paths = defaultEdgePaths();
+  const platform = nodeEdgePlatform(paths);
   const agent = options.agent ?? createDefaultEdgeAgent({
-    controlPlaneUrl: options.controlPlaneUrl ?? process.env.FENTARIS_EDGE_CONTROL_PLANE_URL ?? "",
+    controlPlaneUrl: options.controlPlaneUrl ?? joinUrl ?? process.env.FENTARIS_EDGE_CONTROL_PLANE_URL ?? "",
+    platform,
     onVerification: (request) => {
       io.out(JSON.stringify({
         verificationUri: request.verificationUri,
@@ -158,7 +168,42 @@ export async function main(
       }));
     },
   });
-  return runEdgeCli(argv, agent, io);
+  const service = edgeServiceAdapter({
+    serviceFile: process.platform === "darwin"
+      ? path.join(process.env.HOME ?? paths.dataDir, "Library", "LaunchAgents", "dev.fentaris.edge.plist")
+      : path.join(process.env.HOME ?? paths.dataDir, ".config", "systemd", "user", "fentaris-edge.service"),
+    foregroundCommand: "fentaris edge run",
+  });
+  const definition = { executable: process.execPath, args: [process.argv[1] ?? "fentaris-edge", "run"] };
+  const operations: EdgeCliOperations = {
+    installService: () => service.install(definition),
+    service: (operation) => operation === "install" ? service.install(definition) : service[operation](),
+    run: async () => {
+      const persistent = new EdgePersistentAgent({
+        agent,
+        lock: new FileEdgeSingletonLock(path.join(paths.dataDir, "agent.lock")),
+        statusStore: new ProtectedJsonStore<EdgePersistentStatus>(path.join(paths.dataDir, "status.json")),
+      });
+      const credentialStoreKey = "local-control-credential";
+      let credential = await platform.credentialStore.get(credentialStoreKey);
+      if (!credential) {
+        credential = createEdgeLocalControlCredential();
+        await platform.credentialStore.set(credentialStoreKey, credential);
+      }
+      const control = new EdgeLocalControlServer({
+        endpoint: { address: edgeLocalControlAddress(paths.dataDir), credential },
+        agent: persistent,
+      });
+      await persistent.start();
+      await control.start();
+      try {
+        await persistent.wait();
+      } finally {
+        await control.stop();
+      }
+    },
+  };
+  return runEdgeCli(argv, agent, io, operations);
 }
 
 export function isDirectCliInvocation(entrypointUrl = import.meta.url, argvPath = process.argv[1]): boolean {

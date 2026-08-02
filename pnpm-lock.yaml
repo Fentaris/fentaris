@@ -170,6 +170,9 @@ importers:
       '@fentaris/core':
         specifier: workspace:*
         version: link:../core
+      '@fentaris/edge':
+        specifier: workspace:*
+        version: link:../edge
       semver:
         specifier: ^7.8.5
         version: 7.8.5

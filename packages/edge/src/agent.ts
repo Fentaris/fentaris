@@ -16,6 +16,7 @@ import {
   HttpDeviceAuthorizationProvider,
   HttpEdgeEnrollmentClient,
   type DeviceAuthorizationRequest,
+  type EdgeJoinMetadata,
   type EdgeConnection,
   type EdgeConnectionClient,
 } from "./enrollment.js";
@@ -68,8 +69,8 @@ export class EdgeAgent {
 
   constructor(private readonly options: EdgeAgentOptions) {}
 
-  async login() {
-    const login = await this.options.enrollment.login();
+  async login(metadata: EdgeJoinMetadata = {}) {
+    const login = await this.options.enrollment.login(metadata);
     await this.connect();
     return login;
   }

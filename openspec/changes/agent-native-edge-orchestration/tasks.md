@@ -33,13 +33,13 @@
 
 ## 5. Join and Operator CLI
 
-- [ ] 5.1 Add `fentaris edge join <control-plane-url>` with name, description, repeatable tags, service/no-service selection, device authorization, canonical human output, and canonical `--json` output.
-- [ ] 5.2 Make `npx @fentaris/edge join <control-plane-url>` invoke the same join/service workflow so a supported computer needs no separate global package installation.
-- [ ] 5.3 Add `fentaris edge run` and `fentaris edge service install|start|stop|restart|uninstall` with explicit local targets, stable exit codes, and actionable failures.
-- [ ] 5.4 Add policy-aware `fentaris edge list|get|status|update` discovery and metadata commands with compact output, pagination, include/exclude filters, `--as`, and canonical JSON envelopes.
-- [ ] 5.5 Add guarded `fentaris edge disconnect` and `revoke` mutations with explicit target semantics, confirmation or `--yes`, stable error codes, and safe next actions.
-- [ ] 5.6 Map legacy `fentaris-edge login|status|disconnect|revoke` behavior onto the new services, preserving documented JSON compatibility and emitting migration warnings.
-- [ ] 5.7 Add CLI parsing, help, human output, JSON success/failure, pagination, repeated join, confirmation, service fallback, and legacy-compatibility tests.
+- [x] 5.1 Add `fentaris edge join <control-plane-url>` with name, description, repeatable tags, service/no-service selection, device authorization, canonical human output, and canonical `--json` output.
+- [x] 5.2 Make `npx @fentaris/edge join <control-plane-url>` invoke the same join/service workflow so a supported computer needs no separate global package installation.
+- [x] 5.3 Add `fentaris edge run` and `fentaris edge service install|start|stop|restart|uninstall` with explicit local targets, stable exit codes, and actionable failures.
+- [x] 5.4 Add policy-aware `fentaris edge list|get|status|update` discovery and metadata commands with compact output, pagination, include/exclude filters, `--as`, and canonical JSON envelopes.
+- [x] 5.5 Add guarded `fentaris edge disconnect` and `revoke` mutations with explicit target semantics, confirmation or `--yes`, stable error codes, and safe next actions.
+- [x] 5.6 Map legacy `fentaris-edge login|status|disconnect|revoke` behavior onto the new services, preserving documented JSON compatibility and emitting migration warnings.
+- [x] 5.7 Add CLI parsing, help, human output, JSON success/failure, pagination, repeated join, confirmation, service fallback, and legacy-compatibility tests.
 
 ## 6. Session Selection and Child Bindings
 

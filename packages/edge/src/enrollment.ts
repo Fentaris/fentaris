@@ -36,6 +36,9 @@ export interface EdgeEnrollmentRequest {
   readonly nonce: string;
   readonly proof: string;
   readonly hostnameLabel?: string;
+  readonly name?: string;
+  readonly description?: string;
+  readonly tags?: readonly string[];
 }
 
 export interface EdgeEnrollmentResult {
@@ -90,6 +93,12 @@ export interface EdgeLoginResult {
   readonly repeated: boolean;
 }
 
+export interface EdgeJoinMetadata {
+  readonly name?: string;
+  readonly description?: string;
+  readonly tags?: readonly string[];
+}
+
 const ACCESS_TOKEN = "access-token";
 const REFRESH_TOKEN = "refresh-token";
 const ACCESS_EXPIRES_AT = "access-expires-at";
@@ -105,7 +114,7 @@ export class EdgeEnrollmentService {
     this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
-  async login(): Promise<EdgeLoginResult> {
+  async login(metadata: EdgeJoinMetadata = {}): Promise<EdgeLoginResult> {
     const existing = await this.options.platform.configStore.load();
     if (existing && await this.options.platform.credentialStore.get(DEVICE_CREDENTIAL)) {
       await this.validAccessToken();
@@ -139,6 +148,7 @@ export class EdgeEnrollmentService {
       nonce,
       proof,
       hostnameLabel: this.options.hostnameLabel?.(),
+      ...metadata,
     });
     const config: EdgeLocalConfig = {
       edgeNodeId: enrolled.edgeNodeId,

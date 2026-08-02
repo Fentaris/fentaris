@@ -210,7 +210,10 @@ function parseOptionsAndArgs(spec: CliCommandSpec, tokens: string[]):
       if (value === undefined) {
         return { kind: "parse-error", message: `a value is required for '${token}' but none was supplied` };
       }
-      options[option.name] = value;
+      const existing = options[option.name];
+      options[option.name] = option.repeatable && typeof existing === "string"
+        ? `${existing},${value}`
+        : value;
       if (!hasInlineValue) {
         index += 1;
       }

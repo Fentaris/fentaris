@@ -5,7 +5,7 @@ description: "Run, validate, build, and inspect Fentaris projects from the comma
 
 The `fentaris` CLI creates project scaffolds, runs local development, checks project health, stores local secrets, and builds project output.
 
-The separately installed `fentaris-edge` CLI enrolls and operates a governed edge device.
+The `fentaris edge` command domain enrolls and operates governed Edge devices. The `fentaris-edge` binary remains available during migration.
 
 ## Quick Start
 
@@ -32,38 +32,67 @@ fentaris secrets set --help
 
 ## Commands
 
-### `fentaris-edge login`
+### `fentaris edge join <control-plane-url>`
 
-Start browser/device authorization, create or load the protected device key, enroll the device, connect to the gateway, and process pending setup.
-
-```bash theme={null}
-FENTARIS_EDGE_CONTROL_PLANE_URL="https://fentaris.example" \
-FENTARIS_EDGE_ALLOWED_EXECUTABLES="filesystem-mcp" \
-fentaris-edge login
-```
-
-The executable and package allowlists are deny-by-default. See
-[Environment Variables](/reference/environment-variables) for configuration.
-
-### `fentaris-edge status`
-
-Print connection, desired deployment, readiness, and blocked-action summaries. Output redacts local paths, secrets, credentials, tokens, and full environments.
+Start device authorization, create or load the protected device key, record descriptive metadata, and install the persistent per-user service when supported.
 
 ```bash theme={null}
-fentaris-edge status
+npx @fentaris/edge join https://fentaris.example --name "Mac Studio" --tag xcode --json
+fentaris edge join https://fentaris.example --name "Mac Studio" --description "Local builds" --tag xcode
 ```
 
-### `fentaris-edge disconnect`
+Use repeatable `--tag`, `--description`, `--no-service`, or `--service`. If service installation is unavailable and `--service` was not required, enrollment remains valid and the result gives the exact foreground command.
 
-Close the outbound edge channel and stop workloads according to local shutdown policy.
+### `fentaris edge run`
 
-### `fentaris-edge revoke`
+Run the enrolled agent in the foreground with singleton protection, automatic reconnect, local status, and graceful workload cleanup.
 
-Revoke the enrolled device and delete its local identity, credentials, grants,
-and setup secrets.
+```bash theme={null}
+fentaris edge run
+```
+
+### `fentaris edge service <operation>`
+
+Manage the local per-user service with `install`, `start`, `stop`, `restart`, or `uninstall`.
+
+```bash theme={null}
+fentaris edge service restart --json
+```
+
+Service uninstall removes background operation but retains enrollment identity.
+
+### `fentaris edge list|get|status|update`
+
+Discover and manage only devices visible to the selected Fentaris identity.
+
+```bash theme={null}
+fentaris edge list --as user:alice --compact --limit 20 --json
+fentaris edge get "Mac Studio" --include readiness,observed --json
+fentaris edge status
+fentaris edge update "Mac Studio" --expected-version 4 --description "Build machine" --tag xcode --json
+```
+
+Discovery commands support `--json`, `--compact`, `--limit`, `--cursor`, `--include`, `--exclude`, and `--as user:<name>|group:<name>`. JSON uses `{ ok, data|error, pagination, warnings, nextActions }`.
+
+### `fentaris edge disconnect|revoke <device>`
+
+Both mutations require an explicit public device name and confirmation. Automation must pass `--yes`.
+
+```bash theme={null}
+fentaris edge disconnect "Mac Studio" --yes --json
+fentaris edge revoke "Mac Studio" --yes --json
+```
+
+`disconnect` closes the active channel without deleting enrollment identity. `revoke` invalidates the device authorization.
+
+### Legacy `fentaris-edge` commands
+
+`fentaris-edge login|status|disconnect|revoke` map to the new services and add migration warnings without removing existing JSON fields. New automation should use `fentaris edge`.
+
+The executable and package allowlists are deny-by-default. See [Environment Variables](/reference/environment-variables) for configuration.
 
 <Note>
-  `fentaris-edge` has no `add` command. MCP definitions, setup schemas, targets, and assignments are managed by the Fentaris application.
+  Neither CLI surface has an `add` command. MCP definitions, setup schemas, targets, and assignments are managed by the Fentaris application.
 </Note>
 
 ### `fentaris init [project-name]`

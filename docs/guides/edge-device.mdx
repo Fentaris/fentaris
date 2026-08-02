@@ -3,18 +3,21 @@ title: "Set Up an Edge Device"
 description: "Install, enroll, assign, inspect, and revoke a Fentaris edge device."
 ---
 
-Use `fentaris-edge` on the device that owns the filesystem, credentials, or local process you want an MCP client to use.
+Use `fentaris edge` on the computer that owns the filesystem, credentials, or local process you want an MCP client to use.
 
 ## Quick Start
 
 ```bash theme={null}
-pnpm add -g @fentaris/edge
-export FENTARIS_EDGE_CONTROL_PLANE_URL="https://fentaris.example"
-export FENTARIS_EDGE_ALLOWED_EXECUTABLES="filesystem-mcp"
-fentaris-edge login
+npx @fentaris/edge join https://fentaris.example \
+  --name "Mac Studio" \
+  --description "Local builds and Xcode" \
+  --tag development \
+  --tag xcode
 ```
 
-Open the displayed verification URL and enter the user code. Login creates a random device keypair, proves possession, enrolls the device, starts synchronization, and prompts for pending local setup.
+Open the displayed verification URL and enter the user code. Join creates a random device keypair, proves possession, enrolls the device, and installs a per-user background service when the platform permits it. No global package installation is required for the `npx` form.
+
+If native service installation is unavailable, the device stays enrolled and the command returns `fentaris edge run` as the foreground fallback. Pass `--no-service` to choose foreground operation or `--service` to fail unless persistent installation succeeds.
 
 The local executable allowlist is deny-by-default. Set
 `FENTARIS_EDGE_ALLOWED_EXECUTABLES` for direct executables or
@@ -53,8 +56,9 @@ The local prompt shows the recipe digest and requested access. Approving a folde
 ## Inspect and Disconnect
 
 ```bash theme={null}
-fentaris-edge status
-fentaris-edge disconnect
+fentaris edge status
+fentaris edge list --as user:alice --compact --json
+fentaris edge disconnect "Mac Studio" --yes
 ```
 
 Status reports connection, desired deployments, readiness, and blocked counts. It does not print local paths, tokens, credentials, secrets, or full environments.
@@ -114,7 +118,7 @@ Selector fallback can choose another eligible selector before pinning. It does n
 
 ### Setup remains pending
 
-Run `fentaris-edge status`. Approve every required field and the current recipe digest. A schema access change invalidates only affected grants.
+Run `fentaris edge status`. Approve every required field and the current recipe digest. A schema access change invalidates only affected grants.
 
 ### Device reconnects but calls fail
 

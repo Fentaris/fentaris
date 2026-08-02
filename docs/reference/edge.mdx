@@ -104,7 +104,7 @@ The initial process model is one local MCP process/client per `{ deployment, dow
 
 ## Protocol Compatibility
 
-`EDGE_PROTOCOL_VERSION` and `EDGE_MCP_ENVELOPE_VERSION` are currently `1`. Hello negotiates a mutually supported protocol version. Every accepted connection is bound to tenant, edge node, credential, protocol version, and a monotonically increasing connection generation.
+`EDGE_PROTOCOL_VERSION` is `2`; `EDGE_MCP_ENVELOPE_VERSION` remains `1`. Hello negotiates the highest mutually supported protocol version. Version 1 agents retain transparent Edge execution, while version 2 adds bounded observed facts, capacity, load, readiness, and orchestration correlation. Every accepted connection is bound to tenant, edge node, credential, protocol version, and a monotonically increasing connection generation.
 
 Messages cover hello, heartbeat, desired state, setup status, capability manifests, lifecycle, MCP requests/results/errors, and cancellation.
 
@@ -119,6 +119,8 @@ Stable edge codes:
 * `EDGE_SETUP_REQUIRED`
 * `EDGE_UNAVAILABLE`
 * `EDGE_CAPACITY`
+* `EDGE_INVENTORY_CONFLICT`
+* `EDGE_NAME_CONFLICT`
 * `EDGE_PROTOCOL`
 * `EDGE_WORKLOAD`
 * `EDGE_GRANT`
@@ -135,10 +137,13 @@ Sensitive metadata is removed by `redactEdgeProtocolValue(...)` before telemetry
 ## Agent CLI
 
 ```bash theme={null}
-fentaris-edge login
-fentaris-edge status
-fentaris-edge disconnect
-fentaris-edge revoke
+fentaris edge join https://fentaris.example --name "Mac Studio"
+fentaris edge run
+fentaris edge service restart
+fentaris edge list --as user:alice --json
+fentaris edge status
+fentaris edge disconnect "Mac Studio" --yes
+fentaris edge revoke "Mac Studio" --yes
 ```
 
 There is no MCP add/configuration command. Definitions and assignments remain controlled by Fentaris.
@@ -148,4 +153,3 @@ There is no MCP add/configuration command. Definitions and assignments remain co
 * [Edge Execution](/concepts/edge-execution)
 * [Set Up an Edge Device](/guides/edge-device)
 * [Observability](/concepts/observability)
-

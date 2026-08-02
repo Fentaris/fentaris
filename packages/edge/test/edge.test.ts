@@ -204,6 +204,40 @@ describe("edge enrollment", () => {
 });
 
 describe("edge agent and CLI", () => {
+  it("maps join to enrollment metadata and the persistent service workflow", async () => {
+    const fixture = service();
+    const agent = new EdgeAgent({
+      enrollment: fixture.service,
+      platform: fixture.platform,
+      connection: { connect: async () => ({ connectedAt: 2_000, close: async () => undefined }) },
+    });
+    const installService = vi.fn(async () => ({
+      operation: "install" as const,
+      persistent: true,
+      adapter: "launchd" as const,
+      nextActions: [],
+    }));
+    const output: string[] = [];
+    await expect(runEdgeCli([
+      "join", "https://control.example", "--name", "Mac Studio", "--description", "Build machine", "--tag", "xcode", "--tag", "development", "--json",
+    ], agent, { out: (value) => output.push(value), error: () => undefined }, {
+      installService,
+      service: installService,
+      run: async () => undefined,
+    })).resolves.toBe(0);
+    expect(installService).toHaveBeenCalledOnce();
+    expect(fixture.client.enroll).toHaveBeenCalledWith(expect.objectContaining({
+      name: "Mac Studio",
+      description: "Build machine",
+      tags: ["xcode", "development"],
+    }));
+    expect(JSON.parse(output[0]!)).toMatchObject({
+      ok: true,
+      data: { device: { name: "Mac Studio" }, service: { persistent: true } },
+      pagination: null,
+    });
+  });
+
   it("connects on login, reports safe status, disconnects, and exposes no add command", async () => {
     const fixture = service();
     let closeCount = 0;
@@ -226,6 +260,7 @@ describe("edge agent and CLI", () => {
     const io = { out: (value: string) => out.push(value), error: (value: string) => errors.push(value) };
 
     await expect(runEdgeCli(["login"], agent, io)).resolves.toBe(0);
+    expect(JSON.parse(out.at(-1)!).warnings[0]).toContain("deprecated");
     await expect(runEdgeCli(["status"], agent, io)).resolves.toBe(0);
     expect(JSON.parse(out.at(-1)!)).toMatchObject({
       enrolled: true,
