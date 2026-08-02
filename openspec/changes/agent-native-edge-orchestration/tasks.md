@@ -89,11 +89,11 @@
 
 ## 11. Distributed Adapter Verification
 
-- [ ] 11.1 Add reusable conformance suites for durable inventory, presence, readiness, selection, binding, and channel-broker adapters.
-- [ ] 11.2 Add a multi-instance integration harness where proxy selection, gateway connection, desired state, and result handling run in separate process/service instances over injected durable test adapters.
-- [ ] 11.3 Verify atomic or coordinated round-robin/sticky pool selection behavior and document consistency requirements for managed adapters.
-- [ ] 11.4 Verify restart recovery for inventory, presence expiry, desired state, selections, child cleanup, and in-flight result correlation.
-- [ ] 11.5 Surface actionable diagnostics when only reference in-memory adapters are configured for a deployment claiming production readiness.
+- [x] 11.1 Add reusable conformance suites for durable inventory, presence, readiness, selection, binding, and channel-broker adapters.
+- [x] 11.2 Add a multi-instance integration harness where proxy selection, gateway connection, desired state, and result handling run in separate process/service instances over injected durable test adapters.
+- [x] 11.3 Verify atomic or coordinated round-robin/sticky pool selection behavior and document consistency requirements for managed adapters.
+- [x] 11.4 Verify restart recovery for inventory, presence expiry, desired state, selections, child cleanup, and in-flight result correlation.
+- [x] 11.5 Surface actionable diagnostics when only reference in-memory adapters are configured for a deployment claiming production readiness.
 
 ## 12. Documentation, Release, and Final Verification
 

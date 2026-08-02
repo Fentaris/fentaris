@@ -140,6 +140,21 @@ export {
   DEFAULT_EDGE_ORCHESTRATION_LIMITS,
   EdgeFanoutCoordinator,
 } from "./fanout.js";
+
+export {
+  EDGE_DISTRIBUTED_CONSISTENCY_REQUIREMENTS,
+  InMemoryEdgePoolSelectionStore,
+  InMemoryEdgeResultCorrelationStore,
+  diagnoseEdgeProductionAdapters,
+} from "./distributed.js";
+export type {
+  EdgeCoordinatedPoolStrategy,
+  EdgePoolCandidate,
+  EdgePoolSelectionStore,
+  EdgeProductionAdapterDiagnostic,
+  EdgeResultCorrelation,
+  EdgeResultCorrelationStore,
+} from "./distributed.js";
 export type {
   EdgeFanoutCoordinatorOptions,
   EdgeAggregateApprovalContext,

@@ -131,6 +131,7 @@ export interface EdgeConnectionStore {
 
 /** Replaceable distributed edge channel broker contract. @pk */
 export interface EdgeChannelBroker {
+  readonly diagnostics?: EdgeAdapterDiagnostics;
   publish(channel: string, message: string): Promise<void>;
   subscribe(channel: string, handler: (message: string) => void): () => void;
 }
@@ -352,6 +353,7 @@ export class InMemoryEdgeConnectionStore implements EdgeConnectionStore {
 
 /** Reference single-process pub/sub broker. @pk */
 export class InMemoryEdgeChannelBroker implements EdgeChannelBroker {
+  readonly diagnostics = IN_MEMORY_EDGE_ADAPTER_DIAGNOSTICS;
   private readonly handlers = new Map<string, Set<(message: string) => void>>();
   async publish(channel: string, message: string) {
     for (const handler of this.handlers.get(channel) ?? []) handler(message);
