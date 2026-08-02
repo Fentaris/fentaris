@@ -142,6 +142,7 @@ export {
 } from "./fanout.js";
 export type {
   EdgeFanoutCoordinatorOptions,
+  EdgeAggregateApprovalContext,
   EdgeFanoutEntry,
   EdgeFanoutResult,
   EdgeFanoutStatus,
@@ -311,10 +312,12 @@ export {
   EdgeTelemetry,
   edgeHealth,
   redactEdgeProtocolValue,
+  serializeEdgePublicValue,
 } from "./observability.js";
 export type {
   EdgeHealthOptions,
   EdgeHealthProbeResult,
+  EdgeSerializationLimits,
   EdgeRuntimeEvent,
   EdgeRuntimeEventName,
   EdgeTelemetrySink,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EdgeFanoutCoordinator,
+  EdgeTelemetry,
   edgeError,
   type EdgeInventoryService,
   type EdgeSingleCallCoordinator,
@@ -165,6 +166,49 @@ describe("EdgeFanoutCoordinator", () => {
       .rejects.toMatchObject({ code: "EDGE_CAPACITY" });
     await expect(coordinator.callMany(context(), { devices: devices.slice(0, 1), tool: "files__read", arguments: {}, concurrency: 2 }))
       .rejects.toMatchObject({ code: "EDGE_CAPACITY" });
+    expect(calls).toBe(0);
+  });
+
+  it("evaluates exact aggregate approval before independently dispatched children and emits parent/child telemetry", async () => {
+    const approvals: unknown[] = [];
+    const events: Array<{ name: string; metadata?: Readonly<Record<string, unknown>> }> = [];
+    let calls = 0;
+    const coordinator = new EdgeFanoutCoordinator({
+      inventory: inventory(),
+      telemetry: new EdgeTelemetry({ emit: (event) => events.push(event) }, () => 10),
+      approve: (approval) => { approvals.push(approval); return true; },
+      single: single(async () => { calls += 1; return { content: [] }; }),
+    });
+    await coordinator.callMany(context(), {
+      devices: devices.slice(0, 2), tool: "files__write", arguments: { value: "safe", secret: "hidden" },
+      concurrency: 1, deadlineMs: 50, failurePolicy: "collect",
+    });
+    expect(approvals).toEqual([expect.objectContaining({
+      tool: "files__write", devices: devices.slice(0, 2), concurrency: 1, deadlineMs: 50,
+      argumentSummary: { keys: ["secret", "value"], bytes: expect.any(Number) },
+    })]);
+    expect(calls).toBe(2);
+    expect(events.map((event) => event.name)).toEqual([
+      "edge.orchestration.started", "edge.orchestration.child", "edge.orchestration.child",
+      "edge.orchestration.completed", "edge.orchestration.cleanup",
+    ]);
+    expect(JSON.stringify(events)).not.toContain("hidden");
+  });
+
+  it("prevents approval scope widening and dispatch when aggregate approval is denied", async () => {
+    let calls = 0;
+    const coordinator = new EdgeFanoutCoordinator({
+      inventory: inventory(),
+      approve: (approval) => {
+        expect(Object.isFrozen(approval)).toBe(true);
+        expect(Object.isFrozen(approval.devices)).toBe(true);
+        return false;
+      },
+      single: single(async () => { calls += 1; return { content: [] }; }),
+    });
+    await expect(coordinator.callMany(context(), {
+      devices: devices.slice(0, 1), tool: "files__write", arguments: {},
+    })).rejects.toMatchObject({ code: "EDGE_UNAUTHORIZED_TARGET" });
     expect(calls).toBe(0);
   });
 });

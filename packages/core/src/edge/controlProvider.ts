@@ -12,6 +12,8 @@ import type {
 } from "./inventoryService.js";
 import type { EdgeSessionSelectionService } from "./sessionSelection.js";
 import type { EdgeOrchestrationLimits } from "./fanout.js";
+import type { EdgeAggregateApprovalContext } from "./fanout.js";
+import { serializeEdgePublicValue } from "./observability.js";
 
 export const EDGE_CONTROL_NAMESPACE = "edge" as const;
 export const EDGE_CONTROL_TOOL_NAMES = Object.freeze(["list", "get", "select", "call", "call_many"] as const);
@@ -70,6 +72,7 @@ export interface EdgeControlProviderOptions {
   readonly invoker?: EdgeControlInvoker;
   readonly defaultTargetName?: string;
   readonly limits?: Partial<EdgeOrchestrationLimits>;
+  readonly approveOrchestration?: (approval: EdgeAggregateApprovalContext, context: ProxyContext) => boolean | Promise<boolean>;
 }
 
 const stringArray = { type: "array", maxItems: 32, items: { type: "string", minLength: 1, maxLength: 80 } } as const;
@@ -280,9 +283,10 @@ function inventoryContext(context: ProxyContext): { tenantId: string; subjectId:
 }
 
 function result(value: object): CallToolResult {
+  const safe = serializeEdgePublicValue(value) as Record<string, unknown>;
   return {
-    structuredContent: value as Record<string, unknown>,
-    content: [{ type: "text", text: JSON.stringify(value) }],
+    structuredContent: safe,
+    content: [{ type: "text", text: JSON.stringify(safe) }],
   };
 }
 

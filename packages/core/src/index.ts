@@ -519,6 +519,7 @@ export {
   validateEdgePresenceReport,
   edgeHealth,
   redactEdgeProtocolValue,
+  serializeEdgePublicValue,
 } from "./edge/index.js";
 export type {
   AuthenticatedEdgeIdentity,
@@ -566,6 +567,7 @@ export type {
   EdgeSingleCallStructuredResult,
   EdgeTrustedChildRoute,
   EdgeFanoutCoordinatorOptions,
+  EdgeAggregateApprovalContext,
   EdgeFanoutEntry,
   EdgeFanoutResult,
   EdgeFanoutStatus,
@@ -597,6 +599,7 @@ export type {
   EdgeDiscoveryState,
   EdgeHealthOptions,
   EdgeHealthProbeResult,
+  EdgeSerializationLimits,
   EdgeRuntimeEvent,
   EdgeRuntimeEventName,
   EdgeTelemetrySink,

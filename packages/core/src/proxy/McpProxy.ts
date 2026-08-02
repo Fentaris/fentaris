@@ -1059,6 +1059,8 @@ export class McpProxy {
         inventory: control.inventory,
         single: this.edgeSingleCallCoordinator(),
         limits: control.limits,
+        telemetry: this.edgeOptions?.telemetry,
+        approve: control.approveOrchestration,
       });
     }
     return this.edgeFanoutCoordinatorCache;

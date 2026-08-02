@@ -6,6 +6,7 @@ import { edgeError, isEdgeError } from "./errors.js";
 import type { EdgeInventoryService, EdgeSelectionRequest } from "./inventoryService.js";
 import type { EdgePublicDeviceRef } from "./inventory.js";
 import type { EdgeSingleCallCoordinator } from "./controlInvocation.js";
+import type { EdgeTelemetry } from "./observability.js";
 
 export interface EdgeOrchestrationLimits {
   readonly maxDevices: number;
@@ -51,6 +52,17 @@ export interface EdgeFanoutCoordinatorOptions {
   readonly single: EdgeSingleCallCoordinator;
   readonly limits?: Partial<EdgeOrchestrationLimits>;
   readonly now?: () => number;
+  readonly telemetry?: EdgeTelemetry;
+  readonly approve?: (approval: EdgeAggregateApprovalContext, context: ProxyContext) => boolean | Promise<boolean>;
+}
+
+export interface EdgeAggregateApprovalContext {
+  readonly tool: string;
+  readonly argumentSummary: { readonly keys: readonly string[]; readonly bytes: number };
+  readonly devices: readonly EdgePublicDeviceRef[];
+  readonly failurePolicy: "collect" | "fail-fast";
+  readonly concurrency: number;
+  readonly deadlineMs: number;
 }
 
 /** Coordinates child calls without retries or mutation of transparent parent pins. @pk */
@@ -80,6 +92,7 @@ export class EdgeFanoutCoordinator {
     const failurePolicy = raw.failurePolicy === undefined ? "collect" : raw.failurePolicy;
     if (failurePolicy !== "collect" && failurePolicy !== "fail-fast") throw edgeError("EDGE_PROTOCOL", "failurePolicy must be collect or fail-fast.");
     let devices: readonly EdgePublicDeviceRef[];
+    let selectionMetadata: Record<string, unknown> = { mode: "explicit" };
     if (explicit) {
       if (explicit.length < 1 || explicit.length > this.limits.maxDevices) throw limitError("devices", this.limits.maxDevices);
       const unique = new Set(explicit.map((device) => device.name.normalize("NFKC").toLocaleLowerCase("en-US")));
@@ -94,7 +107,31 @@ export class EdgeFanoutCoordinator {
       devices = Object.freeze([...selected.devices]
         .sort((left, right) => normalize(left.device.name).localeCompare(normalize(right.device.name)))
         .map((device) => device.device));
+      selectionMetadata = {
+        mode: "selector",
+        satisfiedRequirements: selected.explanation.satisfiedRequirements,
+        appliedPreferences: selected.explanation.appliedPreferences,
+        inventoryVersion: selected.explanation.inventoryVersion,
+        evaluatedCandidates: selected.explanation.evaluatedCandidates,
+      };
     }
+    const argumentBytes = safeSize(raw.arguments) ?? this.limits.maxAggregateBytes + 1;
+    const approval: EdgeAggregateApprovalContext = Object.freeze({
+      tool: typeof raw.tool === "string" ? raw.tool : "",
+      argumentSummary: Object.freeze({ keys: Object.freeze(isRecord(raw.arguments) ? Object.keys(raw.arguments).sort() : []), bytes: argumentBytes }),
+      devices,
+      failurePolicy,
+      concurrency: requestedConcurrency,
+      deadlineMs: requestedDeadlineMs,
+    });
+    if (this.options.approve && !await this.options.approve(approval, context)) {
+      throw edgeError("EDGE_UNAUTHORIZED_TARGET", "Aggregate Edge orchestration approval was not granted.");
+    }
+    const orchestrationStartedAt = this.now();
+    await this.options.telemetry?.emit({
+      name: "edge.orchestration.started", tenantId, subjectId, downstreamSessionId: context.transport.sessionId,
+      outcome: "started", metadata: { ...selectionMetadata, deviceCount: devices.length, failurePolicy, concurrency: requestedConcurrency, deadlineMs: requestedDeadlineMs },
+    });
     const deadline = Math.min(this.now() + requestedDeadlineMs, context.transport.deadline ?? Number.POSITIVE_INFINITY);
     const controller = new AbortController();
     const parentAbort = () => controller.abort(context.transport.signal?.reason);
@@ -148,6 +185,10 @@ export class EdgeFanoutCoordinator {
         stop = true;
         controller.abort("fail-fast");
       }
+      await this.options.telemetry?.emit({
+        name: "edge.orchestration.child", tenantId, subjectId, downstreamSessionId: context.transport.sessionId,
+        outcome: entries[index]!.status, metadata: { index, deviceName: device.name, inventoryVersion: device.inventoryVersion },
+      });
     };
     const worker = async () => {
       while (!stop && !controller.signal.aborted) {
@@ -176,6 +217,14 @@ export class EdgeFanoutCoordinator {
       results: Object.freeze(entries),
       warnings: Object.freeze([]),
       nextActions: Object.freeze(counts.failed > 0 ? ["Inspect failed entries; Fentaris does not automatically retry dispatched mutations."] : []),
+    });
+    await this.options.telemetry?.emit({
+      name: "edge.orchestration.completed", tenantId, subjectId, downstreamSessionId: context.transport.sessionId,
+      durationMs: this.now() - orchestrationStartedAt, outcome: overall, metadata: { counts, deviceCount: devices.length },
+    });
+    await this.options.telemetry?.emit({
+      name: "edge.orchestration.cleanup", tenantId, subjectId, downstreamSessionId: context.transport.sessionId,
+      outcome: "completed", metadata: { terminalEntries: entries.length },
     });
     return {
       isError: overall === "failed" || overall === "cancelled" ? true : undefined,

@@ -11,7 +11,11 @@ export type EdgeRuntimeEventName =
   | "edge.request.completed"
   | "edge.request.timeout"
   | "edge.request.cancelled"
-  | "edge.request.failed";
+  | "edge.request.failed"
+  | "edge.orchestration.started"
+  | "edge.orchestration.child"
+  | "edge.orchestration.completed"
+  | "edge.orchestration.cleanup";
 
 export interface EdgeRuntimeEvent {
   readonly name: EdgeRuntimeEventName;
@@ -60,6 +64,13 @@ export interface EdgeHealthOptions {
   readonly deviceAvailability?: () => EdgeHealthProbeResult | Promise<EdgeHealthProbeResult>;
   readonly deploymentReadiness?: () => EdgeHealthProbeResult | Promise<EdgeHealthProbeResult>;
   readonly capabilityCache?: () => EdgeHealthProbeResult | Promise<EdgeHealthProbeResult>;
+  readonly inventoryStore?: () => EdgeHealthProbeResult | Promise<EdgeHealthProbeResult>;
+  readonly presenceExpiry?: () => EdgeHealthProbeResult | Promise<EdgeHealthProbeResult>;
+  readonly selectionService?: () => EdgeHealthProbeResult | Promise<EdgeHealthProbeResult>;
+  readonly childBindingCleanup?: () => EdgeHealthProbeResult | Promise<EdgeHealthProbeResult>;
+  readonly channelRouting?: () => EdgeHealthProbeResult | Promise<EdgeHealthProbeResult>;
+  readonly protocolDistribution?: () => EdgeHealthProbeResult | Promise<EdgeHealthProbeResult>;
+  readonly staleReadiness?: () => EdgeHealthProbeResult | Promise<EdgeHealthProbeResult>;
   readonly timeoutMs?: number;
 }
 
@@ -71,6 +82,13 @@ export function edgeHealth(options: EdgeHealthOptions): HealthBuilder {
   addProbe(builder, "edge.device-availability", options.deviceAvailability);
   addProbe(builder, "edge.deployment-readiness", options.deploymentReadiness);
   addProbe(builder, "edge.capability-cache", options.capabilityCache);
+  addProbe(builder, "edge.inventory-store", options.inventoryStore);
+  addProbe(builder, "edge.presence-expiry", options.presenceExpiry);
+  addProbe(builder, "edge.selection-service", options.selectionService);
+  addProbe(builder, "edge.child-binding-cleanup", options.childBindingCleanup);
+  addProbe(builder, "edge.channel-routing", options.channelRouting);
+  addProbe(builder, "edge.protocol-distribution", options.protocolDistribution);
+  addProbe(builder, "edge.stale-readiness", options.staleReadiness);
   return builder;
 }
 
@@ -90,6 +108,43 @@ export function redactEdgeProtocolValue(value: unknown, key = ""): unknown {
   }
   if (typeof value === "string" && looksLikePrivatePath(value)) return "[REDACTED_PATH]";
   return value;
+}
+
+export interface EdgeSerializationLimits {
+  readonly maxDepth?: number;
+  readonly maxArrayItems?: number;
+  readonly maxStringLength?: number;
+  readonly maxBytes?: number;
+}
+
+/** Redact and bound an untrusted public/diagnostic value before serialization. @pk */
+export function serializeEdgePublicValue(value: unknown, limits: EdgeSerializationLimits = {}): unknown {
+  const maxDepth = limits.maxDepth ?? 12;
+  const maxArrayItems = limits.maxArrayItems ?? 100;
+  const maxStringLength = limits.maxStringLength ?? 8_192;
+  const maxBytes = limits.maxBytes ?? 1_000_000;
+  const seen = new WeakSet<object>();
+  const visit = (input: unknown, key: string, depth: number): unknown => {
+    if (/authorization|credential|privateKey|secret|token|environment|env|canonicalPath|localPath|grant/i.test(key)) return "[REDACTED]";
+    if (depth > maxDepth) return "[TRUNCATED_DEPTH]";
+    if (typeof input === "string") {
+      const redacted = looksLikePrivatePath(input) ? "[REDACTED_PATH]" : input;
+      return redacted.length > maxStringLength ? `${redacted.slice(0, maxStringLength)}[TRUNCATED]` : redacted;
+    }
+    if (!input || typeof input !== "object") return input;
+    if (seen.has(input)) return "[CIRCULAR]";
+    seen.add(input);
+    if (Array.isArray(input)) return input.slice(0, maxArrayItems).map((entry) => visit(entry, key, depth + 1));
+    return Object.fromEntries(Object.entries(input as Record<string, unknown>)
+      .slice(0, maxArrayItems)
+      .map(([childKey, child]) => [childKey, visit(child, childKey, depth + 1)]));
+  };
+  const serialized = visit(value, "", 0);
+  const encoded = JSON.stringify(serialized);
+  if (Buffer.byteLength(encoded, "utf8") > maxBytes) {
+    return { error: { code: "EDGE_CAPACITY", message: "Serialized Edge value exceeded the effective byte limit." } };
+  }
+  return serialized;
 }
 
 function addProbe(

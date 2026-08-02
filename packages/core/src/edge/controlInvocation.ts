@@ -9,6 +9,7 @@ import { edgeError } from "./errors.js";
 import type { EdgeChildBindingManager } from "./sessionSelection.js";
 import type { EdgeInventoryService } from "./inventoryService.js";
 import type { EdgePublicDeviceRef } from "./inventory.js";
+import { serializeEdgePublicValue } from "./observability.js";
 
 export interface EdgeTrustedChildRoute {
   readonly parentSessionId: string;
@@ -154,15 +155,16 @@ export class EdgeSingleCallCoordinator {
 }
 
 function sanitizeToolResult(value: CallToolResult): CallToolResult {
-  if (!value || typeof value !== "object" || !Array.isArray(value.content)) {
+  const sanitized = serializeEdgePublicValue(value, { maxDepth: 20, maxArrayItems: 1_000, maxStringLength: 250_000 }) as Record<string, unknown>;
+  if (!sanitized || typeof sanitized !== "object" || !Array.isArray(sanitized.content)) {
     throw edgeError("EDGE_PROTOCOL", "Edge tool returned a malformed MCP result.");
   }
   return {
-    content: [...value.content],
-    ...(value.structuredContent && typeof value.structuredContent === "object"
-      ? { structuredContent: { ...value.structuredContent } }
+    content: [...sanitized.content] as CallToolResult["content"],
+    ...(sanitized.structuredContent && typeof sanitized.structuredContent === "object"
+      ? { structuredContent: { ...sanitized.structuredContent as Record<string, unknown> } }
       : {}),
-    ...(value.isError ? { isError: true } : {}),
+    ...(sanitized.isError ? { isError: true } : {}),
   };
 }
 

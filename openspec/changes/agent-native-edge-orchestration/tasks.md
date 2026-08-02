@@ -80,12 +80,12 @@
 
 ## 10. Security, Approval, and Observability
 
-- [ ] 10.1 Add aggregate policy evaluation and high-impact approval context containing tool, bounded argument summary, resolved device scope, failure policy, concurrency, and deadline.
-- [ ] 10.2 Ensure every child independently re-evaluates effective tool policy and local recipe/grant/executable consent after aggregate approval.
-- [ ] 10.3 Add parent/child orchestration telemetry with redacted selection factors, inventory version/freshness, correlation IDs, timing, status, and cleanup outcome.
-- [ ] 10.4 Extend redaction and serialization guards for descriptions, observed facts, inventory views, aggregate errors, child outputs, and local service diagnostics.
-- [ ] 10.5 Add adversarial tests for cross-tenant selectors, forged public names, metadata injection, stale inventory races, approval scope changes, output field spoofing, recursive calls, and cancellation races.
-- [ ] 10.6 Add health checks for inventory stores, presence expiry, selection service, child binding cleanup, distributed channel routing, protocol-version distribution, and stale readiness.
+- [x] 10.1 Add aggregate policy evaluation and high-impact approval context containing tool, bounded argument summary, resolved device scope, failure policy, concurrency, and deadline.
+- [x] 10.2 Ensure every child independently re-evaluates effective tool policy and local recipe/grant/executable consent after aggregate approval.
+- [x] 10.3 Add parent/child orchestration telemetry with redacted selection factors, inventory version/freshness, correlation IDs, timing, status, and cleanup outcome.
+- [x] 10.4 Extend redaction and serialization guards for descriptions, observed facts, inventory views, aggregate errors, child outputs, and local service diagnostics.
+- [x] 10.5 Add adversarial tests for cross-tenant selectors, forged public names, metadata injection, stale inventory races, approval scope changes, output field spoofing, recursive calls, and cancellation races.
+- [x] 10.6 Add health checks for inventory stores, presence expiry, selection service, child binding cleanup, distributed channel routing, protocol-version distribution, and stale readiness.
 
 ## 11. Distributed Adapter Verification
 
