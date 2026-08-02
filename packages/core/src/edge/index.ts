@@ -116,6 +116,19 @@ export type {
 export {
   EdgeSessionPinner,
 } from "./sessionPinning.js";
+
+export {
+  EdgeChildBindingManager,
+  EdgeSessionSelectionService,
+} from "./sessionSelection.js";
+export type {
+  EdgeChildBindingAllocation,
+  EdgeChildBindingCleanup,
+  EdgeChildBindingManagerOptions,
+  EdgeChildBindingTerminalReason,
+  EdgeSessionSelectionRequest,
+  EdgeSessionSelectionServiceOptions,
+} from "./sessionSelection.js";
 export type {
   EdgeSessionPinnerInputs,
   SessionPinRequest,

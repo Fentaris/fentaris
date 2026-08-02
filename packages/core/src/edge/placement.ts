@@ -30,6 +30,10 @@ import type {
   TargetKind,
   TargetSelectionStrategy,
 } from "./target.js";
+import type {
+  EdgeSelectionExplanation,
+  EdgeSelectionRequest,
+} from "./inventoryService.js";
 
 /** Placement scope of a binding. @pk */
 export type PlacementScope = "global" | "group" | "user";
@@ -320,6 +324,8 @@ export interface DeviceResolverContext {
   readonly requestedDeviceId?: string;
   /** Pool selection strategy declared on the target, if any. @pk */
   readonly strategy?: TargetSelectionStrategy;
+  /** Optional typed declarative selection supplied for this first pin. @pk */
+  readonly declarativeSelection?: EdgeSelectionRequest;
 }
 
 /** A resolved eligible enrolled device. @pk */
@@ -328,6 +334,8 @@ export interface DeviceResolution {
   readonly edgeNodeId: string;
   /** Control-plane alias, when known. @pk */
   readonly alias?: string;
+  /** Redacted explanation when declarative selection chose the device. @pk */
+  readonly selection?: EdgeSelectionExplanation;
 }
 
 /**
@@ -341,6 +349,17 @@ export interface DeviceResolution {
  * @pk
  */
 export interface DeviceResolver {
+  /** Revalidate and resolve a durable pre-pin selection by opaque node id. @pk */
+  resolveSelectedDevice?(
+    edgeNodeId: string,
+    inventoryVersion: number,
+    context: DeviceResolverContext,
+  ): Promise<DeviceResolution | null>;
+  /** Resolve typed requirements/preferences against the current authorized inventory. @pk */
+  resolveDeclarativeDevice?(
+    selection: EdgeSelectionRequest,
+    context: DeviceResolverContext,
+  ): Promise<DeviceResolution | null>;
   /** Resolve the device requested during downstream session establishment. @pk */
   resolveSessionDevice?(context: DeviceResolverContext): Promise<DeviceResolution | null>;
   /** Resolve the subject's configured default device. @pk */

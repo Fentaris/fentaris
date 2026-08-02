@@ -43,11 +43,11 @@
 
 ## 6. Session Selection and Child Bindings
 
-- [ ] 6.1 Implement a durable session-selection service keyed by session, subject, and logical target with eligibility validation and session expiry.
-- [ ] 6.2 Feed an unpinned authorized selection into existing placement and pinning while rejecting selection changes after a target is pinned.
-- [ ] 6.3 Extend placement resolution with typed declarative requirements/preferences and redacted resolution metadata without changing existing precedence for callers that provide none.
-- [ ] 6.4 Implement isolated child binding allocation, correlation, expiry, cancellation, and cleanup without mutating parent transparent-session bindings.
-- [ ] 6.5 Add placement/session tests for pre-pin selection, stale selection, unauthorized selection, immutable pins, parent cleanup, sibling isolation, and reconnect behavior.
+- [x] 6.1 Implement a durable session-selection service keyed by session, subject, and logical target with eligibility validation and session expiry.
+- [x] 6.2 Feed an unpinned authorized selection into existing placement and pinning while rejecting selection changes after a target is pinned.
+- [x] 6.3 Extend placement resolution with typed declarative requirements/preferences and redacted resolution metadata without changing existing precedence for callers that provide none.
+- [x] 6.4 Implement isolated child binding allocation, correlation, expiry, cancellation, and cleanup without mutating parent transparent-session bindings.
+- [x] 6.5 Add placement/session tests for pre-pin selection, stale selection, unauthorized selection, immutable pins, parent cleanup, sibling isolation, and reconnect behavior.
 
 ## 7. Edge Control MCP Discovery Tools
 
