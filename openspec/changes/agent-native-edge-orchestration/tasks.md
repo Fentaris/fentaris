@@ -69,14 +69,14 @@
 
 ## 9. Multi-Edge Fan-Out Coordinator
 
-- [ ] 9.1 Define orchestration configuration and effective-policy limits for maximum devices, concurrency, deadlines, selector complexity, child bytes, and aggregate bytes.
-- [ ] 9.2 Implement immutable bounded resolution from either an explicit device list or one declarative selector set, rejecting ambiguous or widening inputs.
-- [ ] 9.3 Implement deterministic scheduling with explicit-order preservation, selector-result sorting, bounded concurrency, shared deadline, and linked parent cancellation.
-- [ ] 9.4 Implement `collect` semantics with exactly one terminal entry per resolved device and consistent aggregate counts.
-- [ ] 9.5 Implement `fail-fast` semantics that stops scheduling, cancels cancellable work, and distinguishes failed, cancelled, and not-started entries.
-- [ ] 9.6 Represent lost mutating calls without an idempotency contract as explicit indeterminate outcomes and prohibit automatic retry or failover.
-- [ ] 9.7 Enforce per-child and aggregate output limits while preserving sibling results when one child returns oversized, malformed, or non-serializable output.
-- [ ] 9.8 Add concurrency-controlled end-to-end tests across several simulated devices for all-success, partial failure, fail-fast, setup denial, disconnect, cancellation, deadline, capacity, and aggregate truncation.
+- [x] 9.1 Define orchestration configuration and effective-policy limits for maximum devices, concurrency, deadlines, selector complexity, child bytes, and aggregate bytes.
+- [x] 9.2 Implement immutable bounded resolution from either an explicit device list or one declarative selector set, rejecting ambiguous or widening inputs.
+- [x] 9.3 Implement deterministic scheduling with explicit-order preservation, selector-result sorting, bounded concurrency, shared deadline, and linked parent cancellation.
+- [x] 9.4 Implement `collect` semantics with exactly one terminal entry per resolved device and consistent aggregate counts.
+- [x] 9.5 Implement `fail-fast` semantics that stops scheduling, cancels cancellable work, and distinguishes failed, cancelled, and not-started entries.
+- [x] 9.6 Represent lost mutating calls without an idempotency contract as explicit indeterminate outcomes and prohibit automatic retry or failover.
+- [x] 9.7 Enforce per-child and aggregate output limits while preserving sibling results when one child returns oversized, malformed, or non-serializable output.
+- [x] 9.8 Add concurrency-controlled end-to-end tests across several simulated devices for all-success, partial failure, fail-fast, setup denial, disconnect, cancellation, deadline, capacity, and aggregate truncation.
 
 ## 10. Security, Approval, and Observability
 

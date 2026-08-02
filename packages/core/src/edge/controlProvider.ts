@@ -11,6 +11,7 @@ import type {
   EdgeSelectionRequest,
 } from "./inventoryService.js";
 import type { EdgeSessionSelectionService } from "./sessionSelection.js";
+import type { EdgeOrchestrationLimits } from "./fanout.js";
 
 export const EDGE_CONTROL_NAMESPACE = "edge" as const;
 export const EDGE_CONTROL_TOOL_NAMES = Object.freeze(["list", "get", "select", "call", "call_many"] as const);
@@ -68,6 +69,7 @@ export interface EdgeControlProviderOptions {
   readonly selections: EdgeSessionSelectionService;
   readonly invoker?: EdgeControlInvoker;
   readonly defaultTargetName?: string;
+  readonly limits?: Partial<EdgeOrchestrationLimits>;
 }
 
 const stringArray = { type: "array", maxItems: 32, items: { type: "string", minLength: 1, maxLength: 80 } } as const;

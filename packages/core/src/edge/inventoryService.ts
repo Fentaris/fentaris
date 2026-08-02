@@ -122,6 +122,12 @@ export interface EdgeSelectionResult {
   readonly explanation: EdgeSelectionExplanation;
 }
 
+/** Immutable bounded device set selected from one authorized inventory snapshot. @pk */
+export interface EdgeSelectionSetResult {
+  readonly devices: readonly EdgePublicDeviceView[];
+  readonly explanation: EdgeSelectionExplanation;
+}
+
 /** Internal dispatch resolution returned only after current-state revalidation. @pk */
 export interface EdgeDispatchDeviceResolution {
   readonly tenantId: string;
@@ -210,6 +216,45 @@ export class EdgeInventoryService {
         strategy,
         evaluatedCandidates: snapshot.length,
         inventoryVersion: selected.device.inventoryVersion,
+        evaluatedAt: this.now(),
+      }),
+    });
+  }
+
+  /** Resolve all eligible candidates up to a caller-supplied hard result cap. @pk */
+  async selectMany(
+    context: EdgeInventoryContext,
+    request: EdgeSelectionRequest,
+    maxResults: number,
+  ): Promise<EdgeSelectionSetResult> {
+    validateSelection(request);
+    if (!Number.isSafeInteger(maxResults) || maxResults < 1 || maxResults > 100) {
+      throw edgeError("EDGE_PROTOCOL", "Selection result limit must be between 1 and 100.");
+    }
+    const limit = Math.min(this.maxCandidates, request.maxCandidates ?? this.maxCandidates);
+    const snapshot = (await this.visibleSnapshot(context)).slice(0, limit);
+    const eligible = snapshot.filter((device) => matchesRequirements(device, request.requires));
+    if (eligible.length === 0) {
+      throw edgeError("EDGE_UNAVAILABLE", "No eligible Edge device satisfies the requested requirements.", {
+        details: { unmetRequirementCategories: requirementCategories(request.requires) },
+      });
+    }
+    if (eligible.length > maxResults) {
+      throw edgeError("EDGE_CAPACITY", "Declarative selection exceeds the effective device limit.", {
+        details: { limit: maxResults, nextActions: ["Narrow the selector or request a smaller authorized subset."] },
+      });
+    }
+    const preferences = request.prefer ?? [];
+    const strategy = request.strategy ?? "name";
+    const ranked = [...eligible].sort((left, right) => compareDevices(left, right, preferences, strategy, request.userDefaultDeviceName));
+    return Object.freeze({
+      devices: Object.freeze(ranked),
+      explanation: Object.freeze({
+        satisfiedRequirements: Object.freeze(requirementCategories(request.requires)),
+        appliedPreferences: Object.freeze([...preferences]),
+        strategy,
+        evaluatedCandidates: snapshot.length,
+        inventoryVersion: Math.max(...ranked.map((device) => device.device.inventoryVersion)),
         evaluatedAt: this.now(),
       }),
     });

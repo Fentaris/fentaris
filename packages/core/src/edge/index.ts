@@ -135,6 +135,18 @@ export type {
   EdgeSingleCallStructuredResult,
   EdgeTrustedChildRoute,
 } from "./controlInvocation.js";
+
+export {
+  DEFAULT_EDGE_ORCHESTRATION_LIMITS,
+  EdgeFanoutCoordinator,
+} from "./fanout.js";
+export type {
+  EdgeFanoutCoordinatorOptions,
+  EdgeFanoutEntry,
+  EdgeFanoutResult,
+  EdgeFanoutStatus,
+  EdgeOrchestrationLimits,
+} from "./fanout.js";
 export type {
   EdgeControlDeviceSummary,
   EdgeControlGetResult,
@@ -276,6 +288,7 @@ export type {
   EdgeSelectionRequest,
   EdgeSelectionRequirements,
   EdgeSelectionResult,
+  EdgeSelectionSetResult,
   EdgeSelectionStrategy,
 } from "./inventoryService.js";
 

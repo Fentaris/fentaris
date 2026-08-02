@@ -101,6 +101,7 @@ import {
   EdgeSessionPinner,
   EdgeChildBindingManager,
   EdgeSingleCallCoordinator,
+  EdgeFanoutCoordinator,
   InMemoryEdgeChildBindingStore,
   EDGE_CONTROL_NAMESPACE,
   registerEdgeControlProvider,
@@ -417,6 +418,7 @@ export class McpProxy {
   private edgeSessionPinnerCache?: EdgeSessionPinner;
   private edgeChildBindingManagerCache?: EdgeChildBindingManager;
   private edgeSingleCallCoordinatorCache?: EdgeSingleCallCoordinator;
+  private edgeFanoutCoordinatorCache?: EdgeFanoutCoordinator;
   private readonly edgeChildExecution = new AsyncLocalStorage<EdgeTrustedChildRoute>();
   private readonly edgeChildParentSessions = new Set<string>();
   private httpServer: HttpServer | null = null;
@@ -478,11 +480,7 @@ export class McpProxy {
         ...options.edge.control,
         invoker: {
           call: (request) => configured?.call(request) ?? this.invokeEdgeControlCall(request),
-          callMany: (request) => configured?.callMany(request) ?? Promise.reject(edgeError(
-            "EDGE_UNAVAILABLE",
-            "Multi-device Edge orchestration is not configured.",
-            { details: { nextActions: ["Configure bounded Edge fan-out orchestration."] } },
-          )),
+          callMany: (request) => configured?.callMany(request) ?? this.invokeEdgeControlCallMany(request),
         },
       });
       this.materializeLocalNamespaces();
@@ -1015,6 +1013,7 @@ export class McpProxy {
     this.edgeChildParentSessions.clear();
     this.edgeSessionPinnerCache = undefined;
     this.edgeSingleCallCoordinatorCache = undefined;
+    this.edgeFanoutCoordinatorCache = undefined;
     this.edgeChildBindingManagerCache = undefined;
   }
 
@@ -1050,6 +1049,23 @@ export class McpProxy {
 
   private invokeEdgeControlCall(request: EdgeControlInvocationRequest): Promise<CallToolResult> {
     return this.edgeSingleCallCoordinator().call(request.context, request.arguments);
+  }
+
+  private edgeFanoutCoordinator(): EdgeFanoutCoordinator {
+    const control = this.edgeOptions?.control;
+    if (!control?.enabled) throw edgeError("EDGE_UNAVAILABLE", "Edge Control is not enabled.");
+    if (!this.edgeFanoutCoordinatorCache) {
+      this.edgeFanoutCoordinatorCache = new EdgeFanoutCoordinator({
+        inventory: control.inventory,
+        single: this.edgeSingleCallCoordinator(),
+        limits: control.limits,
+      });
+    }
+    return this.edgeFanoutCoordinatorCache;
+  }
+
+  private invokeEdgeControlCallMany(request: EdgeControlInvocationRequest): Promise<CallToolResult> {
+    return this.edgeFanoutCoordinator().callMany(request.context, request.arguments);
   }
 
   /** Register a setup schema for a server. @pk */
