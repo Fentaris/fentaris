@@ -82,6 +82,7 @@ export interface EdgeEnrollmentServiceOptions {
   authorization: DeviceAuthorizationProvider;
   enrollment: EdgeEnrollmentClient;
   callbacks: EnrollmentCallbacks;
+  controlPlaneUrl?: string;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
   hostnameLabel?: () => string | undefined;
@@ -118,8 +119,12 @@ export class EdgeEnrollmentService {
     const existing = await this.options.platform.configStore.load();
     if (existing && await this.options.platform.credentialStore.get(DEVICE_CREDENTIAL)) {
       await this.validAccessToken();
+      const config = this.options.controlPlaneUrl && existing.controlPlaneUrl !== this.options.controlPlaneUrl
+        ? { ...existing, controlPlaneUrl: this.options.controlPlaneUrl }
+        : existing;
+      if (config !== existing) await this.options.platform.configStore.save(config);
       return {
-        config: existing,
+        config,
         authorization: {
           deviceCode: "",
           userCode: "",
@@ -153,6 +158,7 @@ export class EdgeEnrollmentService {
     const config: EdgeLocalConfig = {
       edgeNodeId: enrolled.edgeNodeId,
       tenantId: enrolled.tenantId,
+      ...(this.options.controlPlaneUrl ? { controlPlaneUrl: this.options.controlPlaneUrl } : {}),
       gatewayUrl: enrolled.gatewayUrl,
       enrolledAt: this.now(),
       hostnameLabel: this.options.hostnameLabel?.(),

@@ -128,6 +128,7 @@ function service(input: {
   enrollment?: EdgeEnrollmentClient;
   now?: number;
   hostname?: string;
+  controlPlaneUrl?: string;
 } = {}) {
   const now = input.now ?? 1_000;
   const edgePlatform = input.platform ?? platform();
@@ -144,6 +145,7 @@ function service(input: {
       authorization: auth,
       enrollment: client,
       callbacks: { onVerification: verification },
+      ...(input.controlPlaneUrl ? { controlPlaneUrl: input.controlPlaneUrl } : {}),
       now: () => now,
       sleep: async () => undefined,
       hostnameLabel: () => input.hostname ?? "laptop",
@@ -153,10 +155,11 @@ function service(input: {
 
 describe("edge enrollment", () => {
   it("creates a random key, proves possession, enrolls, and reuses identity on repeat login", async () => {
-    const fixture = service();
+    const fixture = service({ controlPlaneUrl: "https://control.example" });
     const first = await fixture.service.login();
     expect(first.repeated).toBe(false);
     expect(first.config.edgeNodeId).toBe("node-random");
+    expect(first.config.controlPlaneUrl).toBe("https://control.example");
     expect(await fixture.platform.deviceKeyStore.load()).toMatchObject({
       publicKey: expect.stringContaining("BEGIN PUBLIC KEY"),
       privateKey: expect.stringContaining("BEGIN PRIVATE KEY"),
@@ -168,6 +171,15 @@ describe("edge enrollment", () => {
     expect(second.repeated).toBe(true);
     expect(second.config.edgeNodeId).toBe("node-random");
     expect(fixture.client.enroll).toHaveBeenCalledOnce();
+  });
+
+  it("adds the control-plane URL to an existing enrollment", async () => {
+    const sharedPlatform = platform();
+    await service({ platform: sharedPlatform }).service.login();
+    const repeated = await service({ platform: sharedPlatform, controlPlaneUrl: "https://control.example" }).service.login();
+    expect(repeated.repeated).toBe(true);
+    expect(repeated.config.controlPlaneUrl).toBe("https://control.example");
+    expect((await sharedPlatform.configStore.load())?.controlPlaneUrl).toBe("https://control.example");
   });
 
   it("refreshes expired authorization and rejects copied non-secret config without protected identity", async () => {

@@ -62,6 +62,7 @@ describe("EdgeAgentRuntime", () => {
       })),
     };
     const sent: EdgeAgentMessage[] = [];
+    const publishPresence = vi.fn(async () => undefined);
     const runtimeRef: { current?: EdgeAgentRuntime } = {};
     const supervisor = new EdgeWorkloadSupervisor({
       setup,
@@ -78,6 +79,7 @@ describe("EdgeAgentRuntime", () => {
         connectionGeneration: 4,
       },
       send: async (message) => { sent.push(message); },
+      publishPresence,
     });
     const schema = createSetupSchema({});
     const recipe = compileLaunchRecipe({ command: "fixture" }, schema);
@@ -99,6 +101,7 @@ describe("EdgeAgentRuntime", () => {
       expect.objectContaining({ kind: "edge.setup-status", status: "ready" }),
       expect.objectContaining({ kind: "edge.desired-state.ack", status: "applied", desiredVersion: 2 }),
     ]);
+    expect(publishPresence).toHaveBeenCalledOnce();
     expect(await runtime.summary()).toEqual({
       desiredDeployments: 1,
       readyDeployments: 1,

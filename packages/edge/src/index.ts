@@ -158,8 +158,13 @@ export async function main(
   const joinUrl = argv[0] === "join" && argv[1] && !argv[1].startsWith("-") ? argv[1] : undefined;
   const paths = defaultEdgePaths();
   const platform = nodeEdgePlatform(paths);
+  const enrolled = await platform.configStore.load();
   const agent = options.agent ?? createDefaultEdgeAgent({
-    controlPlaneUrl: options.controlPlaneUrl ?? joinUrl ?? process.env.FENTARIS_EDGE_CONTROL_PLANE_URL ?? "",
+    controlPlaneUrl: options.controlPlaneUrl
+      ?? joinUrl
+      ?? enrolled?.controlPlaneUrl
+      ?? process.env.FENTARIS_EDGE_CONTROL_PLANE_URL
+      ?? "",
     platform,
     onVerification: (request) => {
       io.out(JSON.stringify({

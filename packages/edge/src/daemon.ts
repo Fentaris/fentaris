@@ -1,4 +1,5 @@
-import { open, rm, type FileHandle } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { open, readFile, rename, rm, type FileHandle } from "node:fs/promises";
 import { edgeError, isEdgeError } from "@fentaris/core";
 import type { EdgeAgent, EdgeAgentStatus } from "./agent.js";
 import type { JsonStore } from "./platform.js";
@@ -36,25 +37,46 @@ export class FileEdgeSingletonLock implements EdgeSingletonLock {
   constructor(private readonly lockFile: string) {}
 
   async acquire(): Promise<EdgeSingletonLease> {
-    let handle: FileHandle;
-    try {
-      handle = await open(this.lockFile, "wx", 0o600);
-      await handle.writeFile(String(process.pid));
-    } catch (error) {
-      if (isNodeError(error, "EEXIST")) {
-        throw edgeError("EDGE_WORKLOAD", "Another Edge agent instance is already running.");
-      }
-      throw error;
-    }
+    const owner = `${process.pid}:${randomUUID()}`;
+    const handle = await this.openOwnedLock(owner);
     let released = false;
     return {
       release: async () => {
         if (released) return;
         released = true;
         await handle.close();
-        await rm(this.lockFile, { force: true });
+        if (await lockOwner(this.lockFile) === owner) await rm(this.lockFile, { force: true });
       },
     };
+  }
+
+  private async openOwnedLock(owner: string): Promise<FileHandle> {
+    for (;;) {
+      try {
+        const handle = await open(this.lockFile, "wx", 0o600);
+        try {
+          await handle.writeFile(owner);
+          return handle;
+        } catch (error) {
+          await handle.close();
+          await rm(this.lockFile, { force: true });
+          throw error;
+        }
+      } catch (error) {
+        if (!isNodeError(error, "EEXIST")) throw error;
+        const existing = await lockOwner(this.lockFile);
+        if (existing && processIsAlive(lockPid(existing))) {
+          throw edgeError("EDGE_WORKLOAD", "Another Edge agent instance is already running.");
+        }
+        const staleFile = `${this.lockFile}.stale-${process.pid}-${randomUUID()}`;
+        try {
+          await rename(this.lockFile, staleFile);
+          await rm(staleFile, { force: true });
+        } catch (renameError) {
+          if (!isNodeError(renameError, "ENOENT")) throw renameError;
+        }
+      }
+    }
   }
 }
 
@@ -240,4 +262,28 @@ function waitForAbort(signal: AbortSignal): Promise<void> {
 
 function isNodeError(error: unknown, code: string): boolean {
   return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === code;
+}
+
+async function lockOwner(lockFile: string): Promise<string | undefined> {
+  try {
+    return (await readFile(lockFile, "utf8")).trim() || undefined;
+  } catch (error) {
+    if (isNodeError(error, "ENOENT")) return undefined;
+    throw error;
+  }
+}
+
+function lockPid(owner: string): number | undefined {
+  const value = Number.parseInt(owner.split(":", 1)[0] ?? "", 10);
+  return Number.isSafeInteger(value) && value > 0 ? value : undefined;
+}
+
+function processIsAlive(pid: number | undefined): boolean {
+  if (pid === undefined) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return !isNodeError(error, "ESRCH");
+  }
 }

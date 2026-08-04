@@ -31,6 +31,7 @@ export interface EdgeRuntimeSummaryProvider {
 export interface EdgeRuntimeConnection {
   readonly claims: EdgeProtocolClaims;
   send(message: EdgeAgentMessage): Promise<void>;
+  publishPresence?(): Promise<void>;
 }
 
 export interface EdgeAgentPresenceSnapshot {
@@ -182,6 +183,7 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
     );
 
     const connection = this.requireConnection();
+    await connection.publishPresence?.();
     for (const deployment of message.deployments) {
       const state = await this.options.setup.status(deployment.deploymentId);
       if (!state) continue;

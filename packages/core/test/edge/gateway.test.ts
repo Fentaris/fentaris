@@ -349,4 +349,15 @@ describe("EdgeWebSocketGateway", () => {
     await broker.publish("node-1", "ignored");
     expect(seen).toEqual(["hello"]);
   });
+
+  it("terminates and removes the exact active connection generation", async () => {
+    const { gateway, connections } = await fixture();
+    const { socket, record } = await connect(gateway);
+    await gateway.disconnect("tenant-1", "node-1", record.connectionGeneration + 1, "operator-disconnect");
+    expect(socket.closes).toEqual([]);
+
+    await gateway.disconnect("tenant-1", "node-1", record.connectionGeneration, "revoked");
+    expect(socket.closes.at(-1)).toEqual({ code: 4403, reason: "revoked" });
+    expect(await connections.get("tenant-1", "node-1")).toBeUndefined();
+  });
 });

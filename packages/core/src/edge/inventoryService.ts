@@ -411,7 +411,8 @@ function matchesQuery(device: EdgePublicDeviceView, query: EdgeInventoryQuery): 
     && (query.platforms === undefined || (device.platform !== undefined && query.platforms.includes(device.platform)))
     && (query.pool === undefined || device.pools.includes(query.pool))
     && (query.statuses === undefined || query.statuses.includes(device.status))
-    && (query.deploymentId === undefined || device.readiness.some((value) => value.deploymentId === query.deploymentId
+    && ((query.deploymentId === undefined && query.readiness === undefined) || device.readiness.some((value) =>
+      (query.deploymentId === undefined || value.deploymentId === query.deploymentId)
       && (query.readiness === undefined || query.readiness.includes(value.status))));
 }
 

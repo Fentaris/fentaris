@@ -129,6 +129,16 @@ export interface EdgeConnectionStore {
   remove(tenantId: string, edgeNodeId: string, generation: number): Promise<void>;
 }
 
+/** Control path that terminates the authenticated channel for one generation. @pk */
+export interface EdgeConnectionTerminator {
+  disconnect(
+    tenantId: string,
+    edgeNodeId: string,
+    connectionGeneration: number,
+    reason: "operator-disconnect" | "revoked",
+  ): Promise<void>;
+}
+
 /** Replaceable distributed edge channel broker contract. @pk */
 export interface EdgeChannelBroker {
   readonly diagnostics?: EdgeAdapterDiagnostics;

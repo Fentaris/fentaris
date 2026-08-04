@@ -1,4 +1,4 @@
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -55,6 +55,19 @@ const waitForState = async (store: MemoryStore<EdgePersistentStatus>, state: Edg
 };
 
 describe("persistent Edge lifecycle", () => {
+  it("recovers a singleton lock left by a terminated process", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "fentaris-edge-stale-lock-"));
+    try {
+      const lockFile = path.join(directory, "agent.lock");
+      await writeFile(lockFile, "99999999:stale-instance", { mode: 0o600 });
+      const lease = await new FileEdgeSingletonLock(lockFile).acquire();
+      await lease.release();
+      await expect(stat(lockFile)).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("enforces a singleton, persists lifecycle state, and cleans workloads on graceful stop", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "fentaris-edge-lifecycle-"));
     try {

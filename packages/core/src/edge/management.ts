@@ -2,6 +2,7 @@
 
 import type {
   EdgeConnectionStore,
+  EdgeConnectionTerminator,
   EdgeDeviceRecord,
   EdgeDeviceRegistry,
   EdgeInventoryListItem,
@@ -79,6 +80,7 @@ export class DefaultEdgeControlPlaneService implements EdgeControlPlaneService {
   constructor(
     private readonly devices: EdgeDeviceRegistry,
     private readonly connections: EdgeConnectionStore,
+    private readonly terminator: EdgeConnectionTerminator,
   ) {}
 
   async join(request: EdgeJoinRequest): Promise<EdgeManagementResult<EdgeManagedDeviceView>> {
@@ -122,12 +124,34 @@ export class DefaultEdgeControlPlaneService implements EdgeControlPlaneService {
     context: EdgeManagementContext,
     options: EdgeInventoryListOptions = {},
   ): Promise<EdgeManagementPage<EdgeManagedDeviceView>> {
-    const page = await this.devices.list(context.tenantId, options);
-    const data = await Promise.all(page.items.map((record) => this.view(record)));
+    const { cursor, limit: requestedLimit, ...filters } = options;
+    const visible: EdgeInventoryListItem[] = [];
+    const seenCursors = new Set<string>();
+    let registryCursor: string | undefined;
+    for (;;) {
+      const page = await this.devices.list(context.tenantId, {
+        ...filters,
+        limit: 100,
+        ...(registryCursor ? { cursor: registryCursor } : {}),
+      });
+      visible.push(...page.items.filter((record) => this.isVisible(context, record)));
+      if (!page.nextCursor) break;
+      if (seenCursors.has(page.nextCursor)) throw edgeError("EDGE_PROTOCOL", "Edge inventory cursor did not advance.");
+      seenCursors.add(page.nextCursor);
+      registryCursor = page.nextCursor;
+    }
+
+    const offset = decodeManagementCursor(cursor);
+    const limit = Math.max(1, Math.min(100, requestedLimit ?? 50));
+    const selected = visible.slice(offset, offset + limit);
+    const data = await Promise.all(selected.map((record) => this.view(record)));
+    const nextOffset = offset + selected.length;
     return Object.freeze({
       ok: true,
       data: Object.freeze(data),
-      pagination: Object.freeze({ ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) }),
+      pagination: Object.freeze({
+        ...(nextOffset < visible.length ? { nextCursor: encodeManagementCursor(nextOffset) } : {}),
+      }),
       warnings: Object.freeze([]),
       nextActions: Object.freeze([]),
     });
@@ -141,7 +165,12 @@ export class DefaultEdgeControlPlaneService implements EdgeControlPlaneService {
     const record = await this.requireVisible(context, deviceName);
     const connection = await this.connections.get(context.tenantId, record.edgeNodeId);
     if (connection) {
-      await this.connections.remove(context.tenantId, record.edgeNodeId, connection.connectionGeneration);
+      await this.terminator.disconnect(
+        context.tenantId,
+        record.edgeNodeId,
+        connection.connectionGeneration,
+        "operator-disconnect",
+      );
     }
     return this.result(await this.view(record), ["Run the Edge agent to reconnect this device."]);
   }
@@ -151,7 +180,12 @@ export class DefaultEdgeControlPlaneService implements EdgeControlPlaneService {
     await this.devices.revoke(context.tenantId, record.edgeNodeId);
     const connection = await this.connections.get(context.tenantId, record.edgeNodeId);
     if (connection) {
-      await this.connections.remove(context.tenantId, record.edgeNodeId, connection.connectionGeneration);
+      await this.terminator.disconnect(
+        context.tenantId,
+        record.edgeNodeId,
+        connection.connectionGeneration,
+        "revoked",
+      );
     }
     return this.result(await this.view(await this.requireByNode(context.tenantId, record.edgeNodeId)), [
       "Join again with a new device authorization to restore access.",
@@ -160,10 +194,14 @@ export class DefaultEdgeControlPlaneService implements EdgeControlPlaneService {
 
   private async requireVisible(context: EdgeManagementContext, deviceName: string): Promise<EdgeDeviceRecord> {
     const record = await this.devices.getByName(context.tenantId, deviceName);
-    if (!record || (context.subjectId !== undefined && record.subjectId !== undefined && record.subjectId !== context.subjectId)) {
+    if (!record || !this.isVisible(context, record)) {
       throw edgeError("EDGE_UNAUTHORIZED_TARGET", "Edge device is unavailable or unauthorized.");
     }
     return record;
+  }
+
+  private isVisible(context: EdgeManagementContext, record: EdgeDeviceRecord | EdgeInventoryListItem): boolean {
+    return context.subjectId === undefined || record.subjectId === undefined || record.subjectId === context.subjectId;
   }
 
   private async requireByNode(tenantId: string, edgeNodeId: string): Promise<EdgeDeviceRecord> {
@@ -195,4 +233,17 @@ export class DefaultEdgeControlPlaneService implements EdgeControlPlaneService {
       nextActions: Object.freeze([...nextActions]),
     });
   }
+}
+
+function encodeManagementCursor(offset: number): string {
+  return Buffer.from(`edge-management:${offset}`, "utf8").toString("base64url");
+}
+
+function decodeManagementCursor(cursor: string | undefined): number {
+  if (cursor === undefined) return 0;
+  const decoded = Buffer.from(cursor, "base64url").toString("utf8");
+  const match = /^edge-management:(\d+)$/.exec(decoded);
+  const offset = match ? Number(match[1]) : Number.NaN;
+  if (!Number.isSafeInteger(offset) || offset < 0) throw edgeError("EDGE_PROTOCOL", "Edge inventory cursor is invalid.");
+  return offset;
 }

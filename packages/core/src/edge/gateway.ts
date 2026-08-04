@@ -13,6 +13,7 @@ import type {
   EdgeCapabilityManifestStore,
   EdgeConnectionRecord,
   EdgeConnectionStore,
+  EdgeConnectionTerminator,
   EdgeDesiredStateStore,
   EdgeDeviceRecord,
   EdgeDeviceRegistry,
@@ -94,7 +95,7 @@ type ActiveConnection = {
  * generation, authorization, and protocol semantics.
  * @pk
  */
-export class EdgeWebSocketGateway implements EdgeTransportChannel {
+export class EdgeWebSocketGateway implements EdgeTransportChannel, EdgeConnectionTerminator {
   private readonly options: Required<Pick<
     EdgeWebSocketGatewayOptions,
     "handshakeTimeoutMs" | "heartbeatTimeoutMs" | "maxBufferedBytes"
@@ -184,6 +185,19 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel {
   onMessage(handler: (message: unknown) => void): () => void {
     this.mcpHandlers.add(handler);
     return () => this.mcpHandlers.delete(handler);
+  }
+
+  /** Close and clean the exact authenticated connection generation. @pk */
+  async disconnect(
+    tenantId: string,
+    edgeNodeId: string,
+    connectionGeneration: number,
+    reason: "operator-disconnect" | "revoked",
+  ): Promise<void> {
+    const active = this.active.get(connectionKey(tenantId, edgeNodeId));
+    if (!active || active.record.connectionGeneration !== connectionGeneration) return;
+    await this.cleanup(active);
+    active.socket.close(reason === "revoked" ? 4403 : 1000, reason);
   }
 
   /**

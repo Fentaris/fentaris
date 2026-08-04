@@ -234,6 +234,7 @@ export type {
   EdgeChannelBroker,
   EdgeConnectionRecord,
   EdgeConnectionStore,
+  EdgeConnectionTerminator,
   EdgeDesiredStateStore,
   EdgeDeviceRecord,
   EdgeDeviceRegistry,

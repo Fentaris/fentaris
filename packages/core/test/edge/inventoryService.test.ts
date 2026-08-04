@@ -95,6 +95,20 @@ describe("EdgeInventoryService", () => {
     expect(JSON.stringify(result)).not.toContain("node-alice");
   });
 
+  it("applies readiness filters without requiring a deployment filter", async () => {
+    const { service, readiness } = await fixture();
+    await readiness.put({
+      tenantId: "tenant-a",
+      edgeNodeId: "node-alice-b",
+      deploymentId: "filesystem",
+      status: "setup-required",
+      observedAt: now,
+      expiresAt: now + 100,
+    });
+    const result = await service.list(alice, { readiness: ["ready"] });
+    expect(result.devices.map((device) => device.device.name)).toEqual(["Alice Laptop"]);
+  });
+
   it("paginates only after authorization and does not expose hidden totals or cursors", async () => {
     const { service } = await fixture();
     const first = await service.list(alice, { limit: 1 });

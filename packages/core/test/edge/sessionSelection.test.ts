@@ -113,7 +113,7 @@ describe("Edge session selection", () => {
       resolveSelectedDevice: async (node, version) => {
         selectedCalls += 1;
         expect([node, version]).toEqual(["node-a", 1]);
-        return { edgeNodeId: node, alias: "Alice Laptop" };
+        return { edgeNodeId: node, alias: "Alice Laptop", connectionGeneration: 2 };
       },
       resolveNamedAlias: async () => null,
       resolvePool: async () => null,
@@ -129,6 +129,7 @@ describe("Edge session selection", () => {
     const first = await pinner.pin({ sessionId: "session-a", subjectId: "alice", tenantId: "tenant-a", serverName: "files", groupIds: [] });
     const second = await pinner.pin({ sessionId: "session-a", subjectId: "alice", tenantId: "tenant-a", serverName: "files", groupIds: [] });
     expect(first.kind === "edge" && first.device.edgeNodeId).toBe("node-a");
+    expect(first.kind === "edge" && first.device.connectionGeneration).toBe(2);
     expect(second.kind === "edge" && second.reused).toBe(true);
     expect(selectedCalls).toBe(1);
     await expect(service.select({
@@ -148,6 +149,7 @@ describe("Edge session selection", () => {
         expect(selection).toEqual({ requires: { tags: ["gpu"] }, prefer: ["lowest-load"] });
         return {
           edgeNodeId: "node-gpu",
+          connectionGeneration: 4,
           selection: {
             satisfiedRequirements: ["tags"], appliedPreferences: ["lowest-load"], strategy: "name",
             evaluatedCandidates: 2, inventoryVersion: 4, evaluatedAt: now,

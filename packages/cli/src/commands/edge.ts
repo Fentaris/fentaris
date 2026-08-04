@@ -181,7 +181,13 @@ export class DefaultEdgeOperatorBackend implements EdgeOperatorBackend {
   }
 
   async run(): Promise<EdgeCliEnvelope<unknown>> {
-    const controlPlaneUrl = requiredEnvironment(this.runtime.env, "FENTARIS_EDGE_CONTROL_PLANE_URL");
+    const enrolled = await this.platform.configStore.load();
+    const controlPlaneUrl = enrolled?.controlPlaneUrl
+      ?? this.runtime.env.FENTARIS_EDGE_CONTROL_PLANE_URL
+      ?? "";
+    if (!controlPlaneUrl) {
+      throw new Error("The enrolled Edge configuration has no control-plane URL; join again or set FENTARIS_EDGE_CONTROL_PLANE_URL.");
+    }
     const agent = createDefaultEdgeAgent({ controlPlaneUrl, platform: this.platform, onVerification: () => undefined });
     const persistent = new EdgePersistentAgent({
       agent,

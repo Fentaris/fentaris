@@ -601,6 +601,7 @@ export type {
   EdgeChannelBroker,
   EdgeConnectionRecord,
   EdgeConnectionStore,
+  EdgeConnectionTerminator,
   EdgeControlPlaneMessage,
   EdgeDesiredDeployment,
   EdgeDesiredStateAckMessage,

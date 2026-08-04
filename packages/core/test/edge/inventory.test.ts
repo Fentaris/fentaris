@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DefaultEdgeControlPlaneService,
   EDGE_INVENTORY_SCHEMA_VERSION,
@@ -158,7 +158,10 @@ describe("edge control-plane management service", () => {
   it("returns safe machine views for join, update, list, disconnect, and revoke", async () => {
     const devices = new InMemoryEdgeDeviceRegistry();
     const connections = new InMemoryEdgeConnectionStore();
-    const service = new DefaultEdgeControlPlaneService(devices, connections);
+    const disconnect = vi.fn(async (tenantId: string, edgeNodeId: string, generation: number) => {
+      await connections.remove(tenantId, edgeNodeId, generation);
+    });
+    const service = new DefaultEdgeControlPlaneService(devices, connections, { disconnect });
     const joined = await service.join({
       tenantId: "tenant-a",
       subjectId: "alice",
@@ -176,12 +179,28 @@ describe("edge control-plane management service", () => {
     expect((await service.get({ tenantId: "tenant-a", subjectId: "alice" }, "alice laptop")).data.connected).toBe(true);
     expect((await service.list({ tenantId: "tenant-a", subjectId: "alice" })).data).toHaveLength(1);
     expect((await service.disconnect({ tenantId: "tenant-a", subjectId: "alice" }, "Alice Laptop")).data.connected).toBe(false);
+    expect(disconnect).toHaveBeenCalledWith("tenant-a", "private-node-id", 1, "operator-disconnect");
+    await connections.bind({ tenantId: "tenant-a", edgeNodeId: "private-node-id", connectionId: "c2", connectionGeneration: 2, protocolVersion: 1, connectedAt: 30, lastHeartbeatAt: 30 });
     expect((await service.revoke({ tenantId: "tenant-a", subjectId: "alice" }, "Alice Laptop")).data.revoked).toBe(true);
+    expect(disconnect).toHaveBeenCalledWith("tenant-a", "private-node-id", 2, "revoked");
   });
 
   it("uses non-enumerating errors for cross-subject management", async () => {
-    const service = new DefaultEdgeControlPlaneService(new InMemoryEdgeDeviceRegistry(), new InMemoryEdgeConnectionStore());
+    const service = new DefaultEdgeControlPlaneService(
+      new InMemoryEdgeDeviceRegistry(),
+      new InMemoryEdgeConnectionStore(),
+      { disconnect: async () => undefined },
+    );
     await service.join({ tenantId: "tenant-a", subjectId: "alice", edgeNodeId: "node-1", credentialId: "credential-1", name: "Laptop", enrolledAt: 10 });
+    await service.join({ tenantId: "tenant-a", subjectId: "bob", edgeNodeId: "node-2", credentialId: "credential-2", name: "Desktop", enrolledAt: 10 });
+    await service.join({ tenantId: "tenant-a", subjectId: "bob", edgeNodeId: "node-3", credentialId: "credential-3", name: "Workstation", enrolledAt: 10 });
+    const first = await service.list({ tenantId: "tenant-a", subjectId: "bob" }, { limit: 1 });
+    const second = await service.list(
+      { tenantId: "tenant-a", subjectId: "bob" },
+      { limit: 1, cursor: first.pagination.nextCursor },
+    );
+    expect([...first.data, ...second.data].map((device) => device.device.name)).toEqual(["Desktop", "Workstation"]);
+    expect(second.pagination.nextCursor).toBeUndefined();
     try {
       await service.get({ tenantId: "tenant-a", subjectId: "bob" }, "Laptop");
       throw new Error("expected get to fail");

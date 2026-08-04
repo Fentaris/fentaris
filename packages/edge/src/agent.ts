@@ -219,6 +219,21 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
                 throw edgeError("EDGE_PROTOCOL", "Edge gateway acknowledged a different device identity.");
               }
               ack = message;
+              const publishPresence = async () => {
+                if (!ack || ack.protocolVersion !== 2) return;
+                const snapshot = await input.runtime?.presenceSnapshot?.() ?? { readiness: [] };
+                const reportedAt = Date.now();
+                await send({
+                  version: 2,
+                  kind: "edge.presence",
+                  tenantId: ack.tenantId,
+                  edgeNodeId: ack.edgeNodeId,
+                  connectionGeneration: ack.connectionGeneration,
+                  observed: input.observedFacts ?? defaultObservedFacts(reportedAt),
+                  ...snapshot,
+                  reportedAt,
+                });
+              };
               await input.runtime?.connected({
                 claims: {
                   tenantId: message.tenantId,
@@ -226,21 +241,9 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
                   connectionGeneration: message.connectionGeneration,
                 },
                 send,
+                publishPresence,
               });
-              if (message.protocolVersion === 2) {
-                const snapshot = await input.runtime?.presenceSnapshot?.() ?? { readiness: [] };
-                const reportedAt = Date.now();
-                await send({
-                  version: 2,
-                  kind: "edge.presence",
-                  tenantId: message.tenantId,
-                  edgeNodeId: message.edgeNodeId,
-                  connectionGeneration: message.connectionGeneration,
-                  observed: input.observedFacts ?? defaultObservedFacts(reportedAt),
-                  ...snapshot,
-                  reportedAt,
-                });
-              }
+              await publishPresence();
               heartbeat = setInterval(() => {
                 if (!ack || socket.readyState !== WebSocket.OPEN) return;
                 void (async () => {
@@ -322,6 +325,7 @@ export function createDefaultEdgeAgent(options: DefaultAgentOptions): EdgeAgent 
   const platform = options.platform ?? nodeEdgePlatform();
   const enrollment = new EdgeEnrollmentService({
     platform,
+    controlPlaneUrl: options.controlPlaneUrl,
     authorization: new HttpDeviceAuthorizationProvider(options.controlPlaneUrl),
     enrollment: new HttpEdgeEnrollmentClient(options.controlPlaneUrl),
     callbacks: { onVerification: options.onVerification },

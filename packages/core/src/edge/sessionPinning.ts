@@ -192,7 +192,7 @@ export class EdgeSessionPinner {
       targetName: placement.targetName,
       edgeNodeId: device.edgeNodeId,
       alias: device.alias,
-      connectionGeneration: request.connectionGeneration ?? 1,
+      connectionGeneration: device.connectionGeneration ?? request.connectionGeneration ?? 1,
     });
 
     return {

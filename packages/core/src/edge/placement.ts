@@ -334,6 +334,8 @@ export interface DeviceResolution {
   readonly edgeNodeId: string;
   /** Control-plane alias, when known. @pk */
   readonly alias?: string;
+  /** Active generation to pin after a current-state selection revalidation. @pk */
+  readonly connectionGeneration?: number;
   /** Redacted explanation when declarative selection chose the device. @pk */
   readonly selection?: EdgeSelectionExplanation;
 }
@@ -354,12 +356,12 @@ export interface DeviceResolver {
     edgeNodeId: string,
     inventoryVersion: number,
     context: DeviceResolverContext,
-  ): Promise<DeviceResolution | null>;
+  ): Promise<(DeviceResolution & { readonly connectionGeneration: number }) | null>;
   /** Resolve typed requirements/preferences against the current authorized inventory. @pk */
   resolveDeclarativeDevice?(
     selection: EdgeSelectionRequest,
     context: DeviceResolverContext,
-  ): Promise<DeviceResolution | null>;
+  ): Promise<(DeviceResolution & { readonly connectionGeneration: number }) | null>;
   /** Resolve the device requested during downstream session establishment. @pk */
   resolveSessionDevice?(context: DeviceResolverContext): Promise<DeviceResolution | null>;
   /** Resolve the subject's configured default device. @pk */
