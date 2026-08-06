@@ -569,6 +569,22 @@ export {
   createEdgeLocalOperatorEndpoint,
   IntegratedEdgeAuthServices,
 } from "./edge/index.js";
+export {
+  startIntegratedEdgeControlPlane,
+  acceptEdgeGatewayWebSocket,
+  createEdgeControlPlaneRoutes,
+  exposurePathsConflict,
+  normalizeExposurePath,
+} from "./transports/exposure/index.js";
+export type {
+  IntegratedEdgeControlPlaneRuntime,
+  IntegratedEdgeControlPlaneRuntimeOptions,
+  ProxyExposureHttpRoute,
+  ProxyExposureHttpRouteHandler,
+  ProxyExposureRouteRegistry,
+  ProxyExposureUpgradeHandler,
+  ProxyExposureUpgradeRoute,
+} from "./transports/exposure/index.js";
 export type {
   AuthenticatedEdgeIdentity,
   BooleanSetupField,

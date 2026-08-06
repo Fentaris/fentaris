@@ -6,6 +6,7 @@
 
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { chmod, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { createConnection, createServer, type Server, type Socket } from "node:net";
 import path from "node:path";
 import { edgeError } from "./errors.js";
@@ -59,10 +60,13 @@ export type EdgeLocalOperatorServerOptions = {
   readonly maxRequestBytes?: number;
 };
 
-/** Create a Unix-socket endpoint path and random credential under a state directory. @pk */
+/** Create a short Unix-socket endpoint path and random credential. @pk */
 export function createEdgeLocalOperatorEndpoint(stateDirectory: string): EdgeLocalOperatorEndpoint {
+  // Keep the socket path short for macOS sockaddr limits while remaining
+  // discoverable from the authority directory via a sidecar pointer file later.
+  void stateDirectory;
   return {
-    address: path.join(stateDirectory, "operator.sock"),
+    address: path.join(tmpdir(), `fe-op-${randomBytes(6).toString("hex")}.sock`),
     credential: randomBytes(32).toString("base64url"),
   };
 }

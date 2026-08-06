@@ -85,6 +85,7 @@ import {
   type User,
 } from "../governance.js";
 import { HttpProxyExposureTransport } from "../transports/exposure/HttpProxyExposureTransport.js";
+import { startIntegratedEdgeControlPlane, type IntegratedEdgeControlPlaneRuntime } from "../transports/exposure/integratedRuntime.js";
 import { ResponseController } from "../types/middleware.js";
 import { FentarisConfigError, assertValidFentarisConfig, validateFentarisConfig, type FentarisDiagnostic } from "../config/index.js";
 import { resolveFentarisConfig } from "../config/resolve.js";
@@ -126,6 +127,7 @@ import {
   validateEdgeControlPlaneConfig,
   parseSerializableEdgeControlPlaneConfig,
   mergeEdgeControlPlaneConfig,
+  normalizeEdgeControlPlaneConfig,
 } from "../edge/index.js";
 import type { SessionPinRequest, SessionPinResult } from "../edge/index.js";
 import type { LaunchRecipe } from "../edge/recipe.js";
@@ -445,6 +447,7 @@ export class McpProxy {
   private readonly edgeChildParentSessions = new Set<string>();
   private httpServer: HttpServer | null = null;
   private readonly exposureHandles = new Set<ProxyExposureHandle>();
+  private edgeControlPlaneRuntime?: IntegratedEdgeControlPlaneRuntime;
 
   private static readonly BUILTIN_TARGET_NAMES = new Set<string>([CLOUD_TARGET_NAME]);
 
@@ -1255,11 +1258,29 @@ export class McpProxy {
       const port = options.port ?? this.defaultPort ?? 3000;
       const host = options.host ?? this.defaultHost;
       const path = options.path ?? this.defaultPath;
+      let httpRoutes: IntegratedEdgeControlPlaneRuntime["httpRoutes"] | undefined;
+      let upgradeRoutes: IntegratedEdgeControlPlaneRuntime["upgradeRoutes"] | undefined;
+
+      if (this.edgeOptions?.controlPlane?.enabled === true) {
+        this.edgeControlPlaneRuntime = await startIntegratedEdgeControlPlane({
+          controlPlane: this.edgeOptions.controlPlane,
+          listenerHost: host ?? "127.0.0.1",
+          listenerPort: port,
+          ...(this.edgeOptions.controlPlane.publicOrigin
+            ? { publicOrigin: this.edgeOptions.controlPlane.publicOrigin }
+            : {}),
+        });
+        httpRoutes = this.edgeControlPlaneRuntime.httpRoutes;
+        upgradeRoutes = this.edgeControlPlaneRuntime.upgradeRoutes;
+      }
+
       const handle = await this.listenInternal(
         new HttpProxyExposureTransport({
           port,
           host,
           path,
+          ...(httpRoutes ? { httpRoutes } : {}),
+          ...(upgradeRoutes ? { upgradeRoutes } : {}),
           onStarted: () => {
             this.printStartupBanner(port, path, host);
             callback?.();
@@ -1609,6 +1630,10 @@ export class McpProxy {
       await Promise.all([...this.exposureHandles].map((handle) => handle.close()));
       this.exposureHandles.clear();
       this.httpServer = null;
+      if (this.edgeControlPlaneRuntime) {
+        await this.edgeControlPlaneRuntime.close();
+        this.edgeControlPlaneRuntime = undefined;
+      }
       await Promise.all(this.serverCatalog.allServers().map((server) => server.close()));
       // Remove every session-target binding and notify dependent workloads. @pk
       await this.shutdownEdgeSessions();

@@ -25,12 +25,12 @@
 
 ## 4. Integrated HTTP and WebSocket exposure
 
-- [ ] 4.1 Extend the exposure abstraction with explicit HTTP route and WebSocket upgrade registration contracts that coexist with the MCP endpoint.
-- [ ] 4.2 Mount authorization, token, refresh, enrollment, revocation, and gateway endpoints beneath the configured reserved Edge base path only when the control plane is enabled.
-- [ ] 4.3 Generate device and gateway URLs exclusively from the validated canonical public origin and configured paths, never from untrusted request headers.
-- [ ] 4.4 Adapt accepted WebSocket connections into the existing Edge gateway transport without changing the protocol-v2 message contracts.
-- [ ] 4.5 Authenticate gateway hello proofs against the enrolled public key, enforce freshness and nonce replay protection, and reject client-supplied key substitution.
-- [ ] 4.6 Integrate route mounting and upgrade handling into ordered application startup, rollback, drain, and shutdown behavior.
+- [x] 4.1 Extend the exposure abstraction with explicit HTTP route and WebSocket upgrade registration contracts that coexist with the MCP endpoint.
+- [x] 4.2 Mount authorization, token, refresh, enrollment, revocation, and gateway endpoints beneath the configured reserved Edge base path only when the control plane is enabled.
+- [x] 4.3 Generate device and gateway URLs exclusively from the validated canonical public origin and configured paths, never from untrusted request headers.
+- [x] 4.4 Adapt accepted WebSocket connections into the existing Edge gateway transport without changing the protocol-v2 message contracts.
+- [x] 4.5 Authenticate gateway hello proofs against the enrolled public key, enforce freshness and nonce replay protection, and reject client-supplied key substitution.
+- [x] 4.6 Integrate route mounting and upgrade handling into ordered application startup, rollback, drain, and shutdown behavior.
 
 ## 5. Desired-state planning and reconciliation
 

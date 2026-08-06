@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
+import type { Duplex } from "node:stream";
 import { Server as McpSdkServer } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { FentarisErrorCode } from "../../errors.js";
@@ -11,6 +12,8 @@ import type {
   UserContext,
 } from "../../types/shared.js";
 import { attachDownstreamSessionId, ensureIdentityWithMetadata } from "./downstreamSession.js";
+import type { ProxyExposureHttpRoute, ProxyExposureUpgradeRoute } from "./routeRegistry.js";
+import { exposurePathsConflict, normalizeExposurePath } from "./routeRegistry.js";
 
 /**
  * Options for HTTP downstream proxy exposure.
@@ -21,6 +24,10 @@ export type HttpProxyExposureTransportOptions = {
   host?: string;
   path?: string;
   onStarted?: () => void;
+  /** Additional owned HTTP routes co-located with the MCP endpoint. @pk */
+  httpRoutes?: readonly ProxyExposureHttpRoute[];
+  /** Additional WebSocket upgrade routes co-located with the MCP endpoint. @pk */
+  upgradeRoutes?: readonly ProxyExposureUpgradeRoute[];
 };
 
 /**
@@ -52,7 +59,7 @@ type SessionBinding = {
  */
 export class HttpProxyExposureTransport implements ProxyExposureTransport<HttpProxyExposureHandle> {
   private readonly options: Required<Pick<HttpProxyExposureTransportOptions, "port" | "host" | "path">> &
-    Pick<HttpProxyExposureTransportOptions, "onStarted">;
+    Pick<HttpProxyExposureTransportOptions, "onStarted" | "httpRoutes" | "upgradeRoutes">;
 
   /**
    * Create an HTTP proxy exposure transport.
@@ -64,13 +71,34 @@ export class HttpProxyExposureTransport implements ProxyExposureTransport<HttpPr
       host: options.host ?? "127.0.0.1",
       path: options.path ?? "/mcp",
       onStarted: options.onStarted,
+      httpRoutes: options.httpRoutes ?? [],
+      upgradeRoutes: options.upgradeRoutes ?? [],
     };
+    this.assertNoRouteConflicts();
   }
 
   async listen(runtime: ProxyRuntime): Promise<HttpProxyExposureHandle> {
     const sessions = new Map<string, HttpSessionState>();
     const server = createServer(async (req, res) => {
-      if (req.url?.split("?")[0] !== this.options.path) {
+      const pathname = normalizeExposurePath((req.url ?? "/").split("?")[0] ?? "/");
+      const method = (req.method ?? "GET").toUpperCase();
+      const extra = this.options.httpRoutes?.find(
+        (route) => route.method === method && normalizeExposurePath(route.path) === pathname,
+      );
+      if (extra) {
+        try {
+          const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+          await extra.handler(req, res, url);
+        } catch (error) {
+          runtime.logger.error("Error handling exposure route", { error: safeErrorMessage(error), path: pathname });
+          if (!res.headersSent) {
+            sendText(res, 500, "Internal server error");
+          }
+        }
+        return;
+      }
+
+      if (pathname !== normalizeExposurePath(this.options.path)) {
         sendText(res, 404, "Not Found");
         return;
       }
@@ -110,6 +138,26 @@ export class HttpProxyExposureTransport implements ProxyExposureTransport<HttpPr
       }
     });
 
+    server.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+      const pathname = normalizeExposurePath((req.url ?? "/").split("?")[0] ?? "/");
+      const upgrade = this.options.upgradeRoutes?.find(
+        (route) => normalizeExposurePath(route.path) === pathname,
+      );
+      if (!upgrade) {
+        socket.destroy();
+        return;
+      }
+      void (async () => {
+        try {
+          const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+          await upgrade.handler(req, socket, head, url);
+        } catch (error) {
+          runtime.logger.error("Error handling exposure upgrade", { error: safeErrorMessage(error), path: pathname });
+          socket.destroy();
+        }
+      })();
+    });
+
     await new Promise<void>((resolve) => {
       server.listen(this.options.port, this.options.host, () => {
         this.options.onStarted?.();
@@ -135,6 +183,20 @@ export class HttpProxyExposureTransport implements ProxyExposureTransport<HttpPr
           });
         }),
     };
+  }
+
+  private assertNoRouteConflicts(): void {
+    const mcpPath = normalizeExposurePath(this.options.path);
+    for (const route of this.options.httpRoutes ?? []) {
+      if (exposurePathsConflict(route.path, mcpPath)) {
+        throw new FentarisTransportError(`Exposure HTTP route "${route.path}" conflicts with MCP path "${mcpPath}"`);
+      }
+    }
+    for (const route of this.options.upgradeRoutes ?? []) {
+      if (exposurePathsConflict(route.path, mcpPath)) {
+        throw new FentarisTransportError(`Exposure upgrade route "${route.path}" conflicts with MCP path "${mcpPath}"`);
+      }
+    }
   }
 }
 
