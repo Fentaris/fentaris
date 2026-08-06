@@ -62,6 +62,10 @@ Visit our [docs](https://fentaris.mintlify.app) or jump to a [quickstart](https:
  > 
  > [Install mcp-use skill for MCP Apps](https://www.skills.sh/fentaris/fentaris-skills/fentaris-project-setup)
 
+For a complete runnable project with API-key users, groups, allow-list policy,
+a remote MCP upstream, and app-owned local tools, see
+[`examples/team-governed-proxy`](./examples/team-governed-proxy).
+
 
 ## Getting Started
 

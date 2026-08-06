@@ -1750,13 +1750,10 @@ export class McpProxy {
   }
 
   private shouldDiscoverToolsForServer(serverName: string, userGroups: Group[]): boolean {
-    const hasVisibleTool = (policy: Policy): boolean => {
-      const permissions = policy.getPermissions(serverName);
-      if (permissions.some((permission) => permission.tool === "*" && permission.effect === "deny")) {
-        return false;
-      }
-      return permissions.some((permission) => permission.effect === "allow");
-    };
+    // Exact allow rules win over `*` deny when filtering tools, so any allow means
+    // the server still has at least one potentially visible tool. @pk
+    const hasVisibleTool = (policy: Policy): boolean =>
+      policy.getPermissions(serverName).some((permission) => permission.effect === "allow");
 
     if (this.groups.length > 0) {
       return userGroups.some((group) => hasVisibleTool(group.policy));

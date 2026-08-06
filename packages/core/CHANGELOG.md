@@ -1,5 +1,52 @@
 # @fentaris/core
 
+## 2.3.1
+
+### Patch Changes
+
+- 569938f: Avoid cloud discovery fallback for policy-hidden edge MCP servers during `tools/list`. Exact tool allows now win over a companion `*` deny in both discovery pre-filtering and group tool listing, matching call-time policy evaluation.
+
+## 2.3.0
+
+### Minor Changes
+
+- e46a7ba: Add agent-native MCP tool discovery and auth inspection. Core now validates `cli.mcpAccounts` selectors and exposes `AgentToolDiscoveryService` with stable JSON envelopes, policy-filtered effective tool listing, search, detail, schema inspection, account status, login affordances, pagination, and response budgeting. The CLI adds `fentaris tools list/search/get/schema` and `fentaris tools auth list/status/login`.
+
+### Patch Changes
+
+- e39be45: Expose the typed Edge setup builders on the public `edge` namespace and preserve each setup descriptor's discriminated field type.
+- b81f061: Return `requires-login` for agent tool auth status when an MCP server declares credential requirements.
+
+## 2.2.0
+
+### Minor Changes
+
+- f355a29: Add governed edge execution targets, including device enrollment, local setup grants, session-pinned dispatch, capability discovery, and the edge workload runtime.
+
+## 2.1.2
+
+### Patch Changes
+
+- f46bdad: Accept user- and group-scoped credential sources when validating upstream MCP server credential references.
+
+## 2.1.1
+
+### Patch Changes
+
+- e889b9d: Add a JSON stdout logger factory for structured Fentaris runtime logs.
+- 40c6e9a: Give two-argument middleware callbacks contextual `ctx` and `next` types in strict TypeScript.
+
+## 2.1.0
+
+### Minor Changes
+
+- 3874e97: Add `fentaris auth api-key` commands for storing, listing, generating, and removing local downstream API keys, with hashed API-key management helpers on the local secrets backend.
+- bde0b12: Add `app.local(name)` for declaring local MCP tools, resources, resource templates, prompts, and completions through the existing proxy governance pipeline. Local namespaces now consistently reject same-name upstream MCP registrations regardless of declaration order.
+
+### Patch Changes
+
+- 5a319c2: Add `app.server(...)` as a top-level alias for registering and retrieving upstream MCP server handles.
+
 ## 2.0.0
 
 ### Major Changes

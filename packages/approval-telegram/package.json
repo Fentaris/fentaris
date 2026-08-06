@@ -1,6 +1,6 @@
 {
   "name": "@fentaris/approval-telegram",
-  "version": "0.1.5",
+  "version": "0.1.11",
   "description": "Telegram approval adapter for Fentaris policies",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

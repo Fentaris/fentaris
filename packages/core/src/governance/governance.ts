@@ -1,4 +1,4 @@
-import { getCapabilityPermission, normalizeApprovalResult, toCapabilityPermissions, toCapabilityRequest } from "../policy/index.js";
+import { getCapabilityPermission, getToolPermission, normalizeApprovalResult, toCapabilityPermissions, toCapabilityRequest } from "../policy/index.js";
 import type { CredentialSource, CredentialSourceMap } from "../credentials/index.js";
 import type { McpServer } from "../server/McpServer.js";
 import type { CapabilityOperationRequest, ToolApprovalRequest, ToolCallRequest } from "../types/mcp-operation.js";
@@ -557,18 +557,14 @@ export function filterToolsByGroupPolicies<TTool extends { name: string }>(
 ): TTool[] {
   return tools.filter((tool) => {
     const toolName = unproxyToolName(tool.name, serverName);
-    const permissions = groups.flatMap((group) =>
-      group.policy.getPermissions(serverName).map((permission) => ({ group, permission })),
-    );
-    const matches = permissions
-      .map(({ group, permission }) => ({ group, permission: permission.tool === toolName || permission.tool === "*" ? permission : undefined }))
-      .filter((entry): entry is { group: Group; permission: ToolPermission } => Boolean(entry.permission));
+    // Prefer exact tool matches over `*` wildcards per group, matching call-time policy evaluation. @pk
+    const matched = groups.map((group) => getToolPermission(group.policy.getPermissions(serverName), toolName));
 
-    if (matches.some(({ permission }) => permission.effect === "deny")) {
+    if (matched.some((permission) => permission?.effect === "deny")) {
       return false;
     }
 
-    return matches.some(({ permission }) => permission.effect !== "deny");
+    return matched.some((permission) => Boolean(permission) && permission?.effect !== "deny");
   });
 }
 
