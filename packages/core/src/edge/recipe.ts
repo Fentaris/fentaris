@@ -13,6 +13,7 @@ import { createHash } from "node:crypto";
 import type { StdioTransportOptions } from "../transports/client/StdioTransport.js";
 import { isRuntimeValueToken, type RuntimeValueToken } from "./runtimeInput.js";
 import { edgeError } from "./errors.js";
+import { compileEdgeNpmInstallPlan, validateEdgeInstallPlan, type EdgeInstallPlan } from "./install.js";
 import type { SetupSchema } from "./setup.js";
 
 /** Launch recipe serialization format version. @pk */
@@ -38,6 +39,13 @@ export interface LaunchRecipe {
   readonly setupSchemaVersion?: number;
   /** Sorted setup field names referenced by this recipe. @pk */
   readonly setupFieldRefs: readonly string[];
+  /**
+   * Managed installation for this deployment. When present, `command` is a bare
+   * bin name resolved inside the edge-managed install directory instead of the
+   * device `PATH`.
+   * @pk
+   */
+  readonly install?: EdgeInstallPlan;
   /** Stable content digest over the canonical recipe payload. @pk */
   readonly digest: string;
 }
@@ -53,6 +61,7 @@ function canonicalRecipePayload(recipe: Omit<LaunchRecipe, "digest">): string {
     clientVersion: recipe.clientVersion,
     setupSchemaVersion: recipe.setupSchemaVersion,
     setupFieldRefs: recipe.setupFieldRefs,
+    install: recipe.install,
   });
 }
 
@@ -89,6 +98,12 @@ export function compileLaunchRecipe(options: StdioTransportOptions, schema?: Set
   const args = options.args ?? [];
   const env = options.env ?? {};
   const setupFieldRefs = collectRecipeRuntimeRefs(args, env);
+  const install = options.install === undefined
+    ? undefined
+    : "digest" in options.install
+      ? options.install
+      : compileEdgeNpmInstallPlan(options.install);
+  if (install) assertManagedInstallCommand(options.command, (message) => new TypeError(message));
   const payload: Omit<LaunchRecipe, "digest"> = {
     version: LAUNCH_RECIPE_VERSION,
     command: options.command,
@@ -99,8 +114,21 @@ export function compileLaunchRecipe(options: StdioTransportOptions, schema?: Set
     ...(options.clientVersion ? { clientVersion: options.clientVersion } : {}),
     ...(schema ? { setupSchemaVersion: schema.version } : {}),
     setupFieldRefs,
+    ...(install ? { install } : {}),
   };
   return Object.freeze({ ...payload, digest: computeRecipeDigest(payload) });
+}
+
+/**
+ * A managed-install recipe launches a bin from the edge-managed install
+ * directory, so its command must be a bare executable name.
+ * @pk
+ */
+export function assertManagedInstallCommand(command: string, fail: (message: string) => Error): void {
+  const message = "A managed-install launch recipe command must be a bare bin name without path separators";
+  if (command.includes("/") || command.includes("\\") || command === "." || command === "..") {
+    throw fail(message);
+  }
 }
 
 /** Serialize a recipe to a canonical JSON string. @pk */
@@ -140,6 +168,10 @@ export function validateLaunchRecipe(value: unknown): LaunchRecipe {
     env[key] = normalizeLaunchValue(value);
   }
   const setupFieldRefs = collectRecipeRuntimeRefs(args, env);
+  const install = candidate.install === undefined ? undefined : validateEdgeInstallPlan(candidate.install);
+  if (install) {
+    assertManagedInstallCommand(candidate.command, (message) => edgeError("EDGE_PROTOCOL", message));
+  }
   const payload: Omit<LaunchRecipe, "digest"> = {
     version: LAUNCH_RECIPE_VERSION,
     command: candidate.command,
@@ -150,6 +182,7 @@ export function validateLaunchRecipe(value: unknown): LaunchRecipe {
     ...(typeof candidate.clientVersion === "string" ? { clientVersion: candidate.clientVersion } : {}),
     ...(typeof candidate.setupSchemaVersion === "number" ? { setupSchemaVersion: candidate.setupSchemaVersion } : {}),
     setupFieldRefs,
+    ...(install ? { install } : {}),
   };
   const digest = computeRecipeDigest(payload);
   if (typeof candidate.digest === "string" && candidate.digest !== digest) {

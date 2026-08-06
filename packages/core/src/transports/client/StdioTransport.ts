@@ -22,6 +22,7 @@ import type {
 import { isRuntimeValueToken, describeRuntimeValueToken, type RuntimeValueToken } from "../../edge/runtimeInput.js";
 import { compileLaunchRecipe, type LaunchRecipe } from "../../edge/recipe.js";
 import { edgeError } from "../../edge/errors.js";
+import type { EdgeInstallPlan, EdgeNpmInstallPlanInput } from "../../edge/install.js";
 import type { SetupSchema } from "../../edge/setup.js";
 import type { FentarisTransport } from "../../types/transport.js";
 
@@ -45,6 +46,13 @@ export type StdioTransportOptions = {
    * @pk
    */
   runtimeValues?: Record<string, string>;
+  /**
+   * Managed installation for edge execution. Declare it with `edge.npm(...)`.
+   * When present, `command` is a bare bin name that the edge agent resolves
+   * inside its managed install directory, and cloud execution is rejected.
+   * @pk
+   */
+  install?: EdgeInstallPlan | EdgeNpmInstallPlanInput;
   stderr?: "inherit" | "pipe" | "overlapped" | "ignore";
   clientName?: string;
   clientVersion?: string;
@@ -96,6 +104,11 @@ export class StdioTransport implements FentarisTransport {
       if (isRuntimeValueToken(value)) tokens.push(value);
     }
     return tokens;
+  }
+
+  /** Whether this transport declares an edge-managed software installation. @pk */
+  requiresManagedInstall(): boolean {
+    return this.options.install !== undefined;
   }
 
   /** Runtime references that have no explicit cloud-side value. @pk */
@@ -227,6 +240,13 @@ export class StdioTransport implements FentarisTransport {
   }
 
   private async connect(): Promise<Client> {
+    if (this.options.install) {
+      throw edgeError(
+        "EDGE_UNRESOLVED_RUNTIME_INPUT",
+        "Managed installation requires an edge target; the cloud target cannot install MCP packages.",
+        { details: { command: this.options.command } },
+      );
+    }
     const client = new Client(
       {
         name: this.options.clientName ?? "fentaris-core",

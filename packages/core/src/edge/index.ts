@@ -66,6 +66,7 @@ export type {
 } from "./setup.js";
 
 export {
+  assertManagedInstallCommand,
   compileLaunchRecipe,
   computeRecipeDigest,
   collectRecipeRuntimeRefs,
@@ -75,6 +76,21 @@ export {
   validateLaunchRecipe,
 } from "./recipe.js";
 export type { LaunchRecipe } from "./recipe.js";
+
+export {
+  EDGE_INSTALL_PLAN_VERSION,
+  compileEdgeNpmInstallPlan,
+  computeEdgeInstallDigest,
+  edgeInstallDirectoryName,
+  edgeInstallPackageId,
+  validateEdgeInstallPlan,
+} from "./install.js";
+export type {
+  EdgeInstallPlan,
+  EdgeInstallPlanKind,
+  EdgeNpmInstallPlan,
+  EdgeNpmInstallPlanInput,
+} from "./install.js";
 
 export { EDGE_ERROR_CODES, edgeError, isEdgeError } from "./errors.js";
 export type { EdgeError, EdgeErrorCode, EdgeErrorOptions } from "./errors.js";

@@ -991,6 +991,13 @@ export class McpProxy {
       return;
     }
     const recipe = server.transport.toLaunchRecipe(this.setupSchemas.get(server.name));
+    if (recipe.install) {
+      throw edgeError(
+        "EDGE_UNRESOLVED_RUNTIME_INPUT",
+        `Cloud launch for "${server.name}" declares a managed install, which requires an edge target.`,
+        { details: { serverName: server.name, recipeDigest: recipe.digest, package: recipe.install.package } },
+      );
+    }
     const unresolved = server.transport.unresolvedCloudRuntimeRefs();
     if (unresolved.length > 0) {
       throw edgeError("EDGE_UNRESOLVED_RUNTIME_INPUT", `Cloud launch for "${server.name}" has unresolved runtime inputs.`, {

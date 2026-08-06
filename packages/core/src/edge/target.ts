@@ -1,3 +1,4 @@
+import { compileEdgeNpmInstallPlan } from "./install.js";
 import {
   boolean as setupBoolean,
   file as setupFile,
@@ -156,7 +157,8 @@ export const cloud: CloudExecutionTarget = Object.freeze({ kind: "cloud" });
 /**
  * Build an edge execution target. Also serves as the namespace for device
  * selector builders ({@link edge.sessionDevice}, {@link edge.userDefaultDevice},
- * {@link edge.namedDevice}, {@link edge.pool}) and setup field builders.
+ * {@link edge.namedDevice}, {@link edge.pool}), setup field builders, and the
+ * managed install builder ({@link edge.npm}).
  * @pk
  */
 export const edge = Object.assign(
@@ -187,6 +189,7 @@ export const edge = Object.assign(
     boolean: setupBoolean,
     number: setupNumber,
     select: setupSelect,
+    npm: compileEdgeNpmInstallPlan,
   },
 );
 
