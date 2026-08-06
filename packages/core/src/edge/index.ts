@@ -116,6 +116,70 @@ export type {
 export {
   EdgeSessionPinner,
 } from "./sessionPinning.js";
+
+export {
+  EdgeChildBindingManager,
+  EdgeSessionSelectionService,
+} from "./sessionSelection.js";
+
+export {
+  EDGE_CONTROL_NAMESPACE,
+  EDGE_CONTROL_TOOL_NAMES,
+  EDGE_CONTROL_TOOL_SCHEMAS,
+  registerEdgeControlProvider,
+} from "./controlProvider.js";
+
+export { EdgeSingleCallCoordinator } from "./controlInvocation.js";
+export type {
+  EdgeSingleCallCoordinatorOptions,
+  EdgeSingleCallStructuredResult,
+  EdgeTrustedChildRoute,
+} from "./controlInvocation.js";
+
+export {
+  DEFAULT_EDGE_ORCHESTRATION_LIMITS,
+  EdgeFanoutCoordinator,
+} from "./fanout.js";
+
+export {
+  EDGE_DISTRIBUTED_CONSISTENCY_REQUIREMENTS,
+  InMemoryEdgePoolSelectionStore,
+  InMemoryEdgeResultCorrelationStore,
+  diagnoseEdgeProductionAdapters,
+} from "./distributed.js";
+export type {
+  EdgeCoordinatedPoolStrategy,
+  EdgePoolCandidate,
+  EdgePoolSelectionStore,
+  EdgeProductionAdapterDiagnostic,
+  EdgeResultCorrelation,
+  EdgeResultCorrelationStore,
+} from "./distributed.js";
+export type {
+  EdgeFanoutCoordinatorOptions,
+  EdgeAggregateApprovalContext,
+  EdgeFanoutEntry,
+  EdgeFanoutResult,
+  EdgeFanoutStatus,
+  EdgeOrchestrationLimits,
+} from "./fanout.js";
+export type {
+  EdgeControlDeviceSummary,
+  EdgeControlGetResult,
+  EdgeControlInvocationRequest,
+  EdgeControlInvoker,
+  EdgeControlListResult,
+  EdgeControlProviderOptions,
+  EdgeControlSelectResult,
+} from "./controlProvider.js";
+export type {
+  EdgeChildBindingAllocation,
+  EdgeChildBindingCleanup,
+  EdgeChildBindingManagerOptions,
+  EdgeChildBindingTerminalReason,
+  EdgeSessionSelectionRequest,
+  EdgeSessionSelectionServiceOptions,
+} from "./sessionSelection.js";
 export type {
   EdgeSessionPinnerInputs,
   SessionPinRequest,
@@ -131,8 +195,12 @@ export {
 } from "./protocol.js";
 
 export {
+  EDGE_PROTOCOL_MIN_VERSION,
   EDGE_PROTOCOL_VERSION,
+  EDGE_SUPPORTED_PROTOCOL_VERSIONS,
   parseEdgeProtocolMessage,
+  selectHighestMutualEdgeProtocolVersion,
+  validateEdgePresenceReport,
 } from "./controlProtocol.js";
 export type {
   EdgeAgentMessage,
@@ -145,6 +213,9 @@ export type {
   EdgeHelloAckMessage,
   EdgeHelloMessage,
   EdgeLifecycleMessage,
+  EdgePresenceReportMessage,
+  EdgeProtocolVersion,
+  EdgeReadinessReport,
   EdgeProtocolClaims,
   EdgeProtocolMessage,
   EdgeSetupStatusMessage,
@@ -163,11 +234,80 @@ export type {
   EdgeChannelBroker,
   EdgeConnectionRecord,
   EdgeConnectionStore,
+  EdgeConnectionTerminator,
   EdgeDesiredStateStore,
   EdgeDeviceRecord,
   EdgeDeviceRegistry,
+  EdgeInventoryListItem,
+  EdgeInventoryListOptions,
+  EdgeInventoryListPage,
+  EdgeInventoryRecord,
+  EdgeInventoryUpdate,
   EdgeSetupStatusStore,
 } from "./controlPlane.js";
+
+export { normalizeEdgeDeviceName } from "./controlPlane.js";
+
+export {
+  EDGE_INVENTORY_SCHEMA_VERSION,
+  IN_MEMORY_EDGE_ADAPTER_DIAGNOSTICS,
+  InMemoryEdgeChildBindingStore,
+  InMemoryEdgePresenceStore,
+  InMemoryEdgeReadinessStore,
+  InMemoryEdgeSessionSelectionStore,
+} from "./inventory.js";
+export type {
+  AttributedEdgeValue,
+  EdgeAdapterDiagnostics,
+  EdgeCapacitySnapshot,
+  EdgeChildBinding,
+  EdgeChildBindingStore,
+  EdgeDeploymentReadiness,
+  EdgeDeploymentReadinessStatus,
+  EdgeDeviceAlias,
+  EdgeHeartbeatFreshness,
+  EdgeLoadSnapshot,
+  EdgeManagedMetadata,
+  EdgeMetadataAuthority,
+  EdgeObservedFacts,
+  EdgePresence,
+  EdgePresenceStatus,
+  EdgePresenceStore,
+  EdgePublicDeviceRef,
+  EdgeReadinessStore,
+  EdgeSessionSelection,
+  EdgeSessionSelectionStore,
+  EdgeUserMetadata,
+} from "./inventory.js";
+
+export { DefaultEdgeControlPlaneService } from "./management.js";
+export type {
+  EdgeControlPlaneService,
+  EdgeJoinRequest,
+  EdgeManagedDeviceView,
+  EdgeManagementContext,
+  EdgeManagementPage,
+  EdgeManagementResult,
+} from "./management.js";
+
+export { EdgeInventoryService } from "./inventoryService.js";
+export type {
+  EdgeDispatchDeviceResolution,
+  EdgeInventoryAuthorizer,
+  EdgeInventoryContext,
+  EdgeInventoryQuery,
+  EdgeInventoryServiceOptions,
+  EdgePublicDeviceView,
+  EdgePublicInventoryPage,
+  EdgePublicReadinessSummary,
+  EdgeSelectionExplanation,
+  EdgeSelectionPreference,
+  EdgeSelectionRequest,
+  EdgeSelectionRequirements,
+  EdgeSelectionResult,
+  EdgeSelectionSetResult,
+  EdgeSelectionStrategy,
+} from "./inventoryService.js";
 
 export { EdgeWebSocketGateway } from "./gateway.js";
 export type {
@@ -188,10 +328,12 @@ export {
   EdgeTelemetry,
   edgeHealth,
   redactEdgeProtocolValue,
+  serializeEdgePublicValue,
 } from "./observability.js";
 export type {
   EdgeHealthOptions,
   EdgeHealthProbeResult,
+  EdgeSerializationLimits,
   EdgeRuntimeEvent,
   EdgeRuntimeEventName,
   EdgeTelemetrySink,

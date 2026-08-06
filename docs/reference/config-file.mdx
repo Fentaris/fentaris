@@ -133,6 +133,8 @@ If `entrypoint` is omitted, `fentaris secrets manifest` checks `src/index.ts`, `
 
 Agent-native tool discovery commands read `cli.mcpAccounts` from the Fentaris application config exported by the project entrypoint. Each MCP key declares the default selector and the selectors an agent may request with `--as`.
 
+Edge Control is also application configuration rather than a `fentaris.json` field. Set `McpProxyOptions.edge.control.enabled: true`, provide inventory and selection services, configure hard orchestration limits, and allow only the required `edge` tools in policy. See [Edge API Reference](/reference/edge#edge-control-configuration).
+
 ```ts theme={null}
 import { defineFentarisConfig, mcp, policy } from "@fentaris/core";
 

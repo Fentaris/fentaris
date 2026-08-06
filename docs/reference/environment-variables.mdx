@@ -57,11 +57,17 @@ FENTARIS_API_KEY=...
 
 ### `FENTARIS_EDGE_CONTROL_PLANE_URL`
 
-Control-plane base URL used by `fentaris-edge login` for device authorization and enrollment.
+Control-plane base URL used by legacy `fentaris-edge login` and as the saved default after `fentaris edge join` device authorization and enrollment.
 
 ```bash theme={null}
 export FENTARIS_EDGE_CONTROL_PLANE_URL="https://fentaris.example"
 fentaris-edge login
+```
+
+Prefer the explicit zero-global-install flow for first enrollment:
+
+```bash theme={null}
+npx @fentaris/edge join https://fentaris.example
 ```
 
 Use HTTPS. The enrolled gateway URL must use `wss://`; `ws://` is accepted only for loopback development.
@@ -89,6 +95,8 @@ export FENTARIS_EDGE_ALLOWED_PACKAGES="@modelcontextprotocol/server-filesystem"
   Allow the concrete executable or package. Do not allow a general shell
   interpreter as a workaround.
 </Warning>
+
+Edge Control inventory, selection, and fan-out limits are application configuration, not environment variables. Configure them under `McpProxyOptions.edge.control` so policy review and deployment configuration remain explicit.
 
 ### Upstream Credential Variables
 

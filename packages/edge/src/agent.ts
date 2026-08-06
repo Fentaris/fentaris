@@ -1,19 +1,22 @@
 import { randomBytes, sign } from "node:crypto";
-import { hostname } from "node:os";
+import { arch, hostname, platform as operatingSystem } from "node:os";
 import path from "node:path";
 import {
   EDGE_PROTOCOL_VERSION,
+  EDGE_SUPPORTED_PROTOCOL_VERSIONS,
   edgeError,
   parseEdgeProtocolMessage,
   type EdgeAgentMessage,
   type EdgeControlPlaneMessage,
   type EdgeHelloAckMessage,
+  type EdgeObservedFacts,
 } from "@fentaris/core";
 import {
   EdgeEnrollmentService,
   HttpDeviceAuthorizationProvider,
   HttpEdgeEnrollmentClient,
   type DeviceAuthorizationRequest,
+  type EdgeJoinMetadata,
   type EdgeConnection,
   type EdgeConnectionClient,
 } from "./enrollment.js";
@@ -57,6 +60,7 @@ export interface EdgeAgentOptions {
   platform: EdgePlatform;
   runtime?: EdgeConnectionRuntime;
   runtimeSummary?: EdgeRuntimeSummaryProvider;
+  observedFacts?: () => EdgeObservedFacts;
 }
 
 /** Enrollment and connection lifecycle used by the CLI and embedders. */
@@ -65,8 +69,8 @@ export class EdgeAgent {
 
   constructor(private readonly options: EdgeAgentOptions) {}
 
-  async login() {
-    const login = await this.options.enrollment.login();
+  async login(metadata: EdgeJoinMetadata = {}) {
+    const login = await this.options.enrollment.login(metadata);
     await this.connect();
     return login;
   }
@@ -83,6 +87,7 @@ export class EdgeAgent {
       publicKey: credentials.keyPair.publicKey,
       privateKey: credentials.keyPair.privateKey,
       runtime: this.options.runtime,
+      observedFacts: this.options.observedFacts?.() ?? defaultObservedFacts(),
     });
     const active = this.active;
     void active.closed?.finally(() => {
@@ -93,6 +98,17 @@ export class EdgeAgent {
   async reconnect(): Promise<void> {
     await this.disconnect();
     await this.connect();
+  }
+
+  async waitUntilDisconnected(): Promise<void> {
+    const active = this.active;
+    if (!active) return;
+    if (active.closed) await active.closed;
+    else await new Promise<void>(() => undefined);
+  }
+
+  isConnected(): boolean {
+    return this.active !== undefined;
   }
 
   async status(): Promise<EdgeAgentStatus> {
@@ -183,7 +199,7 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
           kind: "edge.hello",
           tenantId: input.tenantId,
           edgeNodeId: input.edgeNodeId,
-          supportedVersions: [EDGE_PROTOCOL_VERSION],
+          supportedVersions: EDGE_SUPPORTED_PROTOCOL_VERSIONS,
           nonce,
           proof,
           deviceCredential: input.deviceCredential,
@@ -203,6 +219,21 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
                 throw edgeError("EDGE_PROTOCOL", "Edge gateway acknowledged a different device identity.");
               }
               ack = message;
+              const publishPresence = async () => {
+                if (!ack || ack.protocolVersion !== 2) return;
+                const snapshot = await input.runtime?.presenceSnapshot?.() ?? { readiness: [] };
+                const reportedAt = Date.now();
+                await send({
+                  version: 2,
+                  kind: "edge.presence",
+                  tenantId: ack.tenantId,
+                  edgeNodeId: ack.edgeNodeId,
+                  connectionGeneration: ack.connectionGeneration,
+                  observed: input.observedFacts ?? defaultObservedFacts(reportedAt),
+                  ...snapshot,
+                  reportedAt,
+                });
+              };
               await input.runtime?.connected({
                 claims: {
                   tenantId: message.tenantId,
@@ -210,17 +241,26 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
                   connectionGeneration: message.connectionGeneration,
                 },
                 send,
+                publishPresence,
               });
+              await publishPresence();
               heartbeat = setInterval(() => {
                 if (!ack || socket.readyState !== WebSocket.OPEN) return;
-                void send({
-                  version: EDGE_PROTOCOL_VERSION,
-                  kind: "edge.heartbeat",
-                  tenantId: ack.tenantId,
-                  edgeNodeId: ack.edgeNodeId,
-                  connectionGeneration: ack.connectionGeneration,
-                  sentAt: Date.now(),
-                }).catch(() => socket.close(1011, "edge heartbeat failed"));
+                void (async () => {
+                  const snapshot = ack?.protocolVersion === 2
+                    ? await input.runtime?.presenceSnapshot?.() ?? { readiness: [] }
+                    : undefined;
+                  await send({
+                    version: ack!.protocolVersion,
+                    kind: "edge.heartbeat",
+                    tenantId: ack!.tenantId,
+                    edgeNodeId: ack!.edgeNodeId,
+                    connectionGeneration: ack!.connectionGeneration,
+                    sentAt: Date.now(),
+                    ...(snapshot?.capacity ? { capacity: snapshot.capacity } : {}),
+                    ...(snapshot?.load ? { load: snapshot.load } : {}),
+                  });
+                })().catch(() => socket.close(1011, "edge heartbeat failed"));
               }, 10_000);
               heartbeat.unref?.();
               resolve(message);
@@ -263,6 +303,16 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
   }
 }
 
+function defaultObservedFacts(reportedAt = Date.now()): EdgeObservedFacts {
+  return {
+    platform: operatingSystem(),
+    architecture: arch(),
+    agentVersion: "0.1.0",
+    executionFeatures: ["mcp-stdio"],
+    reportedAt,
+  };
+}
+
 export interface DefaultAgentOptions {
   readonly controlPlaneUrl: string;
   readonly platform?: EdgePlatform;
@@ -275,6 +325,7 @@ export function createDefaultEdgeAgent(options: DefaultAgentOptions): EdgeAgent 
   const platform = options.platform ?? nodeEdgePlatform();
   const enrollment = new EdgeEnrollmentService({
     platform,
+    controlPlaneUrl: options.controlPlaneUrl,
     authorization: new HttpDeviceAuthorizationProvider(options.controlPlaneUrl),
     enrollment: new HttpEdgeEnrollmentClient(options.controlPlaneUrl),
     callbacks: { onVerification: options.onVerification },

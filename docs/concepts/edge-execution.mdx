@@ -60,6 +60,25 @@ The first edge-dependent operation pins `{ session, subject, target }` to one el
 
 If the device disconnects, calls fail with `EDGE_UNAVAILABLE`. Fentaris does not silently fail over a stateful session to another device.
 
+An authorized agent can call `edge__select` before the first ordinary tool call. The selection is stored by `{ session, subject, target }`, revalidated at dispatch, and then becomes the normal immutable session pin. A selection made after pinning fails with `EDGE_SESSION_PINNED`.
+
+## Agent-Native Edge Control
+
+Edge Control is an opt-in local MCP provider. It publishes five stable tools through the same catalog and policy pipeline as every upstream MCP:
+
+* `edge__list` and `edge__get` discover authorized devices without exposing credentials or opaque node IDs.
+* `edge__select` chooses a public device for later transparent calls.
+* `edge__call` invokes one effective tool in an isolated child context.
+* `edge__call_many` runs one effective tool over a bounded device set.
+
+Enabling Edge execution does not enable Edge Control. Applications must set `edge.control.enabled` and policy must allow the specific `edge` tools. Device names never become MCP namespaces, so tool discovery stays stable as devices connect and disconnect.
+
+Explicit and fan-out calls re-enter the normal tool pipeline. Every child receives the authenticated identity, policy, deadline, cancellation, trace data, setup checks, and local consent checks. Child bindings never replace a transparent session pin.
+
+<Warning>
+  Fentaris does not automatically retry a dispatched mutation. A lost connection can produce an indeterminate result because the device may have applied the operation before disconnecting.
+</Warning>
+
 ## Local Data Boundary
 
 Folder paths, file paths, secret values, device private keys, and complete process environments remain on the edge. The control plane receives opaque grant references, readiness, recipe digests, and validated capability manifests.
@@ -77,4 +96,3 @@ The edge agent:
 * [Set Up an Edge Device](/guides/edge-device)
 * [Edge API Reference](/reference/edge)
 * [Policies](/concepts/policies)
-

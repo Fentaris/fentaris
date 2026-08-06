@@ -6,6 +6,7 @@ import { runDoctor } from "../commands/doctor.js";
 import { runInit } from "../commands/init.js";
 import { runSecrets } from "../commands/secrets.js";
 import { runTools } from "../commands/tools.js";
+import { runEdge } from "../commands/edge.js";
 import { cliVersion } from "../shared/constants.js";
 import { parseCommand } from "../shared/parse.js";
 import type { CliCommand, Prompt, Runtime } from "../shared/types.js";
@@ -33,8 +34,7 @@ export async function main(argv: string[], runtime: Runtime): Promise<number> {
   }
 
   try {
-    await route(parsed.command, runtimeForCommand(parsed.command, runtime));
-    return 0;
+    return await route(parsed.command, runtimeForCommand(parsed.command, runtime)) ?? 0;
   } catch (error: unknown) {
     printRuntimeError(runtime, error);
     return 1;
@@ -67,7 +67,10 @@ function nonInteractivePrompt(prompt: Prompt): Prompt {
   };
 }
 
-async function route(command: CliCommand, runtime: Runtime): Promise<void> {
+async function route(command: CliCommand, runtime: Runtime): Promise<number | void> {
+  if (command.name === "edge") {
+    return runEdge(command, runtime);
+  }
   if (command.name === "auth") {
     await runAuth(command, runtime);
     return;

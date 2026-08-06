@@ -1,5 +1,6 @@
 packages:
   - "packages/*"
+  - "examples/*"
 
 # Force patched transitive versions for known advisories.
 overrides:
@@ -8,8 +9,8 @@ overrides:
   "brace-expansion": ">=5.0.8"
   "fast-uri": ">=3.1.4"
   "hono": ">=4.12.27"
-  "js-yaml@3": ">=3.15.0"
+  "js-yaml@3": "3.15.0"
   "js-yaml@4.2.0": "4.3.0"
-  "linkify-it": ">=5.0.2"
+  "linkify-it": "5.0.2"
   "postcss": ">=8.5.18"
   "vite": ">=8.0.16"

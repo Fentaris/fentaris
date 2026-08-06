@@ -250,6 +250,16 @@ proxy.use(async (ctx, next) => {
 
 Review denied calls regularly. They show missing policy, unexpected client behavior, or attempted abuse.
 
+## Govern Edge Orchestration
+
+Keep Edge Control disabled unless an agent needs inventory or explicit orchestration. When enabled, grant `edge__list`, `edge__get`, `edge__select`, `edge__call`, and `edge__call_many` independently.
+
+For high-impact fan-out, configure aggregate approval against the exact resolved public-device scope, bounded argument summary, failure policy, concurrency, and deadline. Every child still re-enters normal tool policy and local recipe, grant, and executable consent checks after aggregate approval.
+
+Treat device descriptions, tags, observed facts, and MCP child output as untrusted data. Do not accept route, device, correlation, or status fields from device output. Keep device credentials, opaque node IDs, private paths, grant references, secrets, and complete environments out of agent-visible results and telemetry.
+
+Use durable multi-instance adapters in production. Atomic inventory versions, monotonic connection generations, sticky/round-robin coordination, atomic result consumption, bounded expiry, and idempotent terminal correlation are security boundaries, not only availability optimizations.
+
 ## Harden Network Exposure
 
 Run public Fentaris deployments behind a reverse proxy or cloud load balancer.
