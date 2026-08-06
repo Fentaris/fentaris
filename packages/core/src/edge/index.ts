@@ -401,6 +401,63 @@ export type {
 } from "./gateway.js";
 
 export {
+  EDGE_CONTROL_PLANE_DEFAULT_BASE_PATH,
+  EDGE_CONTROL_PLANE_DEFAULT_STATE_DIR,
+  EDGE_CONTROL_PLANE_DEFAULTS,
+  SERIALIZABLE_EDGE_CONTROL_PLANE_KEYS,
+  buildEdgeControlPlaneUrls,
+  mergeEdgeControlPlaneConfig,
+  normalizeEdgeControlPlaneConfig,
+  parseSerializableEdgeControlPlaneConfig,
+  validateEdgeControlPlaneConfig,
+} from "./integratedConfig.js";
+export type {
+  EdgeAssignmentResolver,
+  EdgeControlPlaneConfig,
+  EdgeControlPlaneManagedAdapters,
+  EdgeControlPlaneMode,
+  EdgeDeviceApprovalAdapter,
+  EdgeDeviceApprovalDecision,
+  NormalizedEdgeControlPlaneConfig,
+  SerializableEdgeControlPlaneConfig,
+} from "./integratedConfig.js";
+
+export {
+  EDGE_CONTROL_PLANE_ERROR_CODES,
+  edgeControlPlaneError,
+  isEdgeControlPlaneErrorBody,
+} from "./integratedProtocol.js";
+export type {
+  EdgeAuthenticatedHelloProof,
+  EdgeAuthenticatedHelloResult,
+  EdgeControlPlaneErrorBody,
+  EdgeControlPlaneErrorCode,
+  EdgeControlPlaneTokenResponse,
+  EdgeDeviceAuthorizeRequest,
+  EdgeDeviceAuthorizeResponse,
+  EdgeDeviceTokenRequest,
+  EdgeEnrollRequest,
+  EdgeEnrollResponse,
+  EdgeRevokeRequest,
+  EdgeTokenRefreshRequest,
+} from "./integratedProtocol.js";
+
+export type {
+  EdgeApprovalService,
+  EdgeAuthorizationSession,
+  EdgeDesiredAssignmentSnapshot,
+  EdgeDesiredAssignmentStore,
+  EdgeDeviceAuthorizationService,
+  EdgeEnrolledDeviceAuthority,
+  EdgeEnrolledDeviceStore,
+  EdgeEnrollmentService,
+  EdgeLocalOperatorChannel,
+  EdgeReconciliationTrigger,
+  EdgeReconciliationTriggerService,
+  EdgeTokenIssuanceService,
+} from "./integratedServices.js";
+
+export {
   EdgeCapabilityCache,
   InMemoryEdgeCapabilityCacheStore,
 } from "./capabilityCache.js";

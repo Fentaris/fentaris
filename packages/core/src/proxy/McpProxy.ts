@@ -121,6 +121,11 @@ import {
   type SessionBindingStore,
   type SetupFieldDescriptor,
   type SetupSchema,
+  type EdgeControlPlaneConfig,
+  type SerializableEdgeControlPlaneConfig,
+  validateEdgeControlPlaneConfig,
+  parseSerializableEdgeControlPlaneConfig,
+  mergeEdgeControlPlaneConfig,
 } from "../edge/index.js";
 import type { SessionPinRequest, SessionPinResult } from "../edge/index.js";
 import type { LaunchRecipe } from "../edge/recipe.js";
@@ -165,6 +170,7 @@ type ProjectRuntimeDefaults = {
   port?: number;
   host?: string;
   path?: string;
+  edgeControlPlane?: SerializableEdgeControlPlaneConfig;
 };
 
 function readProjectRuntimeDefaults(fromDir: string = process.cwd()): ProjectRuntimeDefaults {
@@ -192,10 +198,19 @@ function readProjectRuntimeDefaultsFile(configPath: string): ProjectRuntimeDefau
 
   try {
     const config = JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown>;
+    const edge = config.edge && typeof config.edge === "object" && !Array.isArray(config.edge)
+      ? config.edge as Record<string, unknown>
+      : undefined;
+    const controlPlaneDiagnostics: FentarisDiagnostic[] = [];
+    const edgeControlPlane = edge?.controlPlane !== undefined
+      ? parseSerializableEdgeControlPlaneConfig(edge.controlPlane, controlPlaneDiagnostics)
+      : undefined;
+    void controlPlaneDiagnostics;
     return {
       ...(typeof config.port === "number" ? { port: config.port } : {}),
       ...(typeof config.host === "string" ? { host: config.host } : {}),
       ...(typeof config.path === "string" ? { path: config.path } : {}),
+      ...(edgeControlPlane ? { edgeControlPlane } : {}),
     };
   } catch {
     return {};
@@ -328,6 +343,13 @@ export type EdgeRuntimeOptions = {
   control?: ({ readonly enabled: true } & EdgeControlProviderOptions) | { readonly enabled?: false };
   /** Optional managed child-binding manager for explicit orchestration. @pk */
   childBindingManager?: EdgeChildBindingManager;
+  /**
+   * Integrated Edge control-plane configuration. When enabled, `app.start()`
+   * mounts authorization, enrollment, revocation, and gateway routes. Disabled
+   * by default; omitting this field preserves low-level edge wiring only.
+   * @pk
+   */
+  controlPlane?: EdgeControlPlaneConfig;
 };
 
 /**
@@ -466,13 +488,23 @@ export class McpProxy {
     this.defaultPort = options.port ?? projectDefaults.port;
     this.defaultHost = options.host ?? projectDefaults.host;
     this.defaultPath = options.path ?? projectDefaults.path ?? "/mcp";
+    const mergedControlPlane = mergeEdgeControlPlaneConfig(
+      options.edge?.controlPlane,
+      projectDefaults.edgeControlPlane,
+    );
+    this.edgeOptions = options.edge || mergedControlPlane
+      ? {
+          ...options.edge,
+          ...(mergedControlPlane ? { controlPlane: mergedControlPlane } : {}),
+        }
+      : undefined;
     this.runtimeValidationConfig = {
       ...options,
       servers: this.servers,
       groups: this.groups,
       defaults: { credentials: this.defaultCredentials },
+      ...(this.edgeOptions ? { edge: this.edgeOptions } : {}),
     };
-    this.edgeOptions = options.edge;
 
     if (options.edge?.control?.enabled) {
       const configured = options.edge.control.invoker;
@@ -1505,6 +1537,11 @@ export class McpProxy {
         }
       }
     }
+
+    diagnostics.push(...validateEdgeControlPlaneConfig(this.edgeOptions?.controlPlane, {
+      mcpPath: this.defaultPath,
+      listenerHost: this.defaultHost,
+    }));
 
     return diagnostics;
   }

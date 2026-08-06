@@ -1,10 +1,10 @@
 ## 1. Public configuration and contracts
 
-- [ ] 1.1 Add the public `EdgeControlPlaneConfig` contracts for disabled, local, and managed deployments, including routes, public origin, stores, approval, and assignment adapters.
-- [ ] 1.2 Extend TypeScript and `fentaris.json` configuration resolution so serializable Edge control-plane options merge predictably while callbacks and adapters remain TypeScript-only.
-- [ ] 1.3 Add validation diagnostics for conflicting routes, invalid public origins, insecure non-loopback transports, missing managed adapters, and sensitive values embedded in serializable configuration.
-- [ ] 1.4 Define bounded protocol contracts for device authorization, token polling and refresh, enrollment, revocation, authenticated gateway hello, and control-plane errors.
-- [ ] 1.5 Define internal interfaces for device authorization, token issuance, approvals, enrolled-device storage, desired-state assignments, and reconciliation triggers.
+- [x] 1.1 Add the public `EdgeControlPlaneConfig` contracts for disabled, local, and managed deployments, including routes, public origin, stores, approval, and assignment adapters.
+- [x] 1.2 Extend TypeScript and `fentaris.json` configuration resolution so serializable Edge control-plane options merge predictably while callbacks and adapters remain TypeScript-only.
+- [x] 1.3 Add validation diagnostics for conflicting routes, invalid public origins, insecure non-loopback transports, missing managed adapters, and sensitive values embedded in serializable configuration.
+- [x] 1.4 Define bounded protocol contracts for device authorization, token polling and refresh, enrollment, revocation, authenticated gateway hello, and control-plane errors.
+- [x] 1.5 Define internal interfaces for device authorization, token issuance, approvals, enrolled-device storage, desired-state assignments, and reconciliation triggers.
 
 ## 2. Protected local authority state
 

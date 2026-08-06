@@ -7,6 +7,7 @@ import type { McpServer, ServerCredentialBinding } from "../server/index.js";
 import type { FentarisTransport } from "../types/index.js";
 import type { CapabilityPermission, Policy, ToolPermission } from "../types/index.js";
 import type { McpProxyOptions } from "../proxy/McpProxy.js";
+import { validateEdgeControlPlaneConfig } from "../edge/integratedConfig.js";
 
 type PolicyWithDeclarations = {
   getDeclaredServerNames?: () => string[];
@@ -67,6 +68,7 @@ export function validateFentarisConfig(config: McpProxyOptions, options: Fentari
   for (const [groupIndex, group] of groups.entries()) {
     validateTransportContracts(group.servers, ["groups", groupIndex, "servers"], diagnostics);
   }
+  validateIntegratedEdgeControlPlane(config, diagnostics);
 
   if (resolved) {
     void resolved;
@@ -399,4 +401,11 @@ function groupsOverlap(left: Group, right: Group): boolean {
 
 function hasDeclaredApiKeys(groups: Group[]): boolean {
   return groups.some((group) => group.users.some((user) => user.apiKeys.length > 0));
+}
+
+function validateIntegratedEdgeControlPlane(config: McpProxyOptions, diagnostics: FentarisDiagnostic[]): void {
+  diagnostics.push(...validateEdgeControlPlaneConfig(config.edge?.controlPlane, {
+    mcpPath: config.path,
+    listenerHost: config.host,
+  }));
 }
