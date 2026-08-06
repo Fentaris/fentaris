@@ -106,6 +106,9 @@ describe("EdgeAgentRuntime", () => {
       desiredDeployments: 1,
       readyDeployments: 1,
       blockedDeployments: 0,
+      installedPackages: 0,
+      pendingInstalls: 0,
+      failedInstalls: 0,
     });
 
     const request: EdgeMcpRequestEnvelope = {
@@ -227,6 +230,9 @@ describe("EdgeAgentRuntime", () => {
       desiredDeployments: 1,
       readyDeployments: 1,
       blockedDeployments: 0,
+      installedPackages: 0,
+      pendingInstalls: 0,
+      failedInstalls: 0,
     });
   });
 });

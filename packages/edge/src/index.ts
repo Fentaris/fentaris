@@ -63,6 +63,21 @@ export type {
 } from "./platform.js";
 export { redactEdgeValue, safeEdgeError } from "./redaction.js";
 export {
+  ManagedInstallManager,
+  NodeEdgeInstallCommandRunner,
+} from "./install.js";
+export type {
+  EdgeInstallCommandInput,
+  EdgeInstallCommandResult,
+  EdgeInstallCommandRunner,
+  LocalInstallDatabase,
+  LocalInstallReasonCategory,
+  LocalInstallState,
+  LocalInstallStatus,
+  ManagedInstallManagerOptions,
+  ManagedInstallSummary,
+} from "./install.js";
+export {
   LocalSetupManager,
   NodeTerminalSetupPrompter,
   TerminalSetupProvider,

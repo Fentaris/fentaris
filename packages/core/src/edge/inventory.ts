@@ -103,6 +103,7 @@ export interface EdgePresence {
 export type EdgeDeploymentReadinessStatus =
   | "ready"
   | "setup-required"
+  | "install-required"
   | "blocked"
   | "stale"
   | "unavailable";

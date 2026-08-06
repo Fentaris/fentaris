@@ -7,11 +7,13 @@ import {
   type EdgeCapabilityManifestMessage,
   type EdgeControlPlaneMessage,
   type EdgeDesiredStateMessage,
+  type EdgeInstallStatusReport,
   type EdgeProtocolClaims,
   type EdgeReadinessReport,
   type EdgeCapacitySnapshot,
   type EdgeLoadSnapshot,
 } from "@fentaris/core";
+import type { LocalInstallState, ManagedInstallManager } from "./install.js";
 import type { LocalSetupManager } from "./setup.js";
 import type {
   EdgeWorkloadSupervisor,
@@ -22,6 +24,9 @@ export interface EdgeRuntimeSummary {
   readonly desiredDeployments: number;
   readonly readyDeployments: number;
   readonly blockedDeployments: number;
+  readonly installedPackages: number;
+  readonly pendingInstalls: number;
+  readonly failedInstalls: number;
 }
 
 export interface EdgeRuntimeSummaryProvider {
@@ -52,7 +57,13 @@ export interface EdgeConnectionRuntime extends EdgeRuntimeSummaryProvider {
 export interface EdgeAgentRuntimeOptions {
   readonly setup: LocalSetupManager;
   readonly supervisor: EdgeWorkloadSupervisor;
+  readonly installs?: ManagedInstallManager;
 }
+
+type DeploymentReadiness = {
+  readonly status: "ready" | "blocked";
+  readonly reason?: string;
+};
 
 /**
  * Reconciles cloud desired state and bridges correlated MCP traffic to the
@@ -62,7 +73,7 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
   private connection?: EdgeRuntimeConnection;
   private desiredVersion = 0;
   private reconcileQueue = Promise.resolve();
-  private statuses = new Map<string, "ready" | "blocked">();
+  private statuses = new Map<string, DeploymentReadiness>();
 
   constructor(private readonly options: EdgeAgentRuntimeOptions) {}
 
@@ -93,6 +104,7 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
   async clearLocalState(): Promise<void> {
     await this.options.supervisor.shutdown();
     await this.options.setup.clear();
+    await this.options.installs?.clear();
     this.desiredVersion = 0;
     this.reconcileQueue = Promise.resolve();
     this.statuses.clear();
@@ -101,14 +113,18 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
   async summary(): Promise<EdgeRuntimeSummary> {
     let readyDeployments = 0;
     let blockedDeployments = 0;
-    for (const status of this.statuses.values()) {
-      if (status === "ready") readyDeployments += 1;
+    for (const readiness of this.statuses.values()) {
+      if (readiness.status === "ready") readyDeployments += 1;
       else blockedDeployments += 1;
     }
+    const installs = await this.options.installs?.summary();
     return {
       desiredDeployments: this.statuses.size,
       readyDeployments,
       blockedDeployments,
+      installedPackages: installs?.installedPackages ?? 0,
+      pendingInstalls: installs?.pendingInstalls ?? 0,
+      failedInstalls: installs?.failedInstalls ?? 0,
     };
   }
 
@@ -117,9 +133,9 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
     return {
       readiness: [...this.statuses.entries()]
         .sort(([left], [right]) => left.localeCompare(right))
-        .map(([deploymentId, status]) => ({
+        .map(([deploymentId, readiness]) => ({
           deploymentId,
-          status: status === "ready" ? "ready" : "setup-required",
+          ...readinessReport(readiness),
           observedAt,
         })),
     };
@@ -179,7 +195,13 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
     this.statuses = new Map(
       results
         .filter((result) => result.status !== "removed")
-        .map((result) => [result.deploymentId, result.status === "ready" ? "ready" : "blocked"]),
+        .map((result) => [
+          result.deploymentId,
+          {
+            status: result.status === "ready" ? "ready" as const : "blocked" as const,
+            ...(result.reason ? { reason: result.reason } : {}),
+          },
+        ]),
     );
 
     const connection = this.requireConnection();
@@ -187,6 +209,7 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
     for (const deployment of message.deployments) {
       const state = await this.options.setup.status(deployment.deploymentId);
       if (!state) continue;
+      const install = await this.options.installs?.status(deployment.deploymentId);
       await connection.send({
         version: EDGE_PROTOCOL_VERSION,
         kind: "edge.setup-status",
@@ -196,6 +219,7 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
         setupSchemaVersion: state.setupSchemaVersion,
         status: state.status,
         grantRefs: state.grantRefs,
+        ...(install ? { install: installReport(install) } : {}),
       });
     }
     const blockedDeploymentIds = results
@@ -247,4 +271,25 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
     if (!this.connection) throw edgeError("EDGE_UNAVAILABLE", "Edge runtime is not connected.");
     return this.connection;
   }
+}
+
+function readinessReport(
+  readiness: DeploymentReadiness,
+): Pick<EdgeReadinessReport, "status" | "reasonCategory"> {
+  if (readiness.status === "ready") return { status: "ready" };
+  if (readiness.reason?.startsWith("install-")) {
+    return { status: "install-required", reasonCategory: readiness.reason };
+  }
+  return { status: "setup-required" };
+}
+
+/** Project local install state onto the bounded, non-sensitive wire report. */
+function installReport(state: LocalInstallState): EdgeInstallStatusReport {
+  return {
+    status: state.status,
+    packageId: state.packageId,
+    installDigest: state.installDigest,
+    ...(state.resolvedVersion ? { resolvedVersion: state.resolvedVersion } : {}),
+    ...(state.reasonCategory ? { reasonCategory: state.reasonCategory } : {}),
+  };
 }

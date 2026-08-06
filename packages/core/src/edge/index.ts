@@ -211,14 +211,19 @@ export {
 } from "./protocol.js";
 
 export {
+  EDGE_DEPLOYMENT_READINESS_STATUSES,
+  EDGE_INSTALL_REASON_CATEGORIES,
   EDGE_PROTOCOL_MIN_VERSION,
   EDGE_PROTOCOL_VERSION,
   EDGE_SUPPORTED_PROTOCOL_VERSIONS,
   parseEdgeProtocolMessage,
   selectHighestMutualEdgeProtocolVersion,
+  validateEdgeInstallStatusReport,
   validateEdgePresenceReport,
 } from "./controlProtocol.js";
 export type {
+  EdgeInstallReportStatus,
+  EdgeInstallStatusReport,
   EdgeAgentMessage,
   EdgeCapabilityManifestMessage,
   EdgeControlPlaneMessage,

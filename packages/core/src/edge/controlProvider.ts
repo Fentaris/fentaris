@@ -3,6 +3,7 @@
 import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { ProxyLocalHandle } from "../local/declarations.js";
 import type { ProxyContext } from "../types/proxy.js";
+import { EDGE_DEPLOYMENT_READINESS_STATUSES } from "./controlProtocol.js";
 import { edgeError, isEdgeError } from "./errors.js";
 import type {
   EdgeInventoryQuery,
@@ -118,7 +119,11 @@ export const EDGE_CONTROL_TOOL_SCHEMAS = Object.freeze({
       platforms: stringArray, pool: { type: "string", maxLength: 80 },
       statuses: { type: "array", maxItems: 4, items: { type: "string", enum: ["online", "stale", "offline", "revoked"] } },
       deploymentId: { type: "string", maxLength: 120 },
-      readiness: { type: "array", maxItems: 5, items: { type: "string", enum: ["ready", "setup-required", "blocked", "stale", "unavailable"] } },
+      readiness: {
+        type: "array",
+        maxItems: EDGE_DEPLOYMENT_READINESS_STATUSES.length,
+        items: { type: "string", enum: [...EDGE_DEPLOYMENT_READINESS_STATUSES] },
+      },
       include: { type: "array", maxItems: 5, uniqueItems: true, items: { type: "string", enum: ["description", "tags", "observed", "pools", "readiness"] } },
       limit: { type: "integer", minimum: 1, maximum: 100 }, cursor: { type: "string", maxLength: 2048 },
     },

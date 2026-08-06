@@ -22,6 +22,24 @@ export const EDGE_SUPPORTED_PROTOCOL_VERSIONS = Object.freeze([2, 1] as const);
 /** A negotiated Edge control protocol version. @pk */
 export type EdgeProtocolVersion = 1 | 2;
 
+/** Every public deployment readiness status, in stable order. @pk */
+export const EDGE_DEPLOYMENT_READINESS_STATUSES: readonly EdgeDeploymentReadinessStatus[] = Object.freeze([
+  "ready",
+  "setup-required",
+  "install-required",
+  "blocked",
+  "stale",
+  "unavailable",
+]);
+
+/** Bounded managed-install reason categories reported by an edge. @pk */
+export const EDGE_INSTALL_REASON_CATEGORIES: readonly string[] = Object.freeze([
+  "install-pending",
+  "install-failed",
+  "install-denied",
+  "install-verification-failed",
+]);
+
 /** Common trusted routing claims carried by edge control messages. @pk */
 export interface EdgeProtocolClaims {
   readonly tenantId: string;
@@ -101,6 +119,23 @@ export interface EdgeDesiredStateAckMessage extends EdgeProtocolClaims {
   readonly blockedDeploymentIds?: readonly string[];
 }
 
+/** Managed-install lifecycle state reported by an edge. @pk */
+export type EdgeInstallReportStatus = "installing" | "installed" | "failed" | "denied";
+
+/**
+ * Non-sensitive managed-install progress for one deployment. Carries package
+ * identity and a bounded reason category only; local directories, caches, and
+ * package-manager output never leave the device.
+ * @pk
+ */
+export interface EdgeInstallStatusReport {
+  readonly status: EdgeInstallReportStatus;
+  readonly packageId: string;
+  readonly installDigest: string;
+  readonly resolvedVersion?: string;
+  readonly reasonCategory?: string;
+}
+
 export interface EdgeSetupStatusMessage extends EdgeProtocolClaims {
   readonly version: EdgeProtocolVersion;
   readonly kind: "edge.setup-status";
@@ -109,6 +144,8 @@ export interface EdgeSetupStatusMessage extends EdgeProtocolClaims {
   readonly setupSchemaVersion: number;
   readonly status: "pending" | "ready" | "denied" | "revoked";
   readonly grantRefs?: Readonly<Record<string, string>>;
+  /** Managed-install progress when the deployment declares an install plan. @pk */
+  readonly install?: EdgeInstallStatusReport;
 }
 
 export interface EdgeCapabilityManifestMessage extends EdgeProtocolClaims {
@@ -215,10 +252,27 @@ export function validateEdgePresenceReport(message: EdgePresenceReportMessage): 
   }
   for (const readiness of message.readiness) {
     validateBoundedString(readiness.deploymentId, "readiness.deploymentId", 160);
-    if (!["ready", "setup-required", "blocked", "stale", "unavailable"].includes(readiness.status)) {
+    if (!EDGE_DEPLOYMENT_READINESS_STATUSES.includes(readiness.status)) {
       throw new TypeError("readiness.status is invalid");
     }
     validateTimestamp(readiness.observedAt, "readiness.observedAt");
+  }
+}
+
+/** Validate a bounded, non-sensitive managed-install status report. @pk */
+export function validateEdgeInstallStatusReport(value: unknown): void {
+  if (!value || typeof value !== "object") throw new TypeError("install report must be an object");
+  const report = value as Record<string, unknown>;
+  if (!["installing", "installed", "failed", "denied"].includes(report.status as string)) {
+    throw new TypeError("install.status is invalid");
+  }
+  validateBoundedString(report.packageId, "install.packageId", 280);
+  validateBoundedString(report.installDigest, "install.installDigest", 128);
+  if (report.resolvedVersion !== undefined) {
+    validateBoundedString(report.resolvedVersion, "install.resolvedVersion", 64);
+  }
+  if (report.reasonCategory !== undefined && !EDGE_INSTALL_REASON_CATEGORIES.includes(report.reasonCategory as string)) {
+    throw new TypeError("install.reasonCategory is invalid");
   }
 }
 
@@ -242,6 +296,8 @@ function validateProtocolShell(candidate: Record<string, unknown>): void {
   if (candidate.kind === "edge.presence") {
     if (candidate.version !== 2) throw new TypeError("edge.presence requires protocol version 2");
     validateEdgePresenceReport(candidate as unknown as EdgePresenceReportMessage);
+  } else if (candidate.kind === "edge.setup-status") {
+    if (candidate.install !== undefined) validateEdgeInstallStatusReport(candidate.install);
   } else if (candidate.kind === "edge.heartbeat") {
     validateTimestamp(candidate.sentAt, "sentAt");
     if (candidate.capacity !== undefined && candidate.version !== 2) throw new TypeError("capacity requires protocol version 2");

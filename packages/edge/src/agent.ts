@@ -32,6 +32,10 @@ import {
   type EdgeRuntimeSummaryProvider,
 } from "./runtime.js";
 import {
+  ManagedInstallManager,
+  type LocalInstallDatabase,
+} from "./install.js";
+import {
   LocalSetupManager,
   NodeTerminalSetupPrompter,
   TerminalSetupProvider,
@@ -117,6 +121,9 @@ export class EdgeAgent {
       desiredDeployments: 0,
       readyDeployments: 0,
       blockedDeployments: 0,
+      installedPackages: 0,
+      pendingInstalls: 0,
+      failedInstalls: 0,
     };
     return {
       ...summary,
@@ -332,6 +339,15 @@ export function createDefaultEdgeAgent(options: DefaultAgentOptions): EdgeAgent 
     hostnameLabel: hostname,
   });
   const runtimeRef: { current?: EdgeAgentRuntime } = {};
+  const executablePolicy = new ExecutableAllowlistPolicy({
+    executables: options.executableAllowlist ?? environmentList("FENTARIS_EDGE_ALLOWED_EXECUTABLES"),
+    packages: options.packageAllowlist ?? environmentList("FENTARIS_EDGE_ALLOWED_PACKAGES"),
+  });
+  const installs = new ManagedInstallManager({
+    store: new ProtectedJsonStore<LocalInstallDatabase>(path.join(platform.paths.dataDir, "installs.json")),
+    root: path.join(platform.paths.dataDir, "installs"),
+    allowInstall: (plan) => executablePolicy.allowInstall(plan),
+  });
   const setup = new LocalSetupManager({
     store: new ProtectedJsonStore<LocalGrantDatabase>(path.join(platform.paths.dataDir, "grants.json")),
     credentials: platform.credentialStore,
@@ -340,14 +356,13 @@ export function createDefaultEdgeAgent(options: DefaultAgentOptions): EdgeAgent 
       const activeSupervisor = supervisor;
       await Promise.all(deploymentIds.map((deploymentId) => activeSupervisor.blockDeployment(deploymentId)));
     },
+    resolveManagedCommand: (requirement) => installs.resolveCommand(requirement),
   });
   const supervisor = new EdgeWorkloadSupervisor({
     setup,
     factory: new StdioEdgeWorkloadFactory(),
-    executablePolicy: new ExecutableAllowlistPolicy({
-      executables: options.executableAllowlist ?? environmentList("FENTARIS_EDGE_ALLOWED_EXECUTABLES"),
-      packages: options.packageAllowlist ?? environmentList("FENTARIS_EDGE_ALLOWED_PACKAGES"),
-    }),
+    installs,
+    executablePolicy,
     reportCapabilityManifest: (deploymentId, recipeDigest, manifest) => {
       if (!runtimeRef.current) {
         throw edgeError("EDGE_UNAVAILABLE", "Edge runtime is not initialized.");
@@ -355,7 +370,7 @@ export function createDefaultEdgeAgent(options: DefaultAgentOptions): EdgeAgent 
       return runtimeRef.current.reportCapabilityManifest(deploymentId, recipeDigest, manifest);
     },
   });
-  const runtime = new EdgeAgentRuntime({ setup, supervisor });
+  const runtime = new EdgeAgentRuntime({ setup, supervisor, installs });
   runtimeRef.current = runtime;
   return new EdgeAgent({
     enrollment,

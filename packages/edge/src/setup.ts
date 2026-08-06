@@ -6,7 +6,9 @@ import { createInterface } from "node:readline/promises";
 import {
   LAUNCH_RECIPE_VERSION,
   edgeError,
+  edgeInstallPackageId,
   isRuntimeValueToken,
+  type EdgeInstallPlan,
   type LaunchRecipe,
   type SetupField,
   type SetupFieldAccess,
@@ -75,6 +77,13 @@ export class TerminalSetupProvider implements LocalSetupProvider {
   constructor(private readonly prompt: TerminalSetupPrompter) {}
 
   approveWorkload(requirement: DesiredSetupRequirement): Promise<boolean> {
+    const install = requirement.recipe.install;
+    if (install) {
+      return this.prompt.confirm(
+        `Allow deployment "${requirement.deploymentId}" to install ${edgeInstallPackageId(install)} `
+        + `and run recipe ${requirement.recipe.digest}?`,
+      );
+    }
     return this.prompt.confirm(
       `Allow deployment "${requirement.deploymentId}" to run recipe ${requirement.recipe.digest}?`,
     );
@@ -134,6 +143,8 @@ export interface CompiledLocalLaunchPlan {
   readonly command: string;
   readonly args: readonly string[];
   readonly env: Readonly<Record<string, string>>;
+  /** Install plan whose managed directory provided `command`, when any. */
+  readonly install?: EdgeInstallPlan;
 }
 
 export interface LocalSetupManagerOptions {
@@ -143,6 +154,12 @@ export interface LocalSetupManagerOptions {
   readonly now?: () => number;
   readonly grantId?: () => string;
   readonly onGrantRevoked?: (grantId: string, deploymentIds: readonly string[]) => void | Promise<void>;
+  /**
+   * Resolves the absolute executable of a verified managed install. Required
+   * for deployments whose recipe declares an install plan; without it such a
+   * recipe cannot be compiled, because the device never falls back to `PATH`.
+   */
+  readonly resolveManagedCommand?: (requirement: DesiredSetupRequirement) => Promise<string>;
   readonly telemetry?: EdgeTelemetry;
 }
 
@@ -288,13 +305,26 @@ export class LocalSetupManager {
     const args = await Promise.all(requirement.recipe.args.map(resolve));
     const env: Record<string, string> = {};
     for (const [name, value] of Object.entries(requirement.recipe.env)) env[name] = await resolve(value);
+    const command = await this.resolveCommand(requirement);
     return {
       deploymentId: requirement.deploymentId,
       recipeDigest: requirement.recipe.digest,
-      command: requirement.recipe.command,
+      command,
       args,
       env,
+      ...(requirement.recipe.install ? { install: requirement.recipe.install } : {}),
     };
+  }
+
+  private async resolveCommand(requirement: DesiredSetupRequirement): Promise<string> {
+    const install = requirement.recipe.install;
+    if (!install) return requirement.recipe.command;
+    if (!this.options.resolveManagedCommand) {
+      throw edgeError("EDGE_SETUP_REQUIRED", "This agent cannot run managed-install deployments.", {
+        details: { deploymentId: requirement.deploymentId, package: edgeInstallPackageId(install) },
+      });
+    }
+    return this.options.resolveManagedCommand(requirement);
   }
 
   /** Resolve a child path while rechecking canonical containment and access. */

@@ -3,6 +3,7 @@ import {
   edgeError,
   isEdgeError,
   type EdgeErrorCode,
+  type EdgeInstallPlan,
   type EdgeMcpCancelEnvelope,
   type EdgeMcpErrorEnvelope,
   type EdgeMcpOperation,
@@ -11,6 +12,7 @@ import {
   type EdgeTelemetry,
 } from "@fentaris/core";
 import path from "node:path";
+import type { ManagedInstallManager } from "./install.js";
 import {
   type CompiledLocalLaunchPlan,
   type DesiredSetupRequirement,
@@ -46,11 +48,14 @@ export interface SupervisedDesiredDeployment {
 
 export interface EdgeWorkloadPolicy {
   allow(plan: CompiledLocalLaunchPlan): boolean | Promise<boolean>;
+  /** Evaluated before any registry fetch for a managed installation. */
+  allowInstall?(plan: EdgeInstallPlan): boolean | Promise<boolean>;
 }
 
 export interface EdgeWorkloadSupervisorOptions {
   readonly setup: LocalSetupManager;
   readonly factory: EdgeWorkloadFactory;
+  readonly installs?: ManagedInstallManager;
   readonly executablePolicy?: EdgeWorkloadPolicy;
   readonly maxConcurrentWorkloads?: number;
   readonly startupTimeoutMs?: number;
@@ -140,12 +145,22 @@ export class EdgeWorkloadSupervisor {
         await this.stopDeployment(deploymentId);
         results.push({ deploymentId, status: "blocked", reason: `setup-${state.status}` });
         await this.emitLifecycle(deploymentId, `blocked-setup-${state.status}`);
-      } else {
-        this.blocked.delete(deploymentId);
-        results.push({ deploymentId, status: "ready" });
-        await this.emitLifecycle(deploymentId, "ready");
+        continue;
       }
+      const install = await this.options.installs?.ensure(deployment.requirement);
+      if (install && install.status !== "installed") {
+        this.blocked.add(deploymentId);
+        await this.stopDeployment(deploymentId);
+        const reason = install.reasonCategory ?? "install-pending";
+        results.push({ deploymentId, status: "blocked", reason });
+        await this.emitLifecycle(deploymentId, `blocked-${reason}`);
+        continue;
+      }
+      this.blocked.delete(deploymentId);
+      results.push({ deploymentId, status: "ready" });
+      await this.emitLifecycle(deploymentId, "ready");
     }
+    await this.options.installs?.prune([...next.keys()]);
     return results;
   }
 
@@ -354,11 +369,20 @@ export class ExecutableAllowlistPolicy implements EdgeWorkloadPolicy {
   }
 
   allow(plan: CompiledLocalLaunchPlan): boolean {
+    if (plan.install) return this.allowInstall(plan.install);
     const executable = path.basename(plan.command);
     if (this.executables.has(plan.command) || this.executables.has(executable)) return true;
     if (!["npx", "pnpm", "yarn", "bunx"].includes(executable)) return false;
     const packageName = plan.args.find((argument) => !argument.startsWith("-"));
     return packageName !== undefined && this.packages.has(packageName);
+  }
+
+  /**
+   * A managed install is judged by package name, because its resolved command
+   * is a Fentaris-owned path rather than an operator-declared executable.
+   */
+  allowInstall(plan: EdgeInstallPlan): boolean {
+    return this.packages.has(plan.package);
   }
 }
 

@@ -6,6 +6,7 @@ export type EdgeRuntimeEventName =
   | "edge.connection.generation"
   | "edge.desired.reconciled"
   | "edge.setup.transition"
+  | "edge.install.transition"
   | "edge.workload.lifecycle"
   | "edge.request.started"
   | "edge.request.completed"
