@@ -243,7 +243,7 @@ Write the log entry to the console.
 
 @fentaris/core / DefaultEdgeControlPlaneService
 
-Defined in: packages/core/src/edge/management.ts:78
+Defined in: packages/core/src/edge/management.ts:79
 
 Reference service composing replaceable registry and connection contracts.
 
@@ -255,9 +255,9 @@ Reference service composing replaceable registry and connection contracts.
 
 ### Constructor
 
-> **new DefaultEdgeControlPlaneService**(`devices`, `connections`): `DefaultEdgeControlPlaneService`
+> **new DefaultEdgeControlPlaneService**(`devices`, `connections`, `terminator`): `DefaultEdgeControlPlaneService`
 
-Defined in: packages/core/src/edge/management.ts:79
+Defined in: packages/core/src/edge/management.ts:80
 
 #### Parameters
 
@@ -269,6 +269,10 @@ Defined in: packages/core/src/edge/management.ts:79
 
 `EdgeConnectionStore`
 
+##### terminator
+
+`EdgeConnectionTerminator`
+
 #### Returns
 
 `DefaultEdgeControlPlaneService`
@@ -279,7 +283,7 @@ Defined in: packages/core/src/edge/management.ts:79
 
 > **disconnect**(`context`, `deviceName`): `Promise`\<`EdgeManagementResult`\<`EdgeManagedDeviceView`\>\>
 
-Defined in: packages/core/src/edge/management.ts:140
+Defined in: packages/core/src/edge/management.ts:164
 
 #### Parameters
 
@@ -303,7 +307,7 @@ Defined in: packages/core/src/edge/management.ts:140
 
 > **get**(`context`, `deviceName`): `Promise`\<`EdgeManagementResult`\<`EdgeManagedDeviceView`\>\>
 
-Defined in: packages/core/src/edge/management.ts:136
+Defined in: packages/core/src/edge/management.ts:160
 
 #### Parameters
 
@@ -327,7 +331,7 @@ Defined in: packages/core/src/edge/management.ts:136
 
 > **join**(`request`): `Promise`\<`EdgeManagementResult`\<`EdgeManagedDeviceView`\>\>
 
-Defined in: packages/core/src/edge/management.ts:84
+Defined in: packages/core/src/edge/management.ts:86
 
 #### Parameters
 
@@ -347,7 +351,7 @@ Defined in: packages/core/src/edge/management.ts:84
 
 > **list**(`context`, `options?`): `Promise`\<`EdgeManagementPage`\<`EdgeManagedDeviceView`\>\>
 
-Defined in: packages/core/src/edge/management.ts:121
+Defined in: packages/core/src/edge/management.ts:123
 
 #### Parameters
 
@@ -371,7 +375,7 @@ Defined in: packages/core/src/edge/management.ts:121
 
 > **revoke**(`context`, `deviceName`): `Promise`\<`EdgeManagementResult`\<`EdgeManagedDeviceView`\>\>
 
-Defined in: packages/core/src/edge/management.ts:149
+Defined in: packages/core/src/edge/management.ts:178
 
 #### Parameters
 
@@ -395,7 +399,7 @@ Defined in: packages/core/src/edge/management.ts:149
 
 > **update**(`context`, `deviceName`, `update`): `Promise`\<`EdgeManagementResult`\<`EdgeManagedDeviceView`\>\>
 
-Defined in: packages/core/src/edge/management.ts:111
+Defined in: packages/core/src/edge/management.ts:113
 
 #### Parameters
 
@@ -2001,7 +2005,7 @@ Transports that do not need proxy context may omit it.
 
 @fentaris/core / EdgeWebSocketGateway
 
-Defined in: packages/core/src/edge/gateway.ts:97
+Defined in: packages/core/src/edge/gateway.ts:98
 
 Reference single-process outbound WebSocket gateway.
 
@@ -2012,6 +2016,7 @@ generation, authorization, and protocol semantics.
 ## Implements
 
 - `EdgeTransportChannel`
+- `EdgeConnectionTerminator`
 
 ## Constructors
 
@@ -2019,7 +2024,7 @@ generation, authorization, and protocol semantics.
 
 > **new EdgeWebSocketGateway**(`options`): `EdgeWebSocketGateway`
 
-Defined in: packages/core/src/edge/gateway.ts:107
+Defined in: packages/core/src/edge/gateway.ts:108
 
 #### Parameters
 
@@ -2037,7 +2042,7 @@ Defined in: packages/core/src/edge/gateway.ts:107
 
 > **accept**(`socket`, `credential`): `Promise`\<`EdgeConnectionRecord`\>
 
-Defined in: packages/core/src/edge/gateway.ts:122
+Defined in: packages/core/src/edge/gateway.ts:123
 
 Accept an outbound edge socket and complete hello/authentication/protocol
 negotiation before exposing the connection.
@@ -2056,11 +2061,45 @@ negotiation before exposing the connection.
 
 `Promise`\<`EdgeConnectionRecord`\>
 
+### disconnect()
+
+> **disconnect**(`tenantId`, `edgeNodeId`, `connectionGeneration`, `reason`): `Promise`\<`void`\>
+
+Defined in: packages/core/src/edge/gateway.ts:191
+
+Close and clean the exact authenticated connection generation.
+
+#### Parameters
+
+##### tenantId
+
+`string`
+
+##### edgeNodeId
+
+`string`
+
+##### connectionGeneration
+
+`number`
+
+##### reason
+
+`"revoked"` \| `"operator-disconnect"`
+
+#### Returns
+
+`Promise`\<`void`\>
+
+#### Implementation of
+
+`EdgeConnectionTerminator`.`disconnect`
+
 ### onMessage()
 
 > **onMessage**(`handler`): () => `void`
 
-Defined in: packages/core/src/edge/gateway.ts:184
+Defined in: packages/core/src/edge/gateway.ts:185
 
 #### Parameters
 
@@ -2080,7 +2119,7 @@ Defined in: packages/core/src/edge/gateway.ts:184
 
 > **publishDesiredState**(`state`): `Promise`\<`"published"` \| `"unchanged"`\>
 
-Defined in: packages/core/src/edge/gateway.ts:193
+Defined in: packages/core/src/edge/gateway.ts:207
 
 Publish desired state idempotently. A repeated identical version is stored
 as unchanged and is not resent; stale or conflicting versions are rejected.
@@ -2099,7 +2138,7 @@ as unchanged and is not resent; stale or conflicting versions are rejected.
 
 > **send**(`message`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/gateway.ts:175
+Defined in: packages/core/src/edge/gateway.ts:176
 
 Send a correlated MCP request/cancellation to its authenticated edge.
 
@@ -2121,7 +2160,7 @@ Send a correlated MCP request/cancellation to its authenticated edge.
 
 > **sweepExpiredConnections**(): `Promise`\<readonly `EdgeConnectionRecord`[]\>
 
-Defined in: packages/core/src/edge/gateway.ts:217
+Defined in: packages/core/src/edge/gateway.ts:231
 
 Close connections whose authenticated heartbeat expired.
 
@@ -4407,7 +4446,7 @@ Defined in: packages/core/src/edge/capabilityCache.ts:46
 
 @fentaris/core / InMemoryEdgeCapabilityManifestStore
 
-Defined in: packages/core/src/edge/controlPlane.ts:315
+Defined in: packages/core/src/edge/controlPlane.ts:325
 
 Reference single-process capability-manifest store.
 
@@ -4431,7 +4470,7 @@ Reference single-process capability-manifest store.
 
 > **delete**(`tenantId`, `edgeNodeId`, `deploymentId`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:323
+Defined in: packages/core/src/edge/controlPlane.ts:333
 
 #### Parameters
 
@@ -4459,7 +4498,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:323
 
 > **get**(`tenantId`, `edgeNodeId`, `deploymentId`): `Promise`\<`EdgeCapabilityManifestMessage` \| `undefined`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:317
+Defined in: packages/core/src/edge/controlPlane.ts:327
 
 #### Parameters
 
@@ -4487,7 +4526,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:317
 
 > **put**(`manifest`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:320
+Defined in: packages/core/src/edge/controlPlane.ts:330
 
 #### Parameters
 
@@ -4509,7 +4548,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:320
 
 @fentaris/core / InMemoryEdgeChannelBroker
 
-Defined in: packages/core/src/edge/controlPlane.ts:355
+Defined in: packages/core/src/edge/controlPlane.ts:365
 
 Reference single-process pub/sub broker.
 
@@ -4533,7 +4572,7 @@ Reference single-process pub/sub broker.
 
 > `readonly` **diagnostics**: `EdgeAdapterDiagnostics` = `IN_MEMORY_EDGE_ADAPTER_DIAGNOSTICS`
 
-Defined in: packages/core/src/edge/controlPlane.ts:356
+Defined in: packages/core/src/edge/controlPlane.ts:366
 
 #### Implementation of
 
@@ -4545,7 +4584,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:356
 
 > **publish**(`channel`, `message`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:358
+Defined in: packages/core/src/edge/controlPlane.ts:368
 
 #### Parameters
 
@@ -4569,7 +4608,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:358
 
 > **subscribe**(`channel`, `handler`): () => `void`
 
-Defined in: packages/core/src/edge/controlPlane.ts:361
+Defined in: packages/core/src/edge/controlPlane.ts:371
 
 #### Parameters
 
@@ -4745,7 +4784,7 @@ Defined in: packages/core/src/edge/inventory.ts:346
 
 @fentaris/core / InMemoryEdgeConnectionStore
 
-Defined in: packages/core/src/edge/controlPlane.ts:329
+Defined in: packages/core/src/edge/controlPlane.ts:339
 
 Reference single-process active-connection store.
 
@@ -4769,7 +4808,7 @@ Reference single-process active-connection store.
 
 > **bind**(`connection`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:334
+Defined in: packages/core/src/edge/controlPlane.ts:344
 
 #### Parameters
 
@@ -4789,7 +4828,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:334
 
 > **get**(`tenantId`, `edgeNodeId`): `Promise`\<`EdgeConnectionRecord` \| `undefined`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:331
+Defined in: packages/core/src/edge/controlPlane.ts:341
 
 #### Parameters
 
@@ -4813,7 +4852,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:331
 
 > **heartbeat**(`tenantId`, `edgeNodeId`, `generation`, `at`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:341
+Defined in: packages/core/src/edge/controlPlane.ts:351
 
 #### Parameters
 
@@ -4845,7 +4884,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:341
 
 > **remove**(`tenantId`, `edgeNodeId`, `generation`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:348
+Defined in: packages/core/src/edge/controlPlane.ts:358
 
 #### Parameters
 
@@ -4875,7 +4914,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:348
 
 @fentaris/core / InMemoryEdgeDesiredStateStore
 
-Defined in: packages/core/src/edge/controlPlane.ts:266
+Defined in: packages/core/src/edge/controlPlane.ts:276
 
 Reference single-process desired-state store.
 
@@ -4899,7 +4938,7 @@ Reference single-process desired-state store.
 
 > **acknowledge**(`ack`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:290
+Defined in: packages/core/src/edge/controlPlane.ts:300
 
 #### Parameters
 
@@ -4919,7 +4958,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:290
 
 > **acknowledgedVersion**(`tenantId`, `edgeNodeId`): `Promise`\<`number` \| `undefined`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:298
+Defined in: packages/core/src/edge/controlPlane.ts:308
 
 #### Parameters
 
@@ -4943,7 +4982,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:298
 
 > **get**(`tenantId`, `edgeNodeId`): `Promise`\<`EdgeDesiredStateMessage` \| `undefined`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:270
+Defined in: packages/core/src/edge/controlPlane.ts:280
 
 #### Parameters
 
@@ -4967,7 +5006,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:270
 
 > **publish**(`state`): `Promise`\<`"published"` \| `"unchanged"`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:274
+Defined in: packages/core/src/edge/controlPlane.ts:284
 
 #### Parameters
 
@@ -4989,7 +5028,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:274
 
 @fentaris/core / InMemoryEdgeDeviceRegistry
 
-Defined in: packages/core/src/edge/controlPlane.ts:140
+Defined in: packages/core/src/edge/controlPlane.ts:150
 
 Reference single-process device registry. Not suitable for multi-instance deployments.
 
@@ -5013,7 +5052,7 @@ Reference single-process device registry. Not suitable for multi-instance deploy
 
 > `readonly` **diagnostics**: `EdgeAdapterDiagnostics` = `IN_MEMORY_EDGE_ADAPTER_DIAGNOSTICS`
 
-Defined in: packages/core/src/edge/controlPlane.ts:141
+Defined in: packages/core/src/edge/controlPlane.ts:151
 
 #### Implementation of
 
@@ -5025,7 +5064,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:141
 
 > **get**(`tenantId`, `edgeNodeId`): `Promise`\<`EdgeDeviceRecord` \| `undefined`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:144
+Defined in: packages/core/src/edge/controlPlane.ts:154
 
 #### Parameters
 
@@ -5049,7 +5088,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:144
 
 > **getByName**(`tenantId`, `name`, `at?`): `Promise`\<`EdgeDeviceRecord` \| `undefined`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:154
+Defined in: packages/core/src/edge/controlPlane.ts:164
 
 #### Parameters
 
@@ -5077,7 +5116,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:154
 
 > **list**(`tenantId`, `options?`): `Promise`\<`EdgeInventoryListPage`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:211
+Defined in: packages/core/src/edge/controlPlane.ts:221
 
 #### Parameters
 
@@ -5101,7 +5140,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:211
 
 > **put**(`device`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:148
+Defined in: packages/core/src/edge/controlPlane.ts:158
 
 #### Parameters
 
@@ -5121,7 +5160,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:148
 
 > **revoke**(`tenantId`, `edgeNodeId`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:246
+Defined in: packages/core/src/edge/controlPlane.ts:256
 
 #### Parameters
 
@@ -5145,7 +5184,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:246
 
 > **updateConnection**(`tenantId`, `edgeNodeId`, `generation`, `lastSeenAt`): `Promise`\<`EdgeDeviceRecord`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:233
+Defined in: packages/core/src/edge/controlPlane.ts:243
 
 #### Parameters
 
@@ -5177,7 +5216,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:233
 
 > **updateInventory**(`tenantId`, `edgeNodeId`, `update`): `Promise`\<`EdgeInventoryRecord`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:165
+Defined in: packages/core/src/edge/controlPlane.ts:175
 
 #### Parameters
 
@@ -5829,7 +5868,7 @@ Defined in: packages/core/src/edge/inventory.ts:289
 
 @fentaris/core / InMemoryEdgeSetupStatusStore
 
-Defined in: packages/core/src/edge/controlPlane.ts:304
+Defined in: packages/core/src/edge/controlPlane.ts:314
 
 Reference single-process setup-status store.
 
@@ -5853,7 +5892,7 @@ Reference single-process setup-status store.
 
 > **get**(`tenantId`, `edgeNodeId`, `deploymentId`): `Promise`\<`EdgeSetupStatusMessage` \| `undefined`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:306
+Defined in: packages/core/src/edge/controlPlane.ts:316
 
 #### Parameters
 
@@ -5881,7 +5920,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:306
 
 > **put**(`status`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:309
+Defined in: packages/core/src/edge/controlPlane.ts:319
 
 #### Parameters
 
@@ -13963,7 +14002,7 @@ Create an upstream MCP server declaration.
 
 > **normalizeEdgeDeviceName**(`name`): `string`
 
-Defined in: packages/core/src/edge/controlPlane.ts:377
+Defined in: packages/core/src/edge/controlPlane.ts:387
 
 Normalize a tenant-scoped public Edge name for collision checks.
 
@@ -14345,7 +14384,7 @@ Runtime profiler, event, sink, and runtime error APIs.
 
 > **requireDevice**(`selector`, `context`, `resolver`): `Promise`\<`DeviceResolution`\>
 
-Defined in: packages/core/src/edge/placement.ts:430
+Defined in: packages/core/src/edge/placement.ts:432
 
 Resolve a device selector and return a structured `EDGE_UNAVAILABLE` error
 when no eligible device is found. Never leaks private device inventory.
@@ -14376,7 +14415,7 @@ when no eligible device is found. Never leaks private device inventory.
 
 > **resolveDeviceSelector**(`selector`, `context`, `resolver`): `Promise`\<`DeviceResolution` \| `null`\>
 
-Defined in: packages/core/src/edge/placement.ts:382
+Defined in: packages/core/src/edge/placement.ts:384
 
 Resolve a DeviceSelector against a DeviceResolver.
 
@@ -14968,7 +15007,7 @@ Defined in: packages/core/src/edge/inventory.ts:18
 
 @fentaris/core / AuthenticatedEdgeIdentity
 
-Defined in: packages/core/src/edge/gateway.ts:38
+Defined in: packages/core/src/edge/gateway.ts:39
 
 Trusted identity returned after validating a device-bound credential/proof.
 
@@ -14978,19 +15017,19 @@ Trusted identity returned after validating a device-bound credential/proof.
 
 > `readonly` **credentialId**: `string`
 
-Defined in: packages/core/src/edge/gateway.ts:41
+Defined in: packages/core/src/edge/gateway.ts:42
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/gateway.ts:40
+Defined in: packages/core/src/edge/gateway.ts:41
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/gateway.ts:39
+Defined in: packages/core/src/edge/gateway.ts:40
 
   </Accordion>
 
@@ -15119,6 +15158,14 @@ Defined in: packages/core/src/edge/placement.ts:336
 
 Control-plane alias, when known.
 
+### connectionGeneration?
+
+> `readonly` `optional` **connectionGeneration?**: `number`
+
+Defined in: packages/core/src/edge/placement.ts:338
+
+Active generation to pin after a current-state selection revalidation.
+
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
@@ -15131,7 +15178,7 @@ Stable opaque edge node id backing the device key.
 
 > `readonly` `optional` **selection?**: `EdgeSelectionExplanation`
 
-Defined in: packages/core/src/edge/placement.ts:338
+Defined in: packages/core/src/edge/placement.ts:340
 
 Redacted explanation when declarative selection chose the device.
 
@@ -15141,7 +15188,7 @@ Redacted explanation when declarative selection chose the device.
 
 @fentaris/core / DeviceResolver
 
-Defined in: packages/core/src/edge/placement.ts:351
+Defined in: packages/core/src/edge/placement.ts:353
 
 Control-plane interface that maps logical selectors onto enrolled devices.
 
@@ -15155,9 +15202,9 @@ fallback selectors can proceed.
 
 ### resolveDeclarativeDevice()?
 
-> `optional` **resolveDeclarativeDevice**(`selection`, `context`): `Promise`\<`DeviceResolution` \| `null`\>
+> `optional` **resolveDeclarativeDevice**(`selection`, `context`): `Promise`\<`DeviceResolution` & `object` \| `null`\>
 
-Defined in: packages/core/src/edge/placement.ts:359
+Defined in: packages/core/src/edge/placement.ts:361
 
 Resolve typed requirements/preferences against the current authorized inventory.
 
@@ -15173,13 +15220,13 @@ Resolve typed requirements/preferences against the current authorized inventory.
 
 #### Returns
 
-`Promise`\<`DeviceResolution` \| `null`\>
+`Promise`\<`DeviceResolution` & `object` \| `null`\>
 
 ### resolveNamedAlias()
 
 > **resolveNamedAlias**(`alias`, `context`): `Promise`\<`DeviceResolution` \| `null`\>
 
-Defined in: packages/core/src/edge/placement.ts:368
+Defined in: packages/core/src/edge/placement.ts:370
 
 Resolve a control-plane named alias to a device.
 
@@ -15201,7 +15248,7 @@ Resolve a control-plane named alias to a device.
 
 > **resolvePool**(`pool`, `strategy`, `context`): `Promise`\<`DeviceResolution` \| `null`\>
 
-Defined in: packages/core/src/edge/placement.ts:370
+Defined in: packages/core/src/edge/placement.ts:372
 
 Resolve one eligible device from a shared pool using `strategy`.
 
@@ -15225,9 +15272,9 @@ Resolve one eligible device from a shared pool using `strategy`.
 
 ### resolveSelectedDevice()?
 
-> `optional` **resolveSelectedDevice**(`edgeNodeId`, `inventoryVersion`, `context`): `Promise`\<`DeviceResolution` \| `null`\>
+> `optional` **resolveSelectedDevice**(`edgeNodeId`, `inventoryVersion`, `context`): `Promise`\<`DeviceResolution` & `object` \| `null`\>
 
-Defined in: packages/core/src/edge/placement.ts:353
+Defined in: packages/core/src/edge/placement.ts:355
 
 Revalidate and resolve a durable pre-pin selection by opaque node id.
 
@@ -15247,13 +15294,13 @@ Revalidate and resolve a durable pre-pin selection by opaque node id.
 
 #### Returns
 
-`Promise`\<`DeviceResolution` \| `null`\>
+`Promise`\<`DeviceResolution` & `object` \| `null`\>
 
 ### resolveSessionDevice()?
 
 > `optional` **resolveSessionDevice**(`context`): `Promise`\<`DeviceResolution` \| `null`\>
 
-Defined in: packages/core/src/edge/placement.ts:364
+Defined in: packages/core/src/edge/placement.ts:366
 
 Resolve the device requested during downstream session establishment.
 
@@ -15271,7 +15318,7 @@ Resolve the device requested during downstream session establishment.
 
 > `optional` **resolveUserDefaultDevice**(`context`): `Promise`\<`DeviceResolution` \| `null`\>
 
-Defined in: packages/core/src/edge/placement.ts:366
+Defined in: packages/core/src/edge/placement.ts:368
 
 Resolve the subject's configured default device.
 
@@ -16071,7 +16118,7 @@ Defined in: packages/core/src/edge/inventory.ts:65
 
 @fentaris/core / EdgeChannelBroker
 
-Defined in: packages/core/src/edge/controlPlane.ts:133
+Defined in: packages/core/src/edge/controlPlane.ts:143
 
 Replaceable distributed edge channel broker contract.
 
@@ -16081,7 +16128,7 @@ Replaceable distributed edge channel broker contract.
 
 > `readonly` `optional` **diagnostics?**: `EdgeAdapterDiagnostics`
 
-Defined in: packages/core/src/edge/controlPlane.ts:134
+Defined in: packages/core/src/edge/controlPlane.ts:144
 
 ## Methods
 
@@ -16089,7 +16136,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:134
 
 > **publish**(`channel`, `message`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/controlPlane.ts:135
+Defined in: packages/core/src/edge/controlPlane.ts:145
 
 #### Parameters
 
@@ -16109,7 +16156,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:135
 
 > **subscribe**(`channel`, `handler`): () => `void`
 
-Defined in: packages/core/src/edge/controlPlane.ts:136
+Defined in: packages/core/src/edge/controlPlane.ts:146
 
 #### Parameters
 
@@ -16599,6 +16646,46 @@ Defined in: packages/core/src/edge/controlPlane.ts:129
 
   </Accordion>
 
+  <Accordion title="Core exports: interfaces/EdgeConnectionTerminator">
+
+@fentaris/core / EdgeConnectionTerminator
+
+Defined in: packages/core/src/edge/controlPlane.ts:133
+
+Control path that terminates the authenticated channel for one generation.
+
+## Methods
+
+### disconnect()
+
+> **disconnect**(`tenantId`, `edgeNodeId`, `connectionGeneration`, `reason`): `Promise`\<`void`\>
+
+Defined in: packages/core/src/edge/controlPlane.ts:134
+
+#### Parameters
+
+##### tenantId
+
+`string`
+
+##### edgeNodeId
+
+`string`
+
+##### connectionGeneration
+
+`number`
+
+##### reason
+
+`"revoked"` \| `"operator-disconnect"`
+
+#### Returns
+
+`Promise`\<`void`\>
+
+  </Accordion>
+
   <Accordion title="Core exports: interfaces/EdgeControlDeviceSummary">
 
 @fentaris/core / EdgeControlDeviceSummary
@@ -16819,7 +16906,7 @@ Defined in: packages/core/src/edge/controlProvider.ts:24
 
 @fentaris/core / EdgeControlPlaneService
 
-Defined in: packages/core/src/edge/management.ts:64
+Defined in: packages/core/src/edge/management.ts:65
 
 Replaceable control-plane service used by CLI and Edge Control providers.
 
@@ -16829,7 +16916,7 @@ Replaceable control-plane service used by CLI and Edge Control providers.
 
 > **disconnect**(`context`, `deviceName`): `Promise`\<`EdgeManagementResult`\<`EdgeManagedDeviceView`\>\>
 
-Defined in: packages/core/src/edge/management.ts:73
+Defined in: packages/core/src/edge/management.ts:74
 
 #### Parameters
 
@@ -16849,7 +16936,7 @@ Defined in: packages/core/src/edge/management.ts:73
 
 > **get**(`context`, `deviceName`): `Promise`\<`EdgeManagementResult`\<`EdgeManagedDeviceView`\>\>
 
-Defined in: packages/core/src/edge/management.ts:72
+Defined in: packages/core/src/edge/management.ts:73
 
 #### Parameters
 
@@ -16869,7 +16956,7 @@ Defined in: packages/core/src/edge/management.ts:72
 
 > **join**(`request`): `Promise`\<`EdgeManagementResult`\<`EdgeManagedDeviceView`\>\>
 
-Defined in: packages/core/src/edge/management.ts:65
+Defined in: packages/core/src/edge/management.ts:66
 
 #### Parameters
 
@@ -16885,7 +16972,7 @@ Defined in: packages/core/src/edge/management.ts:65
 
 > **list**(`context`, `options?`): `Promise`\<`EdgeManagementPage`\<`EdgeManagedDeviceView`\>\>
 
-Defined in: packages/core/src/edge/management.ts:71
+Defined in: packages/core/src/edge/management.ts:72
 
 #### Parameters
 
@@ -16905,7 +16992,7 @@ Defined in: packages/core/src/edge/management.ts:71
 
 > **revoke**(`context`, `deviceName`): `Promise`\<`EdgeManagementResult`\<`EdgeManagedDeviceView`\>\>
 
-Defined in: packages/core/src/edge/management.ts:74
+Defined in: packages/core/src/edge/management.ts:75
 
 #### Parameters
 
@@ -16925,7 +17012,7 @@ Defined in: packages/core/src/edge/management.ts:74
 
 > **update**(`context`, `deviceName`, `update`): `Promise`\<`EdgeManagementResult`\<`EdgeManagedDeviceView`\>\>
 
-Defined in: packages/core/src/edge/management.ts:66
+Defined in: packages/core/src/edge/management.ts:67
 
 #### Parameters
 
@@ -18101,7 +18188,7 @@ Defined in: packages/core/src/edge/fanout.ts:46
 
 @fentaris/core / EdgeGatewayAuthenticator
 
-Defined in: packages/core/src/edge/gateway.ts:45
+Defined in: packages/core/src/edge/gateway.ts:46
 
 Device-bound gateway authentication contract.
 
@@ -18111,7 +18198,7 @@ Device-bound gateway authentication contract.
 
 > **authenticate**(`credential`, `hello`): `Promise`\<`AuthenticatedEdgeIdentity`\>
 
-Defined in: packages/core/src/edge/gateway.ts:46
+Defined in: packages/core/src/edge/gateway.ts:47
 
 #### Parameters
 
@@ -18133,7 +18220,7 @@ Defined in: packages/core/src/edge/gateway.ts:46
 
 @fentaris/core / EdgeGatewayAuthorization
 
-Defined in: packages/core/src/edge/gateway.ts:50
+Defined in: packages/core/src/edge/gateway.ts:51
 
 Per-message authorization input.
 
@@ -18143,25 +18230,25 @@ Per-message authorization input.
 
 > `readonly` **connection**: `EdgeConnectionRecord`
 
-Defined in: packages/core/src/edge/gateway.ts:53
+Defined in: packages/core/src/edge/gateway.ts:54
 
 ### direction
 
 > `readonly` **direction**: `"inbound"` \| `"outbound"`
 
-Defined in: packages/core/src/edge/gateway.ts:51
+Defined in: packages/core/src/edge/gateway.ts:52
 
 ### identity
 
 > `readonly` **identity**: `AuthenticatedEdgeIdentity`
 
-Defined in: packages/core/src/edge/gateway.ts:52
+Defined in: packages/core/src/edge/gateway.ts:53
 
 ### message
 
 > `readonly` **message**: `EdgeMcpRequestEnvelope` \| `EdgeMcpResultEnvelope` \| `EdgeMcpErrorEnvelope` \| `EdgeMcpCancelEnvelope` \| `EdgeHelloMessage` \| `EdgeHelloAckMessage` \| `EdgeHeartbeatMessage` \| `EdgePresenceReportMessage` \| `EdgeDesiredStateMessage` \| `EdgeDesiredStateAckMessage` \| `EdgeSetupStatusMessage` \| `EdgeCapabilityManifestMessage` \| `EdgeLifecycleMessage`
 
-Defined in: packages/core/src/edge/gateway.ts:54
+Defined in: packages/core/src/edge/gateway.ts:55
 
   </Accordion>
 
@@ -18169,7 +18256,7 @@ Defined in: packages/core/src/edge/gateway.ts:54
 
 @fentaris/core / EdgeGatewayAuthorizer
 
-Defined in: packages/core/src/edge/gateway.ts:58
+Defined in: packages/core/src/edge/gateway.ts:59
 
 Server-side message authorization contract.
 
@@ -18179,7 +18266,7 @@ Server-side message authorization contract.
 
 > **authorize**(`input`): `Promise`\<`boolean`\>
 
-Defined in: packages/core/src/edge/gateway.ts:59
+Defined in: packages/core/src/edge/gateway.ts:60
 
 #### Parameters
 
@@ -18197,7 +18284,7 @@ Defined in: packages/core/src/edge/gateway.ts:59
 
 @fentaris/core / EdgeGatewaySocket
 
-Defined in: packages/core/src/edge/gateway.ts:29
+Defined in: packages/core/src/edge/gateway.ts:30
 
 Minimal server-side WebSocket seam used by the reference gateway.
 
@@ -18207,7 +18294,7 @@ Minimal server-side WebSocket seam used by the reference gateway.
 
 > `readonly` `optional` **bufferedAmount?**: `number`
 
-Defined in: packages/core/src/edge/gateway.ts:30
+Defined in: packages/core/src/edge/gateway.ts:31
 
 ## Methods
 
@@ -18215,7 +18302,7 @@ Defined in: packages/core/src/edge/gateway.ts:30
 
 > **close**(`code?`, `reason?`): `void`
 
-Defined in: packages/core/src/edge/gateway.ts:32
+Defined in: packages/core/src/edge/gateway.ts:33
 
 #### Parameters
 
@@ -18235,7 +18322,7 @@ Defined in: packages/core/src/edge/gateway.ts:32
 
 > **onClose**(`handler`): () => `void`
 
-Defined in: packages/core/src/edge/gateway.ts:34
+Defined in: packages/core/src/edge/gateway.ts:35
 
 #### Parameters
 
@@ -18251,7 +18338,7 @@ Defined in: packages/core/src/edge/gateway.ts:34
 
 > **onMessage**(`handler`): () => `void`
 
-Defined in: packages/core/src/edge/gateway.ts:33
+Defined in: packages/core/src/edge/gateway.ts:34
 
 #### Parameters
 
@@ -18267,7 +18354,7 @@ Defined in: packages/core/src/edge/gateway.ts:33
 
 > **send**(`frame`): `void` \| `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/gateway.ts:31
+Defined in: packages/core/src/edge/gateway.ts:32
 
 #### Parameters
 
@@ -19169,7 +19256,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:72
 
 @fentaris/core / EdgeJoinRequest
 
-Defined in: packages/core/src/edge/management.ts:21
+Defined in: packages/core/src/edge/management.ts:22
 
 Trusted enrollment input produced after device authorization.
 
@@ -19179,49 +19266,49 @@ Trusted enrollment input produced after device authorization.
 
 > `readonly` **credentialId**: `string`
 
-Defined in: packages/core/src/edge/management.ts:25
+Defined in: packages/core/src/edge/management.ts:26
 
 ### description?
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: packages/core/src/edge/management.ts:27
+Defined in: packages/core/src/edge/management.ts:28
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/management.ts:24
+Defined in: packages/core/src/edge/management.ts:25
 
 ### enrolledAt
 
 > `readonly` **enrolledAt**: `number`
 
-Defined in: packages/core/src/edge/management.ts:29
+Defined in: packages/core/src/edge/management.ts:30
 
 ### name
 
 > `readonly` **name**: `string`
 
-Defined in: packages/core/src/edge/management.ts:26
+Defined in: packages/core/src/edge/management.ts:27
 
 ### subjectId?
 
 > `readonly` `optional` **subjectId?**: `string`
 
-Defined in: packages/core/src/edge/management.ts:23
+Defined in: packages/core/src/edge/management.ts:24
 
 ### tags?
 
 > `readonly` `optional` **tags?**: readonly `string`[]
 
-Defined in: packages/core/src/edge/management.ts:28
+Defined in: packages/core/src/edge/management.ts:29
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/management.ts:22
+Defined in: packages/core/src/edge/management.ts:23
 
   </Accordion>
 
@@ -19353,7 +19440,7 @@ Defined in: packages/core/src/edge/inventory.ts:72
 
 @fentaris/core / EdgeManagedDeviceView
 
-Defined in: packages/core/src/edge/management.ts:39
+Defined in: packages/core/src/edge/management.ts:40
 
 Agent/operator-safe device view. Credentials and opaque routing IDs are omitted.
 
@@ -19363,49 +19450,49 @@ Agent/operator-safe device view. Credentials and opaque routing IDs are omitted.
 
 > `readonly` **connected**: `boolean`
 
-Defined in: packages/core/src/edge/management.ts:46
+Defined in: packages/core/src/edge/management.ts:47
 
 ### device
 
 > `readonly` **device**: `EdgePublicDeviceRef`
 
-Defined in: packages/core/src/edge/management.ts:41
+Defined in: packages/core/src/edge/management.ts:42
 
 ### lastSeenAt?
 
 > `readonly` `optional` **lastSeenAt?**: `number`
 
-Defined in: packages/core/src/edge/management.ts:47
+Defined in: packages/core/src/edge/management.ts:48
 
 ### managed
 
 > `readonly` **managed**: `Pick`\<`EdgeManagedMetadata`, `"pools"` \| `"updatedAt"`\>
 
-Defined in: packages/core/src/edge/management.ts:44
+Defined in: packages/core/src/edge/management.ts:45
 
 ### observed?
 
 > `readonly` `optional` **observed?**: `EdgeObservedFacts`
 
-Defined in: packages/core/src/edge/management.ts:43
+Defined in: packages/core/src/edge/management.ts:44
 
 ### revoked
 
 > `readonly` **revoked**: `boolean`
 
-Defined in: packages/core/src/edge/management.ts:45
+Defined in: packages/core/src/edge/management.ts:46
 
 ### schemaVersion
 
 > `readonly` **schemaVersion**: `1`
 
-Defined in: packages/core/src/edge/management.ts:40
+Defined in: packages/core/src/edge/management.ts:41
 
 ### user
 
 > `readonly` **user**: `EdgeUserMetadata`
 
-Defined in: packages/core/src/edge/management.ts:42
+Defined in: packages/core/src/edge/management.ts:43
 
   </Accordion>
 
@@ -19443,7 +19530,7 @@ Defined in: packages/core/src/edge/inventory.ts:44
 
 @fentaris/core / EdgeManagementContext
 
-Defined in: packages/core/src/edge/management.ts:33
+Defined in: packages/core/src/edge/management.ts:34
 
 Trusted request context for a tenant-scoped device operation.
 
@@ -19453,13 +19540,13 @@ Trusted request context for a tenant-scoped device operation.
 
 > `readonly` `optional` **subjectId?**: `string`
 
-Defined in: packages/core/src/edge/management.ts:35
+Defined in: packages/core/src/edge/management.ts:36
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/management.ts:34
+Defined in: packages/core/src/edge/management.ts:35
 
   </Accordion>
 
@@ -19467,7 +19554,7 @@ Defined in: packages/core/src/edge/management.ts:34
 
 @fentaris/core / EdgeManagementPage
 
-Defined in: packages/core/src/edge/management.ts:59
+Defined in: packages/core/src/edge/management.ts:60
 
 Canonical paginated service result.
 
@@ -19487,7 +19574,7 @@ Canonical paginated service result.
 
 > `readonly` **data**: readonly `T`[]
 
-Defined in: packages/core/src/edge/management.ts:53
+Defined in: packages/core/src/edge/management.ts:54
 
 #### Inherited from
 
@@ -19497,7 +19584,7 @@ Defined in: packages/core/src/edge/management.ts:53
 
 > `readonly` **nextActions**: readonly `string`[]
 
-Defined in: packages/core/src/edge/management.ts:55
+Defined in: packages/core/src/edge/management.ts:56
 
 #### Inherited from
 
@@ -19507,7 +19594,7 @@ Defined in: packages/core/src/edge/management.ts:55
 
 > `readonly` **ok**: `true`
 
-Defined in: packages/core/src/edge/management.ts:52
+Defined in: packages/core/src/edge/management.ts:53
 
 #### Inherited from
 
@@ -19517,7 +19604,7 @@ Defined in: packages/core/src/edge/management.ts:52
 
 > `readonly` **pagination**: `object`
 
-Defined in: packages/core/src/edge/management.ts:60
+Defined in: packages/core/src/edge/management.ts:61
 
 #### nextCursor?
 
@@ -19527,7 +19614,7 @@ Defined in: packages/core/src/edge/management.ts:60
 
 > `readonly` **warnings**: readonly `string`[]
 
-Defined in: packages/core/src/edge/management.ts:54
+Defined in: packages/core/src/edge/management.ts:55
 
 #### Inherited from
 
@@ -19539,7 +19626,7 @@ Defined in: packages/core/src/edge/management.ts:54
 
 @fentaris/core / EdgeManagementResult
 
-Defined in: packages/core/src/edge/management.ts:51
+Defined in: packages/core/src/edge/management.ts:52
 
 Canonical service result with stable warnings and next actions.
 
@@ -19559,25 +19646,25 @@ Canonical service result with stable warnings and next actions.
 
 > `readonly` **data**: `T`
 
-Defined in: packages/core/src/edge/management.ts:53
+Defined in: packages/core/src/edge/management.ts:54
 
 ### nextActions
 
 > `readonly` **nextActions**: readonly `string`[]
 
-Defined in: packages/core/src/edge/management.ts:55
+Defined in: packages/core/src/edge/management.ts:56
 
 ### ok
 
 > `readonly` **ok**: `true`
 
-Defined in: packages/core/src/edge/management.ts:52
+Defined in: packages/core/src/edge/management.ts:53
 
 ### warnings
 
 > `readonly` **warnings**: readonly `string`[]
 
-Defined in: packages/core/src/edge/management.ts:54
+Defined in: packages/core/src/edge/management.ts:55
 
   </Accordion>
 
@@ -22148,7 +22235,7 @@ Defined in: packages/core/src/edge/inventory.ts:28
 
 @fentaris/core / EdgeWebSocketGatewayOptions
 
-Defined in: packages/core/src/edge/gateway.ts:63
+Defined in: packages/core/src/edge/gateway.ts:64
 
 Configuration for the reference outbound WebSocket gateway.
 
@@ -22158,25 +22245,25 @@ Configuration for the reference outbound WebSocket gateway.
 
 > **authenticator**: `EdgeGatewayAuthenticator`
 
-Defined in: packages/core/src/edge/gateway.ts:64
+Defined in: packages/core/src/edge/gateway.ts:65
 
 ### authorizer?
 
 > `optional` **authorizer?**: `EdgeGatewayAuthorizer`
 
-Defined in: packages/core/src/edge/gateway.ts:72
+Defined in: packages/core/src/edge/gateway.ts:73
 
 ### capabilityManifestStore
 
 > **capabilityManifestStore**: `EdgeCapabilityManifestStore`
 
-Defined in: packages/core/src/edge/gateway.ts:69
+Defined in: packages/core/src/edge/gateway.ts:70
 
 ### connectionId?
 
 > `optional` **connectionId?**: () => `string`
 
-Defined in: packages/core/src/edge/gateway.ts:77
+Defined in: packages/core/src/edge/gateway.ts:78
 
 #### Returns
 
@@ -22186,43 +22273,43 @@ Defined in: packages/core/src/edge/gateway.ts:77
 
 > **connectionStore**: `EdgeConnectionStore`
 
-Defined in: packages/core/src/edge/gateway.ts:66
+Defined in: packages/core/src/edge/gateway.ts:67
 
 ### desiredStateStore
 
 > **desiredStateStore**: `EdgeDesiredStateStore`
 
-Defined in: packages/core/src/edge/gateway.ts:67
+Defined in: packages/core/src/edge/gateway.ts:68
 
 ### deviceRegistry
 
 > **deviceRegistry**: `EdgeDeviceRegistry`
 
-Defined in: packages/core/src/edge/gateway.ts:65
+Defined in: packages/core/src/edge/gateway.ts:66
 
 ### handshakeTimeoutMs?
 
 > `optional` **handshakeTimeoutMs?**: `number`
 
-Defined in: packages/core/src/edge/gateway.ts:73
+Defined in: packages/core/src/edge/gateway.ts:74
 
 ### heartbeatTimeoutMs?
 
 > `optional` **heartbeatTimeoutMs?**: `number`
 
-Defined in: packages/core/src/edge/gateway.ts:74
+Defined in: packages/core/src/edge/gateway.ts:75
 
 ### maxBufferedBytes?
 
 > `optional` **maxBufferedBytes?**: `number`
 
-Defined in: packages/core/src/edge/gateway.ts:75
+Defined in: packages/core/src/edge/gateway.ts:76
 
 ### now?
 
 > `optional` **now?**: () => `number`
 
-Defined in: packages/core/src/edge/gateway.ts:76
+Defined in: packages/core/src/edge/gateway.ts:77
 
 #### Returns
 
@@ -22232,25 +22319,25 @@ Defined in: packages/core/src/edge/gateway.ts:76
 
 > `optional` **presenceStore?**: `EdgePresenceStore`
 
-Defined in: packages/core/src/edge/gateway.ts:70
+Defined in: packages/core/src/edge/gateway.ts:71
 
 ### readinessStore?
 
 > `optional` **readinessStore?**: `EdgeReadinessStore`
 
-Defined in: packages/core/src/edge/gateway.ts:71
+Defined in: packages/core/src/edge/gateway.ts:72
 
 ### setupStatusStore
 
 > **setupStatusStore**: `EdgeSetupStatusStore`
 
-Defined in: packages/core/src/edge/gateway.ts:68
+Defined in: packages/core/src/edge/gateway.ts:69
 
 ### telemetry?
 
 > `optional` **telemetry?**: `EdgeTelemetry`
 
-Defined in: packages/core/src/edge/gateway.ts:78
+Defined in: packages/core/src/edge/gateway.ts:79
 
   </Accordion>
 
