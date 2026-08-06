@@ -53,7 +53,12 @@ export class EdgeLocalControlServer {
   async stop(): Promise<void> {
     const server = this.server;
     this.server = undefined;
-    if (server) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    if (server) {
+      await new Promise<void>((resolve, reject) => server.close((error) => {
+        if (!error || isServerNotRunning(error)) resolve();
+        else reject(error);
+      }));
+    }
     if (process.platform !== "win32") await rm(this.options.endpoint.address, { force: true });
   }
 
@@ -150,4 +155,8 @@ function validCredential(actual: string, expected: string): boolean {
   const left = Buffer.from(actual);
   const right = Buffer.from(expected);
   return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function isServerNotRunning(error: Error): boolean {
+  return "code" in error && (error as NodeJS.ErrnoException).code === "ERR_SERVER_NOT_RUNNING";
 }

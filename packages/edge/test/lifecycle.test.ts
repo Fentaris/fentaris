@@ -160,6 +160,8 @@ describe("owner-protected local control channel", () => {
       await callEdgeLocalControl({ address, credential: "credential-123" }, "reconnect");
       await callEdgeLocalControl({ address, credential: "credential-123" }, "setup-handoff");
       expect(calls).toEqual(["reconnect"]);
+      await server.stop();
+      await expect(server.stop()).resolves.toBeUndefined();
     } finally {
       await server.stop();
       await rm(directory, { recursive: true, force: true });
