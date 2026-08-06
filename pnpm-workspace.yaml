@@ -2,6 +2,9 @@ packages:
   - "packages/*"
   - "examples/*"
 
+allowBuilds:
+  esbuild: true
+
 # Force patched transitive versions for known advisories.
 overrides:
   "@hono/node-server": ">=2.0.5"
