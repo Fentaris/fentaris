@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  EDGE_CONTROL_TOOL_SCHEMAS,
+  EDGE_DEPLOYMENT_READINESS_STATUSES,
+  EDGE_INSTALL_REASON_CATEGORIES,
   McpProxy,
   McpServer,
   Policy,
@@ -9,9 +12,11 @@ import {
   edge,
   edgeInstallDirectoryName,
   edgeInstallPackageId,
+  parseEdgeProtocolMessage,
   parseLaunchRecipe,
   serializeLaunchRecipe,
   validateEdgeInstallPlan,
+  validateEdgeInstallStatusReport,
   validateLaunchRecipe,
 } from "../../src/index.js";
 import type { EdgeNpmInstallPlan } from "../../src/index.js";
@@ -136,6 +141,65 @@ describe("launch recipes with managed installs", () => {
       env: {},
       install: { version: 1, kind: "npm", package: "server", packageVersion: "1.0.0", bin: "server", registryUrl: "javascript:alert(1)" },
     })).toThrow(/registryUrl/);
+  });
+});
+
+describe("install reporting contracts", () => {
+  it("accepts a bounded install report on the setup-status message", () => {
+    const message = {
+      version: 2,
+      kind: "edge.setup-status",
+      tenantId: "tenant-1",
+      edgeNodeId: "node-1",
+      connectionGeneration: 3,
+      deploymentId: "filesystem",
+      recipeDigest: "sha256:abc",
+      setupSchemaVersion: 1,
+      status: "ready",
+      install: {
+        status: "installed",
+        packageId: "@scope/server@1.4.2",
+        installDigest: plan().digest,
+        resolvedVersion: "1.4.2",
+      },
+    };
+    expect(parseEdgeProtocolMessage(JSON.stringify(message))).toMatchObject({ kind: "edge.setup-status" });
+    expect(() => validateEdgeInstallStatusReport(message.install)).not.toThrow();
+  });
+
+  it("rejects malformed or unbounded install reports", () => {
+    const base = { status: "installed", packageId: "@scope/server@1.4.2", installDigest: "sha256:abc" };
+    expect(() => validateEdgeInstallStatusReport({ ...base, status: "unknown" })).toThrow(/install.status/);
+    expect(() => validateEdgeInstallStatusReport({ ...base, packageId: "x".repeat(281) })).toThrow(/packageId/);
+    expect(() => validateEdgeInstallStatusReport({ ...base, reasonCategory: "whatever" })).toThrow(/reasonCategory/);
+    expect(() => validateEdgeInstallStatusReport({ ...base, reasonCategory: "install-failed" })).not.toThrow();
+    expect(() => validateEdgeInstallStatusReport(undefined)).toThrow(/must be an object/);
+    expect(EDGE_INSTALL_REASON_CATEGORIES).toContain("install-verification-failed");
+  });
+
+  it("publishes install-required readiness through presence reports and discovery filters", () => {
+    expect(EDGE_DEPLOYMENT_READINESS_STATUSES).toContain("install-required");
+    const presence = {
+      version: 2,
+      kind: "edge.presence",
+      tenantId: "tenant-1",
+      edgeNodeId: "node-1",
+      connectionGeneration: 3,
+      observed: {
+        platform: "darwin",
+        architecture: "arm64",
+        agentVersion: "0.1.0",
+        executionFeatures: ["mcp-stdio"],
+        reportedAt: 1,
+      },
+      readiness: [{ deploymentId: "filesystem", status: "install-required", reasonCategory: "install-pending", observedAt: 1 }],
+      reportedAt: 1,
+    };
+    expect(parseEdgeProtocolMessage(JSON.stringify(presence))).toMatchObject({ kind: "edge.presence" });
+    const listSchema = EDGE_CONTROL_TOOL_SCHEMAS.list as {
+      properties: { readiness: { items: { enum: readonly string[] } } };
+    };
+    expect(listSchema.properties.readiness.items.enum).toContain("install-required");
   });
 });
 

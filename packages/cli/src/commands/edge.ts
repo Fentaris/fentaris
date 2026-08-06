@@ -345,7 +345,18 @@ function formatHuman(value: unknown): string {
   if (!value || typeof value !== "object") return String(value);
   const item = value as Record<string, unknown>;
   const device = item.device as { name?: string } | undefined;
-  return [device?.name ?? item.name, item.status ?? item.state, item.description].filter(Boolean).join(" ") || JSON.stringify(value);
+  const line = [device?.name ?? item.name, item.status ?? item.state, item.description, installSummary(item.agent)]
+    .filter(Boolean)
+    .join(" ");
+  return line || JSON.stringify(value);
+}
+
+/** Compact managed-install counts; never includes install directories. */
+function installSummary(agent: unknown): string | undefined {
+  if (!agent || typeof agent !== "object") return undefined;
+  const { installedPackages, pendingInstalls, failedInstalls } = agent as Record<string, unknown>;
+  if (typeof installedPackages !== "number") return undefined;
+  return `installs ${installedPackages} installed, ${Number(pendingInstalls ?? 0)} pending, ${Number(failedInstalls ?? 0)} failed`;
 }
 
 async function confirmMutation(runtime: Runtime, options: CliOptions, action: string, device: string): Promise<boolean> {

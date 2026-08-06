@@ -135,4 +135,32 @@ describe("fentaris edge canonical behavior", () => {
     await runEdge(command.command, io.value, service);
     expect(io.output).toEqual(["ready"]);
   });
+
+  it("summarizes managed install counts in local status without exposing directories", async () => {
+    const io = runtime();
+    const service = backend();
+    service.status.mockResolvedValue(success({
+      state: "ready",
+      agent: {
+        enrolled: true,
+        connected: true,
+        desiredDeployments: 2,
+        readyDeployments: 1,
+        blockedDeployments: 1,
+        installedPackages: 1,
+        pendingInstalls: 0,
+        failedInstalls: 1,
+      },
+    }));
+    const command = parseCommand(["edge", "status"]);
+    if (command.kind !== "ok") throw new Error("parse failed");
+    await runEdge(command.command, io.value, service);
+    expect(io.output).toEqual(["ready installs 1 installed, 0 pending, 1 failed"]);
+
+    const jsonIo = runtime();
+    const jsonCommand = parseCommand(["edge", "status", "--json"]);
+    if (jsonCommand.kind !== "ok") throw new Error("parse failed");
+    await runEdge(jsonCommand.command, jsonIo.value, service);
+    expect(JSON.parse(jsonIo.output[0]!).data.agent).toMatchObject({ installedPackages: 1, failedInstalls: 1 });
+  });
 });
