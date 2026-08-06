@@ -128,6 +128,7 @@ function service(input: {
   enrollment?: EdgeEnrollmentClient;
   now?: number;
   hostname?: string;
+  controlPlaneUrl?: string;
 } = {}) {
   const now = input.now ?? 1_000;
   const edgePlatform = input.platform ?? platform();
@@ -144,6 +145,7 @@ function service(input: {
       authorization: auth,
       enrollment: client,
       callbacks: { onVerification: verification },
+      ...(input.controlPlaneUrl ? { controlPlaneUrl: input.controlPlaneUrl } : {}),
       now: () => now,
       sleep: async () => undefined,
       hostnameLabel: () => input.hostname ?? "laptop",
@@ -153,10 +155,11 @@ function service(input: {
 
 describe("edge enrollment", () => {
   it("creates a random key, proves possession, enrolls, and reuses identity on repeat login", async () => {
-    const fixture = service();
+    const fixture = service({ controlPlaneUrl: "https://control.example" });
     const first = await fixture.service.login();
     expect(first.repeated).toBe(false);
     expect(first.config.edgeNodeId).toBe("node-random");
+    expect(first.config.controlPlaneUrl).toBe("https://control.example");
     expect(await fixture.platform.deviceKeyStore.load()).toMatchObject({
       publicKey: expect.stringContaining("BEGIN PUBLIC KEY"),
       privateKey: expect.stringContaining("BEGIN PRIVATE KEY"),
@@ -168,6 +171,15 @@ describe("edge enrollment", () => {
     expect(second.repeated).toBe(true);
     expect(second.config.edgeNodeId).toBe("node-random");
     expect(fixture.client.enroll).toHaveBeenCalledOnce();
+  });
+
+  it("adds the control-plane URL to an existing enrollment", async () => {
+    const sharedPlatform = platform();
+    await service({ platform: sharedPlatform }).service.login();
+    const repeated = await service({ platform: sharedPlatform, controlPlaneUrl: "https://control.example" }).service.login();
+    expect(repeated.repeated).toBe(true);
+    expect(repeated.config.controlPlaneUrl).toBe("https://control.example");
+    expect((await sharedPlatform.configStore.load())?.controlPlaneUrl).toBe("https://control.example");
   });
 
   it("refreshes expired authorization and rejects copied non-secret config without protected identity", async () => {
@@ -204,6 +216,40 @@ describe("edge enrollment", () => {
 });
 
 describe("edge agent and CLI", () => {
+  it("maps join to enrollment metadata and the persistent service workflow", async () => {
+    const fixture = service();
+    const agent = new EdgeAgent({
+      enrollment: fixture.service,
+      platform: fixture.platform,
+      connection: { connect: async () => ({ connectedAt: 2_000, close: async () => undefined }) },
+    });
+    const installService = vi.fn(async () => ({
+      operation: "install" as const,
+      persistent: true,
+      adapter: "launchd" as const,
+      nextActions: [],
+    }));
+    const output: string[] = [];
+    await expect(runEdgeCli([
+      "join", "https://control.example", "--name", "Mac Studio", "--description", "Build machine", "--tag", "xcode", "--tag", "development", "--json",
+    ], agent, { out: (value) => output.push(value), error: () => undefined }, {
+      installService,
+      service: installService,
+      run: async () => undefined,
+    })).resolves.toBe(0);
+    expect(installService).toHaveBeenCalledOnce();
+    expect(fixture.client.enroll).toHaveBeenCalledWith(expect.objectContaining({
+      name: "Mac Studio",
+      description: "Build machine",
+      tags: ["xcode", "development"],
+    }));
+    expect(JSON.parse(output[0]!)).toMatchObject({
+      ok: true,
+      data: { device: { name: "Mac Studio" }, service: { persistent: true } },
+      pagination: null,
+    });
+  });
+
   it("connects on login, reports safe status, disconnects, and exposes no add command", async () => {
     const fixture = service();
     let closeCount = 0;
@@ -226,6 +272,7 @@ describe("edge agent and CLI", () => {
     const io = { out: (value: string) => out.push(value), error: (value: string) => errors.push(value) };
 
     await expect(runEdgeCli(["login"], agent, io)).resolves.toBe(0);
+    expect(JSON.parse(out.at(-1)!).warnings[0]).toContain("deprecated");
     await expect(runEdgeCli(["status"], agent, io)).resolves.toBe(0);
     expect(JSON.parse(out.at(-1)!)).toMatchObject({
       enrolled: true,
@@ -300,6 +347,11 @@ describe("edge agent and CLI", () => {
     });
     const connection = await pending;
     expect(runtime.connected).toHaveBeenCalledOnce();
+    const hello = JSON.parse(socket.sent[0]!) as { supportedVersions: number[] };
+    expect(hello.supportedVersions).toEqual([2, 1]);
+    const report = JSON.parse(socket.sent[1]!) as Record<string, unknown>;
+    expect(report).toMatchObject({ kind: "edge.presence", version: 2 });
+    expect(JSON.stringify((report as { observed?: unknown }).observed)).not.toContain("node-1");
 
     const schema = createSetupSchema({});
     socket.receive({

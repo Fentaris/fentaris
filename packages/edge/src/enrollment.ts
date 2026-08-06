@@ -1,6 +1,7 @@
 import { generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import type { EdgeLocalConfig, EdgePlatform, StoredDeviceKeyPair } from "./platform.js";
 import type { EdgeConnectionRuntime } from "./runtime.js";
+import type { EdgeObservedFacts } from "@fentaris/core";
 
 export interface DeviceAuthorizationRequest {
   readonly deviceCode: string;
@@ -35,6 +36,9 @@ export interface EdgeEnrollmentRequest {
   readonly nonce: string;
   readonly proof: string;
   readonly hostnameLabel?: string;
+  readonly name?: string;
+  readonly description?: string;
+  readonly tags?: readonly string[];
 }
 
 export interface EdgeEnrollmentResult {
@@ -65,6 +69,7 @@ export interface EdgeConnectionClient {
     publicKey: string;
     privateKey: string;
     runtime?: EdgeConnectionRuntime;
+    observedFacts?: EdgeObservedFacts;
   }): Promise<EdgeConnection>;
 }
 
@@ -77,6 +82,7 @@ export interface EdgeEnrollmentServiceOptions {
   authorization: DeviceAuthorizationProvider;
   enrollment: EdgeEnrollmentClient;
   callbacks: EnrollmentCallbacks;
+  controlPlaneUrl?: string;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
   hostnameLabel?: () => string | undefined;
@@ -86,6 +92,12 @@ export interface EdgeLoginResult {
   readonly config: EdgeLocalConfig;
   readonly authorization: DeviceAuthorizationRequest;
   readonly repeated: boolean;
+}
+
+export interface EdgeJoinMetadata {
+  readonly name?: string;
+  readonly description?: string;
+  readonly tags?: readonly string[];
 }
 
 const ACCESS_TOKEN = "access-token";
@@ -103,12 +115,16 @@ export class EdgeEnrollmentService {
     this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
-  async login(): Promise<EdgeLoginResult> {
+  async login(metadata: EdgeJoinMetadata = {}): Promise<EdgeLoginResult> {
     const existing = await this.options.platform.configStore.load();
     if (existing && await this.options.platform.credentialStore.get(DEVICE_CREDENTIAL)) {
       await this.validAccessToken();
+      const config = this.options.controlPlaneUrl && existing.controlPlaneUrl !== this.options.controlPlaneUrl
+        ? { ...existing, controlPlaneUrl: this.options.controlPlaneUrl }
+        : existing;
+      if (config !== existing) await this.options.platform.configStore.save(config);
       return {
-        config: existing,
+        config,
         authorization: {
           deviceCode: "",
           userCode: "",
@@ -137,10 +153,12 @@ export class EdgeEnrollmentService {
       nonce,
       proof,
       hostnameLabel: this.options.hostnameLabel?.(),
+      ...metadata,
     });
     const config: EdgeLocalConfig = {
       edgeNodeId: enrolled.edgeNodeId,
       tenantId: enrolled.tenantId,
+      ...(this.options.controlPlaneUrl ? { controlPlaneUrl: this.options.controlPlaneUrl } : {}),
       gatewayUrl: enrolled.gatewayUrl,
       enrolledAt: this.now(),
       hostnameLabel: this.options.hostnameLabel?.(),

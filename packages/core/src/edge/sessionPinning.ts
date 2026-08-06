@@ -27,6 +27,8 @@ import {
   type PlacementResolverInputs,
 } from "./placement.js";
 import type { EdgeExecutionTarget, ExecutionTarget, TargetSelectionStrategy } from "./target.js";
+import type { EdgeSessionSelectionStore } from "./inventory.js";
+import type { EdgeSelectionRequest } from "./inventoryService.js";
 import {
   InMemorySessionBindingStore,
   type ConnectionGeneration,
@@ -48,6 +50,8 @@ export interface SessionPinRequest extends PlacementRequest {
   readonly requestedDeviceId?: string;
   /** Tenant id, when known. @pk */
   readonly tenantId?: string;
+  /** Optional one-shot declarative device constraints for the first pin. @pk */
+  readonly deviceSelection?: EdgeSelectionRequest;
 }
 
 /** The result of pinning a session target. @pk */
@@ -70,6 +74,8 @@ export interface EdgeSessionPinnerInputs extends PlacementResolverInputs {
   readonly store?: SessionBindingStore;
   /** Binding expiry configuration for the default in-memory store. @pk */
   readonly expiry?: SessionBindingExpiryOptions;
+  /** Durable pre-pin selections, when agent-native selection is enabled. @pk */
+  readonly selectionStore?: EdgeSessionSelectionStore;
 }
 
 /**
@@ -82,6 +88,7 @@ export class EdgeSessionPinner {
   private readonly deviceResolver: DeviceResolver;
   private readonly targets: ReadonlyMap<string, ExecutionTarget>;
   readonly store: SessionBindingStore;
+  private readonly selectionStore?: EdgeSessionSelectionStore;
 
   constructor(inputs: EdgeSessionPinnerInputs) {
     this.targets = inputs.targets;
@@ -91,6 +98,7 @@ export class EdgeSessionPinner {
     });
     this.deviceResolver = inputs.deviceResolver;
     this.store = inputs.store ?? new InMemorySessionBindingStore(inputs.expiry);
+    this.selectionStore = inputs.selectionStore;
   }
 
   /** Register a removal listener (see {@link SessionBindingStore.addListener}). @pk */
@@ -148,8 +156,35 @@ export class EdgeSessionPinner {
       targetName: placement.targetName,
       requestedDeviceId: request.requestedDeviceId,
       strategy: target.strategy,
+      ...(request.deviceSelection ? { declarativeSelection: request.deviceSelection } : {}),
     };
-    const device = await requireDevice(target.device, deviceContext, this.deviceResolver);
+    const selected = request.subjectId === undefined
+      ? undefined
+      : await this.selectionStore?.get(request.sessionId, request.subjectId, placement.targetName);
+    let device: DeviceResolution;
+    if (selected) {
+      const resolved = await this.deviceResolver.resolveSelectedDevice?.(
+        selected.edgeNodeId,
+        selected.inventoryVersion,
+        deviceContext,
+      );
+      if (!resolved) {
+        throw edgeError("EDGE_UNAVAILABLE", "The selected Edge device is no longer eligible or available.", {
+          details: { targetName: placement.targetName, nextActions: ["Discover and select an available device again."] },
+        });
+      }
+      device = resolved;
+    } else if (request.deviceSelection) {
+      const resolved = await this.deviceResolver.resolveDeclarativeDevice?.(request.deviceSelection, deviceContext);
+      if (!resolved) {
+        throw edgeError("EDGE_UNAVAILABLE", "No eligible Edge device satisfies the requested requirements.", {
+          details: { targetName: placement.targetName, nextActions: ["Relax the requirements or complete device setup."] },
+        });
+      }
+      device = resolved;
+    } else {
+      device = await requireDevice(target.device, deviceContext, this.deviceResolver);
+    }
 
     const binding = await this.store.store(key, {
       sessionId: request.sessionId,
@@ -157,7 +192,7 @@ export class EdgeSessionPinner {
       targetName: placement.targetName,
       edgeNodeId: device.edgeNodeId,
       alias: device.alias,
-      connectionGeneration: request.connectionGeneration ?? 1,
+      connectionGeneration: device.connectionGeneration ?? request.connectionGeneration ?? 1,
     });
 
     return {
@@ -199,7 +234,9 @@ export class EdgeSessionPinner {
 
   /** Remove and return bindings for a session on downstream session end. @pk */
   async endSession(sessionId: string): Promise<readonly SessionTargetBinding[]> {
-    return this.store.deleteSession(sessionId);
+    const bindings = await this.store.deleteSession(sessionId);
+    await this.selectionStore?.deleteSession(sessionId);
+    return bindings;
   }
 
   /** Remove and return bindings for a target on target removal/shutdown. @pk */

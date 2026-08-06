@@ -83,12 +83,57 @@ Cloud execution rejects unresolved runtime tokens with `EDGE_UNRESOLVED_RUNTIME_
 * `transport`
 * `capabilityCache`
 * `telemetry`
+* `sessionSelectionStore`
+* `childBindingManager`
+* `control`
 
 Reference implementations include `EdgeTransport`, `EdgeWebSocketGateway`, `InMemorySessionBindingStore`, control-plane stores, and `EdgeCapabilityCache`.
 
 <Warning>
   In-memory stores and the gateway active-socket map are single-process references. Multi-instance deployments require shared session bindings, device/desired/setup/manifest stores, and a distributed `EdgeChannelBroker`.
 </Warning>
+
+### Edge Control configuration
+
+`edge.control` is explicit opt-in configuration. It requires the policy-filtered `EdgeInventoryService` and `EdgeSessionSelectionService` used by the control plane.
+
+```ts theme={null}
+const proxy = new McpProxy({
+  policy: policy("agents")
+    .mcp("edge").allow("list")
+    .mcp("edge").allow("get")
+    .mcp("edge").allow("select")
+    .mcp("edge").allow("call")
+    .mcp("edge").allow("call_many"),
+  edge: {
+    transport: edgeTransport,
+    sessionSelectionStore,
+    childBindingManager,
+    control: {
+      enabled: true,
+      inventory,
+      selections,
+      defaultTargetName: "personal",
+      limits: {
+        maxDevices: 8,
+        maxConcurrency: 4,
+        maxDeadlineMs: 120000,
+        maxSelectorCandidates: 100,
+        maxChildBytes: 1000000,
+        maxAggregateBytes: 4000000,
+      },
+    },
+  },
+});
+```
+
+The namespace `edge` is reserved. Individual tools remain hidden or denied unless effective policy allows them.
+
+### Edge Control result contracts
+
+Discovery uses public `{ name, inventoryVersion }` references. `edge__call` returns the selected public device, a server-generated correlation ID, a terminal status, and the sanitized MCP result. `edge__call_many` returns stable counts and exactly one `succeeded`, `failed`, `cancelled`, or `not-started` entry per resolved device.
+
+Explicit input order is preserved. Declarative results are ordered by normalized public name. User limits can only reduce configured limits.
 
 ## Agent APIs
 
@@ -104,11 +149,22 @@ The initial process model is one local MCP process/client per `{ deployment, dow
 
 ## Protocol Compatibility
 
-`EDGE_PROTOCOL_VERSION` and `EDGE_MCP_ENVELOPE_VERSION` are currently `1`. Hello negotiates a mutually supported protocol version. Every accepted connection is bound to tenant, edge node, credential, protocol version, and a monotonically increasing connection generation.
+`EDGE_PROTOCOL_VERSION` is `2`; `EDGE_MCP_ENVELOPE_VERSION` remains `1`. Hello negotiates the highest mutually supported protocol version. Version 1 agents retain transparent Edge execution, while version 2 adds bounded observed facts, capacity, load, readiness, and orchestration correlation. Every accepted connection is bound to tenant, edge node, credential, protocol version, and a monotonically increasing connection generation.
 
 Messages cover hello, heartbeat, desired state, setup status, capability manifests, lifecycle, MCP requests/results/errors, and cancellation.
 
 Servers must reject routing claims that do not match server-side device, deployment, subject, target, and session state.
+
+| Agent | Transparent execution | Presence and facts | Agent-native orchestration |
+| --- | --- | --- | --- |
+| Protocol v1 | Supported | Legacy heartbeat only | Not eligible for v2 fact/readiness selectors |
+| Protocol v2 | Supported | Bounded facts, capacity, load, freshness, readiness | Supported when Edge Control is enabled and policy allows it |
+
+Roll out the control plane first, then proxies, then upgrade agents. The gateway negotiates the highest mutual version, so v1 and v2 agents can coexist. To roll back, disable `edge.control` and new selectors first; transparent v1/v2 routing continues. Do not downgrade stored identity or inventory versions during rollback.
+
+The `fentaris-edge` compatibility commands remain available during the migration window and map to the new services with warnings. New automation should use `fentaris edge`. A future major release may remove the legacy command names after a documented deprecation period.
+
+Stateful failover and automatic mutation retry are not supported. Lost non-idempotent calls are reported as indeterminate and are never automatically replayed.
 
 ## Errors
 
@@ -119,6 +175,10 @@ Stable edge codes:
 * `EDGE_SETUP_REQUIRED`
 * `EDGE_UNAVAILABLE`
 * `EDGE_CAPACITY`
+* `EDGE_SESSION_PINNED`
+* `EDGE_INPUT_INVALID`
+* `EDGE_INVENTORY_CONFLICT`
+* `EDGE_NAME_CONFLICT`
 * `EDGE_PROTOCOL`
 * `EDGE_WORKLOAD`
 * `EDGE_GRANT`
@@ -126,19 +186,24 @@ Stable edge codes:
 
 ## Events and Health
 
-`EdgeTelemetry` emits structured redacted events for target resolution, session binding, connection generations, desired-state reconciliation, setup, workloads, request duration, timeout, cancellation, and failure.
+`EdgeTelemetry` emits structured redacted events for target resolution, session binding, connection generations, desired-state reconciliation, setup, workloads, request duration, timeout, cancellation, failure, and parent/child orchestration lifecycle.
 
-`edgeHealth(...)` adds checks for gateway, target resolution, device/pool availability, deployment readiness, and capability cache age.
+`edgeHealth(...)` adds checks for gateway, target resolution, device/pool availability, deployment readiness, capability cache age, inventory stores, presence expiry, selections, child cleanup, distributed routing, protocol distribution, and stale readiness.
 
-Sensitive metadata is removed by `redactEdgeProtocolValue(...)` before telemetry reaches its sink.
+Sensitive metadata is removed by `redactEdgeProtocolValue(...)` before telemetry reaches its sink. `serializeEdgePublicValue(...)` additionally bounds depth, collection size, string length, circular references, and encoded bytes.
+
+Managed adapters can implement `EdgePoolSelectionStore` and `EdgeResultCorrelationStore`. Use `diagnoseEdgeProductionAdapters(...)` before production rollout. `EDGE_DISTRIBUTED_CONSISTENCY_REQUIREMENTS` documents the required compare-and-set, atomic-take, expiry, pool-selection, and channel-delivery semantics.
 
 ## Agent CLI
 
 ```bash theme={null}
-fentaris-edge login
-fentaris-edge status
-fentaris-edge disconnect
-fentaris-edge revoke
+fentaris edge join https://fentaris.example --name "Mac Studio"
+fentaris edge run
+fentaris edge service restart
+fentaris edge list --as user:alice --json
+fentaris edge status
+fentaris edge disconnect "Mac Studio" --yes
+fentaris edge revoke "Mac Studio" --yes
 ```
 
 There is no MCP add/configuration command. Definitions and assignments remain controlled by Fentaris.
@@ -148,4 +213,3 @@ There is no MCP add/configuration command. Definitions and assignments remain co
 * [Edge Execution](/concepts/edge-execution)
 * [Set Up an Edge Device](/guides/edge-device)
 * [Observability](/concepts/observability)
-

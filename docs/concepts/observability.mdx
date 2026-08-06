@@ -215,6 +215,10 @@ For production proxies, keep the observability setup bounded and queryable:
 
 Observability should answer three questions quickly: who made the request, what Fentaris decided, and what happened upstream.
 
+For Edge Control, also record the redacted selector factors, inventory version and freshness, resolved public-device count, aggregate correlation, child correlation, duration, terminal status, and cleanup outcome. Keep raw arguments and child output out of metric labels.
+
+Add Edge health probes for inventory storage, presence expiry, selection persistence, child-binding cleanup, channel routing, protocol-version distribution, and stale readiness. A production-ready claim should fail or degrade when any configured adapter is non-durable or single-instance.
+
 ## Related Documentation
 
 * [Observability guide](/guides/observability)

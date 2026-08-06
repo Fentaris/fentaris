@@ -3,6 +3,7 @@ export type CliOptionSpec = {
   short?: string;
   valueName?: string;
   description: string;
+  repeatable?: boolean;
 };
 
 export type CliArgumentSpec = {
@@ -48,6 +49,114 @@ const localSecretsKeyOption: CliOptionSpec = {
   description: "Use an explicit local encryption key instead of FENTARIS_AUTH_KEY or an interactive prompt. Prefer FENTARIS_AUTH_KEY for automation.",
 };
 
+const edgeJsonOptions: CliOptionSpec[] = [
+  { name: "json", description: "Output the canonical JSON envelope." },
+  { name: "verbose", description: "Include additional human-readable diagnostics." },
+  { name: "help", short: "h", description: "Print help" },
+];
+
+const edgeDiscoveryOptions: CliOptionSpec[] = [
+  { name: "compact", description: "Return compact device fields." },
+  { name: "limit", valueName: "COUNT", description: "Maximum devices to return (1-100)." },
+  { name: "cursor", valueName: "CURSOR", description: "Continue from a prior inventory cursor." },
+  { name: "include", valueName: "FIELDS", description: "Comma-separated optional fields to include." },
+  { name: "exclude", valueName: "FIELDS", description: "Comma-separated optional fields to exclude." },
+  { name: "as", valueName: "IDENTITY", description: "Calculate visibility and policy as user:<name> or group:<name>." },
+  ...edgeJsonOptions,
+];
+
+const edgeCommandSpec: CliCommandSpec = {
+  name: "edge",
+  path: ["edge"],
+  description: "Join, inspect, and operate governed Edge computers.",
+  details: ["Join once, run persistently when supported, and manage only devices visible to the selected Fentaris identity."],
+  usage: "fentaris edge [COMMAND]",
+  commandGroups: [{
+    title: "Commands",
+    commands: [
+      { name: "join", summary: "Enroll this computer and configure persistent operation." },
+      { name: "run", summary: "Run the enrolled Edge agent in the foreground." },
+      { name: "service", summary: "Manage the local persistent Edge service." },
+      { name: "list", summary: "List policy-visible Edge devices." },
+      { name: "get", summary: "Inspect one policy-visible Edge device." },
+      { name: "status", summary: "Show local or remote Edge status." },
+      { name: "update", summary: "Update user-managed device metadata." },
+      { name: "disconnect", summary: "Disconnect a device without revoking identity." },
+      { name: "revoke", summary: "Revoke a device identity." },
+    ],
+  }],
+  options: [{ name: "help", short: "h", description: "Print help" }],
+  commands: {
+    join: {
+      name: "join", path: ["edge", "join"], description: "Enroll this computer and configure persistent Edge operation.",
+      details: ["Example: fentaris edge join https://control.example --name 'Mac Studio' --tag xcode --json"],
+      usage: "fentaris edge join [OPTIONS] <control-plane-url>",
+      arguments: [{ name: "control-plane-url", required: true, description: "HTTPS control-plane URL." }],
+      options: [
+        { name: "name", valueName: "NAME", description: "Stable tenant-scoped public device name." },
+        { name: "description", valueName: "TEXT", description: "User-managed device description." },
+        { name: "tag", valueName: "TAG", repeatable: true, description: "Add a descriptive tag. Repeat for multiple tags." },
+        { name: "service", description: "Require persistent service installation." },
+        { name: "no-service", description: "Enroll without installing a persistent service." },
+        ...edgeJsonOptions,
+      ],
+    },
+    run: {
+      name: "run", path: ["edge", "run"], description: "Run the enrolled Edge agent in the foreground.",
+      usage: "fentaris edge run [OPTIONS]", options: edgeJsonOptions,
+    },
+    service: {
+      name: "service", path: ["edge", "service"], description: "Manage the local persistent Edge service.",
+      usage: "fentaris edge service <install|start|stop|restart|uninstall> [OPTIONS]",
+      commandGroups: [{ title: "Commands", commands: ["install", "start", "stop", "restart", "uninstall"].map((name) => ({ name, summary: `${name[0]!.toUpperCase()}${name.slice(1)} the local Edge service.` })) }],
+      options: [{ name: "help", short: "h", description: "Print help" }],
+      commands: Object.fromEntries(["install", "start", "stop", "restart", "uninstall"].map((name) => [name, {
+        name, path: ["edge", "service", name], description: `${name[0]!.toUpperCase()}${name.slice(1)} the local Edge service.`,
+        usage: `fentaris edge service ${name} [OPTIONS]`, options: edgeJsonOptions,
+      }])) as Record<string, CliCommandSpec>,
+    },
+    list: {
+      name: "list", path: ["edge", "list"], description: "List policy-visible Edge devices.",
+      details: ["Example: fentaris edge list --as user:alice --compact --limit 20 --json"],
+      usage: "fentaris edge list [OPTIONS]", options: edgeDiscoveryOptions,
+    },
+    get: {
+      name: "get", path: ["edge", "get"], description: "Inspect one policy-visible Edge device.",
+      usage: "fentaris edge get [OPTIONS] <device>",
+      arguments: [{ name: "device", required: true, description: "Public device name." }], options: edgeDiscoveryOptions,
+    },
+    status: {
+      name: "status", path: ["edge", "status"], description: "Show local or policy-visible remote Edge status.",
+      usage: "fentaris edge status [OPTIONS] [device]",
+      arguments: [{ name: "device", description: "Public remote device name; omit for the local installation." }], options: edgeDiscoveryOptions,
+    },
+    update: {
+      name: "update", path: ["edge", "update"], description: "Update user-managed Edge device metadata.",
+      usage: "fentaris edge update [OPTIONS] <device>",
+      arguments: [{ name: "device", required: true, description: "Public device name." }],
+      options: [
+        { name: "expected-version", valueName: "VERSION", description: "Required current inventory version for optimistic updates." },
+        { name: "name", valueName: "NAME", description: "New public device name." },
+        { name: "description", valueName: "TEXT", description: "New user-managed description." },
+        { name: "tag", valueName: "TAG", repeatable: true, description: "Replace tags with this repeatable set." },
+        ...edgeJsonOptions,
+      ],
+    },
+    disconnect: {
+      name: "disconnect", path: ["edge", "disconnect"], description: "Disconnect an Edge device without revoking its identity.",
+      usage: "fentaris edge disconnect [OPTIONS] <device>",
+      arguments: [{ name: "device", required: true, description: "Explicit public device name." }],
+      options: [{ name: "yes", description: "Confirm the disconnect without prompting." }, ...edgeJsonOptions],
+    },
+    revoke: {
+      name: "revoke", path: ["edge", "revoke"], description: "Revoke an Edge device identity.",
+      usage: "fentaris edge revoke [OPTIONS] <device>",
+      arguments: [{ name: "device", required: true, description: "Explicit public device name." }],
+      options: [{ name: "yes", description: "Confirm revocation without prompting." }, ...edgeJsonOptions],
+    },
+  },
+};
+
 export const cliSpec: CliCommandSpec = {
   name: "fentaris",
   path: [],
@@ -79,12 +188,14 @@ export const cliSpec: CliCommandSpec = {
         { name: "auth", summary: "Manage local identity authentication." },
         { name: "secrets", summary: "Manage local credentials and secret manifests." },
         { name: "tools", summary: "Discover effective MCP tools for configured accounts." },
+        { name: "edge", summary: "Join and operate governed Edge computers." },
       ],
     },
   ],
   options: globalOptions,
   environment: [{ name: "FENTARIS_AUTH_KEY", description: "Encryption key used by the local secrets backend." }],
   commands: {
+    edge: edgeCommandSpec,
     init: {
       name: "init",
       path: ["init"],

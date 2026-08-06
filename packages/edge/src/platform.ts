@@ -57,6 +57,7 @@ export interface StoredDeviceKeyPair {
 export interface EdgeLocalConfig {
   readonly edgeNodeId: string;
   readonly tenantId: string;
+  readonly controlPlaneUrl?: string;
   readonly gatewayUrl: string;
   readonly enrolledAt: number;
   readonly hostnameLabel?: string;

@@ -3,6 +3,7 @@ import {
   EdgeTelemetry,
   edgeHealth,
   redactEdgeProtocolValue,
+  serializeEdgePublicValue,
   type HealthCheckContext,
 } from "../../src/index.js";
 
@@ -42,6 +43,13 @@ describe("edge observability", () => {
       deviceAvailability: async () => ({ status: "degraded", message: "one pool offline" }),
       deploymentReadiness: async () => ({ status: "down", metadata: { secret: "hidden" } }),
       capabilityCache: async () => ({ status: "ok", metadata: { cacheAgeMs: 12 } }),
+      inventoryStore: async () => ({ status: "ok" }),
+      presenceExpiry: async () => ({ status: "ok" }),
+      selectionService: async () => ({ status: "ok" }),
+      childBindingCleanup: async () => ({ status: "ok" }),
+      channelRouting: async () => ({ status: "ok" }),
+      protocolDistribution: async () => ({ status: "ok" }),
+      staleReadiness: async () => ({ status: "degraded" }),
     });
     const checks = builder.toConfig().custom;
     expect(checks.map((check) => check.name)).toEqual([
@@ -50,6 +58,13 @@ describe("edge observability", () => {
       "edge.device-availability",
       "edge.deployment-readiness",
       "edge.capability-cache",
+      "edge.inventory-store",
+      "edge.presence-expiry",
+      "edge.selection-service",
+      "edge.child-binding-cleanup",
+      "edge.channel-routing",
+      "edge.protocol-distribution",
+      "edge.stale-readiness",
     ]);
     const readiness = checks.find((check) => check.name === "edge.deployment-readiness")!;
     await expect(readiness.handler({} as HealthCheckContext)).resolves.toMatchObject({
@@ -67,5 +82,23 @@ describe("edge observability", () => {
       nested: { localPath: "[REDACTED]", value: "[REDACTED_PATH]", safe: "ok" },
     });
   });
-});
 
+  it("bounds circular metadata, descriptions, observed facts, errors, outputs, and service diagnostics", () => {
+    const circular: Record<string, unknown> = {
+      description: "x".repeat(20),
+      observedFacts: { token: "private", platform: "darwin" },
+      aggregateError: { localPath: "/Users/alice/private" },
+      childOutput: { environment: { SECRET: "value" } },
+      serviceDiagnostics: { credentialId: "credential" },
+    };
+    circular.self = circular;
+    expect(serializeEdgePublicValue(circular, { maxStringLength: 5 })).toEqual({
+      description: "xxxxx[TRUNCATED]",
+      observedFacts: { token: "[REDACTED]", platform: "darwi[TRUNCATED]" },
+      aggregateError: { localPath: "[REDACTED]" },
+      childOutput: { environment: "[REDACTED]" },
+      serviceDiagnostics: { credentialId: "[REDACTED]" },
+      self: "[CIRCULAR]",
+    });
+  });
+});
