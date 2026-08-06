@@ -458,6 +458,36 @@ export type {
 } from "./integratedServices.js";
 
 export {
+  EDGE_LOCAL_AUTHORITY_SCHEMA_VERSION,
+  LOCAL_EDGE_AUTHORITY_ADAPTER_DIAGNOSTICS,
+  EdgeLocalAuthorityStore,
+  compareSecretHash,
+  hashSecret,
+  normalizeUserCode,
+  redactEdgeAuthorityValue,
+} from "./integratedLocalStore.js";
+export type {
+  EdgeEncryptedBlob,
+  EdgeLocalAuthorityDocument,
+  EdgeLocalAuthorityStoreOptions,
+  EdgeLocalRefreshCredential,
+  EdgeLocalServerIdentity,
+} from "./integratedLocalStore.js";
+
+export {
+  EdgeLocalOperatorClient,
+  EdgeLocalOperatorServer,
+  createEdgeLocalOperatorEndpoint,
+} from "./integratedOperatorChannel.js";
+export type {
+  EdgeLocalOperatorCommand,
+  EdgeLocalOperatorEndpoint,
+  EdgeLocalOperatorRequest,
+  EdgeLocalOperatorResponse,
+  EdgeLocalOperatorServerOptions,
+} from "./integratedOperatorChannel.js";
+
+export {
   EdgeCapabilityCache,
   InMemoryEdgeCapabilityCacheStore,
 } from "./capabilityCache.js";

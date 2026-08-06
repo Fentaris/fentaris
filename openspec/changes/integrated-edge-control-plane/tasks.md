@@ -8,11 +8,11 @@
 
 ## 2. Protected local authority state
 
-- [ ] 2.1 Define the versioned local authority schema for server identity, authorization sessions, refresh credentials, enrolled devices, revocation state, inventory, assignments, and desired-state versions.
-- [ ] 2.2 Implement an atomic owner-only file-backed local store with process locking, crash-safe replacement, schema migration, and corruption diagnostics.
-- [ ] 2.3 Hash bearer and refresh credentials at rest, encrypt private signing material, rotate refresh credentials on use, and redact every secret from errors and logs.
-- [ ] 2.4 Implement the protected local operator channel used for approval and administrative commands without exposing those operations on the public Edge routes.
-- [ ] 2.5 Add restart, concurrent-writer, migration, corruption, permission, token-rotation, and durable-revocation tests for local mode.
+- [x] 2.1 Define the versioned local authority schema for server identity, authorization sessions, refresh credentials, enrolled devices, revocation state, inventory, assignments, and desired-state versions.
+- [x] 2.2 Implement an atomic owner-only file-backed local store with process locking, crash-safe replacement, schema migration, and corruption diagnostics.
+- [x] 2.3 Hash bearer and refresh credentials at rest, encrypt private signing material, rotate refresh credentials on use, and redact every secret from errors and logs.
+- [x] 2.4 Implement the protected local operator channel used for approval and administrative commands without exposing those operations on the public Edge routes.
+- [x] 2.5 Add restart, concurrent-writer, migration, corruption, permission, token-rotation, and durable-revocation tests for local mode.
 
 ## 3. Authorization, enrollment, and revocation services
 
