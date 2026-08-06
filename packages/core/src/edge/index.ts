@@ -487,6 +487,9 @@ export type {
   EdgeLocalOperatorServerOptions,
 } from "./integratedOperatorChannel.js";
 
+export { IntegratedEdgeAuthServices } from "./integratedAuthServices.js";
+export type { IntegratedAuthServicesOptions } from "./integratedAuthServices.js";
+
 export {
   EdgeCapabilityCache,
   InMemoryEdgeCapabilityCacheStore,

@@ -16,12 +16,12 @@
 
 ## 3. Authorization, enrollment, and revocation services
 
-- [ ] 3.1 Implement device authorization creation and polling with user codes, expiration, polling intervals, slowdown responses, attempt limits, and single-use completion.
-- [ ] 3.2 Implement the approval service and local approval adapter with explicit operator confirmation and an auditable subject-to-device grant.
-- [ ] 3.3 Implement short-lived Edge access tokens and rotating refresh tokens bound to the approved device, subject, server, and permitted audience.
-- [ ] 3.4 Implement enrollment using the existing device-key proof contract and persist the verified device key as the authority for later gateway authentication.
-- [ ] 3.5 Implement operator revocation and authenticated self-revocation, including refresh invalidation, desired-state removal, and active gateway termination.
-- [ ] 3.6 Add request-size limits, rate limits, replay defenses, confidential error responses, and redacted security telemetry to every authorization route.
+- [x] 3.1 Implement device authorization creation and polling with user codes, expiration, polling intervals, slowdown responses, attempt limits, and single-use completion.
+- [x] 3.2 Implement the approval service and local approval adapter with explicit operator confirmation and an auditable subject-to-device grant.
+- [x] 3.3 Implement short-lived Edge access tokens and rotating refresh tokens bound to the approved device, subject, server, and permitted audience.
+- [x] 3.4 Implement enrollment using the existing device-key proof contract and persist the verified device key as the authority for later gateway authentication.
+- [x] 3.5 Implement operator revocation and authenticated self-revocation, including refresh invalidation, desired-state removal, and active gateway termination.
+- [x] 3.6 Add request-size limits, rate limits, replay defenses, confidential error responses, and redacted security telemetry to every authorization route.
 
 ## 4. Integrated HTTP and WebSocket exposure
 

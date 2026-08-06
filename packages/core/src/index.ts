@@ -567,6 +567,7 @@ export {
   EdgeLocalOperatorClient,
   EdgeLocalOperatorServer,
   createEdgeLocalOperatorEndpoint,
+  IntegratedEdgeAuthServices,
 } from "./edge/index.js";
 export type {
   AuthenticatedEdgeIdentity,
@@ -750,6 +751,7 @@ export type {
   EdgeLocalOperatorRequest,
   EdgeLocalOperatorResponse,
   EdgeLocalOperatorServerOptions,
+  IntegratedAuthServicesOptions,
   EdgeInventoryListOptions,
   EdgeInventoryListPage,
   EdgeInventoryRecord,
