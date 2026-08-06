@@ -85,7 +85,9 @@ export FENTARIS_EDGE_ALLOWED_EXECUTABLES="/usr/local/bin/filesystem-mcp,workspac
 ### `FENTARIS_EDGE_ALLOWED_PACKAGES`
 
 Comma-separated exact package names that the edge agent may launch through
-`npx`, `pnpm`, `yarn`, or `bunx`. The default is empty.
+`npx`, `pnpm`, `yarn`, or `bunx`, and that it may install for a managed-install
+deployment declared with `edge.npm(...)`. The default is empty, so no managed
+installation happens until a package is listed.
 
 ```bash theme={null}
 export FENTARIS_EDGE_ALLOWED_PACKAGES="@modelcontextprotocol/server-filesystem"

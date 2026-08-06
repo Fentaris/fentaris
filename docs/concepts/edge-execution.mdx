@@ -38,6 +38,28 @@ app.target("personal-device", edge({
 app.mcp("filesystem").target("personal-device");
 ```
 
+## Managed Installation
+
+By default the recipe `command` is resolved by the device operating system, so the MCP server must already exist on the device. A deployment can instead pin the software it needs:
+
+```ts theme={null}
+app.mcp("filesystem", {
+  transport: stdio({
+    command: "mcp-server-filesystem",
+    args: ["--workspace", runtime.input("workspace")],
+    install: edge.npm({ package: "@modelcontextprotocol/server-filesystem", version: "2026.1.4" }),
+  }),
+});
+```
+
+The install plan is data only and travels inside the launch recipe, so it is covered by the recipe digest: changing the package or version requires renewed local consent and cannot be swapped under an approved deployment. The device installs the pinned version into a Fentaris-owned directory, verifies it, and launches the declared bin from there, which makes the executed code identical on every device bound to the target.
+
+Installation is a reconciliation step, not part of a tool call. A deployment whose install is pending, denied, or failed reports `install-required` readiness and is not callable. Installs are shared by package and version, survive restarts, and are pruned once no desired deployment references them.
+
+<Note>
+  The device evaluates its package allowlist before contacting a registry, installs with lifecycle scripts disabled, and refuses to fall back to a `PATH` executable when a managed install is missing.
+</Note>
+
 ## Placement Precedence
 
 Fentaris resolves placement after server visibility and policy authorization:
@@ -86,7 +108,7 @@ Folder paths, file paths, secret values, device private keys, and complete proce
 The edge agent:
 
 * accepts only cloud-defined desired deployments;
-* requires local consent for new recipe digests and sensitive grants;
+* requires local consent for new recipe digests, managed installations, and sensitive grants;
 * checks canonical path containment and access on every resolution;
 * isolates a process/client by deployment and downstream session;
 * applies local deny and revocation before cloud desired state.

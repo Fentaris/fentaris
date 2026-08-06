@@ -178,7 +178,14 @@ executable or package to `FENTARIS_EDGE_ALLOWED_EXECUTABLES` or
   Do not allow a generic shell executable to bypass the allowlist. Approve the concrete MCP executable or package.
 </Warning>
 
-### `edge__select` returns `EDGE_SESSION_PINNED`
+### Edge deployment reports `install-required`
+
+The deployment declares a managed install that is not ready yet. Read the reason
+category from `fentaris edge status`: `install-denied` means the package is not
+in `FENTARIS_EDGE_ALLOWED_PACKAGES`, `install-failed` means the package manager
+exited non-zero or timed out, and `install-verification-failed` means the
+installed version, the declared bin, or the declared integrity digest did not
+match. Fentaris never falls back to a `PATH` executable for a managed install.
 
 The logical target already has a transparent session pin. Fentaris will not move stateful work to another device. Start a new downstream MCP session, call `edge__select` before the first edge-dependent tool, then call the effective tool normally.
 

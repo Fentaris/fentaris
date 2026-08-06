@@ -53,6 +53,42 @@ app.user("alice").mcp("filesystem").target("personal");
 
 The local prompt shows the recipe digest and requested access. Approving a folder stores its canonical path locally and reports only an opaque grant ID.
 
+## Install the MCP Server on the Device
+
+Declare `install` on the transport to let Fentaris install the MCP server itself instead of requiring the executable to exist on the device `PATH`:
+
+```ts theme={null}
+app.mcp("filesystem", {
+  transport: stdio({
+    command: "mcp-server-filesystem",
+    args: ["--workspace", runtime.input("workspace")],
+    install: edge.npm({
+      package: "@modelcontextprotocol/server-filesystem",
+      version: "2026.1.4",
+      bin: "mcp-server-filesystem",
+    }),
+  }),
+});
+```
+
+The version must be exact; ranges, `latest`, and dist-tags are rejected. `command` becomes a bare bin name that the device resolves inside its own install directory, so the workload no longer depends on ambient device state. Add an `integrity` digest to pin the published artifact as well.
+
+Add the package to `FENTARIS_EDGE_ALLOWED_PACKAGES` before assigning the deployment. The device evaluates that allowlist before contacting the registry, so an unapproved package is never downloaded. The install runs with lifecycle scripts disabled, no shell, a Fentaris-owned cache, and a bounded timeout, and is promoted only after the installed version, the declared bin, and any declared integrity digest verify.
+
+Installation happens while the device reconciles desired state. Until it succeeds the deployment is not callable and reports `install-required` with an `install-pending`, `install-failed`, `install-denied`, or `install-verification-failed` reason. `fentaris edge status` reports installed, pending, and failed counts.
+
+```bash theme={null}
+FENTARIS_EDGE_ALLOWED_PACKAGES="@modelcontextprotocol/server-filesystem" fentaris edge run
+```
+
+<Note>
+  Changing the package or version changes the recipe digest, so the device asks for consent again and installs the new version. The superseded install is removed once no deployment references it.
+</Note>
+
+<Warning>
+  A managed install requires an edge target. Placing a managed-install MCP on `cloud` fails with `EDGE_UNRESOLVED_RUNTIME_INPUT`.
+</Warning>
+
 ## Inspect and Disconnect
 
 ```bash theme={null}
@@ -164,6 +200,14 @@ An existing session is pinned to its original connection generation. Start a new
 Add the exact executable or package to `FENTARIS_EDGE_ALLOWED_EXECUTABLES` or
 `FENTARIS_EDGE_ALLOWED_PACKAGES`, reconnect the agent, then renew consent for
 the recipe digest. Do not allow a shell interpreter as a generic workaround.
+
+### Readiness stays `install-required`
+
+Check the reason category in `fentaris edge status`:
+
+* `install-denied`: add the exact package to `FENTARIS_EDGE_ALLOWED_PACKAGES` and reconnect.
+* `install-failed`: the package manager exited non-zero or timed out; check device network access and registry reachability. The device stops retrying after its attempt budget until the pinned version changes.
+* `install-verification-failed`: the installed version, the declared bin, or the declared integrity digest did not match. Correct the install plan rather than retrying.
 
 ## Related Documentation
 

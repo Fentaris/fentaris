@@ -483,7 +483,7 @@ Defined in: packages/core/src/errors/errors.ts:19
 
 @fentaris/core / DeviceSelectorBuilder
 
-Defined in: packages/core/src/edge/target.ts:60
+Defined in: packages/core/src/edge/target.ts:61
 
 Composable device selector builder. Own enumerable fields are serializable;
 the DeviceSelectorBuilder.or method lives on the prototype and is
@@ -499,7 +499,7 @@ omitted by `JSON.stringify`.
 
 > `readonly` `optional` **alias?**: `string`
 
-Defined in: packages/core/src/edge/target.ts:62
+Defined in: packages/core/src/edge/target.ts:63
 
 Alias for a `named` selector.
 
@@ -511,7 +511,7 @@ Alias for a `named` selector.
 
 > `readonly` `optional` **pool?**: `string`
 
-Defined in: packages/core/src/edge/target.ts:63
+Defined in: packages/core/src/edge/target.ts:64
 
 Pool name for a `pool` selector.
 
@@ -523,7 +523,7 @@ Pool name for a `pool` selector.
 
 > `readonly` `optional` **selectors?**: readonly `DeviceSelector`[]
 
-Defined in: packages/core/src/edge/target.ts:65
+Defined in: packages/core/src/edge/target.ts:66
 
 Ordered selectors for a `fallback` selector; first eligible wins.
 
@@ -535,7 +535,7 @@ Ordered selectors for a `fallback` selector; first eligible wins.
 
 > `readonly` `optional` **strategy?**: `TargetSelectionStrategy`
 
-Defined in: packages/core/src/edge/target.ts:64
+Defined in: packages/core/src/edge/target.ts:65
 
 Selection strategy for a `pool` selector.
 
@@ -547,7 +547,7 @@ Selection strategy for a `pool` selector.
 
 > `readonly` **type**: `DeviceSelectorType`
 
-Defined in: packages/core/src/edge/target.ts:61
+Defined in: packages/core/src/edge/target.ts:62
 
 #### Implementation of
 
@@ -559,7 +559,7 @@ Defined in: packages/core/src/edge/target.ts:61
 
 > **or**(`other`): `DeviceSelectorBuilder`
 
-Defined in: packages/core/src/edge/target.ts:108
+Defined in: packages/core/src/edge/target.ts:109
 
 Compose a fallback: resolve `this` first, then `other` if not eligible.
 
@@ -577,7 +577,7 @@ Compose a fallback: resolve `this` first, then `other` if not eligible.
 
 > **toJSON**(): `DeviceSelector`
 
-Defined in: packages/core/src/edge/target.ts:113
+Defined in: packages/core/src/edge/target.ts:114
 
 Return a plain serializable selector object without prototype methods.
 
@@ -589,7 +589,7 @@ Return a plain serializable selector object without prototype methods.
 
 > `static` **named**(`alias`): `DeviceSelectorBuilder`
 
-Defined in: packages/core/src/edge/target.ts:92
+Defined in: packages/core/src/edge/target.ts:93
 
 Resolve a control-plane named alias to a device.
 
@@ -607,7 +607,7 @@ Resolve a control-plane named alias to a device.
 
 > `static` **pool**(`name`, `strategy?`): `DeviceSelectorBuilder`
 
-Defined in: packages/core/src/edge/target.ts:100
+Defined in: packages/core/src/edge/target.ts:101
 
 Resolve one eligible device from a shared pool using `strategy`.
 
@@ -629,7 +629,7 @@ Resolve one eligible device from a shared pool using `strategy`.
 
 > `static` **session**(): `DeviceSelectorBuilder`
 
-Defined in: packages/core/src/edge/target.ts:82
+Defined in: packages/core/src/edge/target.ts:83
 
 Select the device requested during downstream session establishment.
 
@@ -641,7 +641,7 @@ Select the device requested during downstream session establishment.
 
 > `static` **userDefault**(): `DeviceSelectorBuilder`
 
-Defined in: packages/core/src/edge/target.ts:87
+Defined in: packages/core/src/edge/target.ts:88
 
 Select the subject's configured default device.
 
@@ -1480,7 +1480,7 @@ Defined in: packages/core/src/edge/controlInvocation.ts:72
 
 @fentaris/core / EdgeTelemetry
 
-Defined in: packages/core/src/edge/observability.ts:41
+Defined in: packages/core/src/edge/observability.ts:42
 
 Structured edge telemetry emitter with mandatory protocol/local-data redaction.
 
@@ -1490,7 +1490,7 @@ Structured edge telemetry emitter with mandatory protocol/local-data redaction.
 
 > **new EdgeTelemetry**(`sink`, `now?`): `EdgeTelemetry`
 
-Defined in: packages/core/src/edge/observability.ts:42
+Defined in: packages/core/src/edge/observability.ts:43
 
 #### Parameters
 
@@ -1512,7 +1512,7 @@ Defined in: packages/core/src/edge/observability.ts:42
 
 > **emit**(`event`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/observability.ts:47
+Defined in: packages/core/src/edge/observability.ts:48
 
 #### Parameters
 
@@ -4634,7 +4634,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:371
 
 @fentaris/core / InMemoryEdgeChildBindingStore
 
-Defined in: packages/core/src/edge/inventory.ts:317
+Defined in: packages/core/src/edge/inventory.ts:318
 
 Deterministic single-process isolated child-binding store.
 
@@ -4648,7 +4648,7 @@ Deterministic single-process isolated child-binding store.
 
 > **new InMemoryEdgeChildBindingStore**(`createId?`): `InMemoryEdgeChildBindingStore`
 
-Defined in: packages/core/src/edge/inventory.ts:321
+Defined in: packages/core/src/edge/inventory.ts:322
 
 #### Parameters
 
@@ -4666,7 +4666,7 @@ Defined in: packages/core/src/edge/inventory.ts:321
 
 > `readonly` **diagnostics**: `EdgeAdapterDiagnostics` = `IN_MEMORY_EDGE_ADAPTER_DIAGNOSTICS`
 
-Defined in: packages/core/src/edge/inventory.ts:318
+Defined in: packages/core/src/edge/inventory.ts:319
 
 #### Implementation of
 
@@ -4678,7 +4678,7 @@ Defined in: packages/core/src/edge/inventory.ts:318
 
 > **allocate**(`input`): `Promise`\<`EdgeChildBinding`\>
 
-Defined in: packages/core/src/edge/inventory.ts:323
+Defined in: packages/core/src/edge/inventory.ts:324
 
 #### Parameters
 
@@ -4698,7 +4698,7 @@ Defined in: packages/core/src/edge/inventory.ts:323
 
 > **delete**(`childBindingId`): `Promise`\<`EdgeChildBinding` \| `undefined`\>
 
-Defined in: packages/core/src/edge/inventory.ts:337
+Defined in: packages/core/src/edge/inventory.ts:338
 
 #### Parameters
 
@@ -4718,7 +4718,7 @@ Defined in: packages/core/src/edge/inventory.ts:337
 
 > **deleteParent**(`parentSessionId`, `parentRequestId?`): `Promise`\<readonly `EdgeChildBinding`[]\>
 
-Defined in: packages/core/src/edge/inventory.ts:341
+Defined in: packages/core/src/edge/inventory.ts:342
 
 #### Parameters
 
@@ -4742,7 +4742,7 @@ Defined in: packages/core/src/edge/inventory.ts:341
 
 > **get**(`childBindingId`): `Promise`\<`EdgeChildBinding` \| `undefined`\>
 
-Defined in: packages/core/src/edge/inventory.ts:333
+Defined in: packages/core/src/edge/inventory.ts:334
 
 #### Parameters
 
@@ -4762,7 +4762,7 @@ Defined in: packages/core/src/edge/inventory.ts:333
 
 > **purgeExpired**(`evaluatedAt`): `Promise`\<readonly `EdgeChildBinding`[]\>
 
-Defined in: packages/core/src/edge/inventory.ts:346
+Defined in: packages/core/src/edge/inventory.ts:347
 
 #### Parameters
 
@@ -5320,7 +5320,7 @@ readonly `EdgePoolCandidate`[]
 
 @fentaris/core / InMemoryEdgePresenceStore
 
-Defined in: packages/core/src/edge/inventory.ts:212
+Defined in: packages/core/src/edge/inventory.ts:213
 
 Deterministic single-process presence store.
 
@@ -5344,7 +5344,7 @@ Deterministic single-process presence store.
 
 > `readonly` **diagnostics**: `EdgeAdapterDiagnostics` = `IN_MEMORY_EDGE_ADAPTER_DIAGNOSTICS`
 
-Defined in: packages/core/src/edge/inventory.ts:213
+Defined in: packages/core/src/edge/inventory.ts:214
 
 #### Implementation of
 
@@ -5356,7 +5356,7 @@ Defined in: packages/core/src/edge/inventory.ts:213
 
 > **get**(`tenantId`, `edgeNodeId`): `Promise`\<`EdgePresence` \| `undefined`\>
 
-Defined in: packages/core/src/edge/inventory.ts:216
+Defined in: packages/core/src/edge/inventory.ts:217
 
 #### Parameters
 
@@ -5380,7 +5380,7 @@ Defined in: packages/core/src/edge/inventory.ts:216
 
 > **purgeStale**(`evaluatedAt`): `Promise`\<readonly `EdgePresence`[]\>
 
-Defined in: packages/core/src/edge/inventory.ts:236
+Defined in: packages/core/src/edge/inventory.ts:237
 
 #### Parameters
 
@@ -5400,7 +5400,7 @@ Defined in: packages/core/src/edge/inventory.ts:236
 
 > **put**(`presence`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/inventory.ts:220
+Defined in: packages/core/src/edge/inventory.ts:221
 
 #### Parameters
 
@@ -5420,7 +5420,7 @@ Defined in: packages/core/src/edge/inventory.ts:220
 
 > **remove**(`tenantId`, `edgeNodeId`, `connectionGeneration`): `Promise`\<`EdgePresence` \| `undefined`\>
 
-Defined in: packages/core/src/edge/inventory.ts:228
+Defined in: packages/core/src/edge/inventory.ts:229
 
 #### Parameters
 
@@ -5450,7 +5450,7 @@ Defined in: packages/core/src/edge/inventory.ts:228
 
 @fentaris/core / InMemoryEdgeReadinessStore
 
-Defined in: packages/core/src/edge/inventory.ts:255
+Defined in: packages/core/src/edge/inventory.ts:256
 
 Deterministic single-process readiness store.
 
@@ -5474,7 +5474,7 @@ Deterministic single-process readiness store.
 
 > `readonly` **diagnostics**: `EdgeAdapterDiagnostics` = `IN_MEMORY_EDGE_ADAPTER_DIAGNOSTICS`
 
-Defined in: packages/core/src/edge/inventory.ts:256
+Defined in: packages/core/src/edge/inventory.ts:257
 
 #### Implementation of
 
@@ -5486,7 +5486,7 @@ Defined in: packages/core/src/edge/inventory.ts:256
 
 > **delete**(`tenantId`, `edgeNodeId`, `deploymentId`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/inventory.ts:273
+Defined in: packages/core/src/edge/inventory.ts:274
 
 #### Parameters
 
@@ -5514,7 +5514,7 @@ Defined in: packages/core/src/edge/inventory.ts:273
 
 > **get**(`tenantId`, `edgeNodeId`, `deploymentId`): `Promise`\<`EdgeDeploymentReadiness` \| `undefined`\>
 
-Defined in: packages/core/src/edge/inventory.ts:259
+Defined in: packages/core/src/edge/inventory.ts:260
 
 #### Parameters
 
@@ -5542,7 +5542,7 @@ Defined in: packages/core/src/edge/inventory.ts:259
 
 > **list**(`tenantId`, `edgeNodeId`): `Promise`\<readonly `EdgeDeploymentReadiness`[]\>
 
-Defined in: packages/core/src/edge/inventory.ts:263
+Defined in: packages/core/src/edge/inventory.ts:264
 
 #### Parameters
 
@@ -5566,7 +5566,7 @@ Defined in: packages/core/src/edge/inventory.ts:263
 
 > **purgeExpired**(`evaluatedAt`): `Promise`\<readonly `EdgeDeploymentReadiness`[]\>
 
-Defined in: packages/core/src/edge/inventory.ts:277
+Defined in: packages/core/src/edge/inventory.ts:278
 
 #### Parameters
 
@@ -5586,7 +5586,7 @@ Defined in: packages/core/src/edge/inventory.ts:277
 
 > **put**(`readiness`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/inventory.ts:269
+Defined in: packages/core/src/edge/inventory.ts:270
 
 #### Parameters
 
@@ -5706,7 +5706,7 @@ Defined in: packages/core/src/edge/distributed.ts:110
 
 @fentaris/core / InMemoryEdgeSessionSelectionStore
 
-Defined in: packages/core/src/edge/inventory.ts:283
+Defined in: packages/core/src/edge/inventory.ts:284
 
 Deterministic single-process pre-pin selection store.
 
@@ -5720,7 +5720,7 @@ Deterministic single-process pre-pin selection store.
 
 > **new InMemoryEdgeSessionSelectionStore**(`now?`): `InMemoryEdgeSessionSelectionStore`
 
-Defined in: packages/core/src/edge/inventory.ts:287
+Defined in: packages/core/src/edge/inventory.ts:288
 
 #### Parameters
 
@@ -5738,7 +5738,7 @@ Defined in: packages/core/src/edge/inventory.ts:287
 
 > `readonly` **diagnostics**: `EdgeAdapterDiagnostics` = `IN_MEMORY_EDGE_ADAPTER_DIAGNOSTICS`
 
-Defined in: packages/core/src/edge/inventory.ts:284
+Defined in: packages/core/src/edge/inventory.ts:285
 
 #### Implementation of
 
@@ -5750,7 +5750,7 @@ Defined in: packages/core/src/edge/inventory.ts:284
 
 > **delete**(`sessionId`, `subjectId`, `targetName`): `Promise`\<`EdgeSessionSelection` \| `undefined`\>
 
-Defined in: packages/core/src/edge/inventory.ts:303
+Defined in: packages/core/src/edge/inventory.ts:304
 
 #### Parameters
 
@@ -5778,7 +5778,7 @@ Defined in: packages/core/src/edge/inventory.ts:303
 
 > **deleteSession**(`sessionId`): `Promise`\<readonly `EdgeSessionSelection`[]\>
 
-Defined in: packages/core/src/edge/inventory.ts:307
+Defined in: packages/core/src/edge/inventory.ts:308
 
 #### Parameters
 
@@ -5798,7 +5798,7 @@ Defined in: packages/core/src/edge/inventory.ts:307
 
 > **get**(`sessionId`, `subjectId`, `targetName`): `Promise`\<`EdgeSessionSelection` \| `undefined`\>
 
-Defined in: packages/core/src/edge/inventory.ts:293
+Defined in: packages/core/src/edge/inventory.ts:294
 
 #### Parameters
 
@@ -5826,7 +5826,7 @@ Defined in: packages/core/src/edge/inventory.ts:293
 
 > **purgeExpired**(`evaluatedAt`): `Promise`\<readonly `EdgeSessionSelection`[]\>
 
-Defined in: packages/core/src/edge/inventory.ts:311
+Defined in: packages/core/src/edge/inventory.ts:312
 
 #### Parameters
 
@@ -5846,7 +5846,7 @@ Defined in: packages/core/src/edge/inventory.ts:311
 
 > **put**(`selection`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/inventory.ts:289
+Defined in: packages/core/src/edge/inventory.ts:290
 
 #### Parameters
 
@@ -6780,7 +6780,7 @@ Create a new MCP proxy instance.
 
 > **addGroupUsers**(`groupId`, `users`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2552
+Defined in: packages/core/src/proxy/McpProxy.ts:2556
 
 #### Parameters
 
@@ -6800,7 +6800,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2552
 
 > **assertGroupHandleKnown**(`groupId`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2592
+Defined in: packages/core/src/proxy/McpProxy.ts:2596
 
 #### Parameters
 
@@ -6816,7 +6816,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2592
 
 > **assertServerHandleVisible**(`serverName`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2564
+Defined in: packages/core/src/proxy/McpProxy.ts:2568
 
 #### Parameters
 
@@ -6836,7 +6836,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2564
 
 > **callTool**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `content`: (\{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `text`: `string`; `type`: `"text"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"image"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"audio"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `description?`: `string`; `icons?`: `object`[]; `mimeType?`: `string`; `name`: `string`; `size?`: `number`; `title?`: `string`; `type`: `"resource_link"`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `resource`: \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `mimeType?`: `string`; `text`: `string`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `blob`: `string`; `mimeType?`: `string`; `uri`: `string`; \}; `type`: `"resource"`; \})[]; `isError?`: `boolean`; `structuredContent?`: \{\[`key`: `string`\]: `unknown`; \}; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1772
+Defined in: packages/core/src/proxy/McpProxy.ts:1776
 
 Call a proxied tool with middleware dispatch.
 
@@ -6900,7 +6900,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **close**(): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1553
+Defined in: packages/core/src/proxy/McpProxy.ts:1560
 
 Close the HTTP server and all backends.
 
@@ -6912,7 +6912,7 @@ Close the HTTP server and all backends.
 
 > **complete**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `completion`: \{\[`key`: `string`\]: `unknown`; `hasMore?`: `boolean`; `total?`: `number`; `values`: `string`[]; \}; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2316
+Defined in: packages/core/src/proxy/McpProxy.ts:2320
 
 Complete a proxied prompt or resource-template argument.
 
@@ -6998,7 +6998,7 @@ targets, normalized bindings, and configured device resolver. Returns
 
 > **emitSessionEnd**(`context`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2433
+Defined in: packages/core/src/proxy/McpProxy.ts:2437
 
 Emit a downstream session end lifecycle event.
 
@@ -7016,7 +7016,7 @@ Emit a downstream session end lifecycle event.
 
 > **emitSessionStart**(`context`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2395
+Defined in: packages/core/src/proxy/McpProxy.ts:2399
 
 Emit a downstream session start lifecycle event.
 
@@ -7034,7 +7034,7 @@ Emit a downstream session start lifecycle event.
 
 > **endEdgeSession**(`sessionId`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1003
+Defined in: packages/core/src/proxy/McpProxy.ts:1010
 
 Remove every session-target binding for a downstream session.
 
@@ -7052,7 +7052,7 @@ Remove every session-target binding for a downstream session.
 
 > **getPrompt**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `description?`: `string`; `messages`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2261
+Defined in: packages/core/src/proxy/McpProxy.ts:2265
 
 Get a proxied prompt from its owning upstream server.
 
@@ -7126,7 +7126,7 @@ Register or retrieve a scoped group handle.
 
 > **health**(): `Promise`\<`HealthReport`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1603
+Defined in: packages/core/src/proxy/McpProxy.ts:1610
 
 Run configured runtime health checks.
 
@@ -7138,7 +7138,7 @@ Run configured runtime health checks.
 
 > **listen**\<`THandle`\>(`transport`): `Promise`\<`THandle`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1269
+Defined in: packages/core/src/proxy/McpProxy.ts:1276
 
 Start the proxy with an explicit downstream exposure transport.
 
@@ -7162,7 +7162,7 @@ Start the proxy with an explicit downstream exposure transport.
 
 > **listPrompts**(`params?`, `user?`, `_identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `prompts`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2196
+Defined in: packages/core/src/proxy/McpProxy.ts:2200
 
 List prompts across all configured servers.
 
@@ -7214,7 +7214,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listResources**(`params?`, `user?`, `_identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `resources`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1991
+Defined in: packages/core/src/proxy/McpProxy.ts:1995
 
 List resources across all configured servers.
 
@@ -7266,7 +7266,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listResourceTemplates**(`params?`, `user?`, `_identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `resourceTemplates`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2125
+Defined in: packages/core/src/proxy/McpProxy.ts:2129
 
 List resource templates across all configured servers.
 
@@ -7318,7 +7318,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listTools**(`params?`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `tools`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1659
+Defined in: packages/core/src/proxy/McpProxy.ts:1666
 
 List tools across all configured servers.
 
@@ -7470,7 +7470,7 @@ Register or retrieve a scoped upstream MCP handle.
 
 > **mcpHealth**(`name`): `Promise`\<`HealthCheckResult`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1650
+Defined in: packages/core/src/proxy/McpProxy.ts:1657
 
 Check a configured upstream MCP server health.
 
@@ -7490,7 +7490,7 @@ Check a configured upstream MCP server health.
 
 > **on**(`event`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1131
+Defined in: packages/core/src/proxy/McpProxy.ts:1138
 
 Register an event hook.
 
@@ -7512,7 +7512,7 @@ Register an event hook.
 
 > **on**(`event`, `filter`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1136
+Defined in: packages/core/src/proxy/McpProxy.ts:1143
 
 Register a filtered event hook.
 
@@ -7538,7 +7538,7 @@ Register a filtered event hook.
 
 > **on**(`event`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1141
+Defined in: packages/core/src/proxy/McpProxy.ts:1148
 
 Register a unified proxy event handler.
 
@@ -7560,7 +7560,7 @@ Register a unified proxy event handler.
 
 > **on**(`event`, `filter`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1146
+Defined in: packages/core/src/proxy/McpProxy.ts:1153
 
 Register a filtered unified proxy event handler.
 
@@ -7586,7 +7586,7 @@ Register a filtered unified proxy event handler.
 
 > **onLifecycle**(`event`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1180
+Defined in: packages/core/src/proxy/McpProxy.ts:1187
 
 Register a lifecycle hook.
 
@@ -7608,7 +7608,7 @@ Register a lifecycle hook.
 
 > **onListTools**(`hook`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1195
+Defined in: packages/core/src/proxy/McpProxy.ts:1202
 
 Register a hook that can transform listed tools.
 
@@ -7648,7 +7648,7 @@ Register a global operation route for governed non-tool operations.
 
 > **pingMcp**(`name`): `Promise`\<`HealthCheckResult`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1641
+Defined in: packages/core/src/proxy/McpProxy.ts:1648
 
 Ping a configured upstream MCP server by listing tools.
 
@@ -7719,7 +7719,7 @@ Register or retrieve a named app-level policy declaration.
 
 > **readResource**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `contents`: (\{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `mimeType?`: `string`; `text`: `string`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `blob`: `string`; `mimeType?`: `string`; `uri`: `string`; \})[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2062
+Defined in: packages/core/src/proxy/McpProxy.ts:2066
 
 Read a proxied resource from its owning upstream server.
 
@@ -7771,7 +7771,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **ready**(`options?`): `Promise`\<`RuntimeLifecycleSnapshot`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1561
+Defined in: packages/core/src/proxy/McpProxy.ts:1568
 
 Wait for the runtime to reach readiness.
 
@@ -7789,7 +7789,7 @@ Wait for the runtime to reach readiness.
 
 > **registerGroupEvent**(`groupId`, `eventName`, `filter`, `handler`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2540
+Defined in: packages/core/src/proxy/McpProxy.ts:2544
 
 #### Parameters
 
@@ -7817,7 +7817,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2540
 
 > **registerGroupMiddleware**(`groupId`, `handler`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2530
+Defined in: packages/core/src/proxy/McpProxy.ts:2534
 
 #### Parameters
 
@@ -7837,7 +7837,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2530
 
 > **registerGroupOperation**(`groupId`, `operation`, `handler`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2535
+Defined in: packages/core/src/proxy/McpProxy.ts:2539
 
 #### Parameters
 
@@ -7861,7 +7861,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2535
 
 > **registerPlacementBinding**(`binding`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1091
+Defined in: packages/core/src/proxy/McpProxy.ts:1098
 
 Record a placement binding unless a conflicting one already exists.
 
@@ -7879,7 +7879,7 @@ Record a placement binding unless a conflicting one already exists.
 
 > **registerServerEvent**(`serverName`, `eventName`, `filter`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2517
+Defined in: packages/core/src/proxy/McpProxy.ts:2521
 
 #### Parameters
 
@@ -7911,7 +7911,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2517
 
 > **registerServerMiddleware**(`serverName`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2502
+Defined in: packages/core/src/proxy/McpProxy.ts:2506
 
 #### Parameters
 
@@ -7935,7 +7935,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2502
 
 > **registerServerOperation**(`serverName`, `operation`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2512
+Defined in: packages/core/src/proxy/McpProxy.ts:2516
 
 #### Parameters
 
@@ -7963,7 +7963,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2512
 
 > **registerServerSetup**(`serverName`, `schema`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1074
+Defined in: packages/core/src/proxy/McpProxy.ts:1081
 
 Register a setup schema for a server.
 
@@ -7985,7 +7985,7 @@ Register a setup schema for a server.
 
 > **registerServerTool**(`serverName`, `pattern`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2507
+Defined in: packages/core/src/proxy/McpProxy.ts:2511
 
 #### Parameters
 
@@ -8013,7 +8013,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2507
 
 > **resolveHttpUser**(`req`): `Promise`\<\{ `identity?`: `IdentityMetadata`; `subject?`: `ResolvedSubject`; `user`: `UserContext`; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2378
+Defined in: packages/core/src/proxy/McpProxy.ts:2382
 
 Resolve user context from an HTTP downstream request.
 
@@ -8053,7 +8053,7 @@ Throws `EDGE_UNAUTHORIZED_TARGET` for an ineligible explicit selection and
 
 > **resolveStdioUser**(): `Promise`\<\{ `identity?`: `IdentityMetadata`; `subject?`: `ResolvedSubject`; `user`: `UserContext`; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2386
+Defined in: packages/core/src/proxy/McpProxy.ts:2390
 
 Resolve user context for non-HTTP stdio downstream exposure.
 
@@ -8169,7 +8169,7 @@ Alias for `mcp(...)`.
 
 > **setGroupPolicy**(`groupId`, `policy`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2558
+Defined in: packages/core/src/proxy/McpProxy.ts:2562
 
 #### Parameters
 
@@ -8189,7 +8189,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2558
 
 > **shutdownEdgeSessions**(): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1010
+Defined in: packages/core/src/proxy/McpProxy.ts:1017
 
 Remove every session-target binding on runtime shutdown.
 
@@ -8203,7 +8203,7 @@ Remove every session-target binding on runtime shutdown.
 
 > **start**(`onStarted?`): `Promise`\<`Server`\<*typeof* `IncomingMessage`, *typeof* `ServerResponse`\>\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1204
+Defined in: packages/core/src/proxy/McpProxy.ts:1211
 
 Start the HTTP server.
 
@@ -8221,7 +8221,7 @@ Start the HTTP server.
 
 > **start**(`options?`, `onStarted?`): `Promise`\<`Server`\<*typeof* `IncomingMessage`, *typeof* `ServerResponse`\>\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1209
+Defined in: packages/core/src/proxy/McpProxy.ts:1216
 
 Start the HTTP server with optional overrides.
 
@@ -8243,7 +8243,7 @@ Start the HTTP server with optional overrides.
 
 > **state**(): `RuntimeLifecycleSnapshot`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1595
+Defined in: packages/core/src/proxy/McpProxy.ts:1602
 
 Inspect the current runtime lifecycle state.
 
@@ -8255,7 +8255,7 @@ Inspect the current runtime lifecycle state.
 
 > **stop**(`options?`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1569
+Defined in: packages/core/src/proxy/McpProxy.ts:1576
 
 Stop the runtime and close owned resources.
 
@@ -8376,7 +8376,7 @@ Apply a named or concrete policy as the global proxy policy.
 
 > **user**(`userId`): `ProxyUserHandle`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1111
+Defined in: packages/core/src/proxy/McpProxy.ts:1118
 
 Retrieve a user-scoped MCP handle. Records placement bindings without
 creating or authenticating a subject.
@@ -8395,7 +8395,7 @@ creating or authenticating a subject.
 
 > **validateEdgeConfiguration**(): `FentarisDiagnostic`[]
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1321
+Defined in: packages/core/src/proxy/McpProxy.ts:1328
 
 Validate fluent and constructor-style target, setup, and placement
 declarations: unresolved user handles, missing targets, duplicate
@@ -11299,7 +11299,7 @@ Defined in: packages/core/src/transports/exposure/StdioProxyExposureTransport.ts
 
 @fentaris/core / StdioTransport
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:57
+Defined in: packages/core/src/transports/client/StdioTransport.ts:65
 
 Stdio-based MCP transport implementation.
 
@@ -11313,7 +11313,7 @@ Stdio-based MCP transport implementation.
 
 > **new StdioTransport**(`options`): `StdioTransport`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:66
+Defined in: packages/core/src/transports/client/StdioTransport.ts:74
 
 Create a new stdio transport.
 
@@ -11333,7 +11333,7 @@ Create a new stdio transport.
 
 > **callTool**(`params`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `content`: (\{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `text`: `string`; `type`: `"text"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"image"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"audio"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `description?`: `string`; `icons?`: `object`[]; `mimeType?`: `string`; `name`: `string`; `size?`: `number`; `title?`: `string`; `type`: `"resource_link"`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `resource`: \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `mimeType?`: `string`; `text`: `string`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `blob`: `string`; `mimeType?`: `string`; `uri`: `string`; \}; `type`: `"resource"`; \})[]; `isError?`: `boolean`; `structuredContent?`: \{\[`key`: `string`\]: `unknown`; \}; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:138
+Defined in: packages/core/src/transports/client/StdioTransport.ts:151
 
 Call a tool on the MCP server.
 
@@ -11389,7 +11389,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **close**(): `Promise`\<`void`\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:205
+Defined in: packages/core/src/transports/client/StdioTransport.ts:218
 
 Close the underlying client connection.
 
@@ -11405,7 +11405,7 @@ Close the underlying client connection.
 
 > **complete**(`params`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `completion`: \{\[`key`: `string`\]: `unknown`; `hasMore?`: `boolean`; `total?`: `number`; `values`: `string`[]; \}; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:187
+Defined in: packages/core/src/transports/client/StdioTransport.ts:200
 
 #### Parameters
 
@@ -11467,7 +11467,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **getPrompt**(`params`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `description?`: `string`; `messages`: `object`[]; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:178
+Defined in: packages/core/src/transports/client/StdioTransport.ts:191
 
 #### Parameters
 
@@ -11513,7 +11513,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listPrompts**(`params?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `prompts`: `object`[]; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:169
+Defined in: packages/core/src/transports/client/StdioTransport.ts:182
 
 #### Parameters
 
@@ -11555,7 +11555,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listResources**(`params?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `resources`: `object`[]; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:142
+Defined in: packages/core/src/transports/client/StdioTransport.ts:155
 
 #### Parameters
 
@@ -11597,7 +11597,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listResourceTemplates**(`params?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `resourceTemplates`: `object`[]; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:160
+Defined in: packages/core/src/transports/client/StdioTransport.ts:173
 
 #### Parameters
 
@@ -11639,7 +11639,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listTools**(`params?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `tools`: `object`[]; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:125
+Defined in: packages/core/src/transports/client/StdioTransport.ts:138
 
 List tools exposed by the MCP server.
 
@@ -11683,7 +11683,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **readResource**(`params`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `contents`: (\{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `mimeType?`: `string`; `text`: `string`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `blob`: `string`; `mimeType?`: `string`; `uri`: `string`; \})[]; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:151
+Defined in: packages/core/src/transports/client/StdioTransport.ts:164
 
 #### Parameters
 
@@ -11721,11 +11721,23 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 `FentarisTransport.readResource`
 
+### requiresManagedInstall()
+
+> **requiresManagedInstall**(): `boolean`
+
+Defined in: packages/core/src/transports/client/StdioTransport.ts:110
+
+Whether this transport declares an edge-managed software installation.
+
+#### Returns
+
+`boolean`
+
 ### runtimeValueTokens()
 
 > **runtimeValueTokens**(): `RuntimeValueToken`[]
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:90
+Defined in: packages/core/src/transports/client/StdioTransport.ts:98
 
 Return every runtime-value token declared in arguments and environment.
 Used by configuration validation to reconcile references against setup
@@ -11739,7 +11751,7 @@ fields without exposing the full options object.
 
 > **serverCapabilities**(): `Promise`\<\{ `completions?`: `object`; `experimental?`: \{\[`key`: `string`\]: `object`; \}; `extensions?`: \{\[`key`: `string`\]: `object`; \}; `logging?`: `object`; `prompts?`: \{ `listChanged?`: `boolean`; \}; `resources?`: \{ `listChanged?`: `boolean`; `subscribe?`: `boolean`; \}; `tasks?`: \{\[`key`: `string`\]: `unknown`; `cancel?`: `object`; `list?`: `object`; `requests?`: \{\[`key`: `string`\]: `unknown`; `tools?`: \{\[`key`: `string`\]: `unknown`; `call?`: `object`; \}; \}; \}; `tools?`: \{ `listChanged?`: `boolean`; \}; \} \| `undefined`\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:197
+Defined in: packages/core/src/transports/client/StdioTransport.ts:210
 
 Return the initialized upstream capability declaration.
 
@@ -11751,7 +11763,7 @@ Return the initialized upstream capability declaration.
 
 > **toLaunchRecipe**(`schema?`): `LaunchRecipe`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:80
+Defined in: packages/core/src/transports/client/StdioTransport.ts:88
 
 Compile this transport's declaration into a serializable launch recipe bound
 to an optional setup schema. Cloud/edge validation uses this to reconcile
@@ -11771,7 +11783,7 @@ runtime-value references against declared setup fields.
 
 > **unresolvedCloudRuntimeRefs**(): `string`[]
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:102
+Defined in: packages/core/src/transports/client/StdioTransport.ts:115
 
 Runtime references that have no explicit cloud-side value.
 
@@ -11783,7 +11795,7 @@ Runtime references that have no explicit cloud-side value.
 
 > **withEnv**(`env`): `StdioTransport`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:111
+Defined in: packages/core/src/transports/client/StdioTransport.ts:124
 
 Return a copy with merged environment variables.
 
@@ -12743,6 +12755,33 @@ API-key identity strategy backed by encrypted local auth storage.
 
   </Accordion>
 
+  <Accordion title="Core exports: functions/assertManagedInstallCommand">
+
+@fentaris/core / assertManagedInstallCommand
+
+> **assertManagedInstallCommand**(`command`, `fail`): `void`
+
+Defined in: packages/core/src/edge/recipe.ts:127
+
+A managed-install recipe launches a bin from the edge-managed install
+directory, so its command must be a bare executable name.
+
+## Parameters
+
+### command
+
+`string`
+
+### fail
+
+(`message`) => `Error`
+
+## Returns
+
+`void`
+
+  </Accordion>
+
   <Accordion title="Core exports: functions/assertValidFentarisConfig">
 
 @fentaris/core / assertValidFentarisConfig
@@ -12851,7 +12890,7 @@ First-class governance declaration APIs.
 
 > **collectRecipeRuntimeRefs**(`args`, `env`): `string`[]
 
-Defined in: packages/core/src/edge/recipe.ts:65
+Defined in: packages/core/src/edge/recipe.ts:74
 
 Collect setup field names referenced by runtime-value tokens in a recipe.
 
@@ -12871,13 +12910,38 @@ readonly (`string` \| `RuntimeValueToken`)[]
 
   </Accordion>
 
+  <Accordion title="Core exports: functions/compileEdgeNpmInstallPlan">
+
+@fentaris/core / compileEdgeNpmInstallPlan
+
+> **compileEdgeNpmInstallPlan**(`input`): `EdgeNpmInstallPlan`
+
+Defined in: packages/core/src/edge/install.ts:85
+
+Compile an npm install declaration into a validated, frozen install plan.
+Rejects version ranges, dist-tags, unsafe package names, bin values that
+contain path separators, malformed integrity digests, and non-HTTPS
+registries other than loopback development URLs.
+
+## Parameters
+
+### input
+
+`EdgeNpmInstallPlanInput`
+
+## Returns
+
+`EdgeNpmInstallPlan`
+
+  </Accordion>
+
   <Accordion title="Core exports: functions/compileLaunchRecipe">
 
 @fentaris/core / compileLaunchRecipe
 
 > **compileLaunchRecipe**(`options`, `schema?`): `LaunchRecipe`
 
-Defined in: packages/core/src/edge/recipe.ts:85
+Defined in: packages/core/src/edge/recipe.ts:94
 
 Compile a LaunchRecipe from stdio transport options. Collects the
 setup field names referenced by runtime-value tokens and binds the recipe to
@@ -12899,13 +12963,35 @@ a setup schema version when provided. Throws for empty commands.
 
   </Accordion>
 
+  <Accordion title="Core exports: functions/computeEdgeInstallDigest">
+
+@fentaris/core / computeEdgeInstallDigest
+
+> **computeEdgeInstallDigest**(`payload`): `string`
+
+Defined in: packages/core/src/edge/install.ts:65
+
+Compute a stable SHA-256 digest for an install plan payload.
+
+## Parameters
+
+### payload
+
+`Omit`\<`EdgeInstallPlan`, `"digest"`\>
+
+## Returns
+
+`string`
+
+  </Accordion>
+
   <Accordion title="Core exports: functions/computeRecipeDigest">
 
 @fentaris/core / computeRecipeDigest
 
 > **computeRecipeDigest**(`payload`): `string`
 
-Defined in: packages/core/src/edge/recipe.ts:60
+Defined in: packages/core/src/edge/recipe.ts:69
 
 Compute a stable SHA-256 digest for a recipe payload.
 
@@ -12927,7 +13013,7 @@ Compute a stable SHA-256 digest for a recipe payload.
 
 > **createProxy**(`options?`): `McpProxy`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:3604
+Defined in: packages/core/src/proxy/McpProxy.ts:3608
 
 Create a Fentaris proxy with the express-like routing API.
 
@@ -13336,7 +13422,7 @@ full command environments; redaction is the caller's responsibility.
 
 > **edgeHealth**(`options`): `HealthBuilder`
 
-Defined in: packages/core/src/edge/observability.ts:78
+Defined in: packages/core/src/edge/observability.ts:79
 
 Build standard edge health checks using existing Fentaris health primitives.
 
@@ -13349,6 +13435,50 @@ Build standard edge health checks using existing Fentaris health primitives.
 ## Returns
 
 `HealthBuilder`
+
+  </Accordion>
+
+  <Accordion title="Core exports: functions/edgeInstallDirectoryName">
+
+@fentaris/core / edgeInstallDirectoryName
+
+> **edgeInstallDirectoryName**(`plan`): `string`
+
+Defined in: packages/core/src/edge/install.ts:159
+
+Filesystem-safe directory name for a managed install.
+
+## Parameters
+
+### plan
+
+`EdgeNpmInstallPlan`
+
+## Returns
+
+`string`
+
+  </Accordion>
+
+  <Accordion title="Core exports: functions/edgeInstallPackageId">
+
+@fentaris/core / edgeInstallPackageId
+
+> **edgeInstallPackageId**(`plan`): `string`
+
+Defined in: packages/core/src/edge/install.ts:154
+
+Stable `name@version` identifier for logs, status, and reporting.
+
+## Parameters
+
+### plan
+
+`EdgeNpmInstallPlan`
+
+## Returns
+
+`string`
 
   </Accordion>
 
@@ -13678,7 +13808,7 @@ Check whether a capability is allowed by a permission set.
 
 > **isCloudTarget**(`target`): `target is CloudExecutionTarget`
 
-Defined in: packages/core/src/edge/target.ts:194
+Defined in: packages/core/src/edge/target.ts:197
 
 Type guard for a cloud target.
 
@@ -13744,7 +13874,7 @@ Return true when an unknown value is a structurally valid terminal envelope.
 
 > **isEdgeTarget**(`target`): `target is EdgeExecutionTarget`
 
-Defined in: packages/core/src/edge/target.ts:199
+Defined in: packages/core/src/edge/target.ts:202
 
 Type guard for an edge target.
 
@@ -14076,7 +14206,7 @@ Runtime profiler, event, sink, and runtime error APIs.
 
 > **parseEdgeProtocolMessage**(`frame`): `EdgeProtocolMessage`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:165
+Defined in: packages/core/src/edge/controlProtocol.ts:202
 
 Parse a JSON edge frame and reject unsupported/malformed protocol shells.
 
@@ -14098,7 +14228,7 @@ Parse a JSON edge frame and reject unsupported/malformed protocol shells.
 
 > **parseLaunchRecipe**(`data`): `LaunchRecipe`
 
-Defined in: packages/core/src/edge/recipe.ts:112
+Defined in: packages/core/src/edge/recipe.ts:140
 
 Parse and validate a serialized recipe.
 
@@ -14278,7 +14408,7 @@ Middleware helper that enforces a rate limiter before forwarding tool calls.
 
 > **redactEdgeProtocolValue**(`value`, `key?`): `unknown`
 
-Defined in: packages/core/src/edge/observability.ts:96
+Defined in: packages/core/src/edge/observability.ts:97
 
 Redact edge credentials, local paths, secrets, environments, and auth fields.
 
@@ -14336,7 +14466,7 @@ Runtime profiler, event, sink, and runtime error APIs.
 
 > **registerEdgeControlProvider**(`handle`, `options`): `void`
 
-Defined in: packages/core/src/edge/controlProvider.ts:168
+Defined in: packages/core/src/edge/controlProvider.ts:173
 
 Register the reserved provider through the normal local capability machinery.
 
@@ -14572,7 +14702,7 @@ Stable key for comparing secret references.
 
 > **selectHighestMutualEdgeProtocolVersion**(`peerVersions`, `supportedVersions?`): `EdgeProtocolVersion` \| `undefined`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:191
+Defined in: packages/core/src/edge/controlProtocol.ts:228
 
 Select the highest version supported by both peers.
 
@@ -14620,7 +14750,7 @@ Permission helper for sensitive-operation metadata.
 
 > **serializeEdgePublicValue**(`value`, `limits?`): `unknown`
 
-Defined in: packages/core/src/edge/observability.ts:121
+Defined in: packages/core/src/edge/observability.ts:122
 
 Redact and bound an untrusted public/diagnostic value before serialization.
 
@@ -14646,7 +14776,7 @@ Redact and bound an untrusted public/diagnostic value before serialization.
 
 > **serializeLaunchRecipe**(`recipe`): `string`
 
-Defined in: packages/core/src/edge/recipe.ts:107
+Defined in: packages/core/src/edge/recipe.ts:135
 
 Serialize a recipe to a canonical JSON string.
 
@@ -14690,7 +14820,7 @@ Serialize a secrets manifest to JSON.
 
 > **stdio**(`options`): `StdioTransport`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:293
+Defined in: packages/core/src/transports/client/StdioTransport.ts:313
 
 Create a stdio upstream transport.
 
@@ -14856,7 +14986,7 @@ Helper to declare a user.
 
 > **validateDeviceSelector**(`selector`): `string`[]
 
-Defined in: packages/core/src/edge/target.ts:212
+Defined in: packages/core/src/edge/target.ts:215
 
 Validate a device selector structure and return collected diagnostic messages.
 
@@ -14872,13 +15002,58 @@ Validate a device selector structure and return collected diagnostic messages.
 
   </Accordion>
 
+  <Accordion title="Core exports: functions/validateEdgeInstallPlan">
+
+@fentaris/core / validateEdgeInstallPlan
+
+> **validateEdgeInstallPlan**(`value`): `EdgeNpmInstallPlan`
+
+Defined in: packages/core/src/edge/install.ts:124
+
+Validate an install plan received from the control plane. Applies the same
+rules as compileEdgeNpmInstallPlan and rejects a mismatched digest.
+
+## Parameters
+
+### value
+
+`unknown`
+
+## Returns
+
+`EdgeNpmInstallPlan`
+
+  </Accordion>
+
+  <Accordion title="Core exports: functions/validateEdgeInstallStatusReport">
+
+@fentaris/core / validateEdgeInstallStatusReport
+
+> **validateEdgeInstallStatusReport**(`value`): `void`
+
+Defined in: packages/core/src/edge/controlProtocol.ts:263
+
+Validate a bounded, non-sensitive managed-install status report.
+
+## Parameters
+
+### value
+
+`unknown`
+
+## Returns
+
+`void`
+
+  </Accordion>
+
   <Accordion title="Core exports: functions/validateEdgePresenceReport">
 
 @fentaris/core / validateEdgePresenceReport
 
 > **validateEdgePresenceReport**(`message`): `void`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:200
+Defined in: packages/core/src/edge/controlProtocol.ts:237
 
 Validate bounded protocol-v2 observed facts and dynamic report fields.
 
@@ -14926,7 +15101,7 @@ Validate Fentaris configuration and return structured diagnostics.
 
 > **validateLaunchRecipe**(`value`): `LaunchRecipe`
 
-Defined in: packages/core/src/edge/recipe.ts:123
+Defined in: packages/core/src/edge/recipe.ts:151
 
 Validate an already-decoded launch recipe object.
 
@@ -15126,7 +15301,7 @@ Whether the field must be supplied. Defaults to `true`.
 
 @fentaris/core / CloudExecutionTarget
 
-Defined in: packages/core/src/edge/target.ts:129
+Defined in: packages/core/src/edge/target.ts:130
 
 Cloud execution target: run the configured transport on the Fentaris host.
 
@@ -15136,7 +15311,7 @@ Cloud execution target: run the configured transport on the Fentaris host.
 
 > `readonly` **kind**: `"cloud"`
 
-Defined in: packages/core/src/edge/target.ts:130
+Defined in: packages/core/src/edge/target.ts:131
 
   </Accordion>
 
@@ -15402,7 +15577,7 @@ Tenant id, if known.
 
 @fentaris/core / DeviceSelector
 
-Defined in: packages/core/src/edge/target.ts:42
+Defined in: packages/core/src/edge/target.ts:43
 
 A serializable, composable device selector. Selector instances carry an `or`
 method on the prototype (not serialized) but expose only data fields through
@@ -15414,7 +15589,7 @@ method on the prototype (not serialized) but expose only data fields through
 
 > `readonly` `optional` **alias?**: `string`
 
-Defined in: packages/core/src/edge/target.ts:45
+Defined in: packages/core/src/edge/target.ts:46
 
 Alias for a `named` selector.
 
@@ -15422,7 +15597,7 @@ Alias for a `named` selector.
 
 > `readonly` `optional` **pool?**: `string`
 
-Defined in: packages/core/src/edge/target.ts:47
+Defined in: packages/core/src/edge/target.ts:48
 
 Pool name for a `pool` selector.
 
@@ -15430,7 +15605,7 @@ Pool name for a `pool` selector.
 
 > `readonly` `optional` **selectors?**: readonly `DeviceSelector`[]
 
-Defined in: packages/core/src/edge/target.ts:51
+Defined in: packages/core/src/edge/target.ts:52
 
 Ordered selectors for a `fallback` selector; first eligible wins.
 
@@ -15438,7 +15613,7 @@ Ordered selectors for a `fallback` selector; first eligible wins.
 
 > `readonly` `optional` **strategy?**: `TargetSelectionStrategy`
 
-Defined in: packages/core/src/edge/target.ts:49
+Defined in: packages/core/src/edge/target.ts:50
 
 Selection strategy for a `pool` selector.
 
@@ -15446,7 +15621,7 @@ Selection strategy for a `pool` selector.
 
 > `readonly` **type**: `DeviceSelectorType`
 
-Defined in: packages/core/src/edge/target.ts:43
+Defined in: packages/core/src/edge/target.ts:44
 
   </Accordion>
 
@@ -15454,7 +15629,7 @@ Defined in: packages/core/src/edge/target.ts:43
 
 @fentaris/core / EdgeAdapterDiagnostics
 
-Defined in: packages/core/src/edge/inventory.ts:153
+Defined in: packages/core/src/edge/inventory.ts:154
 
 Diagnostics every replaceable Edge adapter exposes.
 
@@ -15464,31 +15639,31 @@ Diagnostics every replaceable Edge adapter exposes.
 
 > `readonly` **adapter**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:154
+Defined in: packages/core/src/edge/inventory.ts:155
 
 ### durable
 
 > `readonly` **durable**: `boolean`
 
-Defined in: packages/core/src/edge/inventory.ts:155
+Defined in: packages/core/src/edge/inventory.ts:156
 
 ### multiInstance
 
 > `readonly` **multiInstance**: `boolean`
 
-Defined in: packages/core/src/edge/inventory.ts:156
+Defined in: packages/core/src/edge/inventory.ts:157
 
 ### productionReady
 
 > `readonly` **productionReady**: `boolean`
 
-Defined in: packages/core/src/edge/inventory.ts:157
+Defined in: packages/core/src/edge/inventory.ts:158
 
 ### warnings
 
 > `readonly` **warnings**: readonly `string`[]
 
-Defined in: packages/core/src/edge/inventory.ts:158
+Defined in: packages/core/src/edge/inventory.ts:159
 
   </Accordion>
 
@@ -15912,7 +16087,7 @@ Defined in: packages/core/src/edge/capabilityCache.ts:15
 
 @fentaris/core / EdgeCapabilityManifestMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:114
+Defined in: packages/core/src/edge/controlProtocol.ts:151
 
 Common trusted routing claims carried by edge control messages.
 
@@ -15926,7 +16101,7 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:29
+Defined in: packages/core/src/edge/controlProtocol.ts:47
 
 #### Inherited from
 
@@ -15936,13 +16111,13 @@ Defined in: packages/core/src/edge/controlProtocol.ts:29
 
 > `readonly` **deploymentId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:117
+Defined in: packages/core/src/edge/controlProtocol.ts:154
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:28
+Defined in: packages/core/src/edge/controlProtocol.ts:46
 
 #### Inherited from
 
@@ -15952,43 +16127,43 @@ Defined in: packages/core/src/edge/controlProtocol.ts:28
 
 > `readonly` **kind**: `"edge.capability-manifest"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:116
+Defined in: packages/core/src/edge/controlProtocol.ts:153
 
 ### prompts
 
 > `readonly` **prompts**: readonly `unknown`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:122
+Defined in: packages/core/src/edge/controlProtocol.ts:159
 
 ### recipeDigest
 
 > `readonly` **recipeDigest**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:118
+Defined in: packages/core/src/edge/controlProtocol.ts:155
 
 ### resources
 
 > `readonly` **resources**: readonly `unknown`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:120
+Defined in: packages/core/src/edge/controlProtocol.ts:157
 
 ### resourceTemplates
 
 > `readonly` **resourceTemplates**: readonly `unknown`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:121
+Defined in: packages/core/src/edge/controlProtocol.ts:158
 
 ### supportsCompletion
 
 > `readonly` **supportsCompletion**: `boolean`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:123
+Defined in: packages/core/src/edge/controlProtocol.ts:160
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:27
+Defined in: packages/core/src/edge/controlProtocol.ts:45
 
 #### Inherited from
 
@@ -15998,13 +16173,13 @@ Defined in: packages/core/src/edge/controlProtocol.ts:27
 
 > `readonly` **tools**: readonly `unknown`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:119
+Defined in: packages/core/src/edge/controlProtocol.ts:156
 
 ### version
 
 > `readonly` **version**: `EdgeProtocolVersion`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:115
+Defined in: packages/core/src/edge/controlProtocol.ts:152
 
   </Accordion>
 
@@ -16178,7 +16353,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:146
 
 @fentaris/core / EdgeChildBinding
 
-Defined in: packages/core/src/edge/inventory.ts:138
+Defined in: packages/core/src/edge/inventory.ts:139
 
 Isolated placement binding for an explicit orchestration child.
 
@@ -16188,67 +16363,67 @@ Isolated placement binding for an explicit orchestration child.
 
 > `readonly` **childBindingId**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:139
+Defined in: packages/core/src/edge/inventory.ts:140
 
 ### childRequestId
 
 > `readonly` **childRequestId**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:142
+Defined in: packages/core/src/edge/inventory.ts:143
 
 ### connectionGeneration
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/inventory.ts:147
+Defined in: packages/core/src/edge/inventory.ts:148
 
 ### createdAt
 
 > `readonly` **createdAt**: `number`
 
-Defined in: packages/core/src/edge/inventory.ts:148
+Defined in: packages/core/src/edge/inventory.ts:149
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:146
+Defined in: packages/core/src/edge/inventory.ts:147
 
 ### expiresAt
 
 > `readonly` **expiresAt**: `number`
 
-Defined in: packages/core/src/edge/inventory.ts:149
+Defined in: packages/core/src/edge/inventory.ts:150
 
 ### parentRequestId
 
 > `readonly` **parentRequestId**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:141
+Defined in: packages/core/src/edge/inventory.ts:142
 
 ### parentSessionId
 
 > `readonly` **parentSessionId**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:140
+Defined in: packages/core/src/edge/inventory.ts:141
 
 ### subjectId
 
 > `readonly` **subjectId**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:144
+Defined in: packages/core/src/edge/inventory.ts:145
 
 ### targetName
 
 > `readonly` **targetName**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:145
+Defined in: packages/core/src/edge/inventory.ts:146
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:143
+Defined in: packages/core/src/edge/inventory.ts:144
 
   </Accordion>
 
@@ -16392,7 +16567,7 @@ Defined in: packages/core/src/edge/sessionSelection.ts:103
 
 @fentaris/core / EdgeChildBindingStore
 
-Defined in: packages/core/src/edge/inventory.ts:202
+Defined in: packages/core/src/edge/inventory.ts:203
 
 Replaceable isolated child-binding store.
 
@@ -16402,7 +16577,7 @@ Replaceable isolated child-binding store.
 
 > `readonly` **diagnostics**: `EdgeAdapterDiagnostics`
 
-Defined in: packages/core/src/edge/inventory.ts:203
+Defined in: packages/core/src/edge/inventory.ts:204
 
 ## Methods
 
@@ -16410,7 +16585,7 @@ Defined in: packages/core/src/edge/inventory.ts:203
 
 > **allocate**(`input`): `Promise`\<`EdgeChildBinding`\>
 
-Defined in: packages/core/src/edge/inventory.ts:204
+Defined in: packages/core/src/edge/inventory.ts:205
 
 #### Parameters
 
@@ -16426,7 +16601,7 @@ Defined in: packages/core/src/edge/inventory.ts:204
 
 > **delete**(`childBindingId`): `Promise`\<`EdgeChildBinding` \| `undefined`\>
 
-Defined in: packages/core/src/edge/inventory.ts:206
+Defined in: packages/core/src/edge/inventory.ts:207
 
 #### Parameters
 
@@ -16442,7 +16617,7 @@ Defined in: packages/core/src/edge/inventory.ts:206
 
 > **deleteParent**(`parentSessionId`, `parentRequestId?`): `Promise`\<readonly `EdgeChildBinding`[]\>
 
-Defined in: packages/core/src/edge/inventory.ts:207
+Defined in: packages/core/src/edge/inventory.ts:208
 
 #### Parameters
 
@@ -16462,7 +16637,7 @@ Defined in: packages/core/src/edge/inventory.ts:207
 
 > **get**(`childBindingId`): `Promise`\<`EdgeChildBinding` \| `undefined`\>
 
-Defined in: packages/core/src/edge/inventory.ts:205
+Defined in: packages/core/src/edge/inventory.ts:206
 
 #### Parameters
 
@@ -16478,7 +16653,7 @@ Defined in: packages/core/src/edge/inventory.ts:205
 
 > **purgeExpired**(`evaluatedAt`): `Promise`\<readonly `EdgeChildBinding`[]\>
 
-Defined in: packages/core/src/edge/inventory.ts:208
+Defined in: packages/core/src/edge/inventory.ts:209
 
 #### Parameters
 
@@ -16690,7 +16865,7 @@ Defined in: packages/core/src/edge/controlPlane.ts:134
 
 @fentaris/core / EdgeControlDeviceSummary
 
-Defined in: packages/core/src/edge/controlProvider.ts:28
+Defined in: packages/core/src/edge/controlProvider.ts:29
 
 ## Properties
 
@@ -16698,13 +16873,13 @@ Defined in: packages/core/src/edge/controlProvider.ts:28
 
 > `readonly` `optional` **description?**: `string`
 
-Defined in: packages/core/src/edge/controlProvider.ts:30
+Defined in: packages/core/src/edge/controlProvider.ts:31
 
 ### device
 
 > `readonly` **device**: `object`
 
-Defined in: packages/core/src/edge/controlProvider.ts:29
+Defined in: packages/core/src/edge/controlProvider.ts:30
 
 #### inventoryVersion
 
@@ -16718,19 +16893,19 @@ Defined in: packages/core/src/edge/controlProvider.ts:29
 
 > `readonly` `optional` **executionFeatures?**: readonly `string`[]
 
-Defined in: packages/core/src/edge/controlProvider.ts:35
+Defined in: packages/core/src/edge/controlProvider.ts:36
 
 ### heartbeatFresh
 
 > `readonly` **heartbeatFresh**: `boolean`
 
-Defined in: packages/core/src/edge/controlProvider.ts:32
+Defined in: packages/core/src/edge/controlProvider.ts:33
 
 ### metadata?
 
 > `readonly` `optional` **metadata?**: `object`
 
-Defined in: packages/core/src/edge/controlProvider.ts:38
+Defined in: packages/core/src/edge/controlProvider.ts:39
 
 #### agent
 
@@ -16748,37 +16923,37 @@ Defined in: packages/core/src/edge/controlProvider.ts:38
 
 > `readonly` `optional` **platform?**: `string`
 
-Defined in: packages/core/src/edge/controlProvider.ts:34
+Defined in: packages/core/src/edge/controlProvider.ts:35
 
 ### pools?
 
 > `readonly` `optional` **pools?**: readonly `string`[]
 
-Defined in: packages/core/src/edge/controlProvider.ts:36
+Defined in: packages/core/src/edge/controlProvider.ts:37
 
 ### readiness?
 
 > `readonly` `optional` **readiness?**: readonly `EdgePublicReadinessSummary`[]
 
-Defined in: packages/core/src/edge/controlProvider.ts:37
+Defined in: packages/core/src/edge/controlProvider.ts:38
 
 ### status
 
 > `readonly` **status**: `string`
 
-Defined in: packages/core/src/edge/controlProvider.ts:31
+Defined in: packages/core/src/edge/controlProvider.ts:32
 
 ### tags?
 
 > `readonly` `optional` **tags?**: readonly `string`[]
 
-Defined in: packages/core/src/edge/controlProvider.ts:33
+Defined in: packages/core/src/edge/controlProvider.ts:34
 
 ### warnings
 
 > `readonly` **warnings**: readonly `string`[]
 
-Defined in: packages/core/src/edge/controlProvider.ts:43
+Defined in: packages/core/src/edge/controlProvider.ts:44
 
   </Accordion>
 
@@ -16786,7 +16961,7 @@ Defined in: packages/core/src/edge/controlProvider.ts:43
 
 @fentaris/core / EdgeControlGetResult
 
-Defined in: packages/core/src/edge/controlProvider.ts:46
+Defined in: packages/core/src/edge/controlProvider.ts:47
 
 ## Properties
 
@@ -16794,13 +16969,13 @@ Defined in: packages/core/src/edge/controlProvider.ts:46
 
 > `readonly` **device**: `EdgeControlDeviceSummary`
 
-Defined in: packages/core/src/edge/controlProvider.ts:47
+Defined in: packages/core/src/edge/controlProvider.ts:48
 
 ### nextActions
 
 > `readonly` **nextActions**: readonly `string`[]
 
-Defined in: packages/core/src/edge/controlProvider.ts:48
+Defined in: packages/core/src/edge/controlProvider.ts:49
 
   </Accordion>
 
@@ -16808,7 +16983,7 @@ Defined in: packages/core/src/edge/controlProvider.ts:48
 
 @fentaris/core / EdgeControlInvocationRequest
 
-Defined in: packages/core/src/edge/controlProvider.ts:59
+Defined in: packages/core/src/edge/controlProvider.ts:60
 
 ## Properties
 
@@ -16816,13 +16991,13 @@ Defined in: packages/core/src/edge/controlProvider.ts:59
 
 > `readonly` **arguments**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: packages/core/src/edge/controlProvider.ts:61
+Defined in: packages/core/src/edge/controlProvider.ts:62
 
 ### context
 
 > `readonly` **context**: `ProxyContext`
 
-Defined in: packages/core/src/edge/controlProvider.ts:60
+Defined in: packages/core/src/edge/controlProvider.ts:61
 
   </Accordion>
 
@@ -16830,7 +17005,7 @@ Defined in: packages/core/src/edge/controlProvider.ts:60
 
 @fentaris/core / EdgeControlInvoker
 
-Defined in: packages/core/src/edge/controlProvider.ts:64
+Defined in: packages/core/src/edge/controlProvider.ts:65
 
 ## Methods
 
@@ -16838,7 +17013,7 @@ Defined in: packages/core/src/edge/controlProvider.ts:64
 
 > **call**(`request`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `content`: (\{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `text`: `string`; `type`: `"text"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"image"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"audio"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `description?`: `string`; `icons?`: `object`[]; `mimeType?`: `string`; `name`: `string`; `size?`: `number`; `title?`: `string`; `type`: `"resource_link"`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `resource`: \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `mimeType?`: `string`; `text`: `string`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `blob`: `string`; `mimeType?`: `string`; `uri`: `string`; \}; `type`: `"resource"`; \})[]; `isError?`: `boolean`; `structuredContent?`: \{\[`key`: `string`\]: `unknown`; \}; \}\>
 
-Defined in: packages/core/src/edge/controlProvider.ts:65
+Defined in: packages/core/src/edge/controlProvider.ts:66
 
 #### Parameters
 
@@ -16854,7 +17029,7 @@ Defined in: packages/core/src/edge/controlProvider.ts:65
 
 > **callMany**(`request`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `content`: (\{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `text`: `string`; `type`: `"text"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"image"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"audio"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `description?`: `string`; `icons?`: `object`[]; `mimeType?`: `string`; `name`: `string`; `size?`: `number`; `title?`: `string`; `type`: `"resource_link"`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `resource`: \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `mimeType?`: `string`; `text`: `string`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `blob`: `string`; `mimeType?`: `string`; `uri`: `string`; \}; `type`: `"resource"`; \})[]; `isError?`: `boolean`; `structuredContent?`: \{\[`key`: `string`\]: `unknown`; \}; \}\>
 
-Defined in: packages/core/src/edge/controlProvider.ts:66
+Defined in: packages/core/src/edge/controlProvider.ts:67
 
 #### Parameters
 
@@ -16872,7 +17047,7 @@ Defined in: packages/core/src/edge/controlProvider.ts:66
 
 @fentaris/core / EdgeControlListResult
 
-Defined in: packages/core/src/edge/controlProvider.ts:21
+Defined in: packages/core/src/edge/controlProvider.ts:22
 
 ## Properties
 
@@ -16880,25 +17055,25 @@ Defined in: packages/core/src/edge/controlProvider.ts:21
 
 > `readonly` **devices**: readonly `EdgeControlDeviceSummary`[]
 
-Defined in: packages/core/src/edge/controlProvider.ts:22
+Defined in: packages/core/src/edge/controlProvider.ts:23
 
 ### nextActions
 
 > `readonly` **nextActions**: readonly `string`[]
 
-Defined in: packages/core/src/edge/controlProvider.ts:25
+Defined in: packages/core/src/edge/controlProvider.ts:26
 
 ### nextCursor?
 
 > `readonly` `optional` **nextCursor?**: `string`
 
-Defined in: packages/core/src/edge/controlProvider.ts:23
+Defined in: packages/core/src/edge/controlProvider.ts:24
 
 ### warnings
 
 > `readonly` **warnings**: readonly `string`[]
 
-Defined in: packages/core/src/edge/controlProvider.ts:24
+Defined in: packages/core/src/edge/controlProvider.ts:25
 
   </Accordion>
 
@@ -17038,7 +17213,7 @@ Defined in: packages/core/src/edge/management.ts:67
 
 @fentaris/core / EdgeControlProviderOptions
 
-Defined in: packages/core/src/edge/controlProvider.ts:69
+Defined in: packages/core/src/edge/controlProvider.ts:70
 
 ## Properties
 
@@ -17046,7 +17221,7 @@ Defined in: packages/core/src/edge/controlProvider.ts:69
 
 > `readonly` `optional` **approveOrchestration?**: (`approval`, `context`) => `boolean` \| `Promise`\<`boolean`\>
 
-Defined in: packages/core/src/edge/controlProvider.ts:75
+Defined in: packages/core/src/edge/controlProvider.ts:76
 
 #### Parameters
 
@@ -17066,31 +17241,31 @@ Defined in: packages/core/src/edge/controlProvider.ts:75
 
 > `readonly` `optional` **defaultTargetName?**: `string`
 
-Defined in: packages/core/src/edge/controlProvider.ts:73
+Defined in: packages/core/src/edge/controlProvider.ts:74
 
 ### inventory
 
 > `readonly` **inventory**: `EdgeInventoryService`
 
-Defined in: packages/core/src/edge/controlProvider.ts:70
+Defined in: packages/core/src/edge/controlProvider.ts:71
 
 ### invoker?
 
 > `readonly` `optional` **invoker?**: `EdgeControlInvoker`
 
-Defined in: packages/core/src/edge/controlProvider.ts:72
+Defined in: packages/core/src/edge/controlProvider.ts:73
 
 ### limits?
 
 > `readonly` `optional` **limits?**: `Partial`\<`EdgeOrchestrationLimits`\>
 
-Defined in: packages/core/src/edge/controlProvider.ts:74
+Defined in: packages/core/src/edge/controlProvider.ts:75
 
 ### selections
 
 > `readonly` **selections**: `EdgeSessionSelectionService`
 
-Defined in: packages/core/src/edge/controlProvider.ts:71
+Defined in: packages/core/src/edge/controlProvider.ts:72
 
   </Accordion>
 
@@ -17098,7 +17273,7 @@ Defined in: packages/core/src/edge/controlProvider.ts:71
 
 @fentaris/core / EdgeControlSelectResult
 
-Defined in: packages/core/src/edge/controlProvider.ts:51
+Defined in: packages/core/src/edge/controlProvider.ts:52
 
 ## Properties
 
@@ -17106,7 +17281,7 @@ Defined in: packages/core/src/edge/controlProvider.ts:51
 
 > `readonly` **device**: `object`
 
-Defined in: packages/core/src/edge/controlProvider.ts:53
+Defined in: packages/core/src/edge/controlProvider.ts:54
 
 #### inventoryVersion
 
@@ -17120,25 +17295,25 @@ Defined in: packages/core/src/edge/controlProvider.ts:53
 
 > `readonly` **expiresAt**: `number`
 
-Defined in: packages/core/src/edge/controlProvider.ts:54
+Defined in: packages/core/src/edge/controlProvider.ts:55
 
 ### explanation?
 
 > `readonly` `optional` **explanation?**: `unknown`
 
-Defined in: packages/core/src/edge/controlProvider.ts:55
+Defined in: packages/core/src/edge/controlProvider.ts:56
 
 ### nextActions
 
 > `readonly` **nextActions**: readonly `string`[]
 
-Defined in: packages/core/src/edge/controlProvider.ts:56
+Defined in: packages/core/src/edge/controlProvider.ts:57
 
 ### target
 
 > `readonly` **target**: `string`
 
-Defined in: packages/core/src/edge/controlProvider.ts:52
+Defined in: packages/core/src/edge/controlProvider.ts:53
 
   </Accordion>
 
@@ -17146,7 +17321,7 @@ Defined in: packages/core/src/edge/controlProvider.ts:52
 
 @fentaris/core / EdgeDeploymentReadiness
 
-Defined in: packages/core/src/edge/inventory.ts:111
+Defined in: packages/core/src/edge/inventory.ts:112
 
 Per-device deployment readiness without grant values or local paths.
 
@@ -17156,67 +17331,67 @@ Per-device deployment readiness without grant values or local paths.
 
 > `readonly` `optional` **connectionGeneration?**: `number`
 
-Defined in: packages/core/src/edge/inventory.ts:115
+Defined in: packages/core/src/edge/inventory.ts:116
 
 ### credentialId?
 
 > `readonly` `optional` **credentialId?**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:114
+Defined in: packages/core/src/edge/inventory.ts:115
 
 ### deploymentId
 
 > `readonly` **deploymentId**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:116
+Defined in: packages/core/src/edge/inventory.ts:117
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:113
+Defined in: packages/core/src/edge/inventory.ts:114
 
 ### expiresAt?
 
 > `readonly` `optional` **expiresAt?**: `number`
 
-Defined in: packages/core/src/edge/inventory.ts:120
+Defined in: packages/core/src/edge/inventory.ts:121
 
 ### nextActions?
 
 > `readonly` `optional` **nextActions?**: readonly `string`[]
 
-Defined in: packages/core/src/edge/inventory.ts:122
+Defined in: packages/core/src/edge/inventory.ts:123
 
 ### observedAt
 
 > `readonly` **observedAt**: `number`
 
-Defined in: packages/core/src/edge/inventory.ts:119
+Defined in: packages/core/src/edge/inventory.ts:120
 
 ### reasonCategory?
 
 > `readonly` `optional` **reasonCategory?**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:121
+Defined in: packages/core/src/edge/inventory.ts:122
 
 ### recipeVersion?
 
 > `readonly` `optional` **recipeVersion?**: `number`
 
-Defined in: packages/core/src/edge/inventory.ts:118
+Defined in: packages/core/src/edge/inventory.ts:119
 
 ### status
 
 > `readonly` **status**: `EdgeDeploymentReadinessStatus`
 
-Defined in: packages/core/src/edge/inventory.ts:117
+Defined in: packages/core/src/edge/inventory.ts:118
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:112
+Defined in: packages/core/src/edge/inventory.ts:113
 
   </Accordion>
 
@@ -17224,7 +17399,7 @@ Defined in: packages/core/src/edge/inventory.ts:112
 
 @fentaris/core / EdgeDesiredDeployment
 
-Defined in: packages/core/src/edge/controlProtocol.ts:79
+Defined in: packages/core/src/edge/controlProtocol.ts:97
 
 ## Properties
 
@@ -17232,25 +17407,25 @@ Defined in: packages/core/src/edge/controlProtocol.ts:79
 
 > `readonly` **deploymentId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:80
+Defined in: packages/core/src/edge/controlProtocol.ts:98
 
 ### recipe
 
 > `readonly` **recipe**: `LaunchRecipe`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:82
+Defined in: packages/core/src/edge/controlProtocol.ts:100
 
 ### serverName
 
 > `readonly` **serverName**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:81
+Defined in: packages/core/src/edge/controlProtocol.ts:99
 
 ### setupSchema
 
 > `readonly` **setupSchema**: `SetupSchema`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:84
+Defined in: packages/core/src/edge/controlProtocol.ts:102
 
 Complete unresolved setup schema collected locally by the edge agent.
 
@@ -17258,13 +17433,13 @@ Complete unresolved setup schema collected locally by the edge agent.
 
 > `readonly` `optional` **setupSchemaVersion?**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:85
+Defined in: packages/core/src/edge/controlProtocol.ts:103
 
 ### subjectIds?
 
 > `readonly` `optional` **subjectIds?**: readonly `string`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:86
+Defined in: packages/core/src/edge/controlProtocol.ts:104
 
   </Accordion>
 
@@ -17272,7 +17447,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:86
 
 @fentaris/core / EdgeDesiredStateAckMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:96
+Defined in: packages/core/src/edge/controlProtocol.ts:114
 
 Common trusted routing claims carried by edge control messages.
 
@@ -17286,13 +17461,13 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` `optional` **blockedDeploymentIds?**: readonly `string`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:101
+Defined in: packages/core/src/edge/controlProtocol.ts:119
 
 ### connectionGeneration
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:29
+Defined in: packages/core/src/edge/controlProtocol.ts:47
 
 #### Inherited from
 
@@ -17302,13 +17477,13 @@ Defined in: packages/core/src/edge/controlProtocol.ts:29
 
 > `readonly` **desiredVersion**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:99
+Defined in: packages/core/src/edge/controlProtocol.ts:117
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:28
+Defined in: packages/core/src/edge/controlProtocol.ts:46
 
 #### Inherited from
 
@@ -17318,19 +17493,19 @@ Defined in: packages/core/src/edge/controlProtocol.ts:28
 
 > `readonly` **kind**: `"edge.desired-state.ack"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:98
+Defined in: packages/core/src/edge/controlProtocol.ts:116
 
 ### status
 
 > `readonly` **status**: `"blocked"` \| `"applied"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:100
+Defined in: packages/core/src/edge/controlProtocol.ts:118
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:27
+Defined in: packages/core/src/edge/controlProtocol.ts:45
 
 #### Inherited from
 
@@ -17340,7 +17515,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:27
 
 > `readonly` **version**: `EdgeProtocolVersion`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:97
+Defined in: packages/core/src/edge/controlProtocol.ts:115
 
   </Accordion>
 
@@ -17348,7 +17523,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:97
 
 @fentaris/core / EdgeDesiredStateMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:89
+Defined in: packages/core/src/edge/controlProtocol.ts:107
 
 Common trusted routing claims carried by edge control messages.
 
@@ -17362,7 +17537,7 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:29
+Defined in: packages/core/src/edge/controlProtocol.ts:47
 
 #### Inherited from
 
@@ -17372,19 +17547,19 @@ Defined in: packages/core/src/edge/controlProtocol.ts:29
 
 > `readonly` **deployments**: readonly `EdgeDesiredDeployment`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:93
+Defined in: packages/core/src/edge/controlProtocol.ts:111
 
 ### desiredVersion
 
 > `readonly` **desiredVersion**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:92
+Defined in: packages/core/src/edge/controlProtocol.ts:110
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:28
+Defined in: packages/core/src/edge/controlProtocol.ts:46
 
 #### Inherited from
 
@@ -17394,13 +17569,13 @@ Defined in: packages/core/src/edge/controlProtocol.ts:28
 
 > `readonly` **kind**: `"edge.desired-state"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:91
+Defined in: packages/core/src/edge/controlProtocol.ts:109
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:27
+Defined in: packages/core/src/edge/controlProtocol.ts:45
 
 #### Inherited from
 
@@ -17410,7 +17585,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:27
 
 > `readonly` **version**: `EdgeProtocolVersion`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:90
+Defined in: packages/core/src/edge/controlProtocol.ts:108
 
   </Accordion>
 
@@ -17936,7 +18111,7 @@ Defined in: node\_modules/.pnpm/typescript@6.0.3/node\_modules/typescript/lib/li
 
 @fentaris/core / EdgeExecutionTarget
 
-Defined in: packages/core/src/edge/target.ts:134
+Defined in: packages/core/src/edge/target.ts:135
 
 Edge execution target: run on an enrolled device selected by `device`.
 
@@ -17946,7 +18121,7 @@ Edge execution target: run on an enrolled device selected by `device`.
 
 > `readonly` **device**: `DeviceSelector`
 
-Defined in: packages/core/src/edge/target.ts:137
+Defined in: packages/core/src/edge/target.ts:138
 
 Device selector for this target.
 
@@ -17954,13 +18129,13 @@ Device selector for this target.
 
 > `readonly` **kind**: `"edge"`
 
-Defined in: packages/core/src/edge/target.ts:135
+Defined in: packages/core/src/edge/target.ts:136
 
 ### strategy?
 
 > `readonly` `optional` **strategy?**: `TargetSelectionStrategy`
 
-Defined in: packages/core/src/edge/target.ts:139
+Defined in: packages/core/src/edge/target.ts:140
 
 Selection strategy for pool selectors declared on the target.
 
@@ -18372,7 +18547,7 @@ Defined in: packages/core/src/edge/gateway.ts:32
 
 @fentaris/core / EdgeHealthOptions
 
-Defined in: packages/core/src/edge/observability.ts:61
+Defined in: packages/core/src/edge/observability.ts:62
 
 ## Properties
 
@@ -18380,7 +18555,7 @@ Defined in: packages/core/src/edge/observability.ts:61
 
 > `readonly` `optional` **capabilityCache?**: () => `EdgeHealthProbeResult` \| `Promise`\<`EdgeHealthProbeResult`\>
 
-Defined in: packages/core/src/edge/observability.ts:66
+Defined in: packages/core/src/edge/observability.ts:67
 
 #### Returns
 
@@ -18390,7 +18565,7 @@ Defined in: packages/core/src/edge/observability.ts:66
 
 > `readonly` `optional` **channelRouting?**: () => `EdgeHealthProbeResult` \| `Promise`\<`EdgeHealthProbeResult`\>
 
-Defined in: packages/core/src/edge/observability.ts:71
+Defined in: packages/core/src/edge/observability.ts:72
 
 #### Returns
 
@@ -18400,7 +18575,7 @@ Defined in: packages/core/src/edge/observability.ts:71
 
 > `readonly` `optional` **childBindingCleanup?**: () => `EdgeHealthProbeResult` \| `Promise`\<`EdgeHealthProbeResult`\>
 
-Defined in: packages/core/src/edge/observability.ts:70
+Defined in: packages/core/src/edge/observability.ts:71
 
 #### Returns
 
@@ -18410,7 +18585,7 @@ Defined in: packages/core/src/edge/observability.ts:70
 
 > `readonly` `optional` **deploymentReadiness?**: () => `EdgeHealthProbeResult` \| `Promise`\<`EdgeHealthProbeResult`\>
 
-Defined in: packages/core/src/edge/observability.ts:65
+Defined in: packages/core/src/edge/observability.ts:66
 
 #### Returns
 
@@ -18420,7 +18595,7 @@ Defined in: packages/core/src/edge/observability.ts:65
 
 > `readonly` `optional` **deviceAvailability?**: () => `EdgeHealthProbeResult` \| `Promise`\<`EdgeHealthProbeResult`\>
 
-Defined in: packages/core/src/edge/observability.ts:64
+Defined in: packages/core/src/edge/observability.ts:65
 
 #### Returns
 
@@ -18430,7 +18605,7 @@ Defined in: packages/core/src/edge/observability.ts:64
 
 > `readonly` `optional` **gateway?**: () => `EdgeHealthProbeResult` \| `Promise`\<`EdgeHealthProbeResult`\>
 
-Defined in: packages/core/src/edge/observability.ts:62
+Defined in: packages/core/src/edge/observability.ts:63
 
 #### Returns
 
@@ -18440,7 +18615,7 @@ Defined in: packages/core/src/edge/observability.ts:62
 
 > `readonly` `optional` **inventoryStore?**: () => `EdgeHealthProbeResult` \| `Promise`\<`EdgeHealthProbeResult`\>
 
-Defined in: packages/core/src/edge/observability.ts:67
+Defined in: packages/core/src/edge/observability.ts:68
 
 #### Returns
 
@@ -18450,7 +18625,7 @@ Defined in: packages/core/src/edge/observability.ts:67
 
 > `readonly` `optional` **presenceExpiry?**: () => `EdgeHealthProbeResult` \| `Promise`\<`EdgeHealthProbeResult`\>
 
-Defined in: packages/core/src/edge/observability.ts:68
+Defined in: packages/core/src/edge/observability.ts:69
 
 #### Returns
 
@@ -18460,7 +18635,7 @@ Defined in: packages/core/src/edge/observability.ts:68
 
 > `readonly` `optional` **protocolDistribution?**: () => `EdgeHealthProbeResult` \| `Promise`\<`EdgeHealthProbeResult`\>
 
-Defined in: packages/core/src/edge/observability.ts:72
+Defined in: packages/core/src/edge/observability.ts:73
 
 #### Returns
 
@@ -18470,7 +18645,7 @@ Defined in: packages/core/src/edge/observability.ts:72
 
 > `readonly` `optional` **selectionService?**: () => `EdgeHealthProbeResult` \| `Promise`\<`EdgeHealthProbeResult`\>
 
-Defined in: packages/core/src/edge/observability.ts:69
+Defined in: packages/core/src/edge/observability.ts:70
 
 #### Returns
 
@@ -18480,7 +18655,7 @@ Defined in: packages/core/src/edge/observability.ts:69
 
 > `readonly` `optional` **staleReadiness?**: () => `EdgeHealthProbeResult` \| `Promise`\<`EdgeHealthProbeResult`\>
 
-Defined in: packages/core/src/edge/observability.ts:73
+Defined in: packages/core/src/edge/observability.ts:74
 
 #### Returns
 
@@ -18490,7 +18665,7 @@ Defined in: packages/core/src/edge/observability.ts:73
 
 > `readonly` `optional` **targetResolution?**: () => `EdgeHealthProbeResult` \| `Promise`\<`EdgeHealthProbeResult`\>
 
-Defined in: packages/core/src/edge/observability.ts:63
+Defined in: packages/core/src/edge/observability.ts:64
 
 #### Returns
 
@@ -18500,7 +18675,7 @@ Defined in: packages/core/src/edge/observability.ts:63
 
 > `readonly` `optional` **timeoutMs?**: `number`
 
-Defined in: packages/core/src/edge/observability.ts:74
+Defined in: packages/core/src/edge/observability.ts:75
 
   </Accordion>
 
@@ -18508,7 +18683,7 @@ Defined in: packages/core/src/edge/observability.ts:74
 
 @fentaris/core / EdgeHealthProbeResult
 
-Defined in: packages/core/src/edge/observability.ts:55
+Defined in: packages/core/src/edge/observability.ts:56
 
 ## Properties
 
@@ -18516,19 +18691,19 @@ Defined in: packages/core/src/edge/observability.ts:55
 
 > `readonly` `optional` **message?**: `string`
 
-Defined in: packages/core/src/edge/observability.ts:57
+Defined in: packages/core/src/edge/observability.ts:58
 
 ### metadata?
 
 > `readonly` `optional` **metadata?**: `Record`\<`string`, `unknown`\>
 
-Defined in: packages/core/src/edge/observability.ts:58
+Defined in: packages/core/src/edge/observability.ts:59
 
 ### status
 
 > `readonly` **status**: `HealthStatus`
 
-Defined in: packages/core/src/edge/observability.ts:56
+Defined in: packages/core/src/edge/observability.ts:57
 
   </Accordion>
 
@@ -18572,7 +18747,7 @@ Defined in: packages/core/src/edge/inventory.ts:79
 
 @fentaris/core / EdgeHeartbeatMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:49
+Defined in: packages/core/src/edge/controlProtocol.ts:67
 
 Common trusted routing claims carried by edge control messages.
 
@@ -18586,13 +18761,13 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` `optional` **capacity?**: `EdgeCapacitySnapshot`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:55
+Defined in: packages/core/src/edge/controlProtocol.ts:73
 
 ### connectionGeneration
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:29
+Defined in: packages/core/src/edge/controlProtocol.ts:47
 
 #### Inherited from
 
@@ -18602,7 +18777,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:29
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:28
+Defined in: packages/core/src/edge/controlProtocol.ts:46
 
 #### Inherited from
 
@@ -18612,13 +18787,13 @@ Defined in: packages/core/src/edge/controlProtocol.ts:28
 
 > `readonly` **kind**: `"edge.heartbeat"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:51
+Defined in: packages/core/src/edge/controlProtocol.ts:69
 
 ### load?
 
 > `readonly` `optional` **load?**: `number` \| `EdgeLoadSnapshot`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:54
+Defined in: packages/core/src/edge/controlProtocol.ts:72
 
 Legacy v1 scalar load.
 
@@ -18626,13 +18801,13 @@ Legacy v1 scalar load.
 
 > `readonly` **sentAt**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:52
+Defined in: packages/core/src/edge/controlProtocol.ts:70
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:27
+Defined in: packages/core/src/edge/controlProtocol.ts:45
 
 #### Inherited from
 
@@ -18642,7 +18817,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:27
 
 > `readonly` **version**: `EdgeProtocolVersion`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:50
+Defined in: packages/core/src/edge/controlProtocol.ts:68
 
   </Accordion>
 
@@ -18650,7 +18825,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:50
 
 @fentaris/core / EdgeHelloAckMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:42
+Defined in: packages/core/src/edge/controlProtocol.ts:60
 
 Common trusted routing claims carried by edge control messages.
 
@@ -18664,7 +18839,7 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:29
+Defined in: packages/core/src/edge/controlProtocol.ts:47
 
 #### Inherited from
 
@@ -18674,7 +18849,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:29
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:28
+Defined in: packages/core/src/edge/controlProtocol.ts:46
 
 #### Inherited from
 
@@ -18684,25 +18859,25 @@ Defined in: packages/core/src/edge/controlProtocol.ts:28
 
 > `readonly` **kind**: `"edge.hello.ack"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:44
+Defined in: packages/core/src/edge/controlProtocol.ts:62
 
 ### protocolVersion
 
 > `readonly` **protocolVersion**: `EdgeProtocolVersion`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:45
+Defined in: packages/core/src/edge/controlProtocol.ts:63
 
 ### serverTime
 
 > `readonly` **serverTime**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:46
+Defined in: packages/core/src/edge/controlProtocol.ts:64
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:27
+Defined in: packages/core/src/edge/controlProtocol.ts:45
 
 #### Inherited from
 
@@ -18712,7 +18887,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:27
 
 > `readonly` **version**: `EdgeProtocolVersion`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:43
+Defined in: packages/core/src/edge/controlProtocol.ts:61
 
   </Accordion>
 
@@ -18720,7 +18895,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:43
 
 @fentaris/core / EdgeHelloMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:32
+Defined in: packages/core/src/edge/controlProtocol.ts:50
 
 ## Properties
 
@@ -18728,43 +18903,87 @@ Defined in: packages/core/src/edge/controlProtocol.ts:32
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:36
+Defined in: packages/core/src/edge/controlProtocol.ts:54
 
 ### kind
 
 > `readonly` **kind**: `"edge.hello"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:34
+Defined in: packages/core/src/edge/controlProtocol.ts:52
 
 ### nonce
 
 > `readonly` **nonce**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:38
+Defined in: packages/core/src/edge/controlProtocol.ts:56
 
 ### proof
 
 > `readonly` **proof**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:39
+Defined in: packages/core/src/edge/controlProtocol.ts:57
 
 ### supportedVersions
 
 > `readonly` **supportedVersions**: readonly `number`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:37
+Defined in: packages/core/src/edge/controlProtocol.ts:55
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:35
+Defined in: packages/core/src/edge/controlProtocol.ts:53
 
 ### version
 
 > `readonly` **version**: `EdgeProtocolVersion`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:33
+Defined in: packages/core/src/edge/controlProtocol.ts:51
+
+  </Accordion>
+
+  <Accordion title="Core exports: interfaces/EdgeInstallStatusReport">
+
+@fentaris/core / EdgeInstallStatusReport
+
+Defined in: packages/core/src/edge/controlProtocol.ts:131
+
+Non-sensitive managed-install progress for one deployment. Carries package
+identity and a bounded reason category only; local directories, caches, and
+package-manager output never leave the device.
+
+## Properties
+
+### installDigest
+
+> `readonly` **installDigest**: `string`
+
+Defined in: packages/core/src/edge/controlProtocol.ts:134
+
+### packageId
+
+> `readonly` **packageId**: `string`
+
+Defined in: packages/core/src/edge/controlProtocol.ts:133
+
+### reasonCategory?
+
+> `readonly` `optional` **reasonCategory?**: `string`
+
+Defined in: packages/core/src/edge/controlProtocol.ts:136
+
+### resolvedVersion?
+
+> `readonly` `optional` **resolvedVersion?**: `string`
+
+Defined in: packages/core/src/edge/controlProtocol.ts:135
+
+### status
+
+> `readonly` **status**: `EdgeInstallReportStatus`
+
+Defined in: packages/core/src/edge/controlProtocol.ts:132
 
   </Accordion>
 
@@ -19316,7 +19535,7 @@ Defined in: packages/core/src/edge/management.ts:23
 
 @fentaris/core / EdgeLifecycleMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:126
+Defined in: packages/core/src/edge/controlProtocol.ts:163
 
 Common trusted routing claims carried by edge control messages.
 
@@ -19330,7 +19549,7 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:29
+Defined in: packages/core/src/edge/controlProtocol.ts:47
 
 #### Inherited from
 
@@ -19340,19 +19559,19 @@ Defined in: packages/core/src/edge/controlProtocol.ts:29
 
 > `readonly` `optional` **deploymentId?**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:137
+Defined in: packages/core/src/edge/controlProtocol.ts:174
 
 ### downstreamSessionId?
 
 > `readonly` `optional` **downstreamSessionId?**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:138
+Defined in: packages/core/src/edge/controlProtocol.ts:175
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:28
+Defined in: packages/core/src/edge/controlProtocol.ts:46
 
 #### Inherited from
 
@@ -19362,31 +19581,31 @@ Defined in: packages/core/src/edge/controlProtocol.ts:28
 
 > `readonly` **event**: `"connected"` \| `"disconnected"` \| `"setup-pending"` \| `"setup-ready"` \| `"workload-started"` \| `"workload-stopped"` \| `"workload-failed"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:129
+Defined in: packages/core/src/edge/controlProtocol.ts:166
 
 ### kind
 
 > `readonly` **kind**: `"edge.lifecycle"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:128
+Defined in: packages/core/src/edge/controlProtocol.ts:165
 
 ### metadata?
 
 > `readonly` `optional` **metadata?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: packages/core/src/edge/controlProtocol.ts:140
+Defined in: packages/core/src/edge/controlProtocol.ts:177
 
 ### occurredAt
 
 > `readonly` **occurredAt**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:139
+Defined in: packages/core/src/edge/controlProtocol.ts:176
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:27
+Defined in: packages/core/src/edge/controlProtocol.ts:45
 
 #### Inherited from
 
@@ -19396,7 +19615,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:27
 
 > `readonly` **version**: `EdgeProtocolVersion`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:127
+Defined in: packages/core/src/edge/controlProtocol.ts:164
 
   </Accordion>
 
@@ -19950,6 +20169,134 @@ Defined in: packages/core/src/edge/protocol.ts:25
 
   </Accordion>
 
+  <Accordion title="Core exports: interfaces/EdgeNpmInstallPlan">
+
+@fentaris/core / EdgeNpmInstallPlan
+
+Defined in: packages/core/src/edge/install.ts:23
+
+A pinned npm package installed on the edge for one deployment.
+
+## Properties
+
+### bin
+
+> `readonly` **bin**: `string`
+
+Defined in: packages/core/src/edge/install.ts:33
+
+Bin entry launched from the managed install directory.
+
+### digest
+
+> `readonly` **digest**: `string`
+
+Defined in: packages/core/src/edge/install.ts:39
+
+Stable content digest over the canonical plan payload.
+
+### integrity?
+
+> `readonly` `optional` **integrity?**: `string`
+
+Defined in: packages/core/src/edge/install.ts:35
+
+Expected registry integrity digest for the installed package.
+
+### kind
+
+> `readonly` **kind**: `"npm"`
+
+Defined in: packages/core/src/edge/install.ts:27
+
+Package source discriminator.
+
+### package
+
+> `readonly` **package**: `string`
+
+Defined in: packages/core/src/edge/install.ts:29
+
+Exact registry package name.
+
+### packageVersion
+
+> `readonly` **packageVersion**: `string`
+
+Defined in: packages/core/src/edge/install.ts:31
+
+Exact package version; ranges and dist-tags are rejected.
+
+### registryUrl?
+
+> `readonly` `optional` **registryUrl?**: `string`
+
+Defined in: packages/core/src/edge/install.ts:37
+
+Explicit registry URL; defaults to the device package-manager registry.
+
+### version
+
+> `readonly` **version**: `number`
+
+Defined in: packages/core/src/edge/install.ts:25
+
+Plan serialization version.
+
+  </Accordion>
+
+  <Accordion title="Core exports: interfaces/EdgeNpmInstallPlanInput">
+
+@fentaris/core / EdgeNpmInstallPlanInput
+
+Defined in: packages/core/src/edge/install.ts:46
+
+Author-supplied npm install declaration.
+
+## Properties
+
+### bin?
+
+> `readonly` `optional` **bin?**: `string`
+
+Defined in: packages/core/src/edge/install.ts:52
+
+Bin entry to launch; defaults to the unscoped package name.
+
+### integrity?
+
+> `readonly` `optional` **integrity?**: `string`
+
+Defined in: packages/core/src/edge/install.ts:54
+
+Expected registry integrity digest.
+
+### package
+
+> `readonly` **package**: `string`
+
+Defined in: packages/core/src/edge/install.ts:48
+
+Exact registry package name.
+
+### registryUrl?
+
+> `readonly` `optional` **registryUrl?**: `string`
+
+Defined in: packages/core/src/edge/install.ts:56
+
+Explicit registry URL.
+
+### version
+
+> `readonly` **version**: `string`
+
+Defined in: packages/core/src/edge/install.ts:50
+
+Exact package version.
+
+  </Accordion>
+
   <Accordion title="Core exports: interfaces/EdgeObservedFacts">
 
 @fentaris/core / EdgeObservedFacts
@@ -20206,7 +20553,7 @@ Defined in: packages/core/src/edge/inventory.ts:89
 
 @fentaris/core / EdgePresenceReportMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:69
+Defined in: packages/core/src/edge/controlProtocol.ts:87
 
 Authenticated protocol-v2 observed facts and dynamic state.
 
@@ -20220,13 +20567,13 @@ Authenticated protocol-v2 observed facts and dynamic state.
 
 > `readonly` `optional` **capacity?**: `EdgeCapacitySnapshot`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:73
+Defined in: packages/core/src/edge/controlProtocol.ts:91
 
 ### connectionGeneration
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:29
+Defined in: packages/core/src/edge/controlProtocol.ts:47
 
 #### Inherited from
 
@@ -20236,7 +20583,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:29
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:28
+Defined in: packages/core/src/edge/controlProtocol.ts:46
 
 #### Inherited from
 
@@ -20246,37 +20593,37 @@ Defined in: packages/core/src/edge/controlProtocol.ts:28
 
 > `readonly` **kind**: `"edge.presence"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:71
+Defined in: packages/core/src/edge/controlProtocol.ts:89
 
 ### load?
 
 > `readonly` `optional` **load?**: `EdgeLoadSnapshot`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:74
+Defined in: packages/core/src/edge/controlProtocol.ts:92
 
 ### observed
 
 > `readonly` **observed**: `EdgeObservedFacts`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:72
+Defined in: packages/core/src/edge/controlProtocol.ts:90
 
 ### readiness
 
 > `readonly` **readiness**: readonly `EdgeReadinessReport`[]
 
-Defined in: packages/core/src/edge/controlProtocol.ts:75
+Defined in: packages/core/src/edge/controlProtocol.ts:93
 
 ### reportedAt
 
 > `readonly` **reportedAt**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:76
+Defined in: packages/core/src/edge/controlProtocol.ts:94
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:27
+Defined in: packages/core/src/edge/controlProtocol.ts:45
 
 #### Inherited from
 
@@ -20286,7 +20633,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:27
 
 > `readonly` **version**: `2`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:70
+Defined in: packages/core/src/edge/controlProtocol.ts:88
 
   </Accordion>
 
@@ -20294,7 +20641,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:70
 
 @fentaris/core / EdgePresenceStore
 
-Defined in: packages/core/src/edge/inventory.ts:173
+Defined in: packages/core/src/edge/inventory.ts:174
 
 Replaceable authenticated presence store.
 
@@ -20304,7 +20651,7 @@ Replaceable authenticated presence store.
 
 > `readonly` **diagnostics**: `EdgeAdapterDiagnostics`
 
-Defined in: packages/core/src/edge/inventory.ts:174
+Defined in: packages/core/src/edge/inventory.ts:175
 
 ## Methods
 
@@ -20312,7 +20659,7 @@ Defined in: packages/core/src/edge/inventory.ts:174
 
 > **get**(`tenantId`, `edgeNodeId`): `Promise`\<`EdgePresence` \| `undefined`\>
 
-Defined in: packages/core/src/edge/inventory.ts:175
+Defined in: packages/core/src/edge/inventory.ts:176
 
 #### Parameters
 
@@ -20332,7 +20679,7 @@ Defined in: packages/core/src/edge/inventory.ts:175
 
 > **purgeStale**(`evaluatedAt`): `Promise`\<readonly `EdgePresence`[]\>
 
-Defined in: packages/core/src/edge/inventory.ts:178
+Defined in: packages/core/src/edge/inventory.ts:179
 
 #### Parameters
 
@@ -20348,7 +20695,7 @@ Defined in: packages/core/src/edge/inventory.ts:178
 
 > **put**(`presence`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/inventory.ts:176
+Defined in: packages/core/src/edge/inventory.ts:177
 
 #### Parameters
 
@@ -20364,7 +20711,7 @@ Defined in: packages/core/src/edge/inventory.ts:176
 
 > **remove**(`tenantId`, `edgeNodeId`, `connectionGeneration`): `Promise`\<`EdgePresence` \| `undefined`\>
 
-Defined in: packages/core/src/edge/inventory.ts:177
+Defined in: packages/core/src/edge/inventory.ts:178
 
 #### Parameters
 
@@ -20430,7 +20777,7 @@ Defined in: packages/core/src/edge/distributed.ts:129
 
 @fentaris/core / EdgeProtocolClaims
 
-Defined in: packages/core/src/edge/controlProtocol.ts:26
+Defined in: packages/core/src/edge/controlProtocol.ts:44
 
 Common trusted routing claims carried by edge control messages.
 
@@ -20451,19 +20798,19 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:29
+Defined in: packages/core/src/edge/controlProtocol.ts:47
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:28
+Defined in: packages/core/src/edge/controlProtocol.ts:46
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:27
+Defined in: packages/core/src/edge/controlProtocol.ts:45
 
   </Accordion>
 
@@ -20693,7 +21040,7 @@ Defined in: packages/core/src/edge/inventoryService.ts:39
 
 @fentaris/core / EdgeReadinessReport
 
-Defined in: packages/core/src/edge/controlProtocol.ts:59
+Defined in: packages/core/src/edge/controlProtocol.ts:77
 
 Public readiness report carried only by protocol v2.
 
@@ -20703,37 +21050,37 @@ Public readiness report carried only by protocol v2.
 
 > `readonly` **deploymentId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:60
+Defined in: packages/core/src/edge/controlProtocol.ts:78
 
 ### expiresAt?
 
 > `readonly` `optional` **expiresAt?**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:64
+Defined in: packages/core/src/edge/controlProtocol.ts:82
 
 ### observedAt
 
 > `readonly` **observedAt**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:63
+Defined in: packages/core/src/edge/controlProtocol.ts:81
 
 ### reasonCategory?
 
 > `readonly` `optional` **reasonCategory?**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:65
+Defined in: packages/core/src/edge/controlProtocol.ts:83
 
 ### recipeVersion?
 
 > `readonly` `optional` **recipeVersion?**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:62
+Defined in: packages/core/src/edge/controlProtocol.ts:80
 
 ### status
 
 > `readonly` **status**: `EdgeDeploymentReadinessStatus`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:61
+Defined in: packages/core/src/edge/controlProtocol.ts:79
 
   </Accordion>
 
@@ -20741,7 +21088,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:61
 
 @fentaris/core / EdgeReadinessStore
 
-Defined in: packages/core/src/edge/inventory.ts:182
+Defined in: packages/core/src/edge/inventory.ts:183
 
 Replaceable per-deployment readiness store.
 
@@ -20751,7 +21098,7 @@ Replaceable per-deployment readiness store.
 
 > `readonly` **diagnostics**: `EdgeAdapterDiagnostics`
 
-Defined in: packages/core/src/edge/inventory.ts:183
+Defined in: packages/core/src/edge/inventory.ts:184
 
 ## Methods
 
@@ -20759,7 +21106,7 @@ Defined in: packages/core/src/edge/inventory.ts:183
 
 > **delete**(`tenantId`, `edgeNodeId`, `deploymentId`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/inventory.ts:187
+Defined in: packages/core/src/edge/inventory.ts:188
 
 #### Parameters
 
@@ -20783,7 +21130,7 @@ Defined in: packages/core/src/edge/inventory.ts:187
 
 > **get**(`tenantId`, `edgeNodeId`, `deploymentId`): `Promise`\<`EdgeDeploymentReadiness` \| `undefined`\>
 
-Defined in: packages/core/src/edge/inventory.ts:184
+Defined in: packages/core/src/edge/inventory.ts:185
 
 #### Parameters
 
@@ -20807,7 +21154,7 @@ Defined in: packages/core/src/edge/inventory.ts:184
 
 > **list**(`tenantId`, `edgeNodeId`): `Promise`\<readonly `EdgeDeploymentReadiness`[]\>
 
-Defined in: packages/core/src/edge/inventory.ts:185
+Defined in: packages/core/src/edge/inventory.ts:186
 
 #### Parameters
 
@@ -20827,7 +21174,7 @@ Defined in: packages/core/src/edge/inventory.ts:185
 
 > **purgeExpired**(`evaluatedAt`): `Promise`\<readonly `EdgeDeploymentReadiness`[]\>
 
-Defined in: packages/core/src/edge/inventory.ts:188
+Defined in: packages/core/src/edge/inventory.ts:189
 
 #### Parameters
 
@@ -20843,7 +21190,7 @@ Defined in: packages/core/src/edge/inventory.ts:188
 
 > **put**(`readiness`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/inventory.ts:186
+Defined in: packages/core/src/edge/inventory.ts:187
 
 #### Parameters
 
@@ -20975,7 +21322,7 @@ Defined in: packages/core/src/edge/distributed.ts:40
 
 @fentaris/core / EdgeRuntimeEvent
 
-Defined in: packages/core/src/edge/observability.ts:20
+Defined in: packages/core/src/edge/observability.ts:21
 
 ## Properties
 
@@ -20983,79 +21330,79 @@ Defined in: packages/core/src/edge/observability.ts:20
 
 > `readonly` `optional` **connectionGeneration?**: `number`
 
-Defined in: packages/core/src/edge/observability.ts:29
+Defined in: packages/core/src/edge/observability.ts:30
 
 ### deploymentId?
 
 > `readonly` `optional` **deploymentId?**: `string`
 
-Defined in: packages/core/src/edge/observability.ts:27
+Defined in: packages/core/src/edge/observability.ts:28
 
 ### downstreamSessionId?
 
 > `readonly` `optional` **downstreamSessionId?**: `string`
 
-Defined in: packages/core/src/edge/observability.ts:30
+Defined in: packages/core/src/edge/observability.ts:31
 
 ### durationMs?
 
 > `readonly` `optional` **durationMs?**: `number`
 
-Defined in: packages/core/src/edge/observability.ts:23
+Defined in: packages/core/src/edge/observability.ts:24
 
 ### edgeNodeId?
 
 > `readonly` `optional` **edgeNodeId?**: `string`
 
-Defined in: packages/core/src/edge/observability.ts:28
+Defined in: packages/core/src/edge/observability.ts:29
 
 ### metadata?
 
 > `readonly` `optional` **metadata?**: `Readonly`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: packages/core/src/edge/observability.ts:33
+Defined in: packages/core/src/edge/observability.ts:34
 
 ### name
 
 > `readonly` **name**: `EdgeRuntimeEventName`
 
-Defined in: packages/core/src/edge/observability.ts:21
+Defined in: packages/core/src/edge/observability.ts:22
 
 ### occurredAt
 
 > `readonly` **occurredAt**: `number`
 
-Defined in: packages/core/src/edge/observability.ts:22
+Defined in: packages/core/src/edge/observability.ts:23
 
 ### outcome?
 
 > `readonly` `optional` **outcome?**: `string`
 
-Defined in: packages/core/src/edge/observability.ts:32
+Defined in: packages/core/src/edge/observability.ts:33
 
 ### requestId?
 
 > `readonly` `optional` **requestId?**: `string`
 
-Defined in: packages/core/src/edge/observability.ts:31
+Defined in: packages/core/src/edge/observability.ts:32
 
 ### subjectId?
 
 > `readonly` `optional` **subjectId?**: `string`
 
-Defined in: packages/core/src/edge/observability.ts:24
+Defined in: packages/core/src/edge/observability.ts:25
 
 ### targetName?
 
 > `readonly` `optional` **targetName?**: `string`
 
-Defined in: packages/core/src/edge/observability.ts:26
+Defined in: packages/core/src/edge/observability.ts:27
 
 ### tenantId?
 
 > `readonly` `optional` **tenantId?**: `string`
 
-Defined in: packages/core/src/edge/observability.ts:25
+Defined in: packages/core/src/edge/observability.ts:26
 
   </Accordion>
 
@@ -21243,7 +21590,7 @@ Defined in: packages/core/src/edge/inventoryService.ts:128
 
 @fentaris/core / EdgeSerializationLimits
 
-Defined in: packages/core/src/edge/observability.ts:113
+Defined in: packages/core/src/edge/observability.ts:114
 
 ## Properties
 
@@ -21251,25 +21598,25 @@ Defined in: packages/core/src/edge/observability.ts:113
 
 > `readonly` `optional` **maxArrayItems?**: `number`
 
-Defined in: packages/core/src/edge/observability.ts:115
+Defined in: packages/core/src/edge/observability.ts:116
 
 ### maxBytes?
 
 > `readonly` `optional` **maxBytes?**: `number`
 
-Defined in: packages/core/src/edge/observability.ts:117
+Defined in: packages/core/src/edge/observability.ts:118
 
 ### maxDepth?
 
 > `readonly` `optional` **maxDepth?**: `number`
 
-Defined in: packages/core/src/edge/observability.ts:114
+Defined in: packages/core/src/edge/observability.ts:115
 
 ### maxStringLength?
 
 > `readonly` `optional` **maxStringLength?**: `number`
 
-Defined in: packages/core/src/edge/observability.ts:116
+Defined in: packages/core/src/edge/observability.ts:117
 
   </Accordion>
 
@@ -21349,7 +21696,7 @@ Registered execution targets, keyed by name.
 
 @fentaris/core / EdgeSessionSelection
 
-Defined in: packages/core/src/edge/inventory.ts:126
+Defined in: packages/core/src/edge/inventory.ts:127
 
 Durable pre-pin selection requested by an authorized session.
 
@@ -21359,49 +21706,49 @@ Durable pre-pin selection requested by an authorized session.
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:131
+Defined in: packages/core/src/edge/inventory.ts:132
 
 ### expiresAt
 
 > `readonly` **expiresAt**: `number`
 
-Defined in: packages/core/src/edge/inventory.ts:134
+Defined in: packages/core/src/edge/inventory.ts:135
 
 ### inventoryVersion
 
 > `readonly` **inventoryVersion**: `number`
 
-Defined in: packages/core/src/edge/inventory.ts:132
+Defined in: packages/core/src/edge/inventory.ts:133
 
 ### selectedAt
 
 > `readonly` **selectedAt**: `number`
 
-Defined in: packages/core/src/edge/inventory.ts:133
+Defined in: packages/core/src/edge/inventory.ts:134
 
 ### sessionId
 
 > `readonly` **sessionId**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:127
+Defined in: packages/core/src/edge/inventory.ts:128
 
 ### subjectId
 
 > `readonly` **subjectId**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:128
+Defined in: packages/core/src/edge/inventory.ts:129
 
 ### targetName
 
 > `readonly` **targetName**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:129
+Defined in: packages/core/src/edge/inventory.ts:130
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/inventory.ts:130
+Defined in: packages/core/src/edge/inventory.ts:131
 
   </Accordion>
 
@@ -21511,7 +21858,7 @@ Defined in: packages/core/src/edge/sessionSelection.ts:26
 
 @fentaris/core / EdgeSessionSelectionStore
 
-Defined in: packages/core/src/edge/inventory.ts:192
+Defined in: packages/core/src/edge/inventory.ts:193
 
 Replaceable pre-pin session-selection store.
 
@@ -21521,7 +21868,7 @@ Replaceable pre-pin session-selection store.
 
 > `readonly` **diagnostics**: `EdgeAdapterDiagnostics`
 
-Defined in: packages/core/src/edge/inventory.ts:193
+Defined in: packages/core/src/edge/inventory.ts:194
 
 ## Methods
 
@@ -21529,7 +21876,7 @@ Defined in: packages/core/src/edge/inventory.ts:193
 
 > **delete**(`sessionId`, `subjectId`, `targetName`): `Promise`\<`EdgeSessionSelection` \| `undefined`\>
 
-Defined in: packages/core/src/edge/inventory.ts:196
+Defined in: packages/core/src/edge/inventory.ts:197
 
 #### Parameters
 
@@ -21553,7 +21900,7 @@ Defined in: packages/core/src/edge/inventory.ts:196
 
 > **deleteSession**(`sessionId`): `Promise`\<readonly `EdgeSessionSelection`[]\>
 
-Defined in: packages/core/src/edge/inventory.ts:197
+Defined in: packages/core/src/edge/inventory.ts:198
 
 #### Parameters
 
@@ -21569,7 +21916,7 @@ Defined in: packages/core/src/edge/inventory.ts:197
 
 > **get**(`sessionId`, `subjectId`, `targetName`): `Promise`\<`EdgeSessionSelection` \| `undefined`\>
 
-Defined in: packages/core/src/edge/inventory.ts:195
+Defined in: packages/core/src/edge/inventory.ts:196
 
 #### Parameters
 
@@ -21593,7 +21940,7 @@ Defined in: packages/core/src/edge/inventory.ts:195
 
 > **purgeExpired**(`evaluatedAt`): `Promise`\<readonly `EdgeSessionSelection`[]\>
 
-Defined in: packages/core/src/edge/inventory.ts:198
+Defined in: packages/core/src/edge/inventory.ts:199
 
 #### Parameters
 
@@ -21609,7 +21956,7 @@ Defined in: packages/core/src/edge/inventory.ts:198
 
 > **put**(`selection`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/inventory.ts:194
+Defined in: packages/core/src/edge/inventory.ts:195
 
 #### Parameters
 
@@ -21627,7 +21974,7 @@ Defined in: packages/core/src/edge/inventory.ts:194
 
 @fentaris/core / EdgeSetupStatusMessage
 
-Defined in: packages/core/src/edge/controlProtocol.ts:104
+Defined in: packages/core/src/edge/controlProtocol.ts:139
 
 Common trusted routing claims carried by edge control messages.
 
@@ -21641,7 +21988,7 @@ Common trusted routing claims carried by edge control messages.
 
 > `readonly` **connectionGeneration**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:29
+Defined in: packages/core/src/edge/controlProtocol.ts:47
 
 #### Inherited from
 
@@ -21651,13 +21998,13 @@ Defined in: packages/core/src/edge/controlProtocol.ts:29
 
 > `readonly` **deploymentId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:107
+Defined in: packages/core/src/edge/controlProtocol.ts:142
 
 ### edgeNodeId
 
 > `readonly` **edgeNodeId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:28
+Defined in: packages/core/src/edge/controlProtocol.ts:46
 
 #### Inherited from
 
@@ -21667,37 +22014,45 @@ Defined in: packages/core/src/edge/controlProtocol.ts:28
 
 > `readonly` `optional` **grantRefs?**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: packages/core/src/edge/controlProtocol.ts:111
+Defined in: packages/core/src/edge/controlProtocol.ts:146
+
+### install?
+
+> `readonly` `optional` **install?**: `EdgeInstallStatusReport`
+
+Defined in: packages/core/src/edge/controlProtocol.ts:148
+
+Managed-install progress when the deployment declares an install plan.
 
 ### kind
 
 > `readonly` **kind**: `"edge.setup-status"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:106
+Defined in: packages/core/src/edge/controlProtocol.ts:141
 
 ### recipeDigest
 
 > `readonly` **recipeDigest**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:108
+Defined in: packages/core/src/edge/controlProtocol.ts:143
 
 ### setupSchemaVersion
 
 > `readonly` **setupSchemaVersion**: `number`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:109
+Defined in: packages/core/src/edge/controlProtocol.ts:144
 
 ### status
 
 > `readonly` **status**: `"denied"` \| `"pending"` \| `"ready"` \| `"revoked"`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:110
+Defined in: packages/core/src/edge/controlProtocol.ts:145
 
 ### tenantId
 
 > `readonly` **tenantId**: `string`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:27
+Defined in: packages/core/src/edge/controlProtocol.ts:45
 
 #### Inherited from
 
@@ -21707,7 +22062,7 @@ Defined in: packages/core/src/edge/controlProtocol.ts:27
 
 > `readonly` **version**: `EdgeProtocolVersion`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:105
+Defined in: packages/core/src/edge/controlProtocol.ts:140
 
   </Accordion>
 
@@ -21963,7 +22318,7 @@ Defined in: packages/core/src/edge/controlInvocation.ts:54
 
 @fentaris/core / EdgeTargetOptions
 
-Defined in: packages/core/src/edge/target.ts:146
+Defined in: packages/core/src/edge/target.ts:147
 
 Options for edge.
 
@@ -21973,7 +22328,7 @@ Options for edge.
 
 > **device**: `DeviceSelector`
 
-Defined in: packages/core/src/edge/target.ts:148
+Defined in: packages/core/src/edge/target.ts:149
 
 Device selector for the target.
 
@@ -21981,7 +22336,7 @@ Device selector for the target.
 
 > `optional` **strategy?**: `TargetSelectionStrategy`
 
-Defined in: packages/core/src/edge/target.ts:150
+Defined in: packages/core/src/edge/target.ts:151
 
 Selection strategy for pool resolution.
 
@@ -21991,7 +22346,7 @@ Selection strategy for pool resolution.
 
 @fentaris/core / EdgeTelemetrySink
 
-Defined in: packages/core/src/edge/observability.ts:36
+Defined in: packages/core/src/edge/observability.ts:37
 
 ## Methods
 
@@ -21999,7 +22354,7 @@ Defined in: packages/core/src/edge/observability.ts:36
 
 > **emit**(`event`): `void` \| `Promise`\<`void`\>
 
-Defined in: packages/core/src/edge/observability.ts:37
+Defined in: packages/core/src/edge/observability.ts:38
 
 #### Parameters
 
@@ -22609,7 +22964,7 @@ Defined in: packages/core/src/types/policy.ts:128
 
 @fentaris/core / LaunchRecipe
 
-Defined in: packages/core/src/edge/recipe.ts:22
+Defined in: packages/core/src/edge/recipe.ts:23
 
 A versioned, serializable launch recipe.
 
@@ -22619,7 +22974,7 @@ A versioned, serializable launch recipe.
 
 > `readonly` **args**: readonly (`string` \| `RuntimeValueToken`)[]
 
-Defined in: packages/core/src/edge/recipe.ts:28
+Defined in: packages/core/src/edge/recipe.ts:29
 
 Argument templates; entries may be runtime-value tokens.
 
@@ -22627,7 +22982,7 @@ Argument templates; entries may be runtime-value tokens.
 
 > `readonly` `optional` **clientName?**: `string`
 
-Defined in: packages/core/src/edge/recipe.ts:34
+Defined in: packages/core/src/edge/recipe.ts:35
 
 Client name reported to the upstream MCP.
 
@@ -22635,7 +22990,7 @@ Client name reported to the upstream MCP.
 
 > `readonly` `optional` **clientVersion?**: `string`
 
-Defined in: packages/core/src/edge/recipe.ts:36
+Defined in: packages/core/src/edge/recipe.ts:37
 
 Client version reported to the upstream MCP.
 
@@ -22643,7 +22998,7 @@ Client version reported to the upstream MCP.
 
 > `readonly` **command**: `string`
 
-Defined in: packages/core/src/edge/recipe.ts:26
+Defined in: packages/core/src/edge/recipe.ts:27
 
 Executable command.
 
@@ -22651,7 +23006,7 @@ Executable command.
 
 > `readonly` **digest**: `string`
 
-Defined in: packages/core/src/edge/recipe.ts:42
+Defined in: packages/core/src/edge/recipe.ts:50
 
 Stable content digest over the canonical recipe payload.
 
@@ -22659,15 +23014,25 @@ Stable content digest over the canonical recipe payload.
 
 > `readonly` **env**: `Readonly`\<`Record`\<`string`, `string` \| `RuntimeValueToken`\>\>
 
-Defined in: packages/core/src/edge/recipe.ts:30
+Defined in: packages/core/src/edge/recipe.ts:31
 
 Environment templates; values may be runtime-value tokens.
+
+### install?
+
+> `readonly` `optional` **install?**: `EdgeNpmInstallPlan`
+
+Defined in: packages/core/src/edge/recipe.ts:48
+
+Managed installation for this deployment. When present, `command` is a bare
+bin name resolved inside the edge-managed install directory instead of the
+device `PATH`.
 
 ### setupFieldRefs
 
 > `readonly` **setupFieldRefs**: readonly `string`[]
 
-Defined in: packages/core/src/edge/recipe.ts:40
+Defined in: packages/core/src/edge/recipe.ts:41
 
 Sorted setup field names referenced by this recipe.
 
@@ -22675,7 +23040,7 @@ Sorted setup field names referenced by this recipe.
 
 > `readonly` `optional` **setupSchemaVersion?**: `number`
 
-Defined in: packages/core/src/edge/recipe.ts:38
+Defined in: packages/core/src/edge/recipe.ts:39
 
 Setup schema version this recipe expects.
 
@@ -22683,7 +23048,7 @@ Setup schema version this recipe expects.
 
 > `readonly` `optional` **stderr?**: `"pipe"` \| `"inherit"` \| `"overlapped"` \| `"ignore"`
 
-Defined in: packages/core/src/edge/recipe.ts:32
+Defined in: packages/core/src/edge/recipe.ts:33
 
 Stderr policy.
 
@@ -22691,7 +23056,7 @@ Stderr policy.
 
 > `readonly` **version**: `number`
 
-Defined in: packages/core/src/edge/recipe.ts:24
+Defined in: packages/core/src/edge/recipe.ts:25
 
 Recipe serialization version.
 
@@ -25472,7 +25837,7 @@ Defined in: packages/core/src/tools/index.ts:81
 
 > **DeviceSelectorType** = `"session"` \| `"user-default"` \| `"named"` \| `"pool"` \| `"fallback"`
 
-Defined in: packages/core/src/edge/target.ts:29
+Defined in: packages/core/src/edge/target.ts:30
 
 Device selector discriminator.
 
@@ -25520,7 +25885,7 @@ Defined in: packages/core/src/tools/index.ts:98
 
 > **EdgeAgentMessage** = `EdgeHeartbeatMessage` \| `EdgePresenceReportMessage` \| `EdgeDesiredStateAckMessage` \| `EdgeSetupStatusMessage` \| `EdgeCapabilityManifestMessage` \| `EdgeLifecycleMessage` \| `EdgeMcpResultEnvelope` \| `EdgeMcpErrorEnvelope`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:144
+Defined in: packages/core/src/edge/controlProtocol.ts:181
 
 Messages accepted from an edge after hello.
 
@@ -25570,7 +25935,7 @@ Defined in: packages/core/src/edge/sessionSelection.ts:84
 
 > **EdgeControlPlaneMessage** = `EdgeHelloAckMessage` \| `EdgeDesiredStateMessage` \| `EdgeMcpRequestEnvelope` \| `EdgeMcpCancelEnvelope`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:155
+Defined in: packages/core/src/edge/controlProtocol.ts:192
 
 Messages sent by the control plane after hello.
 
@@ -25590,7 +25955,7 @@ Defined in: packages/core/src/edge/distributed.ts:13
 
 @fentaris/core / EdgeDeploymentReadinessStatus
 
-> **EdgeDeploymentReadinessStatus** = `"ready"` \| `"setup-required"` \| `"blocked"` \| `"stale"` \| `"unavailable"`
+> **EdgeDeploymentReadinessStatus** = `"ready"` \| `"setup-required"` \| `"install-required"` \| `"blocked"` \| `"stale"` \| `"unavailable"`
 
 Defined in: packages/core/src/edge/inventory.ts:103
 
@@ -25617,6 +25982,42 @@ Normalized edge error code.
 > **EdgeFanoutStatus** = `"succeeded"` \| `"failed"` \| `"cancelled"` \| `"not-started"`
 
 Defined in: packages/core/src/edge/fanout.ts:29
+
+  </Accordion>
+
+  <Accordion title="Core exports: type-aliases/EdgeInstallPlan">
+
+@fentaris/core / EdgeInstallPlan
+
+> **EdgeInstallPlan** = `EdgeNpmInstallPlan`
+
+Defined in: packages/core/src/edge/install.ts:43
+
+A declarative managed-install plan.
+
+  </Accordion>
+
+  <Accordion title="Core exports: type-aliases/EdgeInstallPlanKind">
+
+@fentaris/core / EdgeInstallPlanKind
+
+> **EdgeInstallPlanKind** = `"npm"`
+
+Defined in: packages/core/src/edge/install.ts:20
+
+Supported managed-install package sources.
+
+  </Accordion>
+
+  <Accordion title="Core exports: type-aliases/EdgeInstallReportStatus">
+
+@fentaris/core / EdgeInstallReportStatus
+
+> **EdgeInstallReportStatus** = `"installing"` \| `"installed"` \| `"failed"` \| `"denied"`
+
+Defined in: packages/core/src/edge/controlProtocol.ts:123
+
+Managed-install lifecycle state reported by an edge.
 
   </Accordion>
 
@@ -25704,7 +26105,7 @@ Availability derived from authenticated presence and freshness.
 
 > **EdgeProtocolMessage** = `EdgeHelloMessage` \| `EdgeAgentMessage` \| `EdgeControlPlaneMessage`
 
-Defined in: packages/core/src/edge/controlProtocol.ts:162
+Defined in: packages/core/src/edge/controlProtocol.ts:199
 
 All versioned edge protocol messages.
 
@@ -25726,7 +26127,7 @@ A negotiated Edge control protocol version.
 
 @fentaris/core / EdgeRuntimeEventName
 
-> **EdgeRuntimeEventName** = `"edge.target.resolved"` \| `"edge.session.bound"` \| `"edge.connection.generation"` \| `"edge.desired.reconciled"` \| `"edge.setup.transition"` \| `"edge.workload.lifecycle"` \| `"edge.request.started"` \| `"edge.request.completed"` \| `"edge.request.timeout"` \| `"edge.request.cancelled"` \| `"edge.request.failed"` \| `"edge.orchestration.started"` \| `"edge.orchestration.child"` \| `"edge.orchestration.completed"` \| `"edge.orchestration.cleanup"`
+> **EdgeRuntimeEventName** = `"edge.target.resolved"` \| `"edge.session.bound"` \| `"edge.connection.generation"` \| `"edge.desired.reconciled"` \| `"edge.setup.transition"` \| `"edge.install.transition"` \| `"edge.workload.lifecycle"` \| `"edge.request.started"` \| `"edge.request.completed"` \| `"edge.request.timeout"` \| `"edge.request.cancelled"` \| `"edge.request.failed"` \| `"edge.orchestration.started"` \| `"edge.orchestration.child"` \| `"edge.orchestration.completed"` \| `"edge.orchestration.cleanup"`
 
 Defined in: packages/core/src/edge/observability.ts:3
 
@@ -25928,7 +26329,7 @@ Defined in: packages/core/src/types/policy.ts:141
 
 > **ExecutionTarget** = `CloudExecutionTarget` \| `EdgeExecutionTarget`
 
-Defined in: packages/core/src/edge/target.ts:143
+Defined in: packages/core/src/edge/target.ts:144
 
 A reusable execution target declaration.
 
@@ -32287,7 +32688,7 @@ Defined in: packages/core/src/transports/exposure/StdioProxyExposureTransport.ts
 
 > **StdioTransportOptions** = `object`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:37
+Defined in: packages/core/src/transports/client/StdioTransport.ts:38
 
 Options for the stdio transport.
 
@@ -32302,37 +32703,47 @@ recipe for edge launch. A plain-string configuration remains unchanged.
 
 > `optional` **args?**: (`string` \| `RuntimeValueToken`)[]
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:39
+Defined in: packages/core/src/transports/client/StdioTransport.ts:40
 
 ### clientName?
 
 > `optional` **clientName?**: `string`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:49
+Defined in: packages/core/src/transports/client/StdioTransport.ts:57
 
 ### clientVersion?
 
 > `optional` **clientVersion?**: `string`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:50
+Defined in: packages/core/src/transports/client/StdioTransport.ts:58
 
 ### command
 
 > **command**: `string`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:38
+Defined in: packages/core/src/transports/client/StdioTransport.ts:39
 
 ### env?
 
 > `optional` **env?**: `Record`\<`string`, `string` \| `RuntimeValueToken`\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:40
+Defined in: packages/core/src/transports/client/StdioTransport.ts:41
+
+### install?
+
+> `optional` **install?**: `EdgeInstallPlan` \| `EdgeNpmInstallPlanInput`
+
+Defined in: packages/core/src/transports/client/StdioTransport.ts:55
+
+Managed installation for edge execution. Declare it with `edge.npm(...)`.
+When present, `command` is a bare bin name that the edge agent resolves
+inside its managed install directory, and cloud execution is rejected.
 
 ### runtimeValues?
 
 > `optional` **runtimeValues?**: `Record`\<`string`, `string`\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:47
+Defined in: packages/core/src/transports/client/StdioTransport.ts:48
 
 Explicit cloud-side resolutions for runtime references. These values are
 used only for local cloud process launch and are never serialized into an
@@ -32342,7 +32753,7 @@ edge launch recipe.
 
 > `optional` **stderr?**: `"inherit"` \| `"pipe"` \| `"overlapped"` \| `"ignore"`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:48
+Defined in: packages/core/src/transports/client/StdioTransport.ts:56
 
   </Accordion>
 
@@ -32502,7 +32913,7 @@ Defined in: packages/core/src/types/shared.ts:28
 
 > **TargetKind** = `"cloud"` \| `"edge"`
 
-Defined in: packages/core/src/edge/target.ts:23
+Defined in: packages/core/src/edge/target.ts:24
 
 Execution target kind.
 
@@ -32514,7 +32925,7 @@ Execution target kind.
 
 > **TargetSelectionStrategy** = `"least-loaded"` \| `"random"` \| `"round-robin"` \| `"sticky"`
 
-Defined in: packages/core/src/edge/target.ts:26
+Defined in: packages/core/src/edge/target.ts:27
 
 Strategy for selecting one device from a shared pool.
 
@@ -32946,7 +33357,7 @@ Permission helper for approval callbacks.
 
 > `const` **cloud**: `CloudExecutionTarget`
 
-Defined in: packages/core/src/edge/target.ts:154
+Defined in: packages/core/src/edge/target.ts:155
 
 The implicit built-in cloud target.
 
@@ -32970,11 +33381,12 @@ Edge execution targets, runtime inputs, setup fields, launch recipes, and errors
 
 > `const` **edge**: (`options`) => `EdgeExecutionTarget` & `object`
 
-Defined in: packages/core/src/edge/target.ts:162
+Defined in: packages/core/src/edge/target.ts:164
 
 Build an edge execution target. Also serves as the namespace for device
 selector builders (edge.sessionDevice, edge.userDefaultDevice,
-edge.namedDevice, edge.pool) and setup field builders.
+edge.namedDevice, edge.pool), setup field builders, and the
+managed install builder (edge.npm).
 
 ## Type Declaration
 
@@ -33039,6 +33451,25 @@ Build a folder grant field.
 #### Returns
 
 `DeviceSelectorBuilder`
+
+### npm
+
+> **npm**: (`input`) => `EdgeNpmInstallPlan` = `compileEdgeNpmInstallPlan`
+
+Compile an npm install declaration into a validated, frozen install plan.
+Rejects version ranges, dist-tags, unsafe package names, bin values that
+contain path separators, malformed integrity digests, and non-HTTPS
+registries other than loopback development URLs.
+
+#### Parameters
+
+##### input
+
+`EdgeNpmInstallPlanInput`
+
+#### Returns
+
+`EdgeNpmInstallPlan`
 
 ### number
 
@@ -33146,7 +33577,7 @@ Build a free-form string field.
 
 > `const` **EDGE\_CONTROL\_NAMESPACE**: `"edge"`
 
-Defined in: packages/core/src/edge/controlProvider.ts:18
+Defined in: packages/core/src/edge/controlProvider.ts:19
 
 Edge execution targets, runtime inputs, setup fields, launch recipes, and errors.
 
@@ -33158,7 +33589,7 @@ Edge execution targets, runtime inputs, setup fields, launch recipes, and errors
 
 > `const` **EDGE\_CONTROL\_TOOL\_NAMES**: readonly \[`"list"`, `"get"`, `"select"`, `"call"`, `"call_many"`\]
 
-Defined in: packages/core/src/edge/controlProvider.ts:19
+Defined in: packages/core/src/edge/controlProvider.ts:20
 
 Edge execution targets, runtime inputs, setup fields, launch recipes, and errors.
 
@@ -33168,11 +33599,23 @@ Edge execution targets, runtime inputs, setup fields, launch recipes, and errors
 
 @fentaris/core / EDGE\_CONTROL\_TOOL\_SCHEMAS
 
-> `const` **EDGE\_CONTROL\_TOOL\_SCHEMAS**: `Readonly`\<\{ `call`: \{ `additionalProperties`: `boolean`; `properties`: \{ `arguments`: \{ `type`: `string`; \}; `deadlineMs`: \{ `maximum`: `number`; `minimum`: `number`; `type`: `string`; \}; `device`: \{\[`key`: `string`\]: `unknown`; `properties?`: \{\[`key`: `string`\]: `object`; \}; `required?`: `string`[]; `type`: `"object"`; \}; `tool`: \{ `maxLength`: `number`; `minLength`: `number`; `type`: `string`; \}; \}; `required`: `string`[]; `type`: `"object"`; \}; `call_many`: \{ `additionalProperties`: `boolean`; `oneOf`: `object`[]; `properties`: \{ `arguments`: \{ `type`: `string`; \}; `concurrency`: \{ `maximum`: `number`; `minimum`: `number`; `type`: `string`; \}; `deadlineMs`: \{ `maximum`: `number`; `minimum`: `number`; `type`: `string`; \}; `devices`: \{ `items`: \{\[`key`: `string`\]: `unknown`; `properties?`: \{\[`key`: `string`\]: `object`; \}; `required?`: `string`[]; `type`: `"object"`; \}; `maxItems`: `number`; `minItems`: `number`; `type`: `string`; `uniqueItems`: `boolean`; \}; `failurePolicy`: \{ `enum`: `string`[]; `type`: `string`; \}; `selector`: \{\[`key`: `string`\]: `unknown`; `properties?`: \{\[`key`: `string`\]: `object`; \}; `required?`: `string`[]; `type`: `"object"`; \}; `tool`: \{ `maxLength`: `number`; `minLength`: `number`; `type`: `string`; \}; \}; `required`: `string`[]; `type`: `"object"`; \}; `get`: \{ `additionalProperties`: `boolean`; `properties`: \{ `include`: \{ `items`: \{ `enum`: `string`[]; `type`: `string`; \}; `maxItems`: `number`; `type`: `string`; `uniqueItems`: `boolean`; \}; `name`: \{ `maxLength`: `number`; `minLength`: `number`; `type`: `string`; \}; \}; `required`: `string`[]; `type`: `"object"`; \}; `list`: \{ `additionalProperties`: `boolean`; `properties`: \{ `cursor`: \{ `maxLength`: `number`; `type`: `string`; \}; `deploymentId`: \{ `maxLength`: `number`; `type`: `string`; \}; `features`: \{ `items`: \{ `maxLength`: `80`; `minLength`: `1`; `type`: `"string"`; \}; `maxItems`: `32`; `type`: `"array"`; \}; `include`: \{ `items`: \{ `enum`: `string`[]; `type`: `string`; \}; `maxItems`: `number`; `type`: `string`; `uniqueItems`: `boolean`; \}; `limit`: \{ `maximum`: `number`; `minimum`: `number`; `type`: `string`; \}; `name`: \{ `maxLength`: `number`; `type`: `string`; \}; `platforms`: \{ `items`: \{ `maxLength`: `80`; `minLength`: `1`; `type`: `"string"`; \}; `maxItems`: `32`; `type`: `"array"`; \}; `pool`: \{ `maxLength`: `number`; `type`: `string`; \}; `readiness`: \{ `items`: \{ `enum`: `string`[]; `type`: `string`; \}; `maxItems`: `number`; `type`: `string`; \}; `statuses`: \{ `items`: \{ `enum`: `string`[]; `type`: `string`; \}; `maxItems`: `number`; `type`: `string`; \}; `tags`: \{ `items`: \{ `maxLength`: `80`; `minLength`: `1`; `type`: `"string"`; \}; `maxItems`: `32`; `type`: `"array"`; \}; \}; `type`: `"object"`; \}; `select`: \{ `additionalProperties`: `boolean`; `oneOf`: `object`[]; `properties`: \{ `deploymentId`: \{ `maxLength`: `number`; `type`: `string`; \}; `device`: \{\[`key`: `string`\]: `unknown`; `properties?`: \{\[`key`: `string`\]: `object`; \}; `required?`: `string`[]; `type`: `"object"`; \}; `selector`: \{\[`key`: `string`\]: `unknown`; `properties?`: \{\[`key`: `string`\]: `object`; \}; `required?`: `string`[]; `type`: `"object"`; \}; `target`: \{ `maxLength`: `number`; `minLength`: `number`; `type`: `string`; \}; `ttlMs`: \{ `maximum`: `number`; `minimum`: `number`; `type`: `string`; \}; \}; `type`: `"object"`; \}; \}\>
+> `const` **EDGE\_CONTROL\_TOOL\_SCHEMAS**: `Readonly`\<\{ `call`: \{ `additionalProperties`: `boolean`; `properties`: \{ `arguments`: \{ `type`: `string`; \}; `deadlineMs`: \{ `maximum`: `number`; `minimum`: `number`; `type`: `string`; \}; `device`: \{\`key`: `string`\]: `unknown`; `properties?`: \{\[`key`: `string`\]: `object`; \}; `required?`: `string`[]; `type`: `"object"`; \}; `tool`: \{ `maxLength`: `number`; `minLength`: `number`; `type`: `string`; \}; \}; `required`: `string`[]; `type`: `"object"`; \}; `call_many`: \{ `additionalProperties`: `boolean`; `oneOf`: `object`[]; `properties`: \{ `arguments`: \{ `type`: `string`; \}; `concurrency`: \{ `maximum`: `number`; `minimum`: `number`; `type`: `string`; \}; `deadlineMs`: \{ `maximum`: `number`; `minimum`: `number`; `type`: `string`; \}; `devices`: \{ `items`: \{\[`key`: `string`\]: `unknown`; `properties?`: \{\[`key`: `string`\]: `object`; \}; `required?`: `string`[]; `type`: `"object"`; \}; `maxItems`: `number`; `minItems`: `number`; `type`: `string`; `uniqueItems`: `boolean`; \}; `failurePolicy`: \{ `enum`: `string`[]; `type`: `string`; \}; `selector`: \{\[`key`: `string`\]: `unknown`; `properties?`: \{\[`key`: `string`\]: `object`; \}; `required?`: `string`[]; `type`: `"object"`; \}; `tool`: \{ `maxLength`: `number`; `minLength`: `number`; `type`: `string`; \}; \}; `required`: `string`[]; `type`: `"object"`; \}; `get`: \{ `additionalProperties`: `boolean`; `properties`: \{ `include`: \{ `items`: \{ `enum`: `string`[]; `type`: `string`; \}; `maxItems`: `number`; `type`: `string`; `uniqueItems`: `boolean`; \}; `name`: \{ `maxLength`: `number`; `minLength`: `number`; `type`: `string`; \}; \}; `required`: `string`[]; `type`: `"object"`; \}; `list`: \{ `additionalProperties`: `boolean`; `properties`: \{ `cursor`: \{ `maxLength`: `number`; `type`: `string`; \}; `deploymentId`: \{ `maxLength`: `number`; `type`: `string`; \}; `features`: \{ `items`: \{ `maxLength`: `80`; `minLength`: `1`; `type`: `"string"`; \}; `maxItems`: `32`; `type`: `"array"`; \}; `include`: \{ `items`: \{ `enum`: `string`[]; `type`: `string`; \}; `maxItems`: `number`; `type`: `string`; `uniqueItems`: `boolean`; \}; `limit`: \{ `maximum`: `number`; `minimum`: `number`; `type`: `string`; \}; `name`: \{ `maxLength`: `number`; `type`: `string`; \}; `platforms`: \{ `items`: \{ `maxLength`: `80`; `minLength`: `1`; `type`: `"string"`; \}; `maxItems`: `32`; `type`: `"array"`; \}; `pool`: \{ `maxLength`: `number`; `type`: `string`; \}; `readiness`: \{ `items`: \{ `enum`: [`EdgeDeploymentReadinessStatus`[]; `type`: `string`; \}; `maxItems`: `number`; `type`: `string`; \}; `statuses`: \{ `items`: \{ `enum`: `string`[]; `type`: `string`; \}; `maxItems`: `number`; `type`: `string`; \}; `tags`: \{ `items`: \{ `maxLength`: `80`; `minLength`: `1`; `type`: `"string"`; \}; `maxItems`: `32`; `type`: `"array"`; \}; \}; `type`: `"object"`; \}; `select`: \{ `additionalProperties`: `boolean`; `oneOf`: `object`[]; `properties`: \{ `deploymentId`: \{ `maxLength`: `number`; `type`: `string`; \}; `device`: \{\[`key`: `string`\]: `unknown`; `properties?`: \{\[`key`: `string`\]: `object`; \}; `required?`: `string`[]; `type`: `"object"`; \}; `selector`: \{\[`key`: `string`\]: `unknown`; `properties?`: \{\[`key`: `string`\]: `object`; \}; `required?`: `string`[]; `type`: `"object"`; \}; `target`: \{ `maxLength`: `number`; `minLength`: `number`; `type`: `string`; \}; `ttlMs`: \{ `maximum`: `number`; `minimum`: `number`; `type`: `string`; \}; \}; `type`: `"object"`; \}; \}\>
 
-Defined in: packages/core/src/edge/controlProvider.ts:113
+Defined in: packages/core/src/edge/controlProvider.ts:114
 
 Edge execution targets, runtime inputs, setup fields, launch recipes, and errors.
+
+  </Accordion>
+
+  <Accordion title="Core exports: variables/EDGE_DEPLOYMENT_READINESS_STATUSES">
+
+@fentaris/core / EDGE\_DEPLOYMENT\_READINESS\_STATUSES
+
+> `const` **EDGE\_DEPLOYMENT\_READINESS\_STATUSES**: readonly `EdgeDeploymentReadinessStatus`[]
+
+Defined in: packages/core/src/edge/controlProtocol.ts:26
+
+Every public deployment readiness status, in stable order.
 
   </Accordion>
 
@@ -33197,6 +33640,30 @@ Edge execution targets, runtime inputs, setup fields, launch recipes, and errors
 Defined in: packages/core/src/edge/errors.ts:28
 
 All normalized edge error codes, in stable order.
+
+  </Accordion>
+
+  <Accordion title="Core exports: variables/EDGE_INSTALL_PLAN_VERSION">
+
+@fentaris/core / EDGE\_INSTALL\_PLAN\_VERSION
+
+> `const` **EDGE\_INSTALL\_PLAN\_VERSION**: `1` = `1`
+
+Defined in: packages/core/src/edge/install.ts:17
+
+Install plan serialization format version.
+
+  </Accordion>
+
+  <Accordion title="Core exports: variables/EDGE_INSTALL_REASON_CATEGORIES">
+
+@fentaris/core / EDGE\_INSTALL\_REASON\_CATEGORIES
+
+> `const` **EDGE\_INSTALL\_REASON\_CATEGORIES**: readonly `string`[]
+
+Defined in: packages/core/src/edge/controlProtocol.ts:36
+
+Bounded managed-install reason categories reported by an edge.
 
   </Accordion>
 
@@ -33266,7 +33733,7 @@ Protocols implemented by this release, newest first.
 
 > `const` **fentaris**: (`options`) => `McpProxy` = `createProxy`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:3613
+Defined in: packages/core/src/proxy/McpProxy.ts:3617
 
 Create a Fentaris proxy with the express-like routing API.
 
@@ -33320,7 +33787,7 @@ Standard Fentaris MCP-style error codes.
 
 > `const` **IN\_MEMORY\_EDGE\_ADAPTER\_DIAGNOSTICS**: `EdgeAdapterDiagnostics`
 
-Defined in: packages/core/src/edge/inventory.ts:162
+Defined in: packages/core/src/edge/inventory.ts:163
 
 Common diagnostics for deterministic single-process reference adapters.
 
@@ -33332,7 +33799,7 @@ Common diagnostics for deterministic single-process reference adapters.
 
 > `const` **LAUNCH\_RECIPE\_VERSION**: `1` = `1`
 
-Defined in: packages/core/src/edge/recipe.ts:19
+Defined in: packages/core/src/edge/recipe.ts:20
 
 Launch recipe serialization format version.
 
@@ -33423,7 +33890,7 @@ Create a new MCP proxy instance.
 
 > **addGroupUsers**(`groupId`, `users`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2552
+Defined in: packages/core/src/proxy/McpProxy.ts:2556
 
 #### Parameters
 
@@ -33443,7 +33910,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2552
 
 > **assertGroupHandleKnown**(`groupId`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2592
+Defined in: packages/core/src/proxy/McpProxy.ts:2596
 
 #### Parameters
 
@@ -33459,7 +33926,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2592
 
 > **assertServerHandleVisible**(`serverName`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2564
+Defined in: packages/core/src/proxy/McpProxy.ts:2568
 
 #### Parameters
 
@@ -33479,7 +33946,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2564
 
 > **callTool**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `content`: (\{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `text`: `string`; `type`: `"text"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"image"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"audio"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `description?`: `string`; `icons?`: `object`[]; `mimeType?`: `string`; `name`: `string`; `size?`: `number`; `title?`: `string`; `type`: `"resource_link"`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `resource`: \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `mimeType?`: `string`; `text`: `string`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `blob`: `string`; `mimeType?`: `string`; `uri`: `string`; \}; `type`: `"resource"`; \})[]; `isError?`: `boolean`; `structuredContent?`: \{\[`key`: `string`\]: `unknown`; \}; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1772
+Defined in: packages/core/src/proxy/McpProxy.ts:1776
 
 Call a proxied tool with middleware dispatch.
 
@@ -33543,7 +34010,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **close**(): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1553
+Defined in: packages/core/src/proxy/McpProxy.ts:1560
 
 Close the HTTP server and all backends.
 
@@ -33555,7 +34022,7 @@ Close the HTTP server and all backends.
 
 > **complete**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `completion`: \{\[`key`: `string`\]: `unknown`; `hasMore?`: `boolean`; `total?`: `number`; `values`: `string`[]; \}; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2316
+Defined in: packages/core/src/proxy/McpProxy.ts:2320
 
 Complete a proxied prompt or resource-template argument.
 
@@ -33641,7 +34108,7 @@ targets, normalized bindings, and configured device resolver. Returns
 
 > **emitSessionEnd**(`context`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2433
+Defined in: packages/core/src/proxy/McpProxy.ts:2437
 
 Emit a downstream session end lifecycle event.
 
@@ -33659,7 +34126,7 @@ Emit a downstream session end lifecycle event.
 
 > **emitSessionStart**(`context`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2395
+Defined in: packages/core/src/proxy/McpProxy.ts:2399
 
 Emit a downstream session start lifecycle event.
 
@@ -33677,7 +34144,7 @@ Emit a downstream session start lifecycle event.
 
 > **endEdgeSession**(`sessionId`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1003
+Defined in: packages/core/src/proxy/McpProxy.ts:1010
 
 Remove every session-target binding for a downstream session.
 
@@ -33695,7 +34162,7 @@ Remove every session-target binding for a downstream session.
 
 > **getPrompt**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `description?`: `string`; `messages`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2261
+Defined in: packages/core/src/proxy/McpProxy.ts:2265
 
 Get a proxied prompt from its owning upstream server.
 
@@ -33769,7 +34236,7 @@ Register or retrieve a scoped group handle.
 
 > **health**(): `Promise`\<`HealthReport`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1603
+Defined in: packages/core/src/proxy/McpProxy.ts:1610
 
 Run configured runtime health checks.
 
@@ -33781,7 +34248,7 @@ Run configured runtime health checks.
 
 > **listen**\<`THandle`\>(`transport`): `Promise`\<`THandle`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1269
+Defined in: packages/core/src/proxy/McpProxy.ts:1276
 
 Start the proxy with an explicit downstream exposure transport.
 
@@ -33805,7 +34272,7 @@ Start the proxy with an explicit downstream exposure transport.
 
 > **listPrompts**(`params?`, `user?`, `_identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `prompts`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2196
+Defined in: packages/core/src/proxy/McpProxy.ts:2200
 
 List prompts across all configured servers.
 
@@ -33857,7 +34324,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listResources**(`params?`, `user?`, `_identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `resources`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1991
+Defined in: packages/core/src/proxy/McpProxy.ts:1995
 
 List resources across all configured servers.
 
@@ -33909,7 +34376,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listResourceTemplates**(`params?`, `user?`, `_identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `resourceTemplates`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2125
+Defined in: packages/core/src/proxy/McpProxy.ts:2129
 
 List resource templates across all configured servers.
 
@@ -33961,7 +34428,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listTools**(`params?`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `tools`: `object`[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1659
+Defined in: packages/core/src/proxy/McpProxy.ts:1666
 
 List tools across all configured servers.
 
@@ -34113,7 +34580,7 @@ Register or retrieve a scoped upstream MCP handle.
 
 > **mcpHealth**(`name`): `Promise`\<`HealthCheckResult`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1650
+Defined in: packages/core/src/proxy/McpProxy.ts:1657
 
 Check a configured upstream MCP server health.
 
@@ -34133,7 +34600,7 @@ Check a configured upstream MCP server health.
 
 > **on**(`event`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1131
+Defined in: packages/core/src/proxy/McpProxy.ts:1138
 
 Register an event hook.
 
@@ -34155,7 +34622,7 @@ Register an event hook.
 
 > **on**(`event`, `filter`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1136
+Defined in: packages/core/src/proxy/McpProxy.ts:1143
 
 Register a filtered event hook.
 
@@ -34181,7 +34648,7 @@ Register a filtered event hook.
 
 > **on**(`event`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1141
+Defined in: packages/core/src/proxy/McpProxy.ts:1148
 
 Register a unified proxy event handler.
 
@@ -34203,7 +34670,7 @@ Register a unified proxy event handler.
 
 > **on**(`event`, `filter`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1146
+Defined in: packages/core/src/proxy/McpProxy.ts:1153
 
 Register a filtered unified proxy event handler.
 
@@ -34229,7 +34696,7 @@ Register a filtered unified proxy event handler.
 
 > **onLifecycle**(`event`, `handler`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1180
+Defined in: packages/core/src/proxy/McpProxy.ts:1187
 
 Register a lifecycle hook.
 
@@ -34251,7 +34718,7 @@ Register a lifecycle hook.
 
 > **onListTools**(`hook`): `this`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1195
+Defined in: packages/core/src/proxy/McpProxy.ts:1202
 
 Register a hook that can transform listed tools.
 
@@ -34291,7 +34758,7 @@ Register a global operation route for governed non-tool operations.
 
 > **pingMcp**(`name`): `Promise`\<`HealthCheckResult`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1641
+Defined in: packages/core/src/proxy/McpProxy.ts:1648
 
 Ping a configured upstream MCP server by listing tools.
 
@@ -34362,7 +34829,7 @@ Register or retrieve a named app-level policy declaration.
 
 > **readResource**(`params`, `user?`, `identity?`, `subject?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `contents`: (\{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `mimeType?`: `string`; `text`: `string`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `blob`: `string`; `mimeType?`: `string`; `uri`: `string`; \})[]; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2062
+Defined in: packages/core/src/proxy/McpProxy.ts:2066
 
 Read a proxied resource from its owning upstream server.
 
@@ -34414,7 +34881,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **ready**(`options?`): `Promise`\<`RuntimeLifecycleSnapshot`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1561
+Defined in: packages/core/src/proxy/McpProxy.ts:1568
 
 Wait for the runtime to reach readiness.
 
@@ -34432,7 +34899,7 @@ Wait for the runtime to reach readiness.
 
 > **registerGroupEvent**(`groupId`, `eventName`, `filter`, `handler`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2540
+Defined in: packages/core/src/proxy/McpProxy.ts:2544
 
 #### Parameters
 
@@ -34460,7 +34927,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2540
 
 > **registerGroupMiddleware**(`groupId`, `handler`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2530
+Defined in: packages/core/src/proxy/McpProxy.ts:2534
 
 #### Parameters
 
@@ -34480,7 +34947,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2530
 
 > **registerGroupOperation**(`groupId`, `operation`, `handler`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2535
+Defined in: packages/core/src/proxy/McpProxy.ts:2539
 
 #### Parameters
 
@@ -34504,7 +34971,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2535
 
 > **registerPlacementBinding**(`binding`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1091
+Defined in: packages/core/src/proxy/McpProxy.ts:1098
 
 Record a placement binding unless a conflicting one already exists.
 
@@ -34522,7 +34989,7 @@ Record a placement binding unless a conflicting one already exists.
 
 > **registerServerEvent**(`serverName`, `eventName`, `filter`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2517
+Defined in: packages/core/src/proxy/McpProxy.ts:2521
 
 #### Parameters
 
@@ -34554,7 +35021,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2517
 
 > **registerServerMiddleware**(`serverName`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2502
+Defined in: packages/core/src/proxy/McpProxy.ts:2506
 
 #### Parameters
 
@@ -34578,7 +35045,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2502
 
 > **registerServerOperation**(`serverName`, `operation`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2512
+Defined in: packages/core/src/proxy/McpProxy.ts:2516
 
 #### Parameters
 
@@ -34606,7 +35073,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2512
 
 > **registerServerSetup**(`serverName`, `schema`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1074
+Defined in: packages/core/src/proxy/McpProxy.ts:1081
 
 Register a setup schema for a server.
 
@@ -34628,7 +35095,7 @@ Register a setup schema for a server.
 
 > **registerServerTool**(`serverName`, `pattern`, `handler`, `groupId?`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2507
+Defined in: packages/core/src/proxy/McpProxy.ts:2511
 
 #### Parameters
 
@@ -34656,7 +35123,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2507
 
 > **resolveHttpUser**(`req`): `Promise`\<\{ `identity?`: `IdentityMetadata`; `subject?`: `ResolvedSubject`; `user`: `UserContext`; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2378
+Defined in: packages/core/src/proxy/McpProxy.ts:2382
 
 Resolve user context from an HTTP downstream request.
 
@@ -34696,7 +35163,7 @@ Throws `EDGE_UNAUTHORIZED_TARGET` for an ineligible explicit selection and
 
 > **resolveStdioUser**(): `Promise`\<\{ `identity?`: `IdentityMetadata`; `subject?`: `ResolvedSubject`; `user`: `UserContext`; \}\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2386
+Defined in: packages/core/src/proxy/McpProxy.ts:2390
 
 Resolve user context for non-HTTP stdio downstream exposure.
 
@@ -34812,7 +35279,7 @@ Alias for `mcp(...)`.
 
 > **setGroupPolicy**(`groupId`, `policy`): `void`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:2558
+Defined in: packages/core/src/proxy/McpProxy.ts:2562
 
 #### Parameters
 
@@ -34832,7 +35299,7 @@ Defined in: packages/core/src/proxy/McpProxy.ts:2558
 
 > **shutdownEdgeSessions**(): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1010
+Defined in: packages/core/src/proxy/McpProxy.ts:1017
 
 Remove every session-target binding on runtime shutdown.
 
@@ -34846,7 +35313,7 @@ Remove every session-target binding on runtime shutdown.
 
 > **start**(`onStarted?`): `Promise`\<`Server`\<*typeof* `IncomingMessage`, *typeof* `ServerResponse`\>\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1204
+Defined in: packages/core/src/proxy/McpProxy.ts:1211
 
 Start the HTTP server.
 
@@ -34864,7 +35331,7 @@ Start the HTTP server.
 
 > **start**(`options?`, `onStarted?`): `Promise`\<`Server`\<*typeof* `IncomingMessage`, *typeof* `ServerResponse`\>\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1209
+Defined in: packages/core/src/proxy/McpProxy.ts:1216
 
 Start the HTTP server with optional overrides.
 
@@ -34886,7 +35353,7 @@ Start the HTTP server with optional overrides.
 
 > **state**(): `RuntimeLifecycleSnapshot`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1595
+Defined in: packages/core/src/proxy/McpProxy.ts:1602
 
 Inspect the current runtime lifecycle state.
 
@@ -34898,7 +35365,7 @@ Inspect the current runtime lifecycle state.
 
 > **stop**(`options?`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1569
+Defined in: packages/core/src/proxy/McpProxy.ts:1576
 
 Stop the runtime and close owned resources.
 
@@ -35019,7 +35486,7 @@ Apply a named or concrete policy as the global proxy policy.
 
 > **user**(`userId`): `ProxyUserHandle`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1111
+Defined in: packages/core/src/proxy/McpProxy.ts:1118
 
 Retrieve a user-scoped MCP handle. Records placement bindings without
 creating or authenticating a subject.
@@ -35038,7 +35505,7 @@ creating or authenticating a subject.
 
 > **validateEdgeConfiguration**(): `FentarisDiagnostic`[]
 
-Defined in: packages/core/src/proxy/McpProxy.ts:1321
+Defined in: packages/core/src/proxy/McpProxy.ts:1328
 
 Validate fluent and constructor-style target, setup, and placement
 declarations: unresolved user handles, missing targets, duplicate
@@ -35058,7 +35525,7 @@ bindings never grant MCP capability access.
 
 > **createProxy**(`options?`): `McpProxy`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:3604
+Defined in: packages/core/src/proxy/McpProxy.ts:3608
 
 Create a Fentaris proxy with the express-like routing API.
 
@@ -35576,7 +36043,7 @@ User id for user-scoped bindings.
 
 > `const` **fentaris**: (`options`) => `McpProxy` = `createProxy`
 
-Defined in: packages/core/src/proxy/McpProxy.ts:3613
+Defined in: packages/core/src/proxy/McpProxy.ts:3617
 
 Create a Fentaris proxy with the express-like routing API.
 
@@ -36366,7 +36833,7 @@ Defined in: packages/core/src/server/McpServer.ts:55
 
 @fentaris/core / StdioTransport
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:57
+Defined in: packages/core/src/transports/client/StdioTransport.ts:65
 
 Stdio-based MCP transport implementation.
 
@@ -36380,7 +36847,7 @@ Stdio-based MCP transport implementation.
 
 > **new StdioTransport**(`options`): `StdioTransport`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:66
+Defined in: packages/core/src/transports/client/StdioTransport.ts:74
 
 Create a new stdio transport.
 
@@ -36400,7 +36867,7 @@ Create a new stdio transport.
 
 > **callTool**(`params`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `content`: (\{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `text`: `string`; `type`: `"text"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"image"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `data`: `string`; `mimeType`: `string`; `type`: `"audio"`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `description?`: `string`; `icons?`: `object`[]; `mimeType?`: `string`; `name`: `string`; `size?`: `number`; `title?`: `string`; `type`: `"resource_link"`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `annotations?`: \{ `audience?`: (`"user"` \| `"assistant"`)[]; `lastModified?`: `string`; `priority?`: `number`; \}; `resource`: \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `mimeType?`: `string`; `text`: `string`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `blob`: `string`; `mimeType?`: `string`; `uri`: `string`; \}; `type`: `"resource"`; \})[]; `isError?`: `boolean`; `structuredContent?`: \{\[`key`: `string`\]: `unknown`; \}; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:138
+Defined in: packages/core/src/transports/client/StdioTransport.ts:151
 
 Call a tool on the MCP server.
 
@@ -36456,7 +36923,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **close**(): `Promise`\<`void`\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:205
+Defined in: packages/core/src/transports/client/StdioTransport.ts:218
 
 Close the underlying client connection.
 
@@ -36472,7 +36939,7 @@ Close the underlying client connection.
 
 > **complete**(`params`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `completion`: \{\[`key`: `string`\]: `unknown`; `hasMore?`: `boolean`; `total?`: `number`; `values`: `string`[]; \}; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:187
+Defined in: packages/core/src/transports/client/StdioTransport.ts:200
 
 #### Parameters
 
@@ -36534,7 +37001,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **getPrompt**(`params`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `description?`: `string`; `messages`: `object`[]; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:178
+Defined in: packages/core/src/transports/client/StdioTransport.ts:191
 
 #### Parameters
 
@@ -36580,7 +37047,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listPrompts**(`params?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `prompts`: `object`[]; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:169
+Defined in: packages/core/src/transports/client/StdioTransport.ts:182
 
 #### Parameters
 
@@ -36622,7 +37089,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listResources**(`params?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `resources`: `object`[]; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:142
+Defined in: packages/core/src/transports/client/StdioTransport.ts:155
 
 #### Parameters
 
@@ -36664,7 +37131,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listResourceTemplates**(`params?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `resourceTemplates`: `object`[]; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:160
+Defined in: packages/core/src/transports/client/StdioTransport.ts:173
 
 #### Parameters
 
@@ -36706,7 +37173,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **listTools**(`params?`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `nextCursor?`: `string`; `tools`: `object`[]; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:125
+Defined in: packages/core/src/transports/client/StdioTransport.ts:138
 
 List tools exposed by the MCP server.
 
@@ -36750,7 +37217,7 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 > **readResource**(`params`): `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `contents`: (\{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `mimeType?`: `string`; `text`: `string`; `uri`: `string`; \} \| \{ `_meta?`: \{\[`key`: `string`\]: `unknown`; \}; `blob`: `string`; `mimeType?`: `string`; `uri`: `string`; \})[]; \}\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:151
+Defined in: packages/core/src/transports/client/StdioTransport.ts:164
 
 #### Parameters
 
@@ -36788,11 +37255,23 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 `FentarisTransport.readResource`
 
+### requiresManagedInstall()
+
+> **requiresManagedInstall**(): `boolean`
+
+Defined in: packages/core/src/transports/client/StdioTransport.ts:110
+
+Whether this transport declares an edge-managed software installation.
+
+#### Returns
+
+`boolean`
+
 ### runtimeValueTokens()
 
 > **runtimeValueTokens**(): `RuntimeValueToken`[]
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:90
+Defined in: packages/core/src/transports/client/StdioTransport.ts:98
 
 Return every runtime-value token declared in arguments and environment.
 Used by configuration validation to reconcile references against setup
@@ -36806,7 +37285,7 @@ fields without exposing the full options object.
 
 > **serverCapabilities**(): `Promise`\<\{ `completions?`: `object`; `experimental?`: \{\[`key`: `string`\]: `object`; \}; `extensions?`: \{\[`key`: `string`\]: `object`; \}; `logging?`: `object`; `prompts?`: \{ `listChanged?`: `boolean`; \}; `resources?`: \{ `listChanged?`: `boolean`; `subscribe?`: `boolean`; \}; `tasks?`: \{\[`key`: `string`\]: `unknown`; `cancel?`: `object`; `list?`: `object`; `requests?`: \{\[`key`: `string`\]: `unknown`; `tools?`: \{\[`key`: `string`\]: `unknown`; `call?`: `object`; \}; \}; \}; `tools?`: \{ `listChanged?`: `boolean`; \}; \} \| `undefined`\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:197
+Defined in: packages/core/src/transports/client/StdioTransport.ts:210
 
 Return the initialized upstream capability declaration.
 
@@ -36818,7 +37297,7 @@ Return the initialized upstream capability declaration.
 
 > **toLaunchRecipe**(`schema?`): `LaunchRecipe`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:80
+Defined in: packages/core/src/transports/client/StdioTransport.ts:88
 
 Compile this transport's declaration into a serializable launch recipe bound
 to an optional setup schema. Cloud/edge validation uses this to reconcile
@@ -36838,7 +37317,7 @@ runtime-value references against declared setup fields.
 
 > **unresolvedCloudRuntimeRefs**(): `string`[]
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:102
+Defined in: packages/core/src/transports/client/StdioTransport.ts:115
 
 Runtime references that have no explicit cloud-side value.
 
@@ -36850,7 +37329,7 @@ Runtime references that have no explicit cloud-side value.
 
 > **withEnv**(`env`): `StdioTransport`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:111
+Defined in: packages/core/src/transports/client/StdioTransport.ts:124
 
 Return a copy with merged environment variables.
 
@@ -36872,7 +37351,7 @@ Return a copy with merged environment variables.
 
 > **stdio**(`options`): `StdioTransport`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:293
+Defined in: packages/core/src/transports/client/StdioTransport.ts:313
 
 Create a stdio upstream transport.
 
@@ -36894,7 +37373,7 @@ Create a stdio upstream transport.
 
 > **StdioTransportOptions** = `object`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:37
+Defined in: packages/core/src/transports/client/StdioTransport.ts:38
 
 Options for the stdio transport.
 
@@ -36909,37 +37388,47 @@ recipe for edge launch. A plain-string configuration remains unchanged.
 
 > `optional` **args?**: (`string` \| `RuntimeValueToken`)[]
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:39
+Defined in: packages/core/src/transports/client/StdioTransport.ts:40
 
 ### clientName?
 
 > `optional` **clientName?**: `string`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:49
+Defined in: packages/core/src/transports/client/StdioTransport.ts:57
 
 ### clientVersion?
 
 > `optional` **clientVersion?**: `string`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:50
+Defined in: packages/core/src/transports/client/StdioTransport.ts:58
 
 ### command
 
 > **command**: `string`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:38
+Defined in: packages/core/src/transports/client/StdioTransport.ts:39
 
 ### env?
 
 > `optional` **env?**: `Record`\<`string`, `string` \| `RuntimeValueToken`\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:40
+Defined in: packages/core/src/transports/client/StdioTransport.ts:41
+
+### install?
+
+> `optional` **install?**: `EdgeInstallPlan` \| `EdgeNpmInstallPlanInput`
+
+Defined in: packages/core/src/transports/client/StdioTransport.ts:55
+
+Managed installation for edge execution. Declare it with `edge.npm(...)`.
+When present, `command` is a bare bin name that the edge agent resolves
+inside its managed install directory, and cloud execution is rejected.
 
 ### runtimeValues?
 
 > `optional` **runtimeValues?**: `Record`\<`string`, `string`\>
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:47
+Defined in: packages/core/src/transports/client/StdioTransport.ts:48
 
 Explicit cloud-side resolutions for runtime references. These values are
 used only for local cloud process launch and are never serialized into an
@@ -36949,7 +37438,7 @@ edge launch recipe.
 
 > `optional` **stderr?**: `"inherit"` \| `"pipe"` \| `"overlapped"` \| `"ignore"`
 
-Defined in: packages/core/src/transports/client/StdioTransport.ts:48
+Defined in: packages/core/src/transports/client/StdioTransport.ts:56
 
   </Accordion>
 </AccordionGroup>

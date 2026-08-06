@@ -72,6 +72,37 @@ Setup builders:
 
 Cloud execution rejects unresolved runtime tokens with `EDGE_UNRESOLVED_RUNTIME_INPUT`. `StdioTransportOptions.runtimeValues` can provide explicit cloud-side string values.
 
+## Managed Installation
+
+### `edge.npm(options)`
+
+Compiles a data-only install plan for `StdioTransportOptions.install`:
+
+```ts theme={null}
+app.mcp("custom", {
+  transport: stdio({
+    command: "custom-server",
+    install: edge.npm({
+      package: "@scope/custom-server",
+      version: "1.4.2",
+      bin: "custom-server",
+      integrity: "sha512-...",
+      registryUrl: "https://npm.example.com",
+    }),
+  }),
+});
+```
+
+`package` must be a valid registry name and `version` an exact version; ranges and dist-tags are rejected. `bin` defaults to the unscoped package name and must be a bare executable name. `registryUrl` must use `https` except for loopback development. The compiled plan carries a `digest` and is included in the launch-recipe digest.
+
+Related exports: `EdgeInstallPlan`, `compileEdgeNpmInstallPlan`, `validateEdgeInstallPlan`, `edgeInstallPackageId`, `edgeInstallDirectoryName`, and `StdioTransport.requiresManagedInstall()`.
+
+When an install plan is present, `command` is resolved inside the device install directory. Cloud placement fails with `EDGE_UNRESOLVED_RUNTIME_INPUT`.
+
+### Readiness and reporting
+
+`EdgeDeploymentReadinessStatus` includes `install-required`. Reason categories are `install-pending`, `install-failed`, `install-denied`, and `install-verification-failed` (`EDGE_INSTALL_REASON_CATEGORIES`). The setup-status message carries an optional `EdgeInstallStatusReport` with the package identifier, install digest, resolved version, and reason category; `validateEdgeInstallStatusReport(...)` bounds it. Local install directories, caches, and package-manager output stay on the device.
+
 ## Core Runtime Adapters
 
 `McpProxyOptions.edge` accepts:
@@ -143,9 +174,12 @@ Explicit input order is preserved. Declarative results are ordered by normalized
 * `LocalSetupManager` and `TerminalSetupProvider`
 * `EdgeWorkloadSupervisor`
 * `ExecutableAllowlistPolicy`
+* `ManagedInstallManager` and `NodeEdgeInstallCommandRunner`
 * platform, credential, process, and connection adapter contracts
 
 The initial process model is one local MCP process/client per `{ deployment, downstream session }`.
+
+`ManagedInstallManager` owns the pinned-package lifecycle: it evaluates the package allowlist through `EdgeWorkloadPolicy.allowInstall`, installs into `<data dir>/installs`, verifies before promotion, reuses an install across deployments and restarts, applies a bounded attempt budget, and prunes unreferenced installs. Replace `EdgeInstallCommandRunner` to control how the package manager is invoked.
 
 ## Protocol Compatibility
 
