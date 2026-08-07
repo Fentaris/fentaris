@@ -1,5 +1,19 @@
 # @fentaris/cli
 
+## 1.5.0
+
+### Minor Changes
+
+- e327f03: Add the centralized `fentaris edge` join, service, inventory, metadata, disconnect, and revoke command surface with stable JSON output.
+
+### Patch Changes
+
+- Updated dependencies [e327f03]
+- Updated dependencies [e327f03]
+- Updated dependencies [43e4fdd]
+  - @fentaris/edge@0.3.0
+  - @fentaris/core@2.4.0
+
 ## 1.4.2
 
 ### Patch Changes

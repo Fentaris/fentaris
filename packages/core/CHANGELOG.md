@@ -1,5 +1,15 @@
 # @fentaris/core
 
+## 2.4.0
+
+### Minor Changes
+
+- e327f03: Add opt-in Edge Control discovery, declarative session selection, isolated explicit calls, bounded multi-device fan-out, distributed adapter contracts, and orchestration observability.
+
+### Patch Changes
+
+- 43e4fdd: Bump `@modelcontextprotocol/sdk` and pin patched transitive dependencies to clear known security advisories.
+
 ## 2.3.1
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # @fentaris/edge
 
+## 0.3.0
+
+### Minor Changes
+
+- e327f03: Add persistent service operation, protocol-v2 presence reporting, local lifecycle control, and legacy `fentaris-edge` command compatibility.
+
+### Patch Changes
+
+- Updated dependencies [e327f03]
+- Updated dependencies [43e4fdd]
+  - @fentaris/core@2.4.0
+
 ## 0.2.2
 
 ### Patch Changes
