@@ -105,7 +105,7 @@ fentaris dev
 
 Save each generated API key when the CLI prints it. Fentaris stores only its hash. Clients send the raw value in the `x-fentaris-api-key` header.
 
-Choose `FENTARIS_AUTH_KEY` outside the project and provide it through your shell session or secret manager. Keep the same value for later reads and updates. Do not commit it, write it into generated project files, or include it in an agent response.
+For local development, let the CLI generate `FENTARIS_AUTH_KEY` in the ignored project `.env` on the first encrypted write. For deployments, provide it through your secret manager. Keep the same value for later reads and updates, and never commit or include it in an agent response.
 
 `credentialJson("users.alice.apiKeys.0")` points at the first CLI-managed API-key hash for `alice`. `fentaris auth api-key add alice --generate` writes that value; application code must not generate or encrypt it directly.
 
@@ -230,7 +230,9 @@ The generated local credential store uses one encrypted file by default:
 
 `credentials.enc.json` is encrypted and stores user API keys plus user, group, and default credential values. New writes use a versioned AES-256-GCM envelope with PBKDF2 key derivation metadata, while legacy SHA-256-derived files are still readable and migrate on the next successful write. On Unix, the file is written with owner-only permissions (`0600`). Keep it private and rotate the encryption key using your deployment secret process.
 
-For automation, prefer environment and stdin inputs so secrets do not appear in process arguments:
+On the first encrypted write, the CLI creates a random `FENTARIS_AUTH_KEY` in the project `.env` when no key is already configured. Generated `dev` and `start` scripts load that file automatically. Projects that do not use encrypted credentials do not need a key.
+
+For deployments or externally managed keys, prefer environment and stdin inputs so secrets do not appear in process arguments:
 
 ```bash theme={null}
 export FENTARIS_AUTH_KEY="local-encryption-key"
@@ -239,7 +241,7 @@ printf '%s' "$GITHUB_TOKEN" | fentaris secrets set github.token --value-stdin
 
 `--key` and `--value` remain available for compatibility, but Fentaris warns because those values can be visible through process inspection.
 
-For agent-created projects, leave the encryption key and secret values for the user to provide after code generation. The handoff must list the exact CLI commands and scopes without inventing, printing, or persisting secret values.
+For agent-created projects, leave secret values for the user to provide after code generation. The CLI can generate the local encryption key during the first credential write; the handoff must list the exact CLI commands and scopes without inventing or printing secret values.
 
 `secrets.manifest.json` lists required credential references only. Commit this file so teammates know which secrets a project needs without sharing encrypted values.
 

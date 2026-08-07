@@ -301,14 +301,15 @@ If the key is lost for a disposable local project, reinitialize the project or r
 
 ### Secret command asks for a key
 
-`fentaris secrets set` needs the local auth key. The CLI checks `--key`, the exported `FENTARIS_AUTH_KEY`, and the discovered project `.env` before opening the interactive prompt.
+`fentaris secrets set` needs a local auth key. When the project has no encrypted credential store and no configured key, the CLI generates a random key in the project `.env` on the first write.
 
 ```bash theme={null}
-printf 'FENTARIS_AUTH_KEY=<key>\n' >> .env
 fentaris secrets set github.token --user admin
 ```
 
-Run the command inside the project or one of its subdirectories so the CLI can discover the correct `.env`. An exported `FENTARIS_AUTH_KEY` overrides the value in `.env`.
+Run the command inside the project or one of its subdirectories so the CLI can discover the correct `.env`. An explicit `--key` overrides an exported `FENTARIS_AUTH_KEY`, which overrides the value in `.env`.
+
+If `credentials.enc.json` already exists, Fentaris does not generate a replacement key because that would make the existing data unreadable. Restore the original key in `.env` or your secret manager.
 
 ### Auth setup requires interactive input
 

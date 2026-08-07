@@ -194,11 +194,11 @@ Doctor:
 
 ## Provision local API keys
 
-Choose the encryption key outside the repository. Agents must leave the actual
-value to the user or secret manager.
+Let the CLI create a random project-local encryption key in the ignored `.env`
+on the first credential write. Agents must leave the client API-key values to
+the user.
 
 ```bash theme={null}
-export FENTARIS_AUTH_KEY="<local-encryption-key>"
 pnpm exec fentaris auth api-key add reader --generate --non-interactive
 pnpm exec fentaris auth api-key add maintainer --generate --non-interactive
 ```

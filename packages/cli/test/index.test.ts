@@ -609,9 +609,14 @@ describe("project template", () => {
     });
 
     const packageJson = JSON.parse(rendered.files["package.json"] ?? "{}") as {
+      scripts?: Record<string, string>;
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
+    expect(packageJson.scripts).toMatchObject({
+      dev: "tsx --env-file-if-exists=.env src/index.ts",
+      start: "node --env-file-if-exists=.env dist/index.js",
+    });
     expect(packageJson.dependencies).toMatchObject({
       tsx: "^4.23.1",
     });
@@ -1356,6 +1361,46 @@ void app;
 });
 
 describe("secrets", () => {
+  it("creates a project-local auth key on the first encrypted write", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const authDir = join(dir, ".fentaris");
+    await mkdir(authDir, { recursive: true });
+    await writeFile(
+      join(dir, "fentaris.json"),
+      JSON.stringify({ name: "demo", packageManager: "pnpm", entrypoint: "src/index.ts", port: 4000, path: "/mcp", authDir: ".fentaris" }),
+    );
+
+    const rt = runtime(dir);
+    delete rt.env.FENTARIS_AUTH_KEY;
+    await expect(main(["secrets", "set", "github.token", "--value", "secret-value"], rt)).resolves.toBe(0);
+
+    const dotenv = await readFile(join(dir, ".env"), "utf8");
+    const key = dotenv.match(/^FENTARIS_AUTH_KEY=(.+)$/m)?.[1];
+    expect(key).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const credentials = FentarisAuth.decryptCredentials(
+      JSON.parse(await readFile(join(authDir, "credentials.enc.json"), "utf8")) as unknown,
+      key ?? "",
+    );
+    expect(credentials.defaults["github.token"]).toBe("secret-value");
+    expect(rt.prompt.text).not.toHaveBeenCalled();
+  });
+
+  it("does not require an auth key when no encrypted store exists", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await mkdir(join(dir, ".fentaris"), { recursive: true });
+    await writeFile(
+      join(dir, "fentaris.json"),
+      JSON.stringify({ name: "demo", packageManager: "pnpm", entrypoint: "src/index.ts", port: 4000, path: "/mcp", authDir: ".fentaris" }),
+    );
+
+    const rt = runtime(dir);
+    delete rt.env.FENTARIS_AUTH_KEY;
+    await expect(main(["secrets", "list"], rt)).resolves.toBe(0);
+
+    expect(rt.prompt.text).not.toHaveBeenCalled();
+    await expect(readFile(join(dir, ".env"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("stores redacted user secrets in FentarisAuth-compatible credentials", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     const project = join(dir, "project");

@@ -46,7 +46,7 @@ async function runSecretsSet(command: CliCommand, reference: string | undefined,
   const project = await discoverSecretsProject(runtime.cwd);
   const input = await resolveSecretsSetInput(command, reference, runtime, project);
   const storagePath = path.relative(project.root, credentialsPath(project));
-  const backend = await openLocalSecretsBackend(project, runtime, input.options);
+  const backend = await openLocalSecretsBackend(project, runtime, input.options, { createKeyIfMissing: true });
   if (!(await backend.credentialsExist())) {
     await backend.initEmpty();
   }
