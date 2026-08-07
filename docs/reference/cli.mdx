@@ -41,6 +41,17 @@ npx @fentaris/edge join https://fentaris.example --name "Mac Studio" --tag xcode
 fentaris edge join https://fentaris.example --name "Mac Studio" --description "Local builds" --tag xcode
 ```
 
+### `fentaris edge approve <user-code>`
+
+Approve a pending local-mode authorization through the protected operator channel. The command never edits the authority file directly.
+
+```bash theme={null}
+fentaris edge approve ABCD-EFGH --subject alice
+fentaris edge approve ABCD-EFGH --subject alice --tenant default --yes --json
+```
+
+Without `--yes`, the CLI asks for explicit confirmation. JSON output uses the standard `{ ok, data, error, warnings, pagination }` envelope. Stable failures include `EDGE_AUTHORIZATION_CODE_EXPIRED`, `EDGE_JOIN_DENIED`, `EDGE_DEVICE_REVOKED`, `EDGE_CONTROL_PLANE_INVALID_CONFIGURATION`, and `LOCAL_EDGE_AUTHORITY_UNAVAILABLE`.
+
 Use repeatable `--tag`, `--description`, `--no-service`, or `--service`. If service installation is unavailable and `--service` was not required, enrollment remains valid and the result gives the exact foreground command.
 
 ### `fentaris edge run`

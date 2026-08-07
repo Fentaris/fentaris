@@ -34,55 +34,55 @@
 
 ## 5. Desired-state planning and reconciliation
 
-- [ ] 5.1 Compile registered MCP transports, setup schemas, installation recipes, placement declarations, and policy metadata into an immutable deployment catalog at startup.
-- [ ] 5.2 Derive device eligibility from authenticated subject grants, groups, policy decisions, placement constraints, enrolled-device identity, and reported inventory.
-- [ ] 5.3 Implement named-device, default-device, pool, session, and declarative placement semantics without requiring application-authored gateway wiring.
-- [ ] 5.4 Implement the managed assignment-resolver adapter for dynamic identity and fleet systems while preserving deterministic local behavior.
-- [ ] 5.5 Produce canonical per-device desired sets with stable digests, compare-and-swap updates, per-device serialization, and version increments only for effective changes.
-- [ ] 5.6 Trigger reconciliation on application start, enrollment, connection, inventory or readiness changes, grant updates, assignment updates, and revocation.
-- [ ] 5.7 Withhold ambiguous, unauthorized, unsupported, or incomplete deployments and expose bounded reasons instead of dispatching unsafe desired state.
+- [x] 5.1 Compile registered MCP transports, setup schemas, installation recipes, placement declarations, and policy metadata into an immutable deployment catalog at startup.
+- [x] 5.2 Derive device eligibility from authenticated subject grants, groups, policy decisions, placement constraints, enrolled-device identity, and reported inventory.
+- [x] 5.3 Implement named-device, default-device, pool, session, and declarative placement semantics without requiring application-authored gateway wiring.
+- [x] 5.4 Implement the managed assignment-resolver adapter for dynamic identity and fleet systems while preserving deterministic local behavior.
+- [x] 5.5 Produce canonical per-device desired sets with stable digests, compare-and-swap updates, per-device serialization, and version increments only for effective changes.
+- [x] 5.6 Trigger reconciliation on application start, enrollment, connection, inventory or readiness changes, grant updates, assignment updates, and revocation.
+- [x] 5.7 Withhold ambiguous, unauthorized, unsupported, or incomplete deployments and expose bounded reasons instead of dispatching unsafe desired state.
 
 ## 6. Gateway, inventory, and capability bridge
 
-- [ ] 6.1 Connect gateway presence, setup state, readiness, installation state, and manifest reports to the configured inventory and desired-state stores.
-- [ ] 6.2 Validate desired generation, recipe digest, setup version, and device identity before accepting readiness or installation transitions.
-- [ ] 6.3 Publish Edge-hosted MCP capabilities with device provenance and invalidate capability caches when manifests, readiness, assignments, or connections change.
-- [ ] 6.4 Gate tool dispatch on current authorization, active assignment, connected presence, matching generation, readiness, and manifest support.
-- [ ] 6.5 Implement offline, reconnect, stale-session, duplicate-connection, reassignment, and revocation cleanup semantics.
-- [ ] 6.6 Add integration tests proving that gateway reports automatically update inventory, capability discovery, and dispatch eligibility.
+- [x] 6.1 Connect gateway presence, setup state, readiness, installation state, and manifest reports to the configured inventory and desired-state stores.
+- [x] 6.2 Validate desired generation, recipe digest, setup version, and device identity before accepting readiness or installation transitions.
+- [x] 6.3 Publish Edge-hosted MCP capabilities with device provenance and invalidate capability caches when manifests, readiness, assignments, or connections change.
+- [x] 6.4 Gate tool dispatch on current authorization, active assignment, connected presence, matching generation, readiness, and manifest support.
+- [x] 6.5 Implement offline, reconnect, stale-session, duplicate-connection, reassignment, and revocation cleanup semantics.
+- [x] 6.6 Add integration tests proving that gateway reports automatically update inventory, capability discovery, and dispatch eligibility.
 
 ## 7. Application lifecycle and health
 
-- [ ] 7.1 Add ordered control-plane startup phases for authority state, authorization services, planner, reconciler, gateway, routes, and application exposure.
-- [ ] 7.2 Add reverse-order rollback and idempotent shutdown that stop new joins, drain active work, close sockets, release locks, and preserve durable state.
-- [ ] 7.3 Extend health reporting with redacted Edge authority, gateway, reconciliation, adapter, and durable-store status and bounded aggregate counts.
-- [ ] 7.4 Make unsafe local configuration and unavailable optional services visible as warnings while treating required managed-adapter failures as unhealthy startup failures.
-- [ ] 7.5 Add telemetry and profiler coverage for authorization, enrollment, connection, reconciliation, desired-state publication, dispatch gating, and revocation.
+- [x] 7.1 Add ordered control-plane startup phases for authority state, authorization services, planner, reconciler, gateway, routes, and application exposure.
+- [x] 7.2 Add reverse-order rollback and idempotent shutdown that stop new joins, drain active work, close sockets, release locks, and preserve durable state.
+- [x] 7.3 Extend health reporting with redacted Edge authority, gateway, reconciliation, adapter, and durable-store status and bounded aggregate counts.
+- [x] 7.4 Make unsafe local configuration and unavailable optional services visible as warnings while treating required managed-adapter failures as unhealthy startup failures.
+- [x] 7.5 Add telemetry and profiler coverage for authorization, enrollment, connection, reconciliation, desired-state publication, dispatch gating, and revocation.
 
 ## 8. CLI and developer experience
 
-- [ ] 8.1 Add `fentaris edge approve <user-code>` with interactive confirmation and stable machine-readable output.
-- [ ] 8.2 Route local approval and administrative CLI operations through the protected operator channel and refuse direct mutation of authority files.
-- [ ] 8.3 Extend project initialization and configuration helpers with the minimal local control-plane configuration while keeping it disabled by default.
-- [ ] 8.4 Extend `fentaris check` and doctor diagnostics to verify route conflicts, canonical origin security, local-state permissions, managed adapters, and gateway reachability.
-- [ ] 8.5 Add stable CLI error codes and JSON output for expired codes, denied joins, revoked devices, unavailable local authority, and invalid configuration.
+- [x] 8.1 Add `fentaris edge approve <user-code>` with interactive confirmation and stable machine-readable output.
+- [x] 8.2 Route local approval and administrative CLI operations through the protected operator channel and refuse direct mutation of authority files.
+- [x] 8.3 Extend project initialization and configuration helpers with the minimal local control-plane configuration while keeping it disabled by default.
+- [x] 8.4 Extend `fentaris check` and doctor diagnostics to verify route conflicts, canonical origin security, local-state permissions, managed adapters, and gateway reachability.
+- [x] 8.5 Add stable CLI error codes and JSON output for expired codes, denied joins, revoked devices, unavailable local authority, and invalid configuration.
 
 ## 9. End-to-end verification and security
 
-- [ ] 9.1 Add focused unit tests for configuration, authorization state machines, proofs, token rotation, assignments, desired-state canonicalization, and dispatch gates.
-- [ ] 9.2 Add loopback HTTP and WebSocket end-to-end tests using a real Edge agent through authorize, approve, join, connect, reconcile, run, refresh, and revoke.
-- [ ] 9.3 Add a two-user and two-device authorization test proving that a restricted user sees only an assigned Edge while an administrator receives all eligible Edge deployments.
-- [ ] 9.4 Add a hot-plug test proving that a newly approved Edge becomes usable while the Fentaris application remains running and without catalog mutation.
-- [ ] 9.5 Add restart tests proving durable enrollment and revocation, reconnect continuity, desired-state recovery, and invalidation of rotated credentials.
-- [ ] 9.6 Add adversarial tests for hostile host and forwarded headers, proof replay, key substitution, token replay, oversized requests, polling abuse, stale generations, and unauthorized dispatch.
-- [ ] 9.7 Add managed-adapter conformance tests and reject unsafe multi-instance local mode before accepting enrollment or dispatch traffic.
-- [ ] 9.8 Run affected package tests, repository type checks, builds, linting, OpenSpec strict validation, and the release readiness checks required by the Fentaris workflow.
+- [x] 9.1 Add focused unit tests for configuration, authorization state machines, proofs, token rotation, assignments, desired-state canonicalization, and dispatch gates.
+- [x] 9.2 Add loopback HTTP and WebSocket end-to-end tests using a real Edge agent through authorize, approve, join, connect, reconcile, run, refresh, and revoke.
+- [x] 9.3 Add a two-user and two-device authorization test proving that a restricted user sees only an assigned Edge while an administrator receives all eligible Edge deployments.
+- [x] 9.4 Add a hot-plug test proving that a newly approved Edge becomes usable while the Fentaris application remains running and without catalog mutation.
+- [x] 9.5 Add restart tests proving durable enrollment and revocation, reconnect continuity, desired-state recovery, and invalidation of rotated credentials.
+- [x] 9.6 Add adversarial tests for hostile host and forwarded headers, proof replay, key substitution, token replay, oversized requests, polling abuse, stale generations, and unauthorized dispatch.
+- [x] 9.7 Add managed-adapter conformance tests and reject unsafe multi-instance local mode before accepting enrollment or dispatch traffic.
+- [x] 9.8 Run affected package tests, repository type checks, builds, linting, OpenSpec strict validation, and the release readiness checks required by the Fentaris workflow.
 
 ## 10. Documentation, examples, and release preparation
 
-- [ ] 10.1 Document the public configuration, route model, trust boundaries, local and managed deployment modes, approval flow, persistence, recovery, and revocation behavior.
-- [ ] 10.2 Replace manual Edge gateway demo wiring with a short supported example based on `edge.controlPlane` and `app.start()`.
-- [ ] 10.3 Add a two-user hot-plug Edge demo showing automatic MCP desired state, capability discovery, selection, and policy-controlled dispatch.
-- [ ] 10.4 Update troubleshooting and security guidance for origins, TLS, file permissions, operator access, stale devices, adapter failures, and credential rotation.
-- [ ] 10.5 Update generated API reference and CLI help snapshots for every new public type, configuration field, command, diagnostic, and stable output contract.
-- [ ] 10.6 Add minor Changesets for the affected public packages and prepare migration, compatibility, rollout, and rollback notes for the release.
+- [x] 10.1 Document the public configuration, route model, trust boundaries, local and managed deployment modes, approval flow, persistence, recovery, and revocation behavior.
+- [x] 10.2 Replace manual Edge gateway demo wiring with a short supported example based on `edge.controlPlane` and `app.start()`.
+- [x] 10.3 Add a two-user hot-plug Edge demo showing automatic MCP desired state, capability discovery, selection, and policy-controlled dispatch.
+- [x] 10.4 Update troubleshooting and security guidance for origins, TLS, file permissions, operator access, stale devices, adapter failures, and credential rotation.
+- [x] 10.5 Update generated API reference and CLI help snapshots for every new public type, configuration field, command, diagnostic, and stable output contract.
+- [x] 10.6 Add minor Changesets for the affected public packages and prepare migration, compatibility, rollout, and rollback notes for the release.
