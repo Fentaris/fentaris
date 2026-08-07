@@ -418,8 +418,10 @@ export type {
   SecretScope,
   SecretsBackend,
   SecretsManifest,
+  SecretsManifestApiKey,
   SecretsManifestDiff,
   SecretsManifestEntry,
+  SecretsManifestSource,
   SecretsProvider,
 } from "./secrets/index.js";
 /**

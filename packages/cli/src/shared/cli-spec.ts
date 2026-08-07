@@ -385,6 +385,7 @@ export const cliSpec: CliCommandSpec = {
           title: "Commands",
           commands: [
             { name: "set", summary: "Store a local credential value." },
+            { name: "setup", summary: "Configure all discovered project credentials." },
             { name: "list", summary: "List required and stored credentials." },
             { name: "unset", summary: "Remove a local credential value." },
             { name: "manifest", summary: "Generate or check the secrets manifest." },
@@ -394,6 +395,24 @@ export const cliSpec: CliCommandSpec = {
       ],
       options: [{ name: "help", short: "h", description: "Print help" }],
       commands: {
+        setup: {
+          name: "setup",
+          path: ["secrets", "setup"],
+          description: "Discover and configure all required project credentials.",
+          usage: "fentaris secrets setup [OPTIONS]",
+          details: [
+            "Generates missing Fentaris API keys, prompts for external values in interactive mode, and writes only after the setup plan is complete.",
+            "JSON and non-interactive runs never prompt and make no changes while required external values are unavailable.",
+          ],
+          options: [
+            { name: "entrypoint", valueName: "PATH", description: "Entrypoint to scan instead of the configured project entrypoint." },
+            { name: "dry-run", description: "Show the setup plan without creating keys or changing files." },
+            { name: "yes", description: "Apply the setup plan without confirmation." },
+            { name: "json", description: "Output the canonical machine-readable setup envelope." },
+            localSecretsKeyOption,
+            { name: "help", short: "h", description: "Print help" },
+          ],
+        },
         set: {
           name: "set",
           path: ["secrets", "set"],

@@ -382,6 +382,30 @@ Use `--value=<secret>` when a scripted secret value starts with `-`, for example
   Do not pass `--value` in shared shell history unless the environment is trusted.
 </Warning>
 
+### `fentaris secrets setup`
+
+Discover every credential and Fentaris user API-key requirement in the project entrypoint, then configure everything that the local backend supports.
+
+```bash theme={null}
+fentaris secrets setup
+fentaris secrets setup --dry-run
+fentaris secrets setup --yes --json
+fentaris secrets setup --non-interactive --yes --json
+```
+
+Interactive setup shows a redacted plan, prompts invisibly for missing third-party tokens, creates `FENTARIS_AUTH_KEY` in the ignored project `.env` when an encrypted local store is needed, and generates missing Fentaris API keys. Generated client API keys are printed only after a successful write; save them immediately because the store retains only their hashes. Rerunning setup does not replace configured credentials or regenerate existing keys.
+
+Options:
+
+* `--entrypoint <path>` - scan a specific TypeScript entrypoint.
+* `--dry-run` - show planned prompts, generation, and manual actions without changing files.
+* `--yes` - apply a complete plan without confirmation.
+* `--non-interactive` - disable prompts. This is a global option and can appear anywhere in the command.
+* `--json` - emit the canonical machine-readable envelope.
+* `--key <key>` - use an explicit local-store encryption key.
+
+JSON and non-interactive setup validates all non-generatable values before writing. If an external value is unavailable, it exits with `SECRETS_SETUP_INCOMPLETE`, leaves `.env`, the encrypted store, and the manifest unchanged, and returns commands in `nextActions`. Fentaris never invents third-party tokens. Custom JSON files or non-standard paths are reported as manual actions.
+
 ### `fentaris secrets list`
 
 List credential references from the committed secrets manifest and show whether each reference is set in the local store.
@@ -415,7 +439,7 @@ Options:
 
 ### `fentaris secrets manifest`
 
-Generate or validate `.fentaris/secrets.manifest.json` from `credential(...)` references in the project entrypoint.
+Generate or validate `.fentaris/secrets.manifest.json` from `credential(...)`, `credentialJson(...)`, and `credentialEnv(...)` declarations in the project entrypoint. The manifest contains source metadata and Fentaris user API-key counts, but never credential values.
 
 ```bash theme={null}
 fentaris secrets manifest

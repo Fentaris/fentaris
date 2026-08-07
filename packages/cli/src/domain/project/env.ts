@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { appendFile, chmod, readFile } from "node:fs/promises";
 import path from "node:path";
 import { exists } from "../../shared/utils.js";
 
@@ -9,6 +10,36 @@ export async function loadProjectEnv(root: string, baseEnv: NodeJS.ProcessEnv): 
   }
 
   return { ...parseDotEnv(await readFile(filePath, "utf8")), ...baseEnv };
+}
+
+export async function ensureProjectAuthKey(root: string, baseEnv: NodeJS.ProcessEnv): Promise<{ env: NodeJS.ProcessEnv; key: string; created: boolean }> {
+  const env = await loadProjectEnv(root, baseEnv);
+  const existing = env.FENTARIS_AUTH_KEY?.trim();
+  if (existing) {
+    return { env, key: existing, created: false };
+  }
+
+  const filePath = path.join(root, ".env");
+  const contents = (await exists(filePath)) ? await readFile(filePath, "utf8") : "";
+  const prefix = contents.length > 0 && !contents.endsWith("\n") ? "\n" : "";
+  const key = randomBytes(32).toString("base64url");
+  await appendFile(filePath, `${prefix}FENTARIS_AUTH_KEY=${key}\n`, { mode: 0o600 });
+  if (process.platform !== "win32") {
+    await chmod(filePath, 0o600);
+  }
+
+  return { env: { ...env, FENTARIS_AUTH_KEY: key }, key, created: true };
+}
+
+export async function appendProjectEnvValues(root: string, values: Record<string, string>): Promise<void> {
+  const entries = Object.entries(values);
+  if (entries.length === 0) return;
+  const filePath = path.join(root, ".env");
+  const contents = (await exists(filePath)) ? await readFile(filePath, "utf8") : "";
+  const prefix = contents.length > 0 && !contents.endsWith("\n") ? "\n" : "";
+  const lines = entries.map(([name, value]) => `${name}=${formatDotEnvValue(value)}`).join("\n");
+  await appendFile(filePath, `${prefix}${lines}\n`, { mode: 0o600 });
+  if (process.platform !== "win32") await chmod(filePath, 0o600);
 }
 
 export function parseDotEnv(contents: string): NodeJS.ProcessEnv {
@@ -47,4 +78,8 @@ function parseDotEnvValue(value: string): string {
 
   const commentIndex = value.search(/\s#/);
   return (commentIndex === -1 ? value : value.slice(0, commentIndex)).trim();
+}
+
+function formatDotEnvValue(value: string): string {
+  return JSON.stringify(value);
 }

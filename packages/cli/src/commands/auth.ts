@@ -64,7 +64,7 @@ async function runAuthApiKeyAdd(command: CliCommand, userId: string | undefined,
     }
   }
 
-  const backend = await openLocalSecretsBackend(project, runtime, command.options);
+  const backend = await openLocalSecretsBackend(project, runtime, command.options, { createKeyIfMissing: true });
   if (!(await backend.credentialsExist())) {
     await backend.initEmpty();
   }

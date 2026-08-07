@@ -73,7 +73,7 @@ import {
 import { filterToolsByPolicy, toCapabilityRequest } from "../policy.js";
 import { rateLimitKey } from "../rate-limit/index.js";
 import { FentarisAuth } from "../auth.js";
-import { resolveCredentialSource, type CredentialSourceMap } from "../credentials/index.js";
+import { resolveCredentialSource, type CredentialSource, type CredentialSourceMap } from "../credentials/index.js";
 import {
   buildSubjectIndex,
   evaluateGroupPolicies,
@@ -1266,6 +1266,7 @@ export class McpProxy {
 
     const startedAt = Date.now();
     const result = await this.lifecycle.start(async () => {
+      await this.assertRuntimeCredentialsAvailable();
       const port = options.port ?? this.defaultPort ?? 3000;
       const host = options.host ?? this.defaultHost;
       const path = options.path ?? this.defaultPath;
@@ -1358,7 +1359,10 @@ export class McpProxy {
       return this.listenInternal(transport);
     }
 
-    return this.lifecycle.start(() => this.listenInternal(transport), {
+    return this.lifecycle.start(async () => {
+      await this.assertRuntimeCredentialsAvailable();
+      return this.listenInternal(transport);
+    }, {
       startupTimeoutMs: this.lifecycleDefaults.startupTimeoutMs,
     }) as Promise<THandle>;
   }
@@ -1388,6 +1392,47 @@ export class McpProxy {
     if (edgeDiagnostics.length > 0) {
       throw new FentarisConfigError(edgeDiagnostics);
     }
+  }
+
+  private async assertRuntimeCredentialsAvailable(): Promise<void> {
+    const requirements = new Map<string, { source: CredentialSource; usages: string[] }>();
+    const add = (source: CredentialSource, usage: string) => {
+      const key = credentialReadinessKey(source);
+      const existing = requirements.get(key);
+      if (existing) existing.usages.push(usage);
+      else requirements.set(key, { source, usages: [usage] });
+    };
+
+    for (const [reference, source] of Object.entries(this.defaultCredentials)) add(source, `default credential ${reference}`);
+    for (const group of this.groups) {
+      for (const [reference, source] of Object.entries(group.credentials)) add(source, `group ${group.id} credential ${reference}`);
+      for (const user of group.users) {
+        for (const [reference, source] of Object.entries(user.credentials)) add(source, `user ${user.id} credential ${reference}`);
+        for (const source of user.apiKeys) add(source, `user ${user.id} API key`);
+      }
+    }
+
+    const unavailable: Array<{ source: string; locator: string; usages: string[] }> = [];
+    await Promise.all([...requirements.values()].map(async (requirement) => {
+      try {
+        await resolveCredentialSource(requirement.source);
+      } catch {
+        unavailable.push({
+          source: requirement.source.type,
+          locator: requirement.source.type === "env" ? requirement.source.name : requirement.source.path,
+          usages: [...new Set(requirement.usages)].sort(),
+        });
+      }
+    }));
+
+    if (unavailable.length === 0) return;
+    unavailable.sort((left, right) => `${left.source}:${left.locator}`.localeCompare(`${right.source}:${right.locator}`));
+    const lines = unavailable.flatMap((entry) => entry.usages.map((usage) => `- ${usage} (${entry.source}:${entry.locator})`));
+    throw new FentarisRuntimeError(`Declared credentials are unavailable:\n${lines.join("\n")}`, {
+      code: "FENTARIS_CREDENTIALS_UNAVAILABLE",
+      hints: ["Run fentaris secrets setup before starting the proxy."],
+      context: { requirements: unavailable },
+    });
   }
 
   /**
@@ -3890,6 +3935,12 @@ function normalizeIdentityOptions(
 
 function hasDeclaredApiKeys(groups: Group[]): boolean {
   return groups.some((group) => group.users.some((user) => user.apiKeys.length > 0));
+}
+
+function credentialReadinessKey(source: CredentialSource): string {
+  return source.type === "env"
+    ? `env:${source.name}`
+    : `json:${source.file ?? ""}:${source.path}:${source.keyEnv ?? ""}:${String(source.key ?? "")}`;
 }
 
 function declaredApiKeyIdentityStrategy(groups: () => Group[]): IdentityStrategy | undefined {

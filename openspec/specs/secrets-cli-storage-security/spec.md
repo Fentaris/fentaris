@@ -84,3 +84,25 @@ The CLI SHALL avoid duplicate unused local credential helper implementations tha
 - **WHEN** maintainers inspect local credential operations
 - **THEN** there is one active implementation path or duplicate helpers are covered by compatibility tests
 
+### Requirement: Project-local encryption key bootstrap
+
+The CLI SHALL use the discovered project `.env` for local credential encryption and SHALL bootstrap a random project-local key only when the first encrypted value is written.
+
+#### Scenario: First encrypted write without a configured key
+
+- **WHEN** a project has no `FENTARIS_AUTH_KEY` and no encrypted credential store
+- **AND** a user writes a local secret or API key
+- **THEN** the CLI generates `FENTARIS_AUTH_KEY` in the ignored project `.env`
+- **AND** encrypts the new store with that key without prompting for another key
+
+#### Scenario: Read without an encrypted store
+
+- **WHEN** a project has no `FENTARIS_AUTH_KEY` and no encrypted credential store
+- **AND** a user runs a read-only local secrets command
+- **THEN** the command returns the empty local state without requiring or creating a key
+
+#### Scenario: Existing store without its key
+
+- **WHEN** an encrypted credential store already exists and its key is unavailable
+- **THEN** the CLI does not generate a replacement key
+- **AND** requires the original key before decrypting or updating the store

@@ -18,7 +18,9 @@ export type {
   SecretScope,
   SecretsBackend,
   SecretsManifest,
+  SecretsManifestApiKey,
   SecretsManifestDiff,
   SecretsManifestEntry,
+  SecretsManifestSource,
   SecretsProvider,
 } from "./types.js";

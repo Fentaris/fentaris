@@ -6,19 +6,34 @@ import {
   secretRefKey,
   type SecretRef,
   type SecretsManifest,
+  type SecretsManifestApiKey,
   type SecretsManifestDiff,
   type SecretsManifestEntry,
 } from "./types.js";
 
+const manifestSourceSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("local") }),
+  z.object({ type: z.literal("env"), name: z.string().min(1) }),
+  z.object({ type: z.literal("manual"), reason: z.string().min(1) }),
+]);
+
 const manifestEntrySchema = z.object({
   ref: z.string().min(1),
   scope: z.string().min(1),
+  source: manifestSourceSchema.optional(),
+});
+
+const manifestApiKeySchema = z.object({
+  userId: z.string().min(1),
+  source: manifestSourceSchema,
+  count: z.number().int().positive().optional(),
 });
 
 const secretsManifestSchema = z.object({
   version: z.literal(1),
   references: z.array(manifestEntrySchema).default([]),
   envVars: z.array(z.string().min(1)).optional(),
+  apiKeys: z.array(manifestApiKeySchema).optional(),
 });
 
 /**
@@ -42,6 +57,7 @@ export function serializeManifest(manifest: SecretsManifest): string {
     version: 1,
     references: sortManifestEntries(manifest.references),
     ...(manifest.envVars?.length ? { envVars: [...new Set(manifest.envVars)].sort() } : {}),
+    ...(manifest.apiKeys?.length ? { apiKeys: sortManifestApiKeys(manifest.apiKeys) } : {}),
   };
   return `${JSON.stringify(normalized, null, 2)}\n`;
 }
@@ -69,7 +85,7 @@ export function diffManifest(required: SecretsManifestEntry[], stored: SecretRef
  * Build manifest entries from credential secret refs.
  * @pk
  */
-export function manifestFromSecretRefs(refs: SecretRef[], envVars: string[] = []): SecretsManifest {
+export function manifestFromSecretRefs(refs: SecretRef[], envVars: string[] = [], apiKeys: SecretsManifestApiKey[] = []): SecretsManifest {
   return {
     version: 1,
     references: sortManifestEntries(
@@ -78,7 +94,17 @@ export function manifestFromSecretRefs(refs: SecretRef[], envVars: string[] = []
         .map((entry) => ({ ref: entry.ref, scope: encodeSecretScope(entry.scope) })),
     ),
     ...(envVars.length ? { envVars: [...new Set(envVars)].sort() } : {}),
+    ...(apiKeys.length ? { apiKeys: sortManifestApiKeys(apiKeys) } : {}),
   };
+}
+
+function sortManifestApiKeys(entries: SecretsManifestApiKey[]): SecretsManifestApiKey[] {
+  return [...entries].sort((left, right) => {
+    const userCompare = left.userId.localeCompare(right.userId);
+    if (userCompare !== 0) return userCompare;
+    const sourceCompare = JSON.stringify(left.source).localeCompare(JSON.stringify(right.source));
+    return sourceCompare !== 0 ? sourceCompare : (left.count ?? 1) - (right.count ?? 1);
+  });
 }
 
 /**
