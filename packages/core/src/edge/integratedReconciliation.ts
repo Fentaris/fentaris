@@ -224,10 +224,13 @@ export class IntegratedEdgeReconciler implements EdgeReconciliationTriggerServic
     return this.serialize(input);
   }
 
-  async reconcileAll(trigger: EdgeReconciliationTrigger = "application-start"): Promise<void> {
+  async reconcileAll(
+    trigger: EdgeReconciliationTrigger = "application-start",
+    tenantId = "default",
+  ): Promise<void> {
     let cursor: string | undefined;
     do {
-      const page = await this.options.deviceRegistry.list("default", { limit: 100, ...(cursor ? { cursor } : {}) });
+      const page = await this.options.deviceRegistry.list(tenantId, { limit: 100, ...(cursor ? { cursor } : {}) });
       await Promise.all(page.items.map((device) => this.enqueue({
         tenantId: device.tenantId,
         edgeNodeId: device.edgeNodeId,
@@ -415,14 +418,22 @@ export class IntegratedEdgeDeviceResolver implements DeviceResolver {
     const presence = await this.options.presence.get(device.tenantId, device.edgeNodeId);
     if (!presence || presence.status !== "online" || !presence.heartbeat.fresh) return false;
     const desired = await this.options.desired.get(device.tenantId, device.edgeNodeId);
+    if (!desired || desired.deployments.length === 0) return false;
     const deploymentId = context.declarativeSelection?.requires?.deploymentId;
-    const deployment = desired?.deployments.find((candidate) => candidate.deploymentId === deploymentId);
-    if (!desired || (!deployment && deploymentId)) return false;
     if (deploymentId) {
+      const deployment = desired.deployments.find((candidate) => candidate.deploymentId === deploymentId);
+      if (!deployment) return false;
       const readiness = await this.options.readiness.get(device.tenantId, device.edgeNodeId, deploymentId);
       return readiness?.status === "ready" && readiness.connectionGeneration === presence.connectionGeneration;
     }
-    return true;
+    // Without a required deploymentId, still require at least one ready deployment.
+    for (const deployment of desired.deployments) {
+      const readiness = await this.options.readiness.get(device.tenantId, device.edgeNodeId, deployment.deploymentId);
+      if (readiness?.status === "ready" && readiness.connectionGeneration === presence.connectionGeneration) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private resolution(device: EdgeDeviceRecord | EdgeInventoryListItem): DeviceResolution {

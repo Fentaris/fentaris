@@ -216,6 +216,24 @@ export class EdgeLocalOperatorServer implements EdgeLocalOperatorChannel {
         return;
       }
       if (request.command === "approve") {
+        if (
+          typeof request.userCode !== "string"
+          || !request.userCode.trim()
+          || !request.decision
+          || typeof request.decision.tenantId !== "string"
+          || !request.decision.tenantId.trim()
+          || typeof request.decision.subjectId !== "string"
+          || !request.decision.subjectId.trim()
+          || typeof request.decision.actorId !== "string"
+          || !request.decision.actorId.trim()
+          || typeof request.decision.approvedAt !== "number"
+        ) {
+          this.respond(socket, {
+            ok: false,
+            error: { code: "invalid_request", message: "Approve requires userCode and a complete decision." },
+          });
+          return;
+        }
         this.respond(socket, {
           ok: true,
           data: await this.approve(request.userCode, request.decision),

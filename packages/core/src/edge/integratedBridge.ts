@@ -94,7 +94,12 @@ export class IntegratedEdgeGatewayBridge implements EdgeGatewayEventSink, EdgeGa
   async presenceChanged(message: EdgePresenceReportMessage): Promise<void> {
     const desired = await this.options.desired.get(message.tenantId, message.edgeNodeId);
     for (const deployment of desired?.deployments ?? []) {
-      await this.options.capabilityCache.setOnline(message.tenantId, deployment.deploymentId, true);
+      await this.options.capabilityCache.setOnline(
+        message.tenantId,
+        deployment.deploymentId,
+        true,
+        message.edgeNodeId,
+      );
     }
     await this.options.reconciler.enqueue({
       tenantId: message.tenantId,
@@ -104,6 +109,7 @@ export class IntegratedEdgeGatewayBridge implements EdgeGatewayEventSink, EdgeGa
   }
 
   async installationChanged(message: EdgeInstallationStatusMessage): Promise<void> {
+    await this.options.installation?.put(message);
     await this.options.reconciler.enqueue({
       tenantId: message.tenantId,
       edgeNodeId: message.edgeNodeId,
@@ -114,6 +120,9 @@ export class IntegratedEdgeGatewayBridge implements EdgeGatewayEventSink, EdgeGa
   async authorize(input: EdgeGatewayAuthorization): Promise<boolean> {
     if (input.message.kind !== "mcp.request" && input.message.kind !== "mcp.cancel") return true;
     const route = input.message.route;
+    if (route.edgeNodeId !== input.identity.edgeNodeId) {
+      return false;
+    }
     const device = await this.options.devices.get(input.identity.tenantId, input.identity.edgeNodeId);
     const desired = await this.options.desired.get(input.identity.tenantId, input.identity.edgeNodeId);
     const presence = await this.options.presence.get(input.identity.tenantId, input.identity.edgeNodeId);
@@ -125,7 +134,8 @@ export class IntegratedEdgeGatewayBridge implements EdgeGatewayEventSink, EdgeGa
       && presence?.status === "online"
       && presence.heartbeat.fresh
       && presence.connectionGeneration === route.connectionGeneration
-      && deployment,
+      && deployment
+      && (!route.subjectId || !device.subjectId || route.subjectId === device.subjectId),
     );
     if (allowed && input.message.kind === "mcp.request") {
       const readiness = await this.options.readiness.get(
@@ -164,7 +174,7 @@ export class IntegratedEdgeGatewayBridge implements EdgeGatewayEventSink, EdgeGa
   private async setAssignedOnline(tenantId: string, edgeNodeId: string, online: boolean): Promise<void> {
     const desired = await this.options.desired.get(tenantId, edgeNodeId);
     for (const deployment of desired?.deployments ?? []) {
-      await this.options.capabilityCache.setOnline(tenantId, deployment.deploymentId, online);
+      await this.options.capabilityCache.setOnline(tenantId, deployment.deploymentId, online, edgeNodeId);
     }
   }
 }
@@ -180,15 +190,35 @@ function supportsOperation(
   }
   if (operation === "resources/read") {
     const uri = objectString(params, "uri");
-    return Boolean(uri && (manifest.resources.some((resource) => objectString(resource, "uri") === uri)
-      || manifest.resourceTemplates.length > 0));
+    if (!uri) return false;
+    if (manifest.resources.some((resource) => objectString(resource, "uri") === uri)) {
+      return true;
+    }
+    return manifest.resourceTemplates.some((template) => {
+      const uriTemplate = objectString(template, "uriTemplate");
+      return Boolean(uriTemplate && resourceTemplateMatches(uri, uriTemplate));
+    });
   }
   if (operation === "prompts/get") {
     const name = objectString(params, "name");
     return Boolean(name && manifest.prompts.some((prompt) => objectString(prompt, "name") === name));
   }
   if (operation === "completion/complete") return manifest.supportsCompletion;
-  return true;
+  // Fail closed for unknown MCP operations.
+  return false;
+}
+
+function resourceTemplateMatches(uri: string, uriTemplate: string): boolean {
+  const parts = uriTemplate.split(/\{[^}]+\}/);
+  let pattern = "^";
+  for (let i = 0; i < parts.length; i += 1) {
+    pattern += parts[i]!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (i < parts.length - 1) {
+      pattern += ".+";
+    }
+  }
+  pattern += "$";
+  return new RegExp(pattern).test(uri);
 }
 
 function objectString(value: unknown, key: string): string | undefined {

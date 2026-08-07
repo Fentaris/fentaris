@@ -66,8 +66,16 @@ export type EdgeLocalAuthorityDocument = {
   readonly refreshCredentials: readonly EdgeLocalRefreshCredential[];
   readonly enrolledDevices: readonly EdgeEnrolledDeviceAuthority[];
   readonly desiredAssignments: readonly EdgeDesiredAssignmentSnapshot[];
+  /** Persisted hello nonces used for restart-safe replay rejection. @pk */
+  readonly usedHelloNonces: readonly EdgeUsedHelloNonce[];
   readonly inventory: Readonly<Record<string, unknown>>;
   readonly updatedAt: number;
+};
+
+/** Persisted hello nonce record. @pk */
+export type EdgeUsedHelloNonce = {
+  readonly nonceHash: string;
+  readonly seenAt: number;
 };
 
 /** AES-GCM encrypted blob stored under the protected auth boundary. @pk */
@@ -103,6 +111,7 @@ export class EdgeLocalAuthorityStore {
   private lockHandle?: FileHandle;
   private document?: EdgeLocalAuthorityDocument;
   private closed = false;
+  private mutationQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: EdgeLocalAuthorityStoreOptions) {
     this.now = options.now ?? Date.now;
@@ -149,8 +158,8 @@ export class EdgeLocalAuthorityStore {
   }
 
   async getSessionByUserCode(userCode: string): Promise<EdgeAuthorizationSession | undefined> {
-    const normalized = normalizeUserCode(userCode);
-    return this.snapshot().authorizationSessions.find((session) => session.userCodeNormalized === normalized);
+    const userCodeHash = hashSecret(normalizeUserCode(userCode));
+    return this.snapshot().authorizationSessions.find((session) => session.userCodeHash === userCodeHash);
   }
 
   async getSessionByDeviceCodeHash(deviceCodeHash: string): Promise<EdgeAuthorizationSession | undefined> {
@@ -165,6 +174,143 @@ export class EdgeLocalAuthorityStore {
         authorizationSessions: Object.freeze([...next, freezeSession(session)]),
       };
     });
+  }
+
+  /**
+   * Atomically update a session when its current status is one of `expectedStatuses`.
+   * Returns undefined when the session is missing or the status no longer matches.
+   * @pk
+   */
+  async compareAndSwapAuthorizationSession(
+    deviceCodeHash: string,
+    expectedStatuses: readonly EdgeAuthorizationSession["status"][],
+    update: (session: EdgeAuthorizationSession) => EdgeAuthorizationSession,
+  ): Promise<EdgeAuthorizationSession | undefined> {
+    let updated: EdgeAuthorizationSession | undefined;
+    await this.mutate((document) => {
+      const current = document.authorizationSessions.find((entry) => entry.deviceCodeHash === deviceCodeHash);
+      if (!current || !expectedStatuses.includes(current.status)) {
+        updated = undefined;
+        return document;
+      }
+      updated = freezeSession(update(current));
+      return {
+        ...document,
+        authorizationSessions: Object.freeze([
+          ...document.authorizationSessions.filter((entry) => entry.deviceCodeHash !== deviceCodeHash),
+          updated,
+        ]),
+      };
+    });
+    return updated;
+  }
+
+  /**
+   * Atomically consume an approved session for one-time token issuance.
+   * @pk
+   */
+  async consumeApprovedSession(
+    deviceCodeHash: string,
+    clientId: string,
+  ): Promise<EdgeAuthorizationSession | undefined> {
+    let approved: EdgeAuthorizationSession | undefined;
+    await this.mutate((document) => {
+      const current = document.authorizationSessions.find((entry) => entry.deviceCodeHash === deviceCodeHash);
+      if (!current || current.clientId !== clientId || current.status !== "approved" || !current.subjectId) {
+        approved = undefined;
+        return document;
+      }
+      approved = freezeSession(current);
+      return {
+        ...document,
+        authorizationSessions: Object.freeze([
+          ...document.authorizationSessions.filter((entry) => entry.deviceCodeHash !== deviceCodeHash),
+          freezeSession({
+            ...current,
+            pollAttempts: current.pollAttempts + 1,
+            status: "consumed",
+          }),
+        ]),
+      };
+    });
+    return approved;
+  }
+
+  /** Drop terminal authorization sessions whose TTL has elapsed. @pk */
+  async pruneAuthorizationSessions(now = this.now()): Promise<void> {
+    await this.mutate((document) => {
+      const next = document.authorizationSessions.filter((session) => {
+        if (session.status === "pending" || session.status === "approved") {
+          return session.expiresAt > now;
+        }
+        // Keep denied/consumed/expired briefly for idempotent poll answers, then drop.
+        return session.expiresAt > now - 5 * 60_000;
+      });
+      if (next.length === document.authorizationSessions.length) {
+        return document;
+      }
+      return {
+        ...document,
+        authorizationSessions: Object.freeze(next.map(freezeSession)),
+      };
+    });
+  }
+
+  /** Persist a hello nonce after successful authentication; returns false on replay. @pk */
+  async rememberHelloNonce(nonce: string, ttlMs = 10 * 60_000): Promise<boolean> {
+    const nonceHash = hashSecret(nonce);
+    const now = this.now();
+    let accepted = false;
+    await this.mutate((document) => {
+      const retained = document.usedHelloNonces.filter((entry) => now - entry.seenAt <= ttlMs);
+      if (retained.some((entry) => timingSafeEqualStrings(entry.nonceHash, nonceHash))) {
+        accepted = false;
+        return {
+          ...document,
+          usedHelloNonces: Object.freeze(retained),
+        };
+      }
+      accepted = true;
+      return {
+        ...document,
+        usedHelloNonces: Object.freeze([
+          ...retained,
+          Object.freeze({ nonceHash, seenAt: now }),
+        ]),
+      };
+    });
+    return accepted;
+  }
+
+  /** Atomically advance an enrolled device connection generation after hello auth. @pk */
+  async advanceEnrolledConnectionGeneration(
+    tenantId: string,
+    edgeNodeId: string,
+  ): Promise<EdgeEnrolledDeviceAuthority | undefined> {
+    let advanced: EdgeEnrolledDeviceAuthority | undefined;
+    await this.mutate((document) => {
+      const current = document.enrolledDevices.find(
+        (entry) => entry.tenantId === tenantId && entry.edgeNodeId === edgeNodeId,
+      );
+      if (!current || current.revoked) {
+        advanced = undefined;
+        return document;
+      }
+      advanced = Object.freeze({
+        ...current,
+        connectionGeneration: current.connectionGeneration + 1,
+      });
+      return {
+        ...document,
+        enrolledDevices: Object.freeze([
+          ...document.enrolledDevices.filter(
+            (entry) => !(entry.tenantId === tenantId && entry.edgeNodeId === edgeNodeId),
+          ),
+          advanced,
+        ]),
+      };
+    });
+    return advanced;
   }
 
   async putRefreshCredential(credential: EdgeLocalRefreshCredential): Promise<void> {
@@ -294,15 +440,20 @@ export class EdgeLocalAuthorityStore {
   private async mutate(
     update: (document: EdgeLocalAuthorityDocument) => EdgeLocalAuthorityDocument,
   ): Promise<void> {
-    this.requireOpen();
-    const next = update(this.document!);
-    const stamped: EdgeLocalAuthorityDocument = {
-      ...next,
-      schemaVersion: EDGE_LOCAL_AUTHORITY_SCHEMA_VERSION,
-      updatedAt: this.now(),
+    const run = async (): Promise<void> => {
+      this.requireOpen();
+      const next = update(this.document!);
+      const stamped: EdgeLocalAuthorityDocument = {
+        ...next,
+        schemaVersion: EDGE_LOCAL_AUTHORITY_SCHEMA_VERSION,
+        updatedAt: this.now(),
+      };
+      await this.writeAtomic(stamped);
+      this.document = stamped;
     };
-    await this.writeAtomic(stamped);
-    this.document = stamped;
+    const pending = this.mutationQueue.then(run, run);
+    this.mutationQueue = pending.then(() => undefined, () => undefined);
+    await pending;
   }
 
   private async readOrInitialize(): Promise<EdgeLocalAuthorityDocument> {
@@ -431,6 +582,7 @@ function createEmptyAuthorityDocument(
     refreshCredentials: Object.freeze([]),
     enrolledDevices: Object.freeze([]),
     desiredAssignments: Object.freeze([]),
+    usedHelloNonces: Object.freeze([]),
     inventory: Object.freeze({}),
     updatedAt: now(),
   };
@@ -462,12 +614,37 @@ function migrateAuthorityDocument(
   return {
     schemaVersion: EDGE_LOCAL_AUTHORITY_SCHEMA_VERSION,
     server: document.server,
-    authorizationSessions: Object.freeze([...(document.authorizationSessions ?? [])].map(freezeSession)),
+    authorizationSessions: Object.freeze(
+      [...(document.authorizationSessions ?? [])].map(migrateSession).map(freezeSession),
+    ),
     refreshCredentials: Object.freeze([...(document.refreshCredentials ?? [])].map((entry) => Object.freeze({ ...entry }))),
     enrolledDevices: Object.freeze([...(document.enrolledDevices ?? [])].map((entry) => Object.freeze({ ...entry }))),
     desiredAssignments: Object.freeze([...(document.desiredAssignments ?? [])].map((entry) => Object.freeze({ ...entry }))),
+    usedHelloNonces: Object.freeze([...(document.usedHelloNonces ?? [])].map((entry) => Object.freeze({ ...entry }))),
     inventory: Object.freeze({ ...(document.inventory ?? {}) }),
     updatedAt: typeof document.updatedAt === "number" ? document.updatedAt : now(),
+  };
+}
+
+function migrateSession(session: EdgeAuthorizationSession & { readonly userCodeNormalized?: string }): EdgeAuthorizationSession {
+  if (session.userCodeHash) {
+    const { userCodeNormalized: _legacy, ...rest } = session as EdgeAuthorizationSession & {
+      readonly userCodeNormalized?: string;
+    };
+    void _legacy;
+    return rest;
+  }
+  const legacy = (session as { readonly userCodeNormalized?: string }).userCodeNormalized;
+  if (!legacy) {
+    throw edgeError("EDGE_PROTOCOL", "Local Edge authorization session is missing a user code hash.");
+  }
+  const { userCodeNormalized: _legacy, ...rest } = session as EdgeAuthorizationSession & {
+    readonly userCodeNormalized?: string;
+  };
+  void _legacy;
+  return {
+    ...rest,
+    userCodeHash: hashSecret(normalizeUserCode(legacy)),
   };
 }
 

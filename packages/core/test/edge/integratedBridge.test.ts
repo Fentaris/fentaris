@@ -142,6 +142,70 @@ describe("integrated Edge gateway bridge", () => {
         route: { ...authorization.message.route, connectionGeneration: 1 },
       } as typeof authorization.message,
     })).resolves.toBe(false);
+    await expect(bridge.authorize({
+      ...authorization,
+      message: {
+        ...authorization.message,
+        operation: "tools/call",
+        params: { name: "missing_tool", arguments: {} },
+      } as typeof authorization.message,
+    })).resolves.toBe(false);
+    await expect(bridge.authorize({
+      ...authorization,
+      message: {
+        ...authorization.message,
+        operation: "experimental/unknown",
+        params: {},
+      } as typeof authorization.message,
+    })).resolves.toBe(false);
+    await expect(bridge.authorize({
+      ...authorization,
+      message: {
+        ...authorization.message,
+        operation: "resources/read",
+        params: { uri: "file:///secret" },
+      } as typeof authorization.message,
+    })).resolves.toBe(false);
+
+    await manifests.put({
+      ...manifest,
+      resourceTemplates: [{ name: "files", uriTemplate: "file:///{path}" }],
+      resources: [{ name: "readme", uri: "file:///readme" }],
+    });
+    await expect(bridge.authorize({
+      ...authorization,
+      message: {
+        ...authorization.message,
+        operation: "resources/read",
+        params: { uri: "file:///readme" },
+      } as typeof authorization.message,
+    })).resolves.toBe(true);
+    await expect(bridge.authorize({
+      ...authorization,
+      message: {
+        ...authorization.message,
+        operation: "resources/read",
+        params: { uri: "file:///docs/a.md" },
+      } as typeof authorization.message,
+    })).resolves.toBe(true);
+    await expect(bridge.authorize({
+      ...authorization,
+      message: {
+        ...authorization.message,
+        operation: "resources/read",
+        params: { uri: "https://evil.example/x" },
+      } as typeof authorization.message,
+    })).resolves.toBe(false);
+
+    await devices.put({
+      tenantId: "default",
+      edgeNodeId: "node-1",
+      credentialId: "credential-1",
+      subjectId: "alice",
+      revoked: true,
+      connectionGeneration: 2,
+    });
+    await expect(bridge.authorize(authorization)).resolves.toBe(false);
   });
 
   it("invalidates discovery availability on disconnect and triggers reconciliation on reports", async () => {

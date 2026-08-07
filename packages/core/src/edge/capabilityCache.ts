@@ -56,7 +56,8 @@ export class InMemoryEdgeCapabilityCacheStore implements EdgeCapabilityCacheStor
 /** Validated capability cache keyed by logical deployment, never public device identity. */
 export class EdgeCapabilityCache {
   private readonly desiredRecipes = new Map<string, string>();
-  private readonly online = new Map<string, boolean>();
+  /** Online Edge nodes contributing availability for a logical deployment. */
+  private readonly onlineNodes = new Map<string, Set<string>>();
   private readonly listeners = new Set<EdgeCapabilityChangeListener>();
 
   constructor(
@@ -75,6 +76,7 @@ export class EdgeCapabilityCache {
     this.desiredRecipes.set(key, recipeDigest);
     if (previous !== undefined && previous !== recipeDigest) {
       await this.store.delete(tenantId, deploymentId);
+      this.onlineNodes.delete(key);
       await this.notify(tenantId, deploymentId);
     }
   }
@@ -91,8 +93,27 @@ export class EdgeCapabilityCache {
     await this.notify(manifest.tenantId, manifest.deploymentId);
   }
 
-  async setOnline(tenantId: string, deploymentId: string, online: boolean): Promise<void> {
-    this.online.set(cacheKey(tenantId, deploymentId), online);
+  async setOnline(
+    tenantId: string,
+    deploymentId: string,
+    online: boolean,
+    edgeNodeId = "*",
+  ): Promise<void> {
+    const key = cacheKey(tenantId, deploymentId);
+    const nodes = this.onlineNodes.get(key) ?? new Set<string>();
+    if (online) {
+      nodes.add(edgeNodeId);
+    } else {
+      nodes.delete(edgeNodeId);
+      if (edgeNodeId === "*") {
+        nodes.clear();
+      }
+    }
+    if (nodes.size === 0) {
+      this.onlineNodes.delete(key);
+    } else {
+      this.onlineNodes.set(key, nodes);
+    }
     await this.notify(tenantId, deploymentId);
   }
 
@@ -105,7 +126,9 @@ export class EdgeCapabilityCache {
       };
     }
     const cacheAgeMs = Math.max(0, this.now() - manifest.capturedAt);
-    if (this.online.get(cacheKey(tenantId, deploymentId)) === false) {
+    const online = (this.onlineNodes.get(cacheKey(tenantId, deploymentId))?.size ?? 0) > 0;
+    // Unset/false online must not advertise ready discovery.
+    if (!online) {
       return {
         status: "offline-cached",
         diagnostic: `Edge deployment "${deploymentId}" is offline; discovery is using its last validated manifest.`,

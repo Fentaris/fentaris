@@ -12,6 +12,7 @@ import type {
   EdgeConnectionStore,
   EdgeDesiredStateStore,
   EdgeDeviceRegistry,
+  EdgeInstallationStatusStore,
   EdgeSetupStatusStore,
 } from "./controlPlane.js";
 import type {
@@ -122,6 +123,7 @@ export type EdgeControlPlaneManagedAdapters = {
   readonly readinessStore: EdgeReadinessStore;
   readonly assignmentStore: EdgeDesiredAssignmentStore;
   readonly services: EdgeControlPlaneManagedServices;
+  readonly installationStatusStore?: EdgeInstallationStatusStore;
   readonly sessionSelectionStore?: EdgeSessionSelectionStore;
   readonly childBindingStore?: EdgeChildBindingStore;
   readonly channelBroker?: EdgeChannelBroker;

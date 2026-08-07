@@ -35,6 +35,8 @@ export type EdgeDeviceAuthorizeRequest = {
   readonly clientId: string;
   readonly tenantId?: string;
   readonly metadata?: Readonly<Record<string, string>>;
+  /** Non-spoofable rate-limit identity (typically remote address). @pk */
+  readonly rateLimitKey?: string;
 };
 
 /** Device authorization creation response. @pk */
@@ -51,6 +53,8 @@ export type EdgeDeviceAuthorizeResponse = {
 export type EdgeDeviceTokenRequest = {
   readonly clientId: string;
   readonly deviceCode: string;
+  /** Non-spoofable rate-limit identity (typically remote address). @pk */
+  readonly rateLimitKey?: string;
 };
 
 /** Successful token issuance shared by poll and refresh. @pk */
@@ -65,6 +69,8 @@ export type EdgeControlPlaneTokenResponse = {
 export type EdgeTokenRefreshRequest = {
   readonly clientId: string;
   readonly refreshToken: string;
+  /** Non-spoofable rate-limit identity (typically remote address). @pk */
+  readonly rateLimitKey?: string;
 };
 
 /** Enrollment request carrying proof of possession for the device key. @pk */
@@ -78,6 +84,8 @@ export type EdgeEnrollRequest = {
   readonly name?: string;
   readonly description?: string;
   readonly tags?: readonly string[];
+  /** Non-spoofable rate-limit identity (typically remote address). @pk */
+  readonly rateLimitKey?: string;
 };
 
 /** Enrollment success response. @pk */

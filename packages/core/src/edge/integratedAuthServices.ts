@@ -106,7 +106,8 @@ export class IntegratedEdgeAuthServices
 
   async begin(request: EdgeDeviceAuthorizeRequest): Promise<EdgeDeviceAuthorizeResponse> {
     this.assertRequestSize(request);
-    this.consumeRateLimit(`authorize:${request.clientId}`);
+    this.consumeRateLimit(`authorize:${rateLimitIdentity(request.rateLimitKey)}`);
+    await this.options.store.pruneAuthorizationSessions(this.now());
     const now = this.now();
     const deviceCode = this.random();
     const userCode = formatUserCode(this.random().slice(0, 8).toUpperCase());
@@ -114,7 +115,7 @@ export class IntegratedEdgeAuthServices
       tenantId: request.tenantId ?? this.options.defaultTenantId ?? "default",
       clientId: request.clientId,
       deviceCodeHash: hashSecret(deviceCode),
-      userCodeNormalized: normalizeUserCode(userCode),
+      userCodeHash: hashSecret(normalizeUserCode(userCode)),
       createdAt: now,
       expiresAt: now + this.options.config.authorizationCodeTtlSeconds * 1_000,
       intervalSeconds: this.options.config.pollIntervalSeconds,
@@ -144,44 +145,64 @@ export class IntegratedEdgeAuthServices
     | { readonly status: "denied" | "expired" }
   > {
     this.assertRequestSize(request);
-    this.consumeRateLimit(`poll:${request.clientId}`);
-    const session = await this.options.store.getSessionByDeviceCodeHash(hashSecret(request.deviceCode));
-    if (!session || session.clientId !== request.clientId) {
-      return { status: "expired" };
-    }
-    const now = this.now();
-    if (session.expiresAt <= now || session.status === "expired") {
-      await this.options.store.putAuthorizationSession({ ...session, status: "expired" });
-      return { status: "expired" };
-    }
-    if (session.status === "denied") {
-      return { status: "denied" };
-    }
-    if (session.status === "consumed") {
-      return { status: "expired" };
-    }
+    this.consumeRateLimit(`poll:${rateLimitIdentity(request.rateLimitKey)}`);
+    await this.options.store.pruneAuthorizationSessions(this.now());
+    const deviceCodeHash = hashSecret(request.deviceCode);
 
-    const pollAttempts = session.pollAttempts + 1;
-    if (pollAttempts > this.options.config.maxPollAttempts) {
-      await this.options.store.putAuthorizationSession({ ...session, pollAttempts, status: "expired" });
-      return { status: "expired" };
-    }
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      // Consume-once path: only one concurrent poll can mint tokens for an approved session.
+      const consumed = await this.options.store.consumeApprovedSession(deviceCodeHash, request.clientId);
+      if (consumed) {
+        const tokens = await this.issueForApprovedSession(consumed);
+        return { status: "authorized", tokens };
+      }
 
-    if (session.status === "approved" && session.subjectId) {
-      const tokens = await this.issueForApprovedSession(session);
-      await this.options.store.putAuthorizationSession({
-        ...session,
-        pollAttempts,
-        status: "consumed",
-      });
-      return { status: "authorized", tokens };
-    }
+      const session = await this.options.store.getSessionByDeviceCodeHash(deviceCodeHash);
+      if (!session || session.clientId !== request.clientId) {
+        return { status: "expired" };
+      }
+      const now = this.now();
+      if (session.expiresAt <= now || session.status === "expired") {
+        await this.options.store.compareAndSwapAuthorizationSession(
+          deviceCodeHash,
+          ["pending", "approved", "expired"],
+          (current) => ({ ...current, status: "expired" }),
+        );
+        return { status: "expired" };
+      }
+      if (session.status === "denied") {
+        return { status: "denied" };
+      }
+      if (session.status === "consumed" || session.status === "approved") {
+        // Lost the consume race to another poll, or already issued.
+        return { status: "expired" };
+      }
 
-    const slowDown = pollAttempts > 3 && pollAttempts % 3 === 0;
-    await this.options.store.putAuthorizationSession({ ...session, pollAttempts });
-    return slowDown
-      ? { status: "slow-down", interval: session.intervalSeconds + 5 }
-      : { status: "pending", interval: session.intervalSeconds };
+      const pollAttempts = session.pollAttempts + 1;
+      if (pollAttempts > this.options.config.maxPollAttempts) {
+        await this.options.store.compareAndSwapAuthorizationSession(
+          deviceCodeHash,
+          ["pending"],
+          (current) => ({ ...current, pollAttempts, status: "expired" }),
+        );
+        return { status: "expired" };
+      }
+
+      // Status-aware CAS so a concurrent approve cannot be overwritten back to pending.
+      const updated = await this.options.store.compareAndSwapAuthorizationSession(
+        deviceCodeHash,
+        ["pending"],
+        (current) => ({ ...current, pollAttempts: current.pollAttempts + 1 }),
+      );
+      if (!updated) {
+        continue;
+      }
+      const slowDown = updated.pollAttempts > 3 && updated.pollAttempts % 3 === 0;
+      return slowDown
+        ? { status: "slow-down", interval: updated.intervalSeconds + 5 }
+        : { status: "pending", interval: updated.intervalSeconds };
+    }
+    return { status: "expired" };
   }
 
   async getPendingByUserCode(userCode: string): Promise<EdgeAuthorizationSession | undefined> {
@@ -193,6 +214,9 @@ export class IntegratedEdgeAuthServices
   }
 
   async approve(userCode: string, decision: EdgeDeviceApprovalDecision): Promise<EdgeAuthorizationSession> {
+    if (!decision.subjectId?.trim() || !decision.tenantId?.trim() || !decision.actorId?.trim()) {
+      throw edgeError("EDGE_PROTOCOL", "Approval decision requires tenantId, subjectId, and actorId.");
+    }
     const session = await this.options.store.getSessionByUserCode(userCode);
     if (!session || session.status !== "pending" || session.expiresAt <= this.now()) {
       throw edgeError("EDGE_PROTOCOL", "No pending Edge authorization matches this user code.");
@@ -200,14 +224,20 @@ export class IntegratedEdgeAuthServices
     if (session.tenantId !== decision.tenantId) {
       throw edgeError("EDGE_PROTOCOL", "Approval tenant does not match the pending authorization.");
     }
-    const approved: EdgeAuthorizationSession = {
-      ...session,
-      status: "approved",
-      subjectId: decision.subjectId,
-      actorId: decision.actorId,
-      approvedAt: decision.approvedAt,
-    };
-    await this.options.store.putAuthorizationSession(approved);
+    const approved = await this.options.store.compareAndSwapAuthorizationSession(
+      session.deviceCodeHash,
+      ["pending"],
+      (current) => ({
+        ...current,
+        status: "approved",
+        subjectId: decision.subjectId,
+        actorId: decision.actorId,
+        approvedAt: decision.approvedAt,
+      }),
+    );
+    if (!approved) {
+      throw edgeError("EDGE_PROTOCOL", "No pending Edge authorization matches this user code.");
+    }
     this.emit("edge.authorization.approved", {
       tenantId: approved.tenantId,
       subjectId: approved.subjectId,
@@ -224,13 +254,19 @@ export class IntegratedEdgeAuthServices
     if (!session || session.status !== "pending" || session.expiresAt <= this.now()) {
       throw edgeError("EDGE_PROTOCOL", "No pending Edge authorization matches this user code.");
     }
-    const denied: EdgeAuthorizationSession = {
-      ...session,
-      status: "denied",
-      actorId: decision.actorId,
-      ...(decision.subjectId ? { subjectId: decision.subjectId } : {}),
-    };
-    await this.options.store.putAuthorizationSession(denied);
+    const denied = await this.options.store.compareAndSwapAuthorizationSession(
+      session.deviceCodeHash,
+      ["pending"],
+      (current) => ({
+        ...current,
+        status: "denied",
+        actorId: decision.actorId,
+        ...(decision.subjectId ? { subjectId: decision.subjectId } : {}),
+      }),
+    );
+    if (!denied) {
+      throw edgeError("EDGE_PROTOCOL", "No pending Edge authorization matches this user code.");
+    }
     this.emit("edge.authorization.denied", {
       tenantId: denied.tenantId,
       actorId: denied.actorId,
@@ -239,7 +275,7 @@ export class IntegratedEdgeAuthServices
   }
 
   async issueForApprovedSession(session: EdgeAuthorizationSession): Promise<EdgeControlPlaneTokenResponse> {
-    if (session.status !== "approved" || !session.subjectId) {
+    if ((session.status !== "approved" && session.status !== "consumed") || !session.subjectId) {
       throw edgeError("EDGE_PROTOCOL", "Cannot issue Edge tokens for an unapproved session.");
     }
     return this.issueTokenSet({
@@ -252,7 +288,7 @@ export class IntegratedEdgeAuthServices
 
   async refresh(request: EdgeTokenRefreshRequest): Promise<EdgeControlPlaneTokenResponse> {
     this.assertRequestSize(request);
-    this.consumeRateLimit(`refresh:${request.clientId}`);
+    this.consumeRateLimit(`refresh:${rateLimitIdentity(request.rateLimitKey)}`);
     const memory = this.refreshTokens.get(hashSecret(request.refreshToken));
     if (memory && memory.expiresAt > this.now()) {
       this.refreshTokens.delete(hashSecret(request.refreshToken));
@@ -291,6 +327,8 @@ export class IntegratedEdgeAuthServices
     readonly subjectId: string;
     readonly deviceCodeHash: string;
     readonly expiresAt: number;
+    readonly audience: "enrollment" | "gateway";
+    readonly edgeNodeId?: string;
   } | undefined> {
     const record = this.accessTokens.get(hashSecret(accessToken));
     if (!record || record.expiresAt <= this.now()) {
@@ -302,16 +340,17 @@ export class IntegratedEdgeAuthServices
       subjectId: record.subjectId,
       deviceCodeHash: record.deviceCodeHash,
       expiresAt: record.expiresAt,
+      audience: record.audience,
+      ...(record.edgeNodeId ? { edgeNodeId: record.edgeNodeId } : {}),
     };
   }
 
   async enroll(request: EdgeEnrollRequest): Promise<EdgeEnrollResponse> {
     this.assertRequestSize(request);
-    this.consumeRateLimit(`enroll:${request.deviceCode.slice(0, 8)}`);
-    this.rememberNonce(`enroll:${request.nonce}`);
+    this.consumeRateLimit(`enroll:${rateLimitIdentity(request.rateLimitKey ?? request.deviceCode.slice(0, 8))}`);
 
     const access = await this.inspectAccessToken(request.accessToken);
-    if (!access) {
+    if (!access || access.audience !== "enrollment") {
       throw confidentialError(EDGE_CONTROL_PLANE_ERROR_CODES.unauthorized, "Enrollment access token is invalid.");
     }
     if (access.deviceCodeHash !== hashSecret(request.deviceCode)) {
@@ -322,6 +361,8 @@ export class IntegratedEdgeAuthServices
     if (!verifyDeviceProof(request.publicKey, payload, request.proof)) {
       throw confidentialError(EDGE_CONTROL_PLANE_ERROR_CODES.unauthorized, "Enrollment proof is invalid.");
     }
+    // Record nonce only after successful verification so failures cannot burn proofs.
+    this.rememberNonce(`enroll:${request.nonce}`);
 
     const edgeNodeId = this.random();
     const deviceCredential = this.random();
@@ -376,6 +417,10 @@ export class IntegratedEdgeAuthServices
     if (!access) {
       throw confidentialError(EDGE_CONTROL_PLANE_ERROR_CODES.unauthorized, "Revocation access token is invalid.");
     }
+    // Enrollment tokens must not revoke arbitrary sibling devices for the same subject.
+    if (access.audience !== "gateway" || access.edgeNodeId !== request.edgeNodeId) {
+      throw confidentialError(EDGE_CONTROL_PLANE_ERROR_CODES.unauthorized, "Revocation was rejected.");
+    }
     const device = await this.options.store.getEnrolledDevice(access.tenantId, request.edgeNodeId);
     if (!device || device.subjectId !== access.subjectId) {
       // Do not confirm existence to unauthorized callers.
@@ -392,7 +437,6 @@ export class IntegratedEdgeAuthServices
 
   async authenticateHello(proof: EdgeAuthenticatedHelloProof): Promise<EdgeAuthenticatedHelloResult> {
     this.assertRequestSize(proof);
-    this.rememberNonce(`hello:${proof.nonce}`);
     const device = await this.options.store.getEnrolledDevice(proof.tenantId, proof.edgeNodeId);
     if (!device || device.revoked) {
       return { status: "rejected", error: EDGE_CONTROL_PLANE_ERROR_CODES.unauthorized };
@@ -408,17 +452,22 @@ export class IntegratedEdgeAuthServices
     if (!Number.isFinite(protocolVersion) || protocolVersion < 1) {
       return { status: "rejected", error: EDGE_CONTROL_PLANE_ERROR_CODES.invalid_request };
     }
-    const connectionGeneration = device.connectionGeneration + 1;
-    await this.options.store.putEnrolledDevice({
-      ...device,
-      connectionGeneration,
-    });
+    // Persist hello nonce only after successful verification (restart-safe replay rejection).
+    const acceptedNonce = await this.options.store.rememberHelloNonce(proof.nonce);
+    if (!acceptedNonce) {
+      return { status: "rejected", error: EDGE_CONTROL_PLANE_ERROR_CODES.unauthorized };
+    }
+    // Authority store remains the durable generation source; registry is synced by the runtime authenticator.
+    const advanced = await this.options.store.advanceEnrolledConnectionGeneration(proof.tenantId, proof.edgeNodeId);
+    if (!advanced) {
+      return { status: "rejected", error: EDGE_CONTROL_PLANE_ERROR_CODES.unauthorized };
+    }
     return {
       status: "accepted",
-      tenantId: device.tenantId,
-      edgeNodeId: device.edgeNodeId,
-      credentialId: device.credentialId,
-      connectionGeneration,
+      tenantId: advanced.tenantId,
+      edgeNodeId: advanced.edgeNodeId,
+      credentialId: advanced.credentialId,
+      connectionGeneration: advanced.connectionGeneration,
       protocolVersion,
     };
   }
@@ -536,4 +585,9 @@ function confidentialError(code: string, message: string): Error {
   const error = edgeError("EDGE_PROTOCOL", message);
   (error as Error & { controlPlaneCode?: string }).controlPlaneCode = code;
   return error;
+}
+
+function rateLimitIdentity(key: string | undefined): string {
+  const trimmed = key?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : "unknown";
 }

@@ -36,6 +36,7 @@ export function createEdgeControlPlaneRoutes(
         await handleJson(req, res, options.maxRequestBytes, async (body) => {
           const result = await options.auth.begin({
             clientId: stringField(body, "clientId") ?? "fentaris-edge",
+            rateLimitKey: remoteRateLimitKey(req),
             ...(stringField(body, "tenantId") ? { tenantId: stringField(body, "tenantId") } : {}),
           });
           sendJson(res, 200, result);
@@ -50,6 +51,7 @@ export function createEdgeControlPlaneRoutes(
           const result = await options.auth.poll({
             clientId: stringField(body, "clientId") ?? "fentaris-edge",
             deviceCode: requiredString(body, "deviceCode"),
+            rateLimitKey: remoteRateLimitKey(req),
           });
           if (result.status === "authorized") {
             sendJson(res, 200, result.tokens);
@@ -83,6 +85,7 @@ export function createEdgeControlPlaneRoutes(
           const tokens = await options.auth.refresh({
             clientId: stringField(body, "clientId") ?? "fentaris-edge",
             refreshToken: requiredString(body, "refreshToken"),
+            rateLimitKey: remoteRateLimitKey(req),
           });
           sendJson(res, 200, tokens);
         });
@@ -100,6 +103,7 @@ export function createEdgeControlPlaneRoutes(
             deviceCode: requiredString(body, "deviceCode"),
             nonce: requiredString(body, "nonce"),
             proof: requiredString(body, "proof"),
+            rateLimitKey: remoteRateLimitKey(req),
             ...(stringField(body, "hostnameLabel") ? { hostnameLabel: stringField(body, "hostnameLabel") } : {}),
             ...(stringField(body, "name") ? { name: stringField(body, "name") } : {}),
             ...(stringField(body, "description") ? { description: stringField(body, "description") } : {}),
@@ -170,6 +174,10 @@ async function handleJson(
     }
     if (code === EDGE_CONTROL_PLANE_ERROR_CODES.rate_limited) {
       sendJson(res, 429, edgeControlPlaneError(EDGE_CONTROL_PLANE_ERROR_CODES.rate_limited));
+      return;
+    }
+    if (code === EDGE_CONTROL_PLANE_ERROR_CODES.invalid_request) {
+      sendJson(res, 400, edgeControlPlaneError(EDGE_CONTROL_PLANE_ERROR_CODES.invalid_request));
       return;
     }
     if (code === EDGE_CONTROL_PLANE_ERROR_CODES.unauthorized || code === EDGE_CONTROL_PLANE_ERROR_CODES.invalid_grant) {
@@ -245,4 +253,12 @@ function requiredString(body: Record<string, unknown>, key: string): string {
     });
   }
   return value;
+}
+
+function remoteRateLimitKey(req: IncomingMessage): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0]!.trim();
+  }
+  return req.socket.remoteAddress?.trim() || "unknown";
 }

@@ -3,12 +3,15 @@
  * @pk
  */
 
+import { randomBytes } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   InMemoryEdgeCapabilityManifestStore,
   InMemoryEdgeConnectionStore,
   InMemoryEdgeDesiredStateStore,
   InMemoryEdgeDeviceRegistry,
+  InMemoryEdgeInstallationStatusStore,
   InMemoryEdgeSetupStatusStore,
 } from "../../edge/controlPlane.js";
 import type {
@@ -16,6 +19,7 @@ import type {
   EdgeConnectionStore,
   EdgeDesiredStateStore,
   EdgeDeviceRegistry,
+  EdgeInstallationStatusStore,
   EdgeSetupStatusStore,
 } from "../../edge/controlPlane.js";
 import {
@@ -139,6 +143,9 @@ export async function startIntegratedEdgeControlPlane(
   const readinessStore: EdgeReadinessStore = managedAdapters?.readinessStore
     ?? config.adapters?.readinessStore
     ?? new InMemoryEdgeReadinessStore();
+  const installationStatusStore: EdgeInstallationStatusStore = managedAdapters?.installationStatusStore
+    ?? config.adapters?.installationStatusStore
+    ?? new InMemoryEdgeInstallationStatusStore();
   const capabilityCache = new EdgeCapabilityCache();
   let store: EdgeLocalAuthorityStore | undefined;
   let operator: EdgeLocalOperatorServer | undefined;
@@ -147,9 +154,7 @@ export async function startIntegratedEdgeControlPlane(
   const directory = path.resolve(options.authDir ?? ".fentaris", config.stateDir);
   let auth: EdgeDeviceAuthorizationService & EdgeTokenIssuanceService & EdgeEnrollmentService;
   if (config.mode === "local") {
-    const protectionKey = options.protectionKey
-      ?? process.env.FENTARIS_AUTH_KEY
-      ?? `local-edge-authority:${directory}`;
+    const protectionKey = await resolveProtectionKey(directory, options.protectionKey);
     store = new EdgeLocalAuthorityStore({ directory, protectionKey });
     await store.open();
     auth = new IntegratedEdgeAuthServices({
@@ -215,6 +220,7 @@ export async function startIntegratedEdgeControlPlane(
     readiness: readinessStore,
     reconciler,
     capabilityCache,
+    installation: installationStatusStore,
     telemetry: options.telemetry,
   });
 
@@ -236,6 +242,7 @@ export async function startIntegratedEdgeControlPlane(
           tenantId: result.tenantId,
           edgeNodeId: result.edgeNodeId,
           credentialId: result.credentialId,
+          connectionGeneration: result.connectionGeneration,
         };
       },
     },
@@ -246,6 +253,7 @@ export async function startIntegratedEdgeControlPlane(
     capabilityManifestStore,
     presenceStore,
     readinessStore,
+    installationStatusStore,
     authorizer: bridge,
     events: bridge,
     telemetry: options.telemetry,
@@ -432,6 +440,36 @@ function resolvePublicOrigin(
   const host = options.listenerHost ?? "127.0.0.1";
   const port = options.listenerPort ?? 3000;
   return `http://${host}:${port}`;
+}
+
+/**
+ * Resolve a non-deterministic local protection key.
+ * Prefer explicit options / FENTARIS_AUTH_KEY, otherwise load or create an
+ * owner-only key file under the authority directory.
+ * @pk
+ */
+async function resolveProtectionKey(
+  directory: string,
+  explicit?: string | Buffer,
+): Promise<string | Buffer> {
+  if (explicit !== undefined) {
+    return explicit;
+  }
+  if (process.env.FENTARIS_AUTH_KEY) {
+    return process.env.FENTARIS_AUTH_KEY;
+  }
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const keyPath = path.join(directory, "protection.key");
+  try {
+    return await readFile(keyPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+  }
+  const key = randomBytes(32);
+  await writeFile(keyPath, key, { mode: 0o600 });
+  return key;
 }
 
 function normalizeBase(basePath: string): string {

@@ -24,7 +24,8 @@ export type EdgeAuthorizationSession = {
   readonly tenantId: string;
   readonly clientId: string;
   readonly deviceCodeHash: string;
-  readonly userCodeNormalized: string;
+  /** SHA-256 hash of the normalized user code; plaintext codes are never stored. @pk */
+  readonly userCodeHash: string;
   readonly createdAt: number;
   readonly expiresAt: number;
   readonly intervalSeconds: number;
@@ -71,6 +72,8 @@ export interface EdgeTokenIssuanceService {
     readonly subjectId: string;
     readonly deviceCodeHash: string;
     readonly expiresAt: number;
+    readonly audience: "enrollment" | "gateway";
+    readonly edgeNodeId?: string;
   } | undefined>;
 }
 

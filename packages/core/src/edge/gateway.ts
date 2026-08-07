@@ -46,6 +46,8 @@ export interface AuthenticatedEdgeIdentity {
   readonly tenantId: string;
   readonly edgeNodeId: string;
   readonly credentialId: string;
+  /** When set, the gateway adopts this generation instead of independently incrementing. @pk */
+  readonly connectionGeneration?: number;
 }
 
 /** Device-bound gateway authentication contract. @pk */
@@ -292,7 +294,11 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel, EdgeConnectio
       throw edgeError("EDGE_UNAVAILABLE", "Device credential was revoked or replaced.");
     }
     const now = this.now();
-    const generation = device.connectionGeneration + 1;
+    const generation = identity.connectionGeneration
+      ?? device.connectionGeneration + 1;
+    if (generation <= device.connectionGeneration) {
+      throw edgeError("EDGE_PROTOCOL", "Edge connection generation is stale.");
+    }
     await this.options.deviceRegistry.updateConnection(identity.tenantId, identity.edgeNodeId, generation, now);
     const record: EdgeConnectionRecord = {
       tenantId: identity.tenantId,
@@ -450,12 +456,15 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel, EdgeConnectio
     active: ActiveConnection,
     message: EdgeProtocolMessage | EdgeMcpOutboundEnvelope,
   ): Promise<void> {
-    const allowed = await this.options.authorizer?.authorize({
-      direction,
-      identity: active.identity,
-      connection: active.record,
-      message,
-    }) ?? true;
+    const allowed = this.options.authorizer
+      ? await this.options.authorizer.authorize({
+        direction,
+        identity: active.identity,
+        connection: active.record,
+        message,
+      })
+      // Fail closed for MCP dispatch when no authorizer is configured.
+      : message.kind !== "mcp.request" && message.kind !== "mcp.cancel";
     if (!allowed) {
       throw edgeError("EDGE_UNAUTHORIZED_TARGET", "Edge message was not authorized by server-side state.");
     }
