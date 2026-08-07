@@ -76,6 +76,81 @@ export {
 } from "./recipe.js";
 export type { LaunchRecipe } from "./recipe.js";
 
+export {
+  INSTALLATION_RECIPE_VERSION,
+  IN_MEMORY_INSTALLATION_ADAPTER_WARNING,
+  InMemoryInstallationApprovalStore,
+  InMemoryInstallationArtifactStore,
+  InMemoryInstallationAttemptStore,
+  InMemoryInstallationLifecycleStore,
+  InMemoryInstallationMutationLock,
+  canonicalizeInstallationValue,
+  compileInstallationRecipe,
+  computeInstallationDigest,
+  install,
+  installationApprovalDigest,
+  installedArtifact,
+  isInstalledArtifactReference,
+  normalizeInstallationReadiness,
+  parseInstallationRecipe,
+  serializeInstallationRecipe,
+  validateInstallationRecipe,
+} from "./installation.js";
+export type {
+  ArchiveInstallationSource,
+  BinaryInstallationProvider,
+  ContainerInstallationProvider,
+  CustomInstallationProvider,
+  EnterpriseInstallationSource,
+  GitInstallationSource,
+  InlineInstallationSource,
+  InstallationApprovalRecord,
+  InstallationApprovalStore,
+  InstallationArtifactRecord,
+  InstallationArtifactStore,
+  InstallationAttemptStore,
+  InstallationAttemptSummary,
+  InstallationBuilderDefaults,
+  InstallationCleanup,
+  InstallationDigest,
+  InstallationFilesystemPermission,
+  InstallationLifecycleState,
+  InstallationLifecycleStore,
+  InstallationLifecycleSummary,
+  InstallationLimits,
+  InstallationMutationLock,
+  InstallationNetworkMode,
+  InstallationOutput,
+  InstallationOutputKind,
+  InstallationPermissions,
+  InstallationPlatformConstraint,
+  InstallationProvider,
+  InstallationProviderAdapter,
+  InstallationProviderContext,
+  InstallationProviderKind,
+  InstallationReasonCode,
+  InstallationRecipe,
+  InstallationRecipeInput,
+  InstallationResolvedSource,
+  InstallationRetention,
+  InstallationSource,
+  InstallationSourceResolver,
+  InstallationVerification,
+  InstalledArtifactReference,
+  LocalInstallationSource,
+  ManualInstallationProvider,
+  NodePackageInstallationProvider,
+  PythonInstallationProvider,
+} from "./installation.js";
+
+export { EdgeInstallationTelemetry, edgeInstallationHealth } from "./installationObservability.js";
+export type {
+  EdgeInstallationHealthOptions,
+  EdgeInstallationRuntimeEvent,
+  EdgeInstallationRuntimeEventName,
+  EdgeInstallationTelemetrySink,
+} from "./installationObservability.js";
+
 export { EDGE_ERROR_CODES, edgeError, isEdgeError } from "./errors.js";
 export type { EdgeError, EdgeErrorCode, EdgeErrorOptions } from "./errors.js";
 
@@ -198,6 +273,7 @@ export {
   EDGE_PROTOCOL_MIN_VERSION,
   EDGE_PROTOCOL_VERSION,
   EDGE_SUPPORTED_PROTOCOL_VERSIONS,
+  adaptDesiredStateForEdgeProtocol,
   parseEdgeProtocolMessage,
   selectHighestMutualEdgeProtocolVersion,
   validateEdgePresenceReport,
@@ -213,6 +289,9 @@ export type {
   EdgeHelloAckMessage,
   EdgeHelloMessage,
   EdgeLifecycleMessage,
+  EdgeInstallationApprovalMessage,
+  EdgeInstallationControlMessage,
+  EdgeInstallationStatusMessage,
   EdgePresenceReportMessage,
   EdgeProtocolVersion,
   EdgeReadinessReport,
@@ -227,6 +306,7 @@ export {
   InMemoryEdgeConnectionStore,
   InMemoryEdgeDesiredStateStore,
   InMemoryEdgeDeviceRegistry,
+  InMemoryEdgeInstallationStatusStore,
   InMemoryEdgeSetupStatusStore,
 } from "./controlPlane.js";
 export type {
@@ -243,6 +323,7 @@ export type {
   EdgeInventoryListPage,
   EdgeInventoryRecord,
   EdgeInventoryUpdate,
+  EdgeInstallationStatusStore,
   EdgeSetupStatusStore,
 } from "./controlPlane.js";
 

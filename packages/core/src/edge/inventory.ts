@@ -6,6 +6,7 @@
 
 import { randomUUID } from "node:crypto";
 import { edgeError } from "./errors.js";
+import type { InstallationDigest, InstallationLifecycleState, InstallationReasonCode } from "./installation.js";
 
 /** Current public inventory schema version. @pk */
 export const EDGE_INVENTORY_SCHEMA_VERSION = 1 as const;
@@ -116,6 +117,13 @@ export interface EdgeDeploymentReadiness {
   readonly deploymentId: string;
   readonly status: EdgeDeploymentReadinessStatus;
   readonly recipeVersion?: number;
+  readonly desiredVersion?: number;
+  readonly installationDigest?: InstallationDigest;
+  readonly launchDigest?: string;
+  readonly installationState?: InstallationLifecycleState;
+  readonly reasonCode?: InstallationReasonCode;
+  readonly retryable?: boolean;
+  readonly attemptId?: string;
   readonly observedAt: number;
   readonly expiresAt?: number;
   readonly reasonCategory?: string;
@@ -267,7 +275,18 @@ export class InMemoryEdgeReadinessStore implements EdgeReadinessStore {
   }
 
   async put(readiness: EdgeDeploymentReadiness): Promise<void> {
-    this.values.set(storageKey(readiness.tenantId, readiness.edgeNodeId, readiness.deploymentId), freezeReadiness(readiness));
+    const key = storageKey(readiness.tenantId, readiness.edgeNodeId, readiness.deploymentId);
+    const current = this.values.get(key);
+    if (current && ((readiness.connectionGeneration ?? 0) < (current.connectionGeneration ?? 0)
+      || (readiness.desiredVersion ?? 0) < (current.desiredVersion ?? 0)
+      || ((readiness.desiredVersion ?? 0) === (current.desiredVersion ?? 0)
+        && current.installationDigest !== undefined && readiness.installationDigest !== current.installationDigest)
+      || ((readiness.desiredVersion ?? 0) === (current.desiredVersion ?? 0)
+        && current.launchDigest !== undefined && readiness.launchDigest !== current.launchDigest)
+      || readiness.observedAt < current.observedAt)) {
+      throw edgeError("EDGE_PROTOCOL", "Readiness belongs to stale or mismatched desired state.");
+    }
+    this.values.set(key, freezeReadiness(readiness));
   }
 
   async delete(tenantId: string, edgeNodeId: string, deploymentId: string): Promise<void> {

@@ -51,7 +51,10 @@ export interface EdgeOperatorBackend {
   update(device: string, input: { expectedVersion: number; name?: string; description?: string; tags?: readonly string[] }): Promise<EdgeCliEnvelope<unknown>>;
   disconnect(device: string): Promise<EdgeCliEnvelope<unknown>>;
   revoke(device: string): Promise<EdgeCliEnvelope<unknown>>;
+  installation(action: EdgeInstallationAction, deploymentId: string | undefined, options: { readonly cleanup?: boolean }): Promise<EdgeCliEnvelope<unknown>>;
 }
+
+export type EdgeInstallationAction = "status" | "review" | "approve" | "deny" | "retry" | "revoke" | "cleanup";
 
 export interface EdgeRemoteQuery {
   readonly compact?: boolean;
@@ -100,6 +103,22 @@ export async function runEdge(
       case "status":
         envelope = await backend.status(command.args[1], remoteQuery(command.options));
         break;
+      case "installation": {
+        const installationAction = requiredInstallationAction(command.args[1]);
+        const deploymentId = command.args[2];
+        if (installationAction !== "status" && !deploymentId) {
+          return printFailure(runtime, command.options, "EDGE_CLI_USAGE", `edge installation ${installationAction} requires a deployment ID.`, 2);
+        }
+        if (["approve", "deny", "retry", "revoke", "cleanup"].includes(installationAction)
+          && !await confirmInstallationMutation(runtime, command.options, installationAction, deploymentId!)) {
+          return printFailure(runtime, command.options, "CONFIRMATION_REQUIRED", `${installationAction} was not confirmed.`, 2, [{
+            description: `Confirm ${installationAction} non-interactively`,
+            command: `fentaris edge installation ${installationAction} ${shellArg(deploymentId!)} --yes --json`,
+          }]);
+        }
+        envelope = await backend.installation(installationAction, deploymentId, { cleanup: command.options.cleanup === true });
+        break;
+      }
       case "update": {
         const expectedVersion = numberOption(command.options, "expected-version");
         if (expectedVersion === undefined) {
@@ -198,6 +217,7 @@ export class DefaultEdgeOperatorBackend implements EdgeOperatorBackend {
     const control = new EdgeLocalControlServer({
       endpoint: { address: edgeLocalControlAddress(this.paths.dataDir), credential },
       agent: persistent,
+      ...(agent.installationControl() ? { installation: agent.installationControl()! } : {}),
     });
     await persistent.start();
     await control.start();
@@ -229,8 +249,12 @@ export class DefaultEdgeOperatorBackend implements EdgeOperatorBackend {
     const credential = await this.platform.credentialStore.get("local-control-credential");
     if (credential) {
       try {
-        const response = await callEdgeLocalControl({ address: edgeLocalControlAddress(this.paths.dataDir), credential }, "status");
-        return response.ok ? success(response.data) : failure(response.error?.code ?? "EDGE_UNAVAILABLE", response.error?.message ?? "Local Edge status failed.");
+        const endpoint = { address: edgeLocalControlAddress(this.paths.dataDir), credential };
+        const response = await callEdgeLocalControl(endpoint, "status");
+        if (!response.ok) return failure(response.error?.code ?? "EDGE_UNAVAILABLE", response.error?.message ?? "Local Edge status failed.");
+        const installations = await callEdgeLocalControl(endpoint, "installation-status").catch(() => ({ ok: true, data: { readiness: [] } }));
+        const status = response.data && typeof response.data === "object" ? response.data as Record<string, unknown> : { state: "unknown" };
+        return success({ ...status, device: { presence: status.agent && typeof status.agent === "object" ? (status.agent as Record<string, unknown>).connected === true ? "online" : "offline" : "unknown" }, service: { state: status.state ?? "unknown" }, deployments: installations.ok ? installations.data : [] });
       } catch {
         // Fall through to safe persisted/local status.
       }
@@ -248,6 +272,17 @@ export class DefaultEdgeOperatorBackend implements EdgeOperatorBackend {
   }
   async revoke(device: string): Promise<EdgeCliEnvelope<unknown>> {
     return this.remote("POST", `/edge/devices/${encodeURIComponent(device)}/revoke`);
+  }
+
+  async installation(action: EdgeInstallationAction, deploymentId: string | undefined, options: { readonly cleanup?: boolean }): Promise<EdgeCliEnvelope<unknown>> {
+    const credential = await this.platform.credentialStore.get("local-control-credential");
+    if (!credential) return failure("EDGE_UNAVAILABLE", "The local Edge service is not running or has no control credential.");
+    const response = await callEdgeLocalControl(
+      { address: edgeLocalControlAddress(this.paths.dataDir), credential },
+      `installation-${action}`,
+      { ...(deploymentId ? { deploymentId } : {}), ...(options.cleanup ? { cleanup: true } : {}), ...(action === "cleanup" ? { approveCleanup: true } : {}) },
+    );
+    return response.ok ? success(response.data) : failure(response.error?.code ?? "EDGE_COMMAND_FAILED", response.error?.message ?? "Installation control failed.");
   }
 
   private async remote(method: string, route: string, body?: unknown, query: EdgeRemoteQuery = {}): Promise<EdgeCliEnvelope<unknown>> {
@@ -354,6 +389,12 @@ async function confirmMutation(runtime: Runtime, options: CliOptions, action: st
   return runtime.prompt.confirm(`${action === "revoke" ? "Revoke" : "Disconnect"} Edge device "${device}"?`);
 }
 
+async function confirmInstallationMutation(runtime: Runtime, options: CliOptions, action: EdgeInstallationAction, deploymentId: string): Promise<boolean> {
+  if (options.yes === true) return true;
+  if (runtime.nonInteractive) return false;
+  return runtime.prompt.confirm(`${action} managed installation for deployment "${deploymentId}"?`);
+}
+
 function remoteQuery(options: CliOptions): EdgeRemoteQuery {
   const as = stringOption(options, "as");
   if (as && !/^(user|group):[^:]+$/.test(as)) throw new Error("--as must use user:<name> or group:<name>.");
@@ -398,6 +439,11 @@ function requiredArg(value: string | undefined, message: string): string {
 function requiredServiceOperation(value: string | undefined): EdgeServiceOperation {
   if (value === "install" || value === "start" || value === "stop" || value === "restart" || value === "uninstall") return value;
   throw new Error("edge service requires install, start, stop, restart, or uninstall.");
+}
+
+function requiredInstallationAction(value: string | undefined): EdgeInstallationAction {
+  if (value === "status" || value === "review" || value === "approve" || value === "deny" || value === "retry" || value === "revoke" || value === "cleanup") return value;
+  throw new Error("edge installation requires status, review, approve, deny, retry, revoke, or cleanup.");
 }
 
 function requiredEnvironment(environment: NodeJS.ProcessEnv, name: string): string {

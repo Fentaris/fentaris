@@ -20,6 +20,7 @@ function backend(): EdgeOperatorBackend & Record<string, ReturnType<typeof vi.fn
     update: vi.fn(async (device) => success({ device: { name: device, inventoryVersion: 3 } })),
     disconnect: vi.fn(async (device) => success({ device: { name: device }, status: "disconnected" })),
     revoke: vi.fn(async (device) => success({ device: { name: device }, status: "revoked" })),
+    installation: vi.fn(async (action, deploymentId) => success({ action, deploymentId, installation: "ready", setup: "ready", workload: "ready", readiness: "ready" })),
   } as EdgeOperatorBackend & Record<string, ReturnType<typeof vi.fn>>;
 }
 
@@ -134,5 +135,28 @@ describe("fentaris edge canonical behavior", () => {
     if (command.kind !== "ok") throw new Error("parse failed");
     await runEdge(command.command, io.value, service);
     expect(io.output).toEqual(["ready"]);
+  });
+
+  it("requires explicit confirmation for installation mutations and preserves canonical JSON", async () => {
+    const io = runtime(true);
+    const service = backend();
+    const denied = parseCommand(["edge", "installation", "retry", "filesystem", "--json"]);
+    if (denied.kind !== "ok") throw new Error("parse failed");
+    await expect(runEdge(denied.command, io.value, service)).resolves.toBe(2);
+    expect(service.installation).not.toHaveBeenCalled();
+    expect(JSON.parse(io.output[0]!)).toMatchObject({ ok: false, error: { code: "CONFIRMATION_REQUIRED" } });
+
+    const approvedIo = runtime(true);
+    const approved = parseCommand(["edge", "installation", "retry", "filesystem", "--yes", "--json"]);
+    if (approved.kind !== "ok") throw new Error("parse failed");
+    await expect(runEdge(approved.command, approvedIo.value, service)).resolves.toBe(0);
+    expect(service.installation).toHaveBeenCalledWith("retry", "filesystem", { cleanup: false });
+    expect(JSON.parse(approvedIo.output[0]!)).toMatchObject({ ok: true, data: { installation: "ready", setup: "ready", workload: "ready", readiness: "ready" }, pagination: null, warnings: [], nextActions: [] });
+
+    const cleanupApprovalIo = runtime(true);
+    const cleanupApproval = parseCommand(["edge", "installation", "approve", "filesystem", "--cleanup", "--yes", "--json"]);
+    if (cleanupApproval.kind !== "ok") throw new Error("parse failed");
+    await expect(runEdge(cleanupApproval.command, cleanupApprovalIo.value, service)).resolves.toBe(0);
+    expect(service.installation).toHaveBeenLastCalledWith("approve", "filesystem", { cleanup: true });
   });
 });

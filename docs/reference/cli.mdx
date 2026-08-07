@@ -85,6 +85,26 @@ fentaris edge revoke "Mac Studio" --yes --json
 
 `disconnect` closes the active channel without deleting enrollment identity. `revoke` invalidates the device authorization.
 
+### `fentaris edge installation <operation> [deployment-id]`
+
+Inspect and operate managed MCP installations through the protected local control channel.
+
+```bash theme={null}
+fentaris edge installation status --json
+fentaris edge installation review filesystem --json
+fentaris edge installation approve filesystem --yes --json
+fentaris edge installation deny filesystem --yes --json
+fentaris edge installation retry filesystem --yes --json
+fentaris edge installation revoke filesystem --yes --json
+fentaris edge installation cleanup filesystem --yes --json
+```
+
+Mutations require interactive confirmation or `--yes`. `review`, `approve`, and `deny` accept `--cleanup` to address the independent approval identity for custom cleanup with external side effects. JSON retains the canonical `{ ok, data|error, pagination, warnings, nextActions }` envelope and separates device, service, installation, setup, workload, and readiness state.
+
+<Warning>
+  `cleanup` blocks the dependent workload first. Shared managed artifacts remain present until their final deployment reference is removed. Manual prerequisites are never removed automatically.
+</Warning>
+
 ### Legacy `fentaris-edge` commands
 
 `fentaris-edge login|status|disconnect|revoke` map to the new services and add migration warnings without removing existing JSON fields. New automation should use `fentaris edge`.

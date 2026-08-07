@@ -72,6 +72,14 @@ Setup builders:
 
 Cloud execution rejects unresolved runtime tokens with `EDGE_UNRESOLVED_RUNTIME_INPUT`. `StdioTransportOptions.runtimeValues` can provide explicit cloud-side string values.
 
+## Managed Installation
+
+`edge.install` provides builders for `nodePackage`, `python`, `binary`, `container`, `custom`, and `manual` providers. Every recipe is canonicalized and digest-addressed. Use `installedArtifact(recipe, outputName)` in a launch recipe so the agent starts only a declared, verified output.
+
+Custom sources support exact Git commits, integrity-bound archives, bounded inline content, locally approved grants, and enterprise resolvers. `InstallationProviderAdapter`, `InstallationSourceResolver`, store, mutation-lock, approval, verification, and telemetry contracts are replaceable. The default local coordinator persists attempts, lifecycle, active pointers, retention references, and approvals before reporting success.
+
+`EdgeInstallationTelemetry` emits redacted source, approval, attempt, verification, activation, rollback, and cleanup events. `edgeInstallationHealth(...)` adds checks for interrupted attempts, stale lifecycle, storage pressure, isolation support, orphaned artifacts, and agent upgrade requirements.
+
 ## Core Runtime Adapters
 
 `McpProxyOptions.edge` accepts:
@@ -149,7 +157,7 @@ The initial process model is one local MCP process/client per `{ deployment, dow
 
 ## Protocol Compatibility
 
-`EDGE_PROTOCOL_VERSION` is `2`; `EDGE_MCP_ENVELOPE_VERSION` remains `1`. Hello negotiates the highest mutually supported protocol version. Version 1 agents retain transparent Edge execution, while version 2 adds bounded observed facts, capacity, load, readiness, and orchestration correlation. Every accepted connection is bound to tenant, edge node, credential, protocol version, and a monotonically increasing connection generation.
+`EDGE_PROTOCOL_VERSION` is `3`; `EDGE_MCP_ENVELOPE_VERSION` remains `1`. Hello negotiates the highest mutually supported protocol version. Version 1 agents retain transparent Edge execution, version 2 adds bounded observed facts and orchestration correlation, and version 3 adds managed-installation desired state, lifecycle, approval, retry, removal, installation digest, and launch digest correlation. Every accepted connection is bound to tenant, edge node, credential, protocol version, and a monotonically increasing connection generation.
 
 Messages cover hello, heartbeat, desired state, setup status, capability manifests, lifecycle, MCP requests/results/errors, and cancellation.
 
@@ -159,8 +167,9 @@ Servers must reject routing claims that do not match server-side device, deploym
 | --- | --- | --- | --- |
 | Protocol v1 | Supported | Legacy heartbeat only | Not eligible for v2 fact/readiness selectors |
 | Protocol v2 | Supported | Bounded facts, capacity, load, freshness, readiness | Supported when Edge Control is enabled and policy allows it |
+| Protocol v3 | Supported | Installation, setup, workload, and digest-correlated readiness | Supported, including managed installation |
 
-Roll out the control plane first, then proxies, then upgrade agents. The gateway negotiates the highest mutual version, so v1 and v2 agents can coexist. To roll back, disable `edge.control` and new selectors first; transparent v1/v2 routing continues. Do not downgrade stored identity or inventory versions during rollback.
+Roll out the control plane first, then proxies, then upgrade agents. The gateway negotiates the highest mutual version, so v1, v2, and v3 agents can coexist. To roll back, stop assigning managed-installation recipes, disable `edge.control` and new selectors, then roll back agents. Transparent legacy routing continues. Do not downgrade stored identity, inventory, installation, or approval records during rollback.
 
 The `fentaris-edge` compatibility commands remain available during the migration window and map to the new services with warnings. New automation should use `fentaris edge`. A future major release may remove the legacy command names after a documented deprecation period.
 
