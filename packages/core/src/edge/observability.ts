@@ -15,7 +15,14 @@ export type EdgeRuntimeEventName =
   | "edge.orchestration.started"
   | "edge.orchestration.child"
   | "edge.orchestration.completed"
-  | "edge.orchestration.cleanup";
+  | "edge.orchestration.cleanup"
+  | "edge.authorization.created"
+  | "edge.authorization.approved"
+  | "edge.authorization.denied"
+  | "edge.enrollment.completed"
+  | "edge.device.revoked"
+  | "edge.connection.authenticated"
+  | "edge.dispatch.gated";
 
 export interface EdgeRuntimeEvent {
   readonly name: EdgeRuntimeEventName;

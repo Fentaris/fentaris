@@ -396,9 +396,124 @@ export type {
   EdgeGatewayAuthenticator,
   EdgeGatewayAuthorization,
   EdgeGatewayAuthorizer,
+  EdgeGatewayEventSink,
   EdgeGatewaySocket,
   EdgeWebSocketGatewayOptions,
 } from "./gateway.js";
+
+export {
+  EDGE_CONTROL_PLANE_DEFAULT_BASE_PATH,
+  EDGE_CONTROL_PLANE_DEFAULT_STATE_DIR,
+  EDGE_CONTROL_PLANE_DEFAULTS,
+  SERIALIZABLE_EDGE_CONTROL_PLANE_KEYS,
+  buildEdgeControlPlaneUrls,
+  mergeEdgeControlPlaneConfig,
+  normalizeEdgeControlPlaneConfig,
+  parseSerializableEdgeControlPlaneConfig,
+  validateEdgeControlPlaneConfig,
+} from "./integratedConfig.js";
+export type {
+  EdgeAssignmentResolver,
+  EdgeControlPlaneConfig,
+  EdgeControlPlaneManagedAdapters,
+  EdgeControlPlaneManagedServices,
+  EdgeControlPlaneMode,
+  EdgeDeviceApprovalAdapter,
+  EdgeDeviceApprovalDecision,
+  NormalizedEdgeControlPlaneConfig,
+  SerializableEdgeControlPlaneConfig,
+} from "./integratedConfig.js";
+
+export {
+  compileEdgeDeploymentCatalog,
+  deriveEligibleEdgeDeployments,
+  IntegratedEdgeDeviceResolver,
+  IntegratedEdgeReconciler,
+  LocalEdgeDesiredAssignmentStore,
+} from "./integratedReconciliation.js";
+export type {
+  CompileEdgeDeploymentCatalogOptions,
+  EdgeDeploymentCatalog,
+  EdgeDeploymentCatalogDiagnostic,
+  EdgeDeploymentCatalogEntry,
+  EdgeDeploymentWithheldReason,
+  EdgeEligibilityContext,
+  EdgeEligibilityResult,
+  IntegratedEdgeReconcilerOptions,
+} from "./integratedReconciliation.js";
+
+export { IntegratedEdgeGatewayBridge } from "./integratedBridge.js";
+export type { IntegratedEdgeBridgeOptions } from "./integratedBridge.js";
+
+export {
+  EDGE_CONTROL_PLANE_ERROR_CODES,
+  edgeControlPlaneError,
+  isEdgeControlPlaneErrorBody,
+} from "./integratedProtocol.js";
+export type {
+  EdgeAuthenticatedHelloProof,
+  EdgeAuthenticatedHelloResult,
+  EdgeControlPlaneErrorBody,
+  EdgeControlPlaneErrorCode,
+  EdgeControlPlaneTokenResponse,
+  EdgeDeviceAuthorizeRequest,
+  EdgeDeviceAuthorizeResponse,
+  EdgeDeviceTokenRequest,
+  EdgeEnrollRequest,
+  EdgeEnrollResponse,
+  EdgeRevokeRequest,
+  EdgeTokenRefreshRequest,
+} from "./integratedProtocol.js";
+
+export type {
+  EdgeApprovalService,
+  EdgeAuthorizationSession,
+  EdgeDesiredAssignmentSnapshot,
+  EdgeDesiredAssignmentStore,
+  EdgeDeviceAuthorizationService,
+  EdgeEnrolledDeviceAuthority,
+  EdgeEnrolledDeviceStore,
+  EdgeEnrollmentService,
+  EdgeLocalOperatorChannel,
+  EdgeReconciliationTrigger,
+  EdgeReconciliationTriggerService,
+  EdgeTokenIssuanceService,
+} from "./integratedServices.js";
+
+export {
+  EDGE_LOCAL_AUTHORITY_SCHEMA_VERSION,
+  LOCAL_EDGE_AUTHORITY_ADAPTER_DIAGNOSTICS,
+  EdgeLocalAuthorityStore,
+  compareSecretHash,
+  hashSecret,
+  normalizeUserCode,
+  redactEdgeAuthorityValue,
+} from "./integratedLocalStore.js";
+export type {
+  EdgeEncryptedBlob,
+  EdgeLocalAuthorityDocument,
+  EdgeLocalAuthorityStoreOptions,
+  EdgeLocalRefreshCredential,
+  EdgeLocalServerIdentity,
+} from "./integratedLocalStore.js";
+
+export {
+  EdgeLocalOperatorClient,
+  EdgeLocalOperatorServer,
+  createEdgeLocalOperatorEndpoint,
+  readEdgeLocalOperatorEndpoint,
+} from "./integratedOperatorChannel.js";
+export type {
+  EdgeLocalOperatorCommand,
+  EdgeLocalOperatorClientRequest,
+  EdgeLocalOperatorEndpoint,
+  EdgeLocalOperatorRequest,
+  EdgeLocalOperatorResponse,
+  EdgeLocalOperatorServerOptions,
+} from "./integratedOperatorChannel.js";
+
+export { IntegratedEdgeAuthServices } from "./integratedAuthServices.js";
+export type { IntegratedAuthServicesOptions } from "./integratedAuthServices.js";
 
 export {
   EdgeCapabilityCache,

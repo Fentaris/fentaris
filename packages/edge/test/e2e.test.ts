@@ -110,6 +110,8 @@ describe("edge execution end to end", () => {
       desiredStateStore: new InMemoryEdgeDesiredStateStore(),
       setupStatusStore: new InMemoryEdgeSetupStatusStore(),
       capabilityManifestStore: new InMemoryEdgeCapabilityManifestStore(),
+      // Explicit allow-all: gateway MCP dispatch is fail-closed without an authorizer.
+      authorizer: { authorize: async () => true },
     });
     const schema = createSetupSchema({ workspace: edge.folder({ access: "read" }) });
     const recipe = compileLaunchRecipe({
@@ -129,6 +131,8 @@ describe("edge execution end to end", () => {
       prompts: [{ name: "summarize", arguments: [{ name: "file" }] }],
       supportsCompletion: true,
     });
+    await cache.setOnline("tenant-1", "fixture", true, "node-alice");
+    await cache.setOnline("tenant-1", "fixture", true, "node-bob");
 
     const supervisors = new Map<string, EdgeWorkloadSupervisor>();
     const connect = async (nodeId: string, credential: string, root: string) => {

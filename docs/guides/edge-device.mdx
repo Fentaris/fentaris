@@ -17,6 +17,14 @@ npx @fentaris/edge join https://fentaris.example \
 
 Open the displayed verification URL and enter the user code. Join creates a random device keypair, proves possession, enrolls the device, and installs a per-user background service when the platform permits it. No global package installation is required for the `npx` form.
 
+For an application using the integrated local control plane, approve the displayed code from the application project:
+
+```bash theme={null}
+fentaris edge approve ABCD-EFGH --subject alice
+```
+
+Approval travels through an owner-only local operator socket. The CLI does not read or mutate the protected authority database. Enrollment, connection, desired-state reconciliation, and capability publication then happen without custom gateway wiring.
+
 If native service installation is unavailable, the device stays enrolled and the command returns `fentaris edge run` as the foreground fallback. Pass `--no-service` to choose foreground operation or `--service` to fail unless persistent installation succeeds.
 
 The local executable allowlist is deny-by-default. Set

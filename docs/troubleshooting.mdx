@@ -481,6 +481,28 @@ Keep `.fentaris/credentials.enc.json` private. Commit only `.fentaris/secrets.ma
 
 ## Documentation Issues
 
+## Integrated Edge Control Plane
+
+### `fentaris edge approve` cannot reach the local authority
+
+Run the command from the same project and operating-system account as the running app. Confirm `edge.controlPlane.enabled` is true, then run `fentaris doctor --runtime`. The operator endpoint descriptor and socket are created beneath the protected Edge state directory and removed during clean shutdown. Do not recreate or edit them manually.
+
+### The gateway URL is wrong or rejected
+
+Set `edge.controlPlane.publicOrigin` to the externally reachable canonical origin. Use HTTPS for every non-loopback host, keep `basePath` distinct from the MCP path, and ensure the reverse proxy forwards WebSocket upgrades. Request `Host` and `Forwarded` headers do not override the configured origin.
+
+### A connected device has no tools
+
+Check the device is assigned to the authenticated subject, the placement selector matches, local setup is approved, the desired and connection generations are current, and the reported manifest matches the desired recipe digest. Reconnect stale devices after fixing setup. Fentaris withholds uncertain deployments instead of publishing partial capabilities.
+
+### Managed mode fails startup
+
+Provide all durable managed adapters, including authorization/token/enrollment services and the desired-assignment store. In-memory reference adapters are single-process and intentionally rejected for multi-instance mode. Use health and adapter diagnostics to identify the missing or unsafe contract.
+
+### Recovery and rollback
+
+Restore the protected authority directory only from a consistent encrypted backup, then start one local instance and inspect health before allowing joins. To roll back the feature, stop assigning new Edge placements, revoke affected devices if credentials may have escaped, set `edge.controlPlane.enabled` to false, and restart. Do not downgrade or hand-edit stored schema records.
+
 ### Generated API reference is stale
 
 Run the docs generator after public API changes:

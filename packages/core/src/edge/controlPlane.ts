@@ -264,7 +264,16 @@ export class InMemoryEdgeDeviceRegistry implements EdgeDeviceRegistry {
 
   async revoke(tenantId: string, edgeNodeId: string): Promise<void> {
     const existing = await this.get(tenantId, edgeNodeId);
-    if (existing) this.devices.set(key(tenantId, edgeNodeId), Object.freeze({ ...existing, revoked: true }));
+    if (existing) {
+      this.devices.set(
+        key(tenantId, edgeNodeId),
+        Object.freeze({
+          ...existing,
+          revoked: true,
+          connectionGeneration: existing.connectionGeneration + 1,
+        }),
+      );
+    }
   }
 
   private assertNameAvailable(tenantId: string, name: string, exceptEdgeNodeId: string): void {

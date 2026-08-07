@@ -115,9 +115,7 @@ const runTypedoc = (section) => {
   const outputDir = join(root, "tmp", "typedoc", section.slug);
   const entryPoints = section.entryPoints.map((entry) => join(root, entry));
   const cmd = [
-    "pnpm",
-    "exec",
-    "typedoc",
+    join(root, "node_modules", ".bin", "typedoc"),
     "--plugin",
     "typedoc-plugin-markdown",
     "--tsconfig",

@@ -130,6 +130,22 @@ curl -sS -X POST http://127.0.0.1:4000/mcp \
 
 For client-specific JSON snippets, see [Client Configs](/guides/client-configs).
 
+## Add a Local Edge Device
+
+Enable the disabled-by-default `edge.controlPlane` block in `fentaris.json`, set `publicOrigin` to `http://127.0.0.1:4000`, and restart the app. In one terminal join the device:
+
+```bash theme={null}
+npx @fentaris/edge join http://127.0.0.1:4000/_fentaris/edge --name "My laptop"
+```
+
+In the project terminal approve the displayed code for an application subject:
+
+```bash theme={null}
+fentaris edge approve ABCD-EFGH --subject alice
+```
+
+The running app enrolls the device, derives its assignments from your Edge targets and placements, and publishes capabilities after local setup and readiness succeed. See [Set Up an Edge Device](/guides/edge-device) for workload declarations and production guidance.
+
 ## Validate the Project
 
 Run the local checks before connecting a client:
@@ -139,7 +155,7 @@ fentaris check --offline
 ```
 
 <Tip>
-  Use `fentaris doctor --runtime` when you want to verify that the running endpoint responds correctly.
+  Use `fentaris doctor --runtime` when you want to verify the MCP endpoint and enabled integrated Edge routes.
 </Tip>
 
 ## Related Documentation

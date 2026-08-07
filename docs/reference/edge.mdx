@@ -97,6 +97,40 @@ Custom sources support exact Git commits, integrity-bound archives, bounded inli
 
 Reference implementations include `EdgeTransport`, `EdgeWebSocketGateway`, `InMemorySessionBindingStore`, control-plane stores, and `EdgeCapabilityCache`.
 
+## Integrated Control Plane
+
+Set `McpProxyOptions.edge.controlPlane` to let `app.start()` own device authorization, enrollment, the WebSocket gateway, desired-state planning, reconciliation, inventory reports, capability publication, health, and shutdown.
+
+```ts theme={null}
+const app = new McpProxy({
+  servers: [workspaceServer],
+  targets: { personal: edge({ device: edge.userDefaultDevice() }) },
+  setup: { workspace: { root: edge.folder({ access: "read-write" }) } },
+  placements: [
+    { serverName: "workspace", scope: "global", targetName: "personal" },
+  ],
+  edge: {
+    controlPlane: {
+      enabled: true,
+      mode: "local",
+      publicOrigin: "http://127.0.0.1:4000",
+    },
+  },
+});
+
+await app.start();
+```
+
+At startup Fentaris compiles an immutable catalog from MCP transports, setup schemas, installation recipes, targets, placements, and subject scopes. Enrollment, connection, inventory, readiness, assignment, and revocation events reconcile canonical per-device desired state. Versions advance only when the effective set changes.
+
+Local mode uses an atomic owner-only authority store and protected operator channel. It is durable across restarts but deliberately single-process. Managed mode requires durable device, desired-state, setup, manifest, connection, presence, readiness, assignment, authorization, token, and enrollment adapters; startup fails closed if any required adapter is absent.
+
+Public routes live under `basePath` (default `/_fentaris/edge`): device authorization and polling, refresh, enrollment, self-revocation, verification, and `/ws`. URLs are derived only from `publicOrigin`, never request host or forwarded headers. Non-loopback deployments require HTTPS/WSS.
+
+Dispatch is allowed only when authorization, assignment, connection generation, desired recipe, readiness, and manifest support all agree. Ambiguous or incomplete deployments are withheld with bounded diagnostics. Revocation removes desired state, rotates or invalidates credentials, evicts capability state, and terminates the active generation.
+
+Health exposes only bounded counts and redacted component status. A local runtime is reported degraded with a single-process warning; an unavailable required managed adapter is an unhealthy startup failure.
+
 <Warning>
   In-memory stores and the gateway active-socket map are single-process references. Multi-instance deployments require shared session bindings, device/desired/setup/manifest stores, and a distributed `EdgeChannelBroker`.
 </Warning>
