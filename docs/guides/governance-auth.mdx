@@ -87,23 +87,15 @@ The same API is available through classes when you prefer object construction, b
 The TypeScript declarations identify where Fentaris reads API-key hashes and upstream credentials. Provision the values after the project is built:
 
 ```bash theme={null}
-export FENTARIS_AUTH_KEY="<local-encryption-key>"
-
-fentaris auth api-key add alice --generate
-fentaris auth api-key add bob --generate
-
-printf '%s' "$SUPPORT_GITHUB_TOKEN" \
-  | fentaris secrets set github.token --group support --value-stdin --non-interactive
-printf '%s' "$MAINTAINER_GITHUB_TOKEN" \
-  | fentaris secrets set github.token --group maintainers --value-stdin --non-interactive
-
-fentaris secrets manifest
+fentaris secrets setup
 fentaris check --offline
 fentaris doctor
 fentaris dev
 ```
 
-Save each generated API key when the CLI prints it. Fentaris stores only its hash. Clients send the raw value in the `x-fentaris-api-key` header.
+The setup plan creates the local encryption key when necessary, asks invisibly for missing upstream tokens, and generates each declared Fentaris user API key. Save each generated API key when the CLI prints it. Fentaris stores only its hash. Clients send the raw value in the `x-fentaris-api-key` header.
+
+For CI, provide third-party tokens through the process environment first, then run `fentaris secrets setup --non-interactive --yes --json`. An incomplete plan exits before changing files and returns `SECRETS_SETUP_INCOMPLETE` with concrete next actions.
 
 For local development, let the CLI generate `FENTARIS_AUTH_KEY` in the ignored project `.env` on the first encrypted write. For deployments, provide it through your secret manager. Keep the same value for later reads and updates, and never commit or include it in an agent response.
 
@@ -452,6 +444,7 @@ Preferred workflow for local encrypted credentials:
 ```bash theme={null}
 export FENTARIS_AUTH_KEY="your-local-encryption-key"
 
+fentaris secrets setup
 fentaris secrets set github.token
 fentaris secrets set github.token --group support
 fentaris secrets list
@@ -462,7 +455,7 @@ fentaris doctor
 
 `fentaris secrets list` shows credential reference names and scopes only. Secret values are never printed.
 
-`.fentaris/secrets.manifest.json` is the committed schema: reference names and scopes with no values. Regenerate it after adding new `credential("...")` references in your entrypoint:
+`.fentaris/secrets.manifest.json` is the committed schema: reference names, scopes, source kinds, and API-key requirements with no values. Regenerate it after changing credential declarations in your entrypoint:
 
 ```bash theme={null}
 fentaris secrets manifest

@@ -27,7 +27,11 @@ Local `fentaris secrets` and `fentaris auth api-key` commands resolve the key in
 
 On the first command that writes an encrypted local credential store, the CLI generates a random project key in `.env` when no key is configured. Read-only commands do not create a key, and projects without encrypted credentials do not require one. If `credentials.enc.json` already exists, Fentaris never replaces its missing key automatically; provide the original key so the store remains recoverable.
 
+`fentaris secrets setup` applies the same precedence and creates the key only when its plan needs the local encrypted backend. It also writes prompted `credentialEnv(...)` values to `.env` with file mode `0600`. Existing shell values and `.env` assignments are left unchanged.
+
 Generated `dev` and `start` scripts load `.env` automatically. `fentaris dev` also loads the discovered project `.env` before starting the package script.
+
+For an older SDK-only project, update direct launch commands to load the file explicitly, for example `node --env-file-if-exists=.env dist/index.js`. The core does not mutate `process.env` or load dotenv files implicitly.
 
 Retain this value through your normal local secret-management process. The same value is required for future reads and updates. Do not commit `.env` or expose the key in command output.
 
@@ -111,6 +115,8 @@ credentialEnv("GITHUB_TOKEN")
 ```
 
 The exact variable name depends on the project code and upstream server.
+
+Every declared credential source is required when the proxy starts. Before opening HTTP, Edge, or another first exposure transport, Fentaris resolves all declarations directly from the runtime configuration. Missing variables, unreadable local files, wrong encryption keys, or absent JSON paths are aggregated in `FENTARIS_CREDENTIALS_UNAVAILABLE`; run `fentaris secrets setup` or follow the manual action for a custom source.
 
 <Warning>
   Do not commit `.env` or `.fentaris/credentials.enc.json`. Generated projects ignore both by default.

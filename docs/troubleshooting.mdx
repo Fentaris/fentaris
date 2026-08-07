@@ -311,6 +311,21 @@ Run the command inside the project or one of its subdirectories so the CLI can d
 
 If `credentials.enc.json` already exists, Fentaris does not generate a replacement key because that would make the existing data unreadable. Restore the original key in `.env` or your secret manager.
 
+### Proxy fails with `FENTARIS_CREDENTIALS_UNAVAILABLE`
+
+The proxy now resolves every declared default, group, user, and API-key credential before it opens its first HTTP, Edge, or custom transport. A missing environment variable, absent JSON path, unreadable file, or wrong local encryption key prevents startup. One error lists all affected references and users without exposing secret values.
+
+Run the guided setup from the project root:
+
+```bash theme={null}
+fentaris secrets setup --dry-run
+fentaris secrets setup
+```
+
+For a deployment or CI job, provide all third-party values first and use `fentaris secrets setup --non-interactive --yes --json`. Fentaris generates local API keys but never invents third-party tokens. If the source uses a custom file or non-standard JSON path, follow the manual action reported by setup.
+
+If setup created `.env` but an older project still reports the key as missing, make its start script load the file (`node --env-file-if-exists=.env dist/index.js`) or export the variables through the deployment environment. Newly generated Fentaris projects already use this form.
+
 ### Auth setup requires interactive input
 
 `fentaris auth` and `fentaris auth api-key add` without explicit values require a real terminal. In CI or other non-interactive environments, provide the user and key source:
