@@ -123,7 +123,7 @@ function addApiKeyEntries(
 
     const expectedPrefix = `users.${userId}.apiKeys.`;
     const slot = locator.startsWith(expectedPrefix) ? Number(locator.slice(expectedPrefix.length)) : Number.NaN;
-    if (trailing.startsWith(",") || !Number.isSafeInteger(slot) || slot < 0) {
+    if (!Number.isSafeInteger(slot) || slot < 0 || hasUnsupportedLocalFileOption(trailing)) {
       const reason = `API key for user ${userId} uses unsupported local source ${locator}`;
       diagnostics.push({ code: "UNSUPPORTED_CREDENTIAL_SOURCE", detail: reason });
       apiKeys.set(`${userId}:manual:${locator}`, { userId, source: { type: "manual", reason } });
@@ -153,11 +153,25 @@ function localSource(
     : scope.startsWith("group:")
       ? `groups.${scope.slice("group:".length)}.${ref}`
       : `users.${scope.slice("user:".length)}.credentials.${ref}`;
-  if (!trailing.startsWith(",") && path === expected) return { type: "local" };
+  // Standard local paths remain provisionable even with key/keyEnv options.
+  // Only a custom `file` option (or a non-standard path) requires manual setup.
+  if (path === expected && !hasUnsupportedLocalFileOption(trailing)) return { type: "local" };
 
   const reason = `Credential ${scope}:${ref} uses unsupported local source ${path}`;
   diagnostics.push({ code: "UNSUPPORTED_CREDENTIAL_SOURCE", detail: reason });
   return { type: "manual", reason };
+}
+
+const defaultCredentialFiles = new Set([
+  ".fentaris/credentials.enc.json",
+  ".fentaris/auth/credentials.enc.json",
+]);
+
+function hasUnsupportedLocalFileOption(trailing: string): boolean {
+  if (!trailing.startsWith(",")) return false;
+  const fileMatch = /\bfile\s*:\s*["'`]([^"'`]+)["'`]/u.exec(trailing);
+  if (!fileMatch?.[1]) return false;
+  return !defaultCredentialFiles.has(fileMatch[1].trim());
 }
 
 function scanSubjectBlocks(source: string, kind: "group" | "user"): Array<{

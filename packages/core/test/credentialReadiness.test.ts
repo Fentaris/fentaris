@@ -70,6 +70,43 @@ describe("runtime credential readiness", () => {
     await app.close();
   });
 
+  it("treats whitespace-only environment credentials as unavailable", async () => {
+    process.env[envNames[3]!] = "   ";
+    const app = fentaris({
+      policy: Policy.allowAll(),
+      groups: [group({ id: "admins", users: [user("admin", { apiKeys: [credentialEnv(envNames[3]!)] })], policy: Policy.allowAll() })],
+    });
+    const exposure = new ProbeExposure();
+
+    const error = await app.listen(exposure).catch((caught: unknown) => caught) as { code?: string; context?: { requirements?: Array<{ locator: string }> } };
+    expect(error.code).toBe("FENTARIS_CREDENTIALS_UNAVAILABLE");
+    expect(exposure.listen).not.toHaveBeenCalled();
+  });
+
+  it("includes the credential file in readiness locators", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-readiness-"));
+    tempDirs.push(dir);
+    const file = join(dir, "credentials.enc.json");
+    await writeFile(file, JSON.stringify(FentarisAuth.encryptCredentials({ users: { admin: { apiKeys: ["hash"], credentials: {} } }, groups: {}, defaults: {} }, "correct-secret-key")));
+    const app = fentaris({
+      policy: Policy.allowAll(),
+      groups: [group({
+        id: "admins",
+        users: [user("admin", { apiKeys: [credentialJson("users.admin.apiKeys.0", { file, key: "wrong-secret-key" })] })],
+        policy: Policy.allowAll(),
+      })],
+    });
+    const exposure = new ProbeExposure();
+
+    const error = await app.listen(exposure).catch((caught: unknown) => caught) as {
+      code?: string;
+      context?: { requirements?: Array<{ locator: string }> };
+    };
+    expect(error.code).toBe("FENTARIS_CREDENTIALS_UNAVAILABLE");
+    expect(error.context?.requirements?.[0]?.locator).toBe(`${file}#users.admin.apiKeys.0`);
+    expect(exposure.listen).not.toHaveBeenCalled();
+  });
+
   it("sanitizes local decryption failures", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-readiness-"));
     tempDirs.push(dir);

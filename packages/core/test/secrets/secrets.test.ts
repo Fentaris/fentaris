@@ -97,6 +97,10 @@ describe("secrets", () => {
       version: 1,
       references: [{ ref: "github.token", scope: "default" }],
     });
+    expect(manifestsEqual(
+      { version: 1, references: [{ ref: "github.token", scope: "default" }] },
+      { version: 1, references: [{ ref: "github.token", scope: "default", source: { type: "local" } }] },
+    )).toBe(true);
   });
 
   it("unsets credentials", async () => {

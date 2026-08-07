@@ -1419,7 +1419,9 @@ export class McpProxy {
       } catch {
         unavailable.push({
           source: requirement.source.type,
-          locator: requirement.source.type === "env" ? requirement.source.name : requirement.source.path,
+          locator: requirement.source.type === "env"
+            ? requirement.source.name
+            : `${requirement.source.file ?? ".fentaris/credentials.enc.json"}#${requirement.source.path}`,
           usages: [...new Set(requirement.usages)].sort(),
         });
       }
@@ -3940,7 +3942,7 @@ function hasDeclaredApiKeys(groups: Group[]): boolean {
 function credentialReadinessKey(source: CredentialSource): string {
   return source.type === "env"
     ? `env:${source.name}`
-    : `json:${source.file ?? ""}:${source.path}:${source.keyEnv ?? ""}:${String(source.key ?? "")}`;
+    : `json:${source.file ?? ""}:${source.path}:${source.keyEnv ?? ""}:${source.key === undefined ? "key:env" : "key:explicit"}`;
 }
 
 function declaredApiKeyIdentityStrategy(groups: () => Group[]): IdentityStrategy | undefined {

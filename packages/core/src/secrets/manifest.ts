@@ -109,10 +109,24 @@ function sortManifestApiKeys(entries: SecretsManifestApiKey[]): SecretsManifestA
 
 /**
  * Compare two manifests for equality (order-insensitive).
+ * Missing reference `source` metadata is treated as `{ type: "local" }` so
+ * legacy version 1 manifests remain compatible with scanned manifests.
  * @pk
  */
 export function manifestsEqual(left: SecretsManifest, right: SecretsManifest): boolean {
-  return serializeManifest(left) === serializeManifest(right);
+  return serializeManifest(normalizeManifestForCompare(left)) === serializeManifest(normalizeManifestForCompare(right));
+}
+
+function normalizeManifestForCompare(manifest: SecretsManifest): SecretsManifest {
+  return {
+    version: 1,
+    references: manifest.references.map((entry) => ({
+      ...entry,
+      source: entry.source ?? { type: "local" },
+    })),
+    ...(manifest.envVars?.length ? { envVars: [...manifest.envVars] } : {}),
+    ...(manifest.apiKeys?.length ? { apiKeys: [...manifest.apiKeys] } : {}),
+  };
 }
 
 function sortManifestEntries(entries: SecretsManifestEntry[]): SecretsManifestEntry[] {
