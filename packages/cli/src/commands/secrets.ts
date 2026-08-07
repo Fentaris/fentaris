@@ -17,7 +17,7 @@ import { section, style } from "../ui/format.js";
 export async function runSecrets(command: CliCommand, runtime: Runtime): Promise<number | void> {
   const [action, reference] = command.args;
   if (!action) {
-    throw new Error("Usage: fentaris secrets <set|list|unset|manifest|doctor> ...");
+    throw new Error("Usage: fentaris secrets <setup|set|list|unset|manifest|doctor> ...");
   }
 
   if (action === "set") {

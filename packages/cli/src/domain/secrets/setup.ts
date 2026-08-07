@@ -1,7 +1,16 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { decodeSecretScope, serializeManifest, type SecretRef, type SecretsManifest, type SecretsManifestApiKey, type SecretsManifestEntry } from "@fentaris/core";
+import {
+  decodeSecretScope,
+  manifestsEqual,
+  parseManifest,
+  serializeManifest,
+  type SecretRef,
+  type SecretsManifest,
+  type SecretsManifestApiKey,
+  type SecretsManifestEntry,
+} from "@fentaris/core";
 import type { CliOptions, ProjectDiscovery, Runtime } from "../../shared/types.js";
 import { exists } from "../../shared/utils.js";
 import { appendProjectEnvValues, loadProjectEnv } from "../project/env.js";
@@ -36,6 +45,8 @@ export async function runGuidedSecretsSetup(
   const machine = options.json === true || runtime.nonInteractive === true;
   const env = await loadProjectEnv(project.root, runtime.env);
   const storeExists = await exists(credentialsPath(project));
+  const targetManifest = manifestPath(project);
+  const manifestExists = await exists(targetManifest);
 
   if (machine && storeExists && !(typeof options.key === "string" ? options.key : env.FENTARIS_AUTH_KEY)?.trim()) {
     return emitIncomplete(runtime, options, ["FENTARIS_AUTH_KEY"], [{
@@ -64,6 +75,12 @@ export async function runGuidedSecretsSetup(
   const plannedEnvKeys = missingApiKeys.filter((entry) => entry.source.type === "env");
   const remaining = [...unsupported];
   const nextActions = nextActionsForMissing(missingReferences, missingApiKeys);
+  const plannedRemaining = [
+    ...needsPrompt.map(referenceLabel),
+    ...plannedLocalKeys.map((entry) => `apiKey:${entry.userId}`),
+    ...plannedEnvKeys.map((entry) => `env:${entry.source.type === "env" ? entry.source.name : entry.userId}`),
+    ...remaining,
+  ];
 
   if (!machine) {
     emitPlan(runtime, missingReferences, missingApiKeys, scan.diagnostics.map((entry) => entry.detail));
@@ -74,15 +91,10 @@ export async function runGuidedSecretsSetup(
       createdEncryptionKey: false,
       generatedApiKeys: [],
       configured: [],
-      remaining: [
-        ...needsPrompt.map(referenceLabel),
-        ...plannedLocalKeys.map((entry) => `apiKey:${entry.userId}`),
-        ...plannedEnvKeys.map((entry) => `env:${entry.source.type === "env" ? entry.source.name : entry.userId}`),
-        ...remaining,
-      ],
+      remaining: plannedRemaining,
     };
-    emitResult(runtime, options, result, ["Dry run: no files were changed."], nextActions);
-    return remaining.length > 0 ? 1 : 0;
+    emitResult(runtime, options, result, ["Dry run: no files were changed."], nextActions, { printGeneratedKeys: true });
+    return plannedRemaining.length > 0 ? 1 : 0;
   }
 
   if (machine && (needsPrompt.length > 0 || remaining.length > 0)) {
@@ -90,25 +102,40 @@ export async function runGuidedSecretsSetup(
   }
   if (remaining.length > 0) return emitIncomplete(runtime, options, remaining, nextActions);
 
+  const credentialWork = needsPrompt.length > 0 || plannedLocalKeys.length > 0 || plannedEnvKeys.length > 0;
+  if (!credentialWork) {
+    if (!manifestExists) {
+      if (options.yes !== true) {
+        const confirmed = await confirmSetup(runtime, options, machine);
+        if (confirmed !== true) return confirmed;
+      }
+      await writeManifest(targetManifest, manifest);
+      emitResult(runtime, options, { createdEncryptionKey: false, generatedApiKeys: [], configured: [], remaining: [] }, [], [], { printGeneratedKeys: true });
+      return 0;
+    }
+    emitResult(runtime, options, { createdEncryptionKey: false, generatedApiKeys: [], configured: [], remaining: [] }, [], [], { printGeneratedKeys: true });
+    return 0;
+  }
+
   const promptedValues = new Map<SecretsManifestEntry, string>();
   if (!machine) {
     for (const entry of needsPrompt) {
-      promptedValues.set(entry, await runtime.prompt.text(`${entry.ref} (${entry.scope})`, { secret: true }));
+      const value = (await runtime.prompt.text(`${entry.ref} (${entry.scope})`, { secret: true })).trim();
+      if (!value) {
+        return emitIncomplete(runtime, options, [referenceLabel(entry)], [{
+          description: `Provide a non-empty value for ${referenceLabel(entry)}`,
+          command: entry.source?.type === "env"
+            ? `Set ${entry.source.name} in .env or the deployment environment`
+            : `fentaris secrets set ${entry.ref}${scopeFlag(entry.scope)}`,
+        }]);
+      }
+      promptedValues.set(entry, value);
     }
   }
 
-  const writeNeeded = needsPrompt.length > 0 || plannedLocalKeys.length > 0 || plannedEnvKeys.length > 0 || !(await exists(manifestPath(project)));
-  if (writeNeeded && options.yes !== true) {
-    if (machine) {
-      return emitFailure(runtime, options, "SECRETS_SETUP_CONFIRMATION_REQUIRED", "Pass --yes to apply the generated setup plan.", [{
-        description: "Apply the setup plan",
-        command: "fentaris secrets setup --yes --json",
-      }]);
-    }
-    if (!(await runtime.prompt.confirm("Apply this secrets setup plan?"))) {
-      emitResult(runtime, options, { createdEncryptionKey: false, generatedApiKeys: [], configured: [], remaining: [] }, ["Setup cancelled."], []);
-      return 0;
-    }
+  if (options.yes !== true) {
+    const confirmed = await confirmSetup(runtime, options, machine);
+    if (confirmed !== true) return confirmed;
   }
 
   const generatedApiKeys: GeneratedApiKey[] = [];
@@ -116,12 +143,14 @@ export async function runGuidedSecretsSetup(
   const envWrites: Record<string, string> = {};
   let createdEncryptionKey = false;
   let writeBackend: Awaited<ReturnType<typeof openLocalSecretsBackend>> | undefined;
+  const human = options.json !== true;
 
   if (needsPrompt.some((entry) => entry.source?.type !== "env") || plannedLocalKeys.length > 0) {
     const before = env.FENTARIS_AUTH_KEY?.trim();
     writeBackend = await openLocalSecretsBackend(project, runtime, options, { createKeyIfMissing: true });
     createdEncryptionKey = !before && !(typeof options.key === "string" && options.key.trim());
     if (!(await writeBackend.credentialsExist())) await writeBackend.initEmpty();
+    if (human && createdEncryptionKey) runtime.out.log("✓ Created project encryption key in .env");
   }
 
   for (const entry of needsPrompt) {
@@ -130,6 +159,7 @@ export async function runGuidedSecretsSetup(
     if (entry.source?.type === "env") envWrites[entry.source.name] = value;
     else await writeBackend?.set(entry.ref, value, decodeSecretScope(entry.scope));
     configured.push(referenceLabel(entry));
+    if (human) runtime.out.log(`✓ Configured ${referenceLabel(entry)}`);
   }
 
   for (const requirement of plannedLocalKeys) {
@@ -137,7 +167,10 @@ export async function runGuidedSecretsSetup(
     for (let index = existingCount; index < (requirement.count ?? 1); index += 1) {
       const value = randomBytes(32).toString("base64url");
       await writeBackend?.addUserApiKey(requirement.userId, value);
-      generatedApiKeys.push({ userId: requirement.userId, value, source: "local" });
+      const generated: GeneratedApiKey = { userId: requirement.userId, value, source: "local" };
+      generatedApiKeys.push(generated);
+      // Print immediately after a successful store write so a later failure cannot hide the only plaintext copy.
+      if (human) runtime.out.log(`✓ Generated API key for ${generated.userId}: ${generated.value}`);
     }
   }
 
@@ -149,11 +182,49 @@ export async function runGuidedSecretsSetup(
   }
 
   await appendProjectEnvValues(project.root, envWrites);
-  await mkdir(path.dirname(manifestPath(project)), { recursive: true });
-  await writeFile(manifestPath(project), serializeManifest(manifest));
+  for (const generated of generatedApiKeys.filter((entry) => entry.source === "env")) {
+    if (human) runtime.out.log(`✓ Generated API key for ${generated.userId}: ${generated.value}`);
+  }
 
-  emitResult(runtime, options, { createdEncryptionKey, generatedApiKeys, configured, remaining: [] }, [], []);
+  const shouldWriteManifest = !manifestExists || !(await manifestMatches(targetManifest, manifest));
+  if (shouldWriteManifest) await writeManifest(targetManifest, manifest);
+
+  emitResult(
+    runtime,
+    options,
+    { createdEncryptionKey, generatedApiKeys, configured, remaining: [] },
+    [],
+    [],
+    { printGeneratedKeys: !human },
+  );
   return 0;
+}
+
+async function confirmSetup(runtime: Runtime, options: CliOptions, machine: boolean): Promise<true | number> {
+  if (machine) {
+    return emitFailure(runtime, options, "SECRETS_SETUP_CONFIRMATION_REQUIRED", "Pass --yes to apply the generated setup plan.", [{
+      description: "Apply the setup plan",
+      command: "fentaris secrets setup --yes --json",
+    }]);
+  }
+  if (!(await runtime.prompt.confirm("Apply this secrets setup plan?"))) {
+    emitResult(runtime, options, { createdEncryptionKey: false, generatedApiKeys: [], configured: [], remaining: [] }, ["Setup cancelled."], [], { printGeneratedKeys: true });
+    return 0;
+  }
+  return true;
+}
+
+async function manifestMatches(filePath: string, expected: SecretsManifest): Promise<boolean> {
+  try {
+    return manifestsEqual(parseManifest(JSON.parse(await readFile(filePath, "utf8")) as unknown), expected);
+  } catch {
+    return false;
+  }
+}
+
+async function writeManifest(filePath: string, manifest: SecretsManifest): Promise<void> {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, serializeManifest(manifest));
 }
 
 function referenceSatisfied(entry: SecretsManifestEntry, stored: SecretRef[], env: NodeJS.ProcessEnv): boolean {
@@ -178,14 +249,20 @@ function referenceLabel(entry: SecretsManifestEntry): string {
   return entry.source?.type === "env" ? `env:${entry.source.name}` : `${entry.scope}:${entry.ref}`;
 }
 
+function scopeFlag(scope: string): string {
+  if (scope === "default") return "";
+  if (scope.startsWith("user:")) return ` --user ${scope.slice(5)}`;
+  if (scope.startsWith("group:")) return ` --group ${scope.slice(6)}`;
+  return "";
+}
+
 function nextActionsForMissing(references: SecretsManifestEntry[], apiKeys: SecretsManifestApiKey[]): NextAction[] {
   const actions: NextAction[] = [];
   for (const entry of references) {
     if (entry.source?.type === "env") {
       actions.push({ description: `Provide ${entry.source.name}`, command: `Set ${entry.source.name} in .env or the deployment environment` });
     } else if (entry.source?.type !== "manual") {
-      const suffix = entry.scope === "default" ? "" : entry.scope.startsWith("user:") ? ` --user ${entry.scope.slice(5)}` : ` --group ${entry.scope.slice(6)}`;
-      actions.push({ description: `Store ${entry.ref}`, command: `fentaris secrets set ${entry.ref}${suffix}` });
+      actions.push({ description: `Store ${entry.ref}`, command: `fentaris secrets set ${entry.ref}${scopeFlag(entry.scope)}` });
     }
   }
   for (const entry of apiKeys) {
@@ -209,15 +286,26 @@ function emitFailure(runtime: Runtime, options: CliOptions, code: string, messag
   return 1;
 }
 
-function emitResult(runtime: Runtime, options: CliOptions, result: SecretsSetupResult, warnings: string[], nextActions: NextAction[]): void {
+function emitResult(
+  runtime: Runtime,
+  options: CliOptions,
+  result: SecretsSetupResult,
+  warnings: string[],
+  nextActions: NextAction[],
+  behavior: { printGeneratedKeys: boolean },
+): void {
   if (options.json === true) {
     runtime.out.log(JSON.stringify({ ok: true, data: result, pagination: null, warnings, nextActions }, null, 2));
     return;
   }
-  if (result.createdEncryptionKey) runtime.out.log("✓ Created project encryption key in .env");
-  for (const entry of result.configured) runtime.out.log(`✓ Configured ${entry}`);
-  for (const generated of result.generatedApiKeys) runtime.out.log(`✓ Generated API key for ${generated.userId}: ${generated.value}`);
-  if (result.configured.length === 0 && result.generatedApiKeys.length === 0 && warnings.length === 0) runtime.out.log("✓ All required credentials are configured.");
+  if (behavior.printGeneratedKeys) {
+    if (result.createdEncryptionKey) runtime.out.log("✓ Created project encryption key in .env");
+    for (const entry of result.configured) runtime.out.log(`✓ Configured ${entry}`);
+    for (const generated of result.generatedApiKeys) runtime.out.log(`✓ Generated API key for ${generated.userId}: ${generated.value}`);
+  }
+  if (result.configured.length === 0 && result.generatedApiKeys.length === 0 && warnings.length === 0) {
+    runtime.out.log("✓ All required credentials are configured.");
+  }
   for (const warning of warnings) runtime.out.log(warning);
 }
 

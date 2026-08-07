@@ -109,7 +109,7 @@ export function isCredentialSource(value: unknown): value is CredentialSource {
 
 export async function resolveCredentialSource(source: CredentialSource): Promise<string> {
   if (source.type === "env") {
-    const value = process.env[source.name];
+    const value = process.env[source.name]?.trim();
     if (!value) {
       throw new Error(`Missing credential environment variable "${source.name}"`);
     }
@@ -119,7 +119,7 @@ export async function resolveCredentialSource(source: CredentialSource): Promise
 
   const credentials = await loadEncryptedJson(source);
   const value = getPath(credentials, source.path);
-  if (typeof value !== "string" || !value) {
+  if (typeof value !== "string" || !value.trim()) {
     throw new Error(`Missing credential JSON value "${source.path}"`);
   }
 

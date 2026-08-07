@@ -23,7 +23,7 @@ export FENTARIS_AUTH_KEY="<local-encryption-key>"
 
 `fentaris doctor` checks whether this variable is present before verifying encrypted credentials when a local credential store exists.
 
-Local `fentaris secrets` and `fentaris auth api-key` commands resolve the key in this order: `--key`, the exported process environment, then the discovered project `.env`. A shell export overrides the project `.env`.
+Local `fentaris secrets` and `fentaris auth api-key` commands resolve the key in this order: `--key`, the exported process environment, then the discovered project `.env`. A shell export overrides the project `.env`. When a local credential store already exists and no key is configured, interactive commands prompt for the encryption key.
 
 On the first command that writes an encrypted local credential store, the CLI generates a random project key in `.env` when no key is configured. Read-only commands do not create a key, and projects without encrypted credentials do not require one. If `credentials.enc.json` already exists, Fentaris never replaces its missing key automatically; provide the original key so the store remains recoverable.
 
