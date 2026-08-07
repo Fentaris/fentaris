@@ -13,7 +13,7 @@ Lint/typecheck/build/test are the root scripts in `package.json` and mirror `.gi
 
 ### Running the product end-to-end
 The canonical runnable proxy is `examples/team-governed-proxy` (follow its `README.md`). Non-obvious details:
-- It is a **nested pnpm workspace** with its own lockfile that consumes the *published* `@fentaris/*` packages (not the workspace source), so its checks work independently of the root build.
+- It is a **nested pnpm workspace** with its own lockfile that consumes the *published* `@fentaris/*` packages (not the workspace source), so its checks work independently of the root build. It is excluded from the root `pnpm-workspace.yaml` (`!examples/team-governed-proxy`) and Changesets `ignore` so version PRs cannot desync the root lockfile before those versions exist on npm.
 - Start it with `pnpm dev` from that directory; it listens on `http://127.0.0.1:4100/mcp` (the CLI-generated default is port 4000).
 - Governance/auth needs `FENTARIS_AUTH_KEY` exported in the same shell to unlock the local encrypted store, then provision an API key (`pnpm exec fentaris auth api-key add reader --generate --non-interactive`). The generated key is shown once. Drive the endpoint with `curl` or `npx @modelcontextprotocol/inspector` using the `x-fentaris-api-key` header.
 - The `specification` upstream is a public remote MCP server; its `specification__*` tools only appear in `tools/list` when outbound network to `mcp.specification.website` is reachable. Local `workspace__*` tools always work offline.

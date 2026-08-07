@@ -1,5 +1,21 @@
 # @fentaris/core
 
+## 3.0.0
+
+### Major Changes
+
+- 1ea9154: Validate every declared runtime credential before opening a transport, and add guided, idempotent project credential and API-key setup through `fentaris secrets setup`.
+
+### Minor Changes
+
+- e327f03: Add opt-in Edge Control discovery, declarative session selection, isolated explicit calls, bounded multi-device fan-out, distributed adapter contracts, and orchestration observability.
+- c474ee6: Add the integrated Edge device authority, authorization and enrollment routes, protected local approval channel, automatic desired-state reconciliation, gateway capability bridge, lifecycle health, CLI approval workflow, and real-agent loopback support.
+- 4d8d03c: Add immutable, consent-gated managed MCP installation on Edge devices with protocol-v3 lifecycle correlation, protected local operations, health and inventory state, recovery, rollback, and safe cleanup.
+
+### Patch Changes
+
+- 43e4fdd: Bump `@modelcontextprotocol/sdk` and pin patched transitive dependencies to clear known security advisories.
+
 ## 2.3.1
 
 ### Patch Changes
