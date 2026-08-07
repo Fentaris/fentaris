@@ -1,18 +1,20 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { text as readStreamText } from "node:stream/consumers";
-import { manifestFromSecretRefs, manifestsEqual, parseManifest, serializeManifest } from "@fentaris/core";
+import { manifestsEqual, parseManifest, serializeManifest, type SecretsManifest } from "@fentaris/core";
 import { secretScope } from "../domain/auth/local-store.js";
 import { resolveSubjectId } from "../domain/auth/subjects.js";
 import { credentialsPath, manifestPath, openLocalSecretsBackend, scopeFromOptions } from "../domain/secrets/backend.js";
-import { buildListRows, getSecretsDoctorIssues, loadRequiredReferences } from "../domain/secrets/doctor.js";
+import { buildListRows, getSecretsDoctorIssues, loadRequiredManifest, loadRequiredReferences } from "../domain/secrets/doctor.js";
 import { scanEntrypointForSecrets } from "../domain/secrets/manifest-scan.js";
+import { runGuidedSecretsSetup } from "../domain/secrets/setup.js";
+import { loadProjectEnv } from "../domain/project/env.js";
 import { discoverSecretsProject } from "../domain/project/project.js";
 import type { CliCommand, CliOptions, Runtime } from "../shared/types.js";
 import { exists } from "../shared/utils.js";
 import { section, style } from "../ui/format.js";
 
-export async function runSecrets(command: CliCommand, runtime: Runtime): Promise<void> {
+export async function runSecrets(command: CliCommand, runtime: Runtime): Promise<number | void> {
   const [action, reference] = command.args;
   if (!action) {
     throw new Error("Usage: fentaris secrets <set|list|unset|manifest|doctor> ...");
@@ -21,6 +23,13 @@ export async function runSecrets(command: CliCommand, runtime: Runtime): Promise
   if (action === "set") {
     await runSecretsSet(command, reference, runtime);
     return;
+  }
+  if (action === "setup") {
+    const project = await discoverSecretsProject(runtime.cwd, {
+      entrypoint: typeof command.options.entrypoint === "string" ? command.options.entrypoint : undefined,
+      requireEntrypoint: true,
+    });
+    return runGuidedSecretsSetup(project, runtime, command.options);
   }
   if (action === "list") {
     await runSecretsList(command, runtime);
@@ -199,8 +208,8 @@ async function runSecretsList(command: CliCommand, runtime: Runtime): Promise<vo
   const project = await discoverSecretsProject(runtime.cwd);
   const backend = await openLocalSecretsBackend(project, runtime, command.options);
   const stored = await backend.listRefs();
-  const required = await loadRequiredReferences(project);
-  const rows = buildListRows(required, stored);
+  const required = await loadRequiredManifest(project);
+  const rows = buildListRows(required, stored, await loadProjectEnv(project.root, runtime.env));
 
   if (command.options.json === true) {
     runtime.out.log(JSON.stringify({ provider: "local", secrets: rows }, null, 2));
@@ -231,15 +240,12 @@ async function runSecretsManifest(command: CliCommand, runtime: Runtime): Promis
   }
 
   const scanned = await scanEntrypointForSecrets(entrypoint);
-  const manifest = manifestFromSecretRefs(
-    scanned.references.map((entry) => ({
-      ref: entry.ref,
-      scope: decodeManifestScope(entry.scope),
-      kind: "credential" as const,
-      count: 1,
-    })),
-    scanned.envVars,
-  );
+  const manifest: SecretsManifest = {
+    version: 1,
+    references: scanned.references,
+    ...(scanned.envVars.length ? { envVars: scanned.envVars } : {}),
+    ...(scanned.apiKeys.length ? { apiKeys: scanned.apiKeys } : {}),
+  };
   const target = manifestPath(project);
 
   if (command.options.check === true) {
@@ -259,7 +265,10 @@ async function runSecretsManifest(command: CliCommand, runtime: Runtime): Promis
   await writeFile(target, serializeManifest(manifest));
   section(runtime, "Secrets manifest");
   runtime.out.log(`  ${style.pass(`Wrote ${path.relative(project.root, target)}`)}`);
-  runtime.out.log(`  ${style.hint(`${manifest.references.length} credential reference(s)${manifest.envVars?.length ? `, ${manifest.envVars.length} env var(s)` : ""}.`)}`);
+  runtime.out.log(`  ${style.hint(`${manifest.references.length} credential reference(s)${manifest.apiKeys?.length ? `, ${manifest.apiKeys.length} API-key requirement(s)` : ""}${manifest.envVars?.length ? `, ${manifest.envVars.length} env var(s)` : ""}.`)}`);
+  for (const diagnostic of scanned.diagnostics) {
+    runtime.out.log(`  ${style.warn(diagnostic.detail)}`);
+  }
 }
 
 function parseManifestJson(source: string, filePath: string): unknown {
@@ -296,17 +305,4 @@ async function runSecretsDoctor(command: CliCommand, runtime: Runtime): Promise<
   if (issues.some((issue) => issue.status === "fail") || (command.options.strict === true && issues.some((issue) => issue.status === "warn"))) {
     throw new Error("Secrets doctor reported issues.");
   }
-}
-
-function decodeManifestScope(scope: string) {
-  if (scope === "default") {
-    return { kind: "default" as const };
-  }
-  if (scope.startsWith("user:")) {
-    return { kind: "user" as const, id: scope.slice("user:".length) };
-  }
-  if (scope.startsWith("group:")) {
-    return { kind: "group" as const, id: scope.slice("group:".length) };
-  }
-  return { kind: "default" as const };
 }

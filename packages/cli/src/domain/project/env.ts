@@ -31,6 +31,17 @@ export async function ensureProjectAuthKey(root: string, baseEnv: NodeJS.Process
   return { env: { ...env, FENTARIS_AUTH_KEY: key }, key, created: true };
 }
 
+export async function appendProjectEnvValues(root: string, values: Record<string, string>): Promise<void> {
+  const entries = Object.entries(values);
+  if (entries.length === 0) return;
+  const filePath = path.join(root, ".env");
+  const contents = (await exists(filePath)) ? await readFile(filePath, "utf8") : "";
+  const prefix = contents.length > 0 && !contents.endsWith("\n") ? "\n" : "";
+  const lines = entries.map(([name, value]) => `${name}=${formatDotEnvValue(value)}`).join("\n");
+  await appendFile(filePath, `${prefix}${lines}\n`, { mode: 0o600 });
+  if (process.platform !== "win32") await chmod(filePath, 0o600);
+}
+
 export function parseDotEnv(contents: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const rawLine of contents.split(/\r?\n/)) {
@@ -67,4 +78,8 @@ function parseDotEnvValue(value: string): string {
 
   const commentIndex = value.search(/\s#/);
   return (commentIndex === -1 ? value : value.slice(0, commentIndex)).trim();
+}
+
+function formatDotEnvValue(value: string): string {
+  return JSON.stringify(value);
 }

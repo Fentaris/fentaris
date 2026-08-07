@@ -77,8 +77,7 @@ async function route(command: CliCommand, runtime: Runtime): Promise<number | vo
   }
 
   if (command.name === "secrets") {
-    await runSecrets(command, runtime);
-    return;
+    return await runSecrets(command, runtime);
   }
 
   if (command.name === "tools") {
