@@ -1,12 +1,12 @@
 ## 1. Core Installation Contracts
 
-- [ ] 1.1 Add versioned installation recipe, immutable source, provider, permission, verification, output, retention, and cleanup types to `@fentaris/core`
-- [ ] 1.2 Implement canonical installation recipe serialization, digest calculation, parsing, and strict validation
-- [ ] 1.3 Add public `edge.install` builders for managed packages, Python, binary/archive, container, manual, and custom providers
-- [ ] 1.4 Add serializable installed-artifact runtime references and validate them against declared installation outputs
-- [ ] 1.5 Add detailed installation/deployment lifecycle states, stable reason codes, retryability, attempt metadata, and normalized compatibility readiness
-- [ ] 1.6 Add installation provider, source resolver, attempt store, approval store, lifecycle store, artifact store, and mutation-lock adapter contracts
-- [ ] 1.7 Add deterministic in-memory reference adapters for the new core contracts and expose single-process readiness warnings
+- [x] 1.1 Add versioned installation recipe, immutable source, provider, permission, verification, output, retention, and cleanup types to `@fentaris/core`
+- [x] 1.2 Implement canonical installation recipe serialization, digest calculation, parsing, and strict validation
+- [x] 1.3 Add public `edge.install` builders for managed packages, Python, binary/archive, container, manual, and custom providers
+- [x] 1.4 Add serializable installed-artifact runtime references and validate them against declared installation outputs
+- [x] 1.5 Add detailed installation/deployment lifecycle states, stable reason codes, retryability, attempt metadata, and normalized compatibility readiness
+- [x] 1.6 Add installation provider, source resolver, attempt store, approval store, lifecycle store, artifact store, and mutation-lock adapter contracts
+- [x] 1.7 Add deterministic in-memory reference adapters for the new core contracts and expose single-process readiness warnings
 
 ## 2. Desired State and Protocol
 
