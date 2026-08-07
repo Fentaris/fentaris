@@ -66,6 +66,13 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
           host: "127.0.0.1",
           path: input.proxyPath,
           authDir,
+          edge: {
+            controlPlane: {
+              enabled: false,
+              mode: "local",
+              stateDir: "edge-control-plane",
+            },
+          },
         },
         null,
         2,

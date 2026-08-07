@@ -75,6 +75,7 @@ const edgeCommandSpec: CliCommandSpec = {
     title: "Commands",
     commands: [
       { name: "join", summary: "Enroll this computer and configure persistent operation." },
+      { name: "approve", summary: "Approve an exact pending local Edge authorization code." },
       { name: "run", summary: "Run the enrolled Edge agent in the foreground." },
       { name: "service", summary: "Manage the local persistent Edge service." },
       { name: "list", summary: "List policy-visible Edge devices." },
@@ -99,6 +100,19 @@ const edgeCommandSpec: CliCommandSpec = {
         { name: "tag", valueName: "TAG", repeatable: true, description: "Add a descriptive tag. Repeat for multiple tags." },
         { name: "service", description: "Require persistent service installation." },
         { name: "no-service", description: "Enroll without installing a persistent service." },
+        ...edgeJsonOptions,
+      ],
+    },
+    approve: {
+      name: "approve", path: ["edge", "approve"], description: "Approve an exact pending Edge authorization through the protected local operator channel.",
+      details: ["Example: fentaris edge approve ABCD-EFGH --subject alice --tenant default --yes --json"],
+      usage: "fentaris edge approve [OPTIONS] <user-code>",
+      arguments: [{ name: "user-code", required: true, description: "Exact short-lived code displayed by the joining Edge." }],
+      options: [
+        { name: "subject", valueName: "SUBJECT", description: "Required Fentaris subject receiving the device grant." },
+        { name: "tenant", valueName: "TENANT", description: "Tenant of the pending authorization. [default: default]" },
+        { name: "actor", valueName: "ACTOR", description: "Auditable local operator identity. [default: current OS user]" },
+        { name: "yes", description: "Confirm this exact approval without prompting." },
         ...edgeJsonOptions,
       ],
     },

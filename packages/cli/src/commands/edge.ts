@@ -15,6 +15,8 @@ import {
   type EdgeServiceOperation,
 } from "@fentaris/edge";
 import type { CliCommand, CliOptions, Runtime } from "../shared/types.js";
+import { EdgeLocalOperatorClient, readEdgeLocalOperatorEndpoint } from "@fentaris/core";
+import { discoverProject } from "../domain/project/project.js";
 
 export interface EdgeCliNextAction {
   readonly description: string;
@@ -52,6 +54,7 @@ export interface EdgeOperatorBackend {
   disconnect(device: string): Promise<EdgeCliEnvelope<unknown>>;
   revoke(device: string): Promise<EdgeCliEnvelope<unknown>>;
   installation(action: EdgeInstallationAction, deploymentId: string | undefined, options: { readonly cleanup?: boolean }): Promise<EdgeCliEnvelope<unknown>>;
+  approve(userCode: string, decision: { readonly tenantId: string; readonly subjectId: string; readonly actorId: string; readonly approvedAt: number }): Promise<EdgeCliEnvelope<unknown>>;
 }
 
 export type EdgeInstallationAction = "status" | "review" | "approve" | "deny" | "retry" | "revoke" | "cleanup";
@@ -91,6 +94,26 @@ export async function runEdge(
       case "run":
         envelope = await backend.run();
         break;
+      case "approve": {
+        const userCode = requiredArg(command.args[1], "edge approve requires a user code");
+        const subjectId = stringOption(command.options, "subject");
+        if (!subjectId) {
+          return printFailure(runtime, command.options, "EDGE_CLI_USAGE", "edge approve requires --subject.", 2, [{
+            description: "Approve for an explicit Fentaris subject",
+            command: `fentaris edge approve ${shellArg(userCode)} --subject user:<name> --yes --json`,
+          }]);
+        }
+        const tenantId = stringOption(command.options, "tenant") ?? "default";
+        const actorId = stringOption(command.options, "actor") ?? runtime.env.USER ?? "local-operator";
+        if (!await confirmApproval(runtime, command.options, userCode, subjectId, tenantId)) {
+          return printFailure(runtime, command.options, "CONFIRMATION_REQUIRED", "Edge authorization approval was not confirmed.", 2, [{
+            description: "Confirm this exact approval non-interactively",
+            command: `fentaris edge approve ${shellArg(userCode)} --subject ${shellArg(subjectId)} --tenant ${shellArg(tenantId)} --yes --json`,
+          }]);
+        }
+        envelope = await backend.approve(userCode, { tenantId, subjectId, actorId, approvedAt: Date.now() });
+        break;
+      }
       case "service":
         envelope = await backend.service(requiredServiceOperation(command.args[1]));
         break;
@@ -285,6 +308,37 @@ export class DefaultEdgeOperatorBackend implements EdgeOperatorBackend {
     return response.ok ? success(response.data) : failure(response.error?.code ?? "EDGE_COMMAND_FAILED", response.error?.message ?? "Installation control failed.");
   }
 
+  async approve(
+    userCode: string,
+    decision: { readonly tenantId: string; readonly subjectId: string; readonly actorId: string; readonly approvedAt: number },
+  ): Promise<EdgeCliEnvelope<unknown>> {
+    try {
+      const project = await discoverProject(this.runtime.cwd);
+      const stateDir = project.config.edge?.controlPlane?.stateDir ?? "edge-control-plane";
+      const endpoint = await readEdgeLocalOperatorEndpoint(path.resolve(project.root, project.config.authDir, stateDir));
+      const response = await new EdgeLocalOperatorClient(endpoint).request({ command: "approve", userCode, decision });
+      if (!response.ok) {
+        const code = response.error?.message.toLowerCase().includes("pending")
+          ? "EDGE_AUTHORIZATION_CODE_EXPIRED"
+          : normalizeControlPlaneErrorCode(response.error?.code);
+        return failure(code, response.error?.message ?? "Local Edge approval failed.");
+      }
+      return success({
+        status: "approved",
+        userCode,
+        tenantId: decision.tenantId,
+        subjectId: decision.subjectId,
+        actorId: decision.actorId,
+      }, null, [], [{ description: "Wait for the Edge to finish enrollment", command: "fentaris edge status --json" }]);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT" || code === "ECONNREFUSED") {
+        return failure("LOCAL_EDGE_AUTHORITY_UNAVAILABLE", "The protected local Edge operator channel is unavailable.");
+      }
+      throw error;
+    }
+  }
+
   private async remote(method: string, route: string, body?: unknown, query: EdgeRemoteQuery = {}): Promise<EdgeCliEnvelope<unknown>> {
     const base = requiredEnvironment(this.runtime.env, "FENTARIS_EDGE_CONTROL_PLANE_URL");
     const url = new URL(route, base.endsWith("/") ? base : `${base}/`);
@@ -457,6 +511,28 @@ function exitCodeFor(code: string): number {
   if (/UNAVAILABLE|CAPACITY/.test(code)) return 4;
   if (/CONFLICT/.test(code)) return 5;
   return 1;
+}
+
+async function confirmApproval(
+  runtime: Runtime,
+  options: CliOptions,
+  userCode: string,
+  subjectId: string,
+  tenantId: string,
+): Promise<boolean> {
+  if (options.yes === true) return true;
+  if (runtime.nonInteractive) return false;
+  return runtime.prompt.confirm(`Approve Edge code "${userCode}" for subject "${subjectId}" in tenant "${tenantId}"?`);
+}
+
+function normalizeControlPlaneErrorCode(code: string | undefined): string {
+  switch (code) {
+    case "expired_token": return "EDGE_AUTHORIZATION_CODE_EXPIRED";
+    case "access_denied": return "EDGE_JOIN_DENIED";
+    case "unauthorized": return "EDGE_DEVICE_REVOKED";
+    case "invalid_request": return "EDGE_CONTROL_PLANE_INVALID_CONFIGURATION";
+    default: return "EDGE_COMMAND_FAILED";
+  }
 }
 
 function shellArg(value: string): string {

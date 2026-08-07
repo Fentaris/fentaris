@@ -73,6 +73,15 @@ export type ProjectConfig = {
   host?: string;
   path: string;
   authDir: string;
+  edge?: {
+    controlPlane?: {
+      enabled?: boolean;
+      mode?: "local" | "managed";
+      basePath?: string;
+      publicOrigin?: string;
+      stateDir?: string;
+    };
+  };
   secrets?: {
     provider?: "local";
   };

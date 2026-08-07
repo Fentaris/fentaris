@@ -1,5 +1,5 @@
 import { constants as fsConstants } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { FentarisAuth } from "@fentaris/core";
@@ -70,6 +70,9 @@ export async function getDoctorResults(runtime: Runtime, options: boolean | Doct
     results.push(...await authResults(project.discovery, runtime, { strict: normalized.strict }));
     if (normalized.runtime) {
       results.push(await runtimeEndpointResult(project.discovery, runtime, normalized.timeoutMs));
+      if (project.discovery.config.edge?.controlPlane?.enabled) {
+        results.push(await edgeControlPlaneEndpointResult(project.discovery, normalized.timeoutMs));
+      }
     } else {
       results.push(await portResult(project.discovery.config.port));
     }
@@ -339,6 +342,7 @@ async function readAndValidateProjectConfig(configPath: string, root: string): P
   const port = portField(raw, results);
   const proxyPath = proxyPathField(raw, results);
   const configuredAuthDir = relativePathField(raw, "authDir", root, results);
+  const edgeConfig = await edgeControlPlaneField(raw, proxyPath, configuredAuthDir, root, results);
 
   if (results.some((result) => result.status === "fail")) {
     return { results };
@@ -352,6 +356,7 @@ async function readAndValidateProjectConfig(configPath: string, root: string): P
       port,
       path: proxyPath,
       authDir: configuredAuthDir,
+      ...(edgeConfig ? { edge: { controlPlane: edgeConfig } } : {}),
     },
     results: [
       {
@@ -363,6 +368,102 @@ async function readAndValidateProjectConfig(configPath: string, root: string): P
       ...results,
     ],
   };
+}
+
+async function edgeControlPlaneField(
+  raw: Record<string, unknown>,
+  proxyPath: string,
+  configuredAuthDir: string,
+  root: string,
+  results: HealthResult[],
+): Promise<NonNullable<ProjectConfig["edge"]>["controlPlane"] | undefined> {
+  if (raw.edge === undefined) return undefined;
+  if (!raw.edge || typeof raw.edge !== "object" || Array.isArray(raw.edge)) {
+    results.push({ group: "Edge", label: "control plane config", status: "fail", detail: "edge must be an object." });
+    return undefined;
+  }
+  const controlPlane = (raw.edge as Record<string, unknown>).controlPlane;
+  if (controlPlane === undefined) return undefined;
+  if (!controlPlane || typeof controlPlane !== "object" || Array.isArray(controlPlane)) {
+    results.push({ group: "Edge", label: "control plane config", status: "fail", detail: "edge.controlPlane must be an object." });
+    return undefined;
+  }
+  const value = controlPlane as Record<string, unknown>;
+  const enabled = value.enabled === true;
+  const mode = value.mode === "managed" ? "managed" : "local";
+  const basePath = typeof value.basePath === "string" ? value.basePath : "/_fentaris/edge";
+  const stateDir = typeof value.stateDir === "string" ? value.stateDir : "edge-control-plane";
+  const publicOrigin = typeof value.publicOrigin === "string" ? value.publicOrigin : undefined;
+  if (value.enabled !== undefined && typeof value.enabled !== "boolean") {
+    results.push({ group: "Edge", label: "control plane enabled", status: "fail", detail: "edge.controlPlane.enabled must be a boolean." });
+  }
+  if (value.mode !== undefined && value.mode !== "local" && value.mode !== "managed") {
+    results.push({ group: "Edge", label: "control plane mode", status: "fail", detail: "edge.controlPlane.mode must be local or managed." });
+  }
+  const validBase = /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$/.test(basePath) && basePath !== "/";
+  results.push({
+    group: "Edge",
+    label: "control plane route",
+    status: !validBase || pathsOverlap(basePath, proxyPath) ? "fail" : "pass",
+    detail: !validBase ? "The Edge base path is invalid." : pathsOverlap(basePath, proxyPath) ? `Conflicts with MCP path ${proxyPath}.` : basePath,
+    hint: !validBase || pathsOverlap(basePath, proxyPath) ? "Use a distinct non-root path such as /_fentaris/edge." : undefined,
+  });
+  if (publicOrigin) {
+    let secure: boolean;
+    try {
+      const url = new URL(publicOrigin);
+      secure = url.protocol === "https:" || (url.protocol === "http:" && isLoopback(url.hostname));
+    } catch {
+      secure = false;
+    }
+    results.push({
+      group: "Edge",
+      label: "canonical public origin",
+      status: secure ? "pass" : "fail",
+      detail: secure ? publicOrigin : "Use HTTPS for non-loopback Edge origins.",
+    });
+  } else if (enabled) {
+    results.push({
+      group: "Edge",
+      label: "canonical public origin",
+      status: "warn",
+      detail: "No explicit publicOrigin; only a loopback listener may derive it safely.",
+    });
+  }
+  const stateSafe = !path.isAbsolute(stateDir) && !stateDir.split(/[\\/]+/).includes("..");
+  const statePath = path.resolve(root, configuredAuthDir, stateDir);
+  let ownerOnly = true;
+  if (await exists(statePath) && process.platform !== "win32") {
+    ownerOnly = ((await stat(statePath)).mode & 0o077) === 0;
+  }
+  results.push({
+    group: "Edge",
+    label: "local authority state",
+    status: !stateSafe || !ownerOnly ? "fail" : mode === "local" && enabled ? "warn" : "pass",
+    detail: !stateSafe ? "stateDir escapes the configured auth directory." : !ownerOnly ? "State directory permissions are not owner-only." : `${path.relative(root, statePath)} (${mode})`,
+    hint: mode === "local" && enabled ? "Local mode is durable but single-process; use managed adapters for multi-instance deployments." : undefined,
+  });
+  if (enabled && mode === "managed") {
+    results.push({
+      group: "Edge",
+      label: "managed adapters",
+      status: "warn",
+      detail: "Managed adapter guarantees are validated from the TypeScript runtime configuration at startup.",
+    });
+  }
+  return { enabled, mode, basePath, stateDir, ...(publicOrigin ? { publicOrigin } : {}) };
+}
+
+function pathsOverlap(left: string, right: string): boolean {
+  const normalize = (value: string) => `/${value.split("/").filter(Boolean).join("/")}`;
+  const a = normalize(left);
+  const b = normalize(right);
+  return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+}
+
+function isLoopback(hostname: string): boolean {
+  const value = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return value === "localhost" || value === "::1" || value.startsWith("127.");
 }
 
 async function installedCoreVersionResult(projectRoot: string, declaredRange: string | undefined): Promise<HealthResult> {
@@ -620,6 +721,43 @@ async function runtimeEndpointResult(project: ProjectDiscovery, runtime: Runtime
   }
 
   return probeMcpEndpoint(project, runtime, timeoutMs);
+}
+
+async function edgeControlPlaneEndpointResult(project: ProjectDiscovery, timeoutMs: number): Promise<HealthResult> {
+  const controlPlane = project.config.edge?.controlPlane;
+  if (!controlPlane?.enabled) {
+    return {
+      group: "Runtime",
+      label: "Edge control plane",
+      status: "pass",
+      detail: "Integrated Edge control plane is disabled.",
+    };
+  }
+
+  const origin = controlPlane.publicOrigin ?? `http://127.0.0.1:${project.config.port}`;
+  const url = `${origin.replace(/\/$/, "")}${controlPlane.basePath ?? "/_fentaris/edge"}/device/verify`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { method: "GET", signal: controller.signal });
+    return {
+      group: "Runtime",
+      label: "Edge control plane",
+      status: response.ok ? "pass" : "fail",
+      detail: response.ok ? `Enrollment and gateway routes responded at ${url}` : `Endpoint returned HTTP ${response.status}.`,
+      hint: response.ok ? undefined : "Check edge.controlPlane.basePath, publicOrigin, and runtime startup logs.",
+    };
+  } catch (error) {
+    return {
+      group: "Runtime",
+      label: "Edge control plane",
+      status: "fail",
+      detail: error instanceof Error ? error.message : String(error),
+      hint: "The integrated Edge control-plane endpoint could not be reached.",
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function probeMcpEndpoint(project: ProjectDiscovery, runtime: Runtime, timeoutMs: number): Promise<HealthResult> {

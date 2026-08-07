@@ -598,6 +598,16 @@ describe("project template", () => {
     expect(rendered.files["src/index.ts"]).not.toContain("policy(");
     expect(rendered.files["src/index.ts"]).not.toContain("profiler()");
 
+    expect(JSON.parse(rendered.files["fentaris.json"] ?? "{}")).toMatchObject({
+      edge: {
+        controlPlane: {
+          enabled: false,
+          mode: "local",
+          stateDir: "edge-control-plane",
+        },
+      },
+    });
+
     const packageJson = JSON.parse(rendered.files["package.json"] ?? "{}") as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
@@ -1187,6 +1197,35 @@ void app;
     expect(output).toContain("MCP initialize");
     expect(output).toContain(`Endpoint responded at http://127.0.0.1:${address.port}/mcp`);
     expect(output).not.toContain("Port is already in use");
+  });
+
+  it("validates integrated Edge configuration and probes its runtime routes", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-edge-doctor-"));
+    await writeHealthyProject(dir);
+    const server = createServer((request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(request.url?.endsWith("/device/verify")
+        ? JSON.stringify({ status: "ready" })
+        : JSON.stringify({ jsonrpc: "2.0", id: "doctor-initialize", result: {} }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("expected doctor Edge port");
+    const configPath = join(dir, "fentaris.json");
+    const config = JSON.parse(await readFile(configPath, "utf8")) as Record<string, unknown>;
+    config.port = address.port;
+    config.edge = { controlPlane: { enabled: true, mode: "local", publicOrigin: `http://127.0.0.1:${address.port}` } };
+    await writeFile(configPath, JSON.stringify(config));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+    try {
+      await expect(main(["doctor", "--runtime", "--verbose"], rt)).resolves.toBe(0);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+    const output = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
+    expect(output).toContain("Edge control plane");
+    expect(output).toContain("Enrollment and gateway routes responded");
+    expect(output).toContain("single-process");
   });
 
   it("points missing credential stores to secrets set when an auth key is configured", async () => {
