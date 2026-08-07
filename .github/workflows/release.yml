@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  # Lets a failed release be retried from the Actions tab. Changesets skips
+  # versions already on npm, so re-running is safe.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
