@@ -65,13 +65,13 @@
 
 ## 8. Inventory, CLI, Health, and Observability
 
-- [ ] 8.1 Extend Edge inventory with policy-filtered per-deployment installation, setup, startup, readiness, retryability, and safe next-action summaries
-- [ ] 8.2 Update Edge selection to require online presence, fresh readiness, capacity, and a ready current installation/deployment digest
-- [ ] 8.3 Extend `fentaris edge status` and canonical JSON output to separate device, service, installation, setup, workload, and readiness states
-- [ ] 8.4 Add authorized CLI/local-control operations for reviewing, approving, denying, retrying, revoking, and cleaning up installations
-- [ ] 8.5 Extend Edge Control discovery with bounded lifecycle states while omitting inaccessible deployments and sensitive local details
-- [ ] 8.6 Add health checks for interrupted attempts, stale lifecycle reports, installation storage pressure, unsupported isolation, orphaned artifacts, and upgrade requirements
-- [ ] 8.7 Emit correlated redacted telemetry for source resolution, approval, attempts, verification, activation, rollback availability, and cleanup
+- [x] 8.1 Extend Edge inventory with policy-filtered per-deployment installation, setup, startup, readiness, retryability, and safe next-action summaries
+- [x] 8.2 Update Edge selection to require online presence, fresh readiness, capacity, and a ready current installation/deployment digest
+- [x] 8.3 Extend `fentaris edge status` and canonical JSON output to separate device, service, installation, setup, workload, and readiness states
+- [x] 8.4 Add authorized CLI/local-control operations for reviewing, approving, denying, retrying, revoking, and cleaning up installations
+- [x] 8.5 Extend Edge Control discovery with bounded lifecycle states while omitting inaccessible deployments and sensitive local details
+- [x] 8.6 Add health checks for interrupted attempts, stale lifecycle reports, installation storage pressure, unsupported isolation, orphaned artifacts, and upgrade requirements
+- [x] 8.7 Emit correlated redacted telemetry for source resolution, approval, attempts, verification, activation, rollback availability, and cleanup
 
 ## 9. Verification and Security Tests
 

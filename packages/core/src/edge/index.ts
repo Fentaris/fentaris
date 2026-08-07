@@ -143,6 +143,14 @@ export type {
   PythonInstallationProvider,
 } from "./installation.js";
 
+export { EdgeInstallationTelemetry, edgeInstallationHealth } from "./installationObservability.js";
+export type {
+  EdgeInstallationHealthOptions,
+  EdgeInstallationRuntimeEvent,
+  EdgeInstallationRuntimeEventName,
+  EdgeInstallationTelemetrySink,
+} from "./installationObservability.js";
+
 export { EDGE_ERROR_CODES, edgeError, isEdgeError } from "./errors.js";
 export type { EdgeError, EdgeErrorCode, EdgeErrorOptions } from "./errors.js";
 

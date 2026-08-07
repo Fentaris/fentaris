@@ -172,7 +172,9 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
     };
     const reconcileAfterDecision = async (parameters: Readonly<Record<string, unknown>>, decision: "approved" | "denied" | "revoked") => {
       const { deployment, desired } = desiredDeployment(parameters);
-      const result = await this.options.installation!.decide(deployment.installationRecipe!, decision, parameters.localPolicy ?? {});
+      const cleanup = parameters.cleanup === true;
+      const result = await this.options.installation!.decide(deployment.installationRecipe!, decision, parameters.localPolicy ?? {}, cleanup);
+      if (cleanup) return result;
       if (decision !== "approved") await this.options.supervisor.blockDeployment(deployment.deploymentId);
       await this.enqueueReconcile(desired);
       return result;

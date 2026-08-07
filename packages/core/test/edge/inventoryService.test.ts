@@ -72,7 +72,7 @@ async function fixture() {
   await putDevice({ edgeNodeId: "node-bob", name: "Bob Secret", subjectId: "bob", platform: "linux", tags: ["private"], pools: ["secret"], load: 0.1, capacity: 4 });
   const authorizer: EdgeInventoryAuthorizer = {
     canAccessDevice: async (context, device) => device.subjectId === context.subjectId,
-    canAccessDeployment: async (_context, _device, deploymentId) => deploymentId === "filesystem",
+    canAccessDeployment: async (_context, _device, deploymentId) => deploymentId !== "hidden",
   };
   const service = new EdgeInventoryService({ devices, presence, readiness, capabilities, authorizer, now: () => now });
   return { service, devices, presence, readiness };
@@ -156,6 +156,44 @@ describe("EdgeInventoryService", () => {
         code: "EDGE_UNAVAILABLE",
         details: { unmetRequirementCategories: ["platforms", "deploymentId"] },
       });
+  });
+
+  it("reports mixed installation states without leaking hidden deployments and selects exact digests", async () => {
+    const { service, readiness } = await fixture();
+    const installationDigest = `sha256:${"a".repeat(64)}` as const;
+    const states = [
+      { deploymentId: "ready", status: "ready", installationState: "ready", retryable: false },
+      { deploymentId: "installing", status: "setup-required", installationState: "installing", retryable: false },
+      { deploymentId: "blocked", status: "blocked", installationState: "blocked", retryable: false },
+      { deploymentId: "degraded", status: "blocked", installationState: "degraded", retryable: true },
+      { deploymentId: "failed", status: "blocked", installationState: "failed", retryable: true },
+      { deploymentId: "hidden", status: "ready", installationState: "ready", retryable: false },
+    ] as const;
+    for (const value of states) await readiness.put({
+      tenantId: "tenant-a",
+      edgeNodeId: "node-alice-a",
+      desiredVersion: 3,
+      installationDigest,
+      launchDigest: "sha256:launch",
+      observedAt: now,
+      expiresAt: now + 100,
+      ...value,
+    });
+
+    const device = await service.get(alice, "Alice Laptop");
+    expect(device.readiness.map((value) => [value.deploymentId, value.installation?.state])).toEqual([
+      ["blocked", "blocked"],
+      ["degraded", "degraded"],
+      ["failed", "failed"],
+      ["filesystem", undefined],
+      ["installing", "installing"],
+      ["ready", "ready"],
+    ]);
+    expect(JSON.stringify(device)).not.toContain("hidden");
+    await expect(service.select(alice, { requires: { deploymentId: "ready", installationDigest, launchDigest: "sha256:launch" } }))
+      .resolves.toMatchObject({ device: { device: { name: "Alice Laptop" } } });
+    await expect(service.select(alice, { requires: { deploymentId: "ready", installationDigest: `sha256:${"b".repeat(64)}` } }))
+      .rejects.toMatchObject({ code: "EDGE_UNAVAILABLE" });
   });
 
   it("revalidates inventory version, authorization, freshness, capacity, readiness, and revocation at dispatch", async () => {

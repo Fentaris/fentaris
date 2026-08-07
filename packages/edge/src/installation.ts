@@ -36,6 +36,7 @@ import {
   type InstallationSource,
   type InstallationVerification,
   type InstalledArtifactReference,
+  type EdgeInstallationTelemetry,
 } from "@fentaris/core";
 import type { CredentialStore, JsonStore } from "./platform.js";
 import { redactInstallerText } from "./redaction.js";
@@ -648,6 +649,7 @@ export interface InstallationCoordinatorOptions {
   readonly now?: () => number;
   readonly attemptId?: () => string;
   readonly terminateProcess?: (pid: number) => Promise<void>;
+  readonly telemetry?: EdgeInstallationTelemetry;
 }
 
 /** Idempotent, crash-aware installation lifecycle coordinator. */
@@ -677,7 +679,10 @@ export class InstallationCoordinator {
       if (recipe.provider.kind === "custom") {
         const review = this.options.consent.review(recipe, request.localPolicy ?? {});
         const approval = await this.options.consent.decision(review);
-        if (!approval) return this.transition(request, "approval-required", { reasonCode: "approval-required", retryable: false, nextAction: `Review installation ${review.approvalDigest}.` });
+        if (!approval) {
+          await this.emit("edge.installation.approval", request, "required", { approvalDigest: review.approvalDigest, sourceKind: recipe.provider.source.kind });
+          return this.transition(request, "approval-required", { reasonCode: "approval-required", retryable: false, nextAction: `Review installation ${review.approvalDigest}.` });
+        }
         if (approval.decision !== "approved") return this.transition(request, "blocked", { reasonCode: approval.decision === "revoked" ? "approval-revoked" : "approval-denied", retryable: false });
       }
       const artifact = await this.options.state.artifact(recipe.digest);
@@ -698,11 +703,16 @@ export class InstallationCoordinator {
       const context: InstallationProviderContext = { recipe, attemptId, stagingRoot, installationRoot: root };
       try {
         const preflight = await provider.preflight(context);
-        if (!preflight.ready) await provider.install(context);
+        if (!preflight.ready) {
+          await this.emit("edge.installation.source", request, "resolving", { provider: recipe.provider.kind, sourceKind: recipe.provider.kind === "custom" ? recipe.provider.source.kind : recipe.provider.kind });
+          await provider.install(context);
+        }
         const outputs = await provider.verify(context);
+        await this.emit("edge.installation.verification", request, "verified", { attemptId, outputNames: Object.keys(outputs).sort() });
         const verified: InstallationArtifactRecord = { recipeDigest: recipe.digest, root, outputs, verifiedAt: this.now(), active: true, references: 1, externalSideEffects: recipe.cleanup.externalSideEffects };
         await this.options.state.putArtifact(verified);
         await this.options.state.activate(request.deploymentId, verified, recipe.retention.previousVersions);
+        await this.emit("edge.installation.activation", request, "activated", { attemptId, rollbackAvailable: recipe.retention.previousVersions > 0 });
         const complete: DurableInstallationAttempt = { ...attempt, state: "installed", finishedAt: this.now() };
         await this.options.state.putAttempt(complete);
         return this.transition(request, "installed", { retryable: false, attempt: complete });
@@ -710,6 +720,7 @@ export class InstallationCoordinator {
         const reasonCode = installationReason(error);
         const failed: DurableInstallationAttempt = { ...attempt, state: "failed", finishedAt: this.now(), reasonCode, retryable: retryableReason(reasonCode), diagnostics: [redactInstallerText(error instanceof Error ? error.message : String(error))] };
         await this.options.state.putAttempt(failed);
+        await this.emit("edge.installation.attempt", request, "failed", { attemptId, reasonCode, retryable: failed.retryable });
         return this.transition(request, "failed", { reasonCode, retryable: failed.retryable, attempt: failed });
       } finally { await rm(stagingRoot, { recursive: true, force: true }); }
     });
@@ -768,6 +779,7 @@ export class InstallationCoordinator {
     }
     const artifact = await this.options.state.removeReference(deploymentId, recipe.digest);
     if (artifact?.references === 0) await rm(artifact.root, { recursive: true, force: true });
+    await this.emit("edge.installation.cleanup", request, "removed", { managedOnly: true, remainingReferences: artifact?.references ?? 0 });
     return this.transition(request, "removed", { retryable: false });
   }
 
@@ -777,6 +789,7 @@ export class InstallationCoordinator {
       return this.transition(request, "failed", { reasonCode: "artifact-missing", retryable: false, nextAction: "Perform manual recovery; no safe verified rollback is available." });
     }
     await this.options.state.activate(deploymentId, { ...candidate, active: true, references: candidate.references + 1 }, request.recipe.retention.previousVersions);
+    await this.emit("edge.installation.rollback", request, "activated", { rollbackDigest: candidate.recipeDigest });
     return this.transition({ ...request, recipe: { ...request.recipe, digest: candidate.recipeDigest } }, "installed", { retryable: false });
   }
 
@@ -807,6 +820,15 @@ export class InstallationCoordinator {
     };
     await this.options.state.putLifecycle(lifecycle);
     return lifecycle;
+  }
+
+  private async emit(
+    name: "edge.installation.source" | "edge.installation.approval" | "edge.installation.attempt" | "edge.installation.verification" | "edge.installation.activation" | "edge.installation.rollback" | "edge.installation.cleanup",
+    request: InstallationReconcileRequest,
+    outcome: string,
+    metadata: Readonly<Record<string, unknown>>,
+  ): Promise<void> {
+    await this.options.telemetry?.emit({ name, deploymentId: request.deploymentId, outcome, metadata: { recipeDigest: request.recipe.digest, desiredVersion: request.desiredVersion, ...metadata } }).catch(() => undefined);
   }
 }
 
