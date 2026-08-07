@@ -10,11 +10,11 @@
 
 ## 2. Desired State and Protocol
 
-- [ ] 2.1 Extend desired deployments with optional installation recipes and installation/launch digest correlation
-- [ ] 2.2 Add negotiated Edge protocol messages for installation lifecycle, approval-required summaries, attempt correlation, explicit retry, and managed removal
-- [ ] 2.3 Preserve launch-only behavior for compatible older agents and report `agent-upgrade-required` for installable deployments they cannot process
-- [ ] 2.4 Extend control-plane desired-state and readiness stores to persist bounded installation identity and lifecycle summaries
-- [ ] 2.5 Reject stale desired-state, lifecycle, approval, and attempt messages by device, deployment, version, digest, and connection generation
+- [x] 2.1 Extend desired deployments with optional installation recipes and installation/launch digest correlation
+- [x] 2.2 Add negotiated Edge protocol messages for installation lifecycle, approval-required summaries, attempt correlation, explicit retry, and managed removal
+- [x] 2.3 Preserve launch-only behavior for compatible older agents and report `agent-upgrade-required` for installable deployments they cannot process
+- [x] 2.4 Extend control-plane desired-state and readiness stores to persist bounded installation identity and lifecycle summaries
+- [x] 2.5 Reject stale desired-state, lifecycle, approval, and attempt messages by device, deployment, version, digest, and connection generation
 
 ## 3. Local Persistence and Reconciliation
 

@@ -128,7 +128,7 @@ function desiredState(version: number): EdgeDesiredStateMessage {
 }
 
 describe("EdgeWebSocketGateway", () => {
-  it("negotiates v1 for legacy agents and v2 for current agents", async () => {
+  it("negotiates v1 for legacy agents and v3 for current agents", async () => {
     const legacy = await fixture();
     const legacySocket = new TestSocket();
     const legacyPending = legacy.gateway.accept(legacySocket, "secret");
@@ -137,15 +137,15 @@ describe("EdgeWebSocketGateway", () => {
     expect(legacySocket.sent[0]).toMatchObject({ version: 1, protocolVersion: 1 });
 
     const current = await fixture();
-    expect((await connect(current.gateway)).record.protocolVersion).toBe(2);
+    expect((await connect(current.gateway)).record.protocolVersion).toBe(3);
   });
 
-  it("persists authenticated v2 facts, presence, readiness, and freshness", async () => {
+  it("persists authenticated current-protocol facts, presence, readiness, and freshness", async () => {
     let now = 100;
     const { gateway, devices, presence, readiness } = await fixture({ now: () => now });
     const { socket } = await connect(gateway);
     socket.receive({
-      version: 2,
+      version: EDGE_PROTOCOL_VERSION,
       kind: "edge.presence",
       tenantId: "tenant-1",
       edgeNodeId: "node-1",
@@ -164,7 +164,7 @@ describe("EdgeWebSocketGateway", () => {
 
     now = 120;
     socket.receive({
-      version: 2,
+      version: EDGE_PROTOCOL_VERSION,
       kind: "edge.heartbeat",
       tenantId: "tenant-1",
       edgeNodeId: "node-1",

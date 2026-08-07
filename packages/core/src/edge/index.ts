@@ -265,6 +265,7 @@ export {
   EDGE_PROTOCOL_MIN_VERSION,
   EDGE_PROTOCOL_VERSION,
   EDGE_SUPPORTED_PROTOCOL_VERSIONS,
+  adaptDesiredStateForEdgeProtocol,
   parseEdgeProtocolMessage,
   selectHighestMutualEdgeProtocolVersion,
   validateEdgePresenceReport,
@@ -280,6 +281,9 @@ export type {
   EdgeHelloAckMessage,
   EdgeHelloMessage,
   EdgeLifecycleMessage,
+  EdgeInstallationApprovalMessage,
+  EdgeInstallationControlMessage,
+  EdgeInstallationStatusMessage,
   EdgePresenceReportMessage,
   EdgeProtocolVersion,
   EdgeReadinessReport,
@@ -294,6 +298,7 @@ export {
   InMemoryEdgeConnectionStore,
   InMemoryEdgeDesiredStateStore,
   InMemoryEdgeDeviceRegistry,
+  InMemoryEdgeInstallationStatusStore,
   InMemoryEdgeSetupStatusStore,
 } from "./controlPlane.js";
 export type {
@@ -310,6 +315,7 @@ export type {
   EdgeInventoryListPage,
   EdgeInventoryRecord,
   EdgeInventoryUpdate,
+  EdgeInstallationStatusStore,
   EdgeSetupStatusStore,
 } from "./controlPlane.js";
 

@@ -1,4 +1,10 @@
 import type { LaunchRecipe } from "./recipe.js";
+import type {
+  InstallationDigest,
+  InstallationLifecycleState,
+  InstallationReasonCode,
+  InstallationRecipe,
+} from "./installation.js";
 import type { SetupSchema } from "./setup.js";
 import type {
   EdgeMcpCancelEnvelope,
@@ -14,13 +20,13 @@ import type {
 } from "./inventory.js";
 
 /** Current edge control-plane protocol version. @pk */
-export const EDGE_PROTOCOL_VERSION = 2 as const;
+export const EDGE_PROTOCOL_VERSION = 3 as const;
 /** Oldest protocol retained for transparent Edge compatibility. @pk */
 export const EDGE_PROTOCOL_MIN_VERSION = 1 as const;
 /** Protocols implemented by this release, newest first. @pk */
-export const EDGE_SUPPORTED_PROTOCOL_VERSIONS = Object.freeze([2, 1] as const);
+export const EDGE_SUPPORTED_PROTOCOL_VERSIONS = Object.freeze([3, 2, 1] as const);
 /** A negotiated Edge control protocol version. @pk */
-export type EdgeProtocolVersion = 1 | 2;
+export type EdgeProtocolVersion = 1 | 2 | 3;
 
 /** Common trusted routing claims carried by edge control messages. @pk */
 export interface EdgeProtocolClaims {
@@ -60,6 +66,13 @@ export interface EdgeReadinessReport {
   readonly deploymentId: string;
   readonly status: EdgeDeploymentReadinessStatus;
   readonly recipeVersion?: number;
+  readonly desiredVersion?: number;
+  readonly installationDigest?: InstallationDigest;
+  readonly launchDigest?: string;
+  readonly installationState?: InstallationLifecycleState;
+  readonly reasonCode?: InstallationReasonCode;
+  readonly retryable?: boolean;
+  readonly attemptId?: string;
   readonly observedAt: number;
   readonly expiresAt?: number;
   readonly reasonCategory?: string;
@@ -67,7 +80,7 @@ export interface EdgeReadinessReport {
 
 /** Authenticated protocol-v2 observed facts and dynamic state. @pk */
 export interface EdgePresenceReportMessage extends EdgeProtocolClaims {
-  readonly version: 2;
+  readonly version: 2 | 3;
   readonly kind: "edge.presence";
   readonly observed: EdgeObservedFacts;
   readonly capacity?: EdgeCapacitySnapshot;
@@ -80,6 +93,13 @@ export interface EdgeDesiredDeployment {
   readonly deploymentId: string;
   readonly serverName: string;
   readonly recipe: LaunchRecipe;
+  /** Correlation identity for the launch recipe. Required for protocol v3 managed installations. */
+  readonly launchDigest?: string;
+  /** Optional managed installation recipe, carried only by protocol v3. */
+  readonly installationRecipe?: InstallationRecipe;
+  readonly installationDigest?: InstallationDigest;
+  /** Compatibility marker sent instead of a recipe to older agents. */
+  readonly requiresAgentUpgrade?: boolean;
   /** Complete unresolved setup schema collected locally by the edge agent. */
   readonly setupSchema: SetupSchema;
   readonly setupSchemaVersion?: number;
@@ -99,6 +119,53 @@ export interface EdgeDesiredStateAckMessage extends EdgeProtocolClaims {
   readonly desiredVersion: number;
   readonly status: "applied" | "blocked";
   readonly blockedDeploymentIds?: readonly string[];
+  readonly deploymentDigests?: Readonly<Record<string, { readonly launchDigest: string; readonly installationDigest?: InstallationDigest }>>;
+}
+
+/** Bounded installation lifecycle report carried by protocol v3. @pk */
+export interface EdgeInstallationStatusMessage extends EdgeProtocolClaims {
+  readonly version: 3;
+  readonly kind: "edge.installation-status";
+  readonly deploymentId: string;
+  readonly desiredVersion: number;
+  readonly installationDigest: InstallationDigest;
+  readonly launchDigest: string;
+  readonly state: InstallationLifecycleState;
+  readonly reasonCode?: InstallationReasonCode;
+  readonly retryable: boolean;
+  readonly attemptId?: string;
+  readonly attemptStartedAt?: number;
+  readonly observedAt: number;
+  readonly approvalRequired?: {
+    readonly approvalDigest: InstallationDigest;
+    readonly sourceKind: string;
+    readonly cleanup: boolean;
+  };
+  readonly nextAction?: string;
+}
+
+/** Explicit authorized retry/removal command; never arbitrary script execution. @pk */
+export interface EdgeInstallationControlMessage extends EdgeProtocolClaims {
+  readonly version: 3;
+  readonly kind: "edge.installation-control";
+  readonly deploymentId: string;
+  readonly desiredVersion: number;
+  readonly installationDigest: InstallationDigest;
+  readonly action: "retry" | "remove";
+  readonly requestId: string;
+}
+
+/** Local approval decision reported without review material or credentials. @pk */
+export interface EdgeInstallationApprovalMessage extends EdgeProtocolClaims {
+  readonly version: 3;
+  readonly kind: "edge.installation-approval";
+  readonly deploymentId: string;
+  readonly desiredVersion: number;
+  readonly installationDigest: InstallationDigest;
+  readonly approvalDigest: InstallationDigest;
+  readonly decision: "approved" | "denied" | "revoked";
+  readonly cleanup: boolean;
+  readonly decidedAt: number;
 }
 
 export interface EdgeSetupStatusMessage extends EdgeProtocolClaims {
@@ -148,6 +215,8 @@ export type EdgeAgentMessage =
   | EdgeSetupStatusMessage
   | EdgeCapabilityManifestMessage
   | EdgeLifecycleMessage
+  | EdgeInstallationStatusMessage
+  | EdgeInstallationApprovalMessage
   | EdgeMcpResultEnvelope
   | EdgeMcpErrorEnvelope;
 
@@ -155,6 +224,7 @@ export type EdgeAgentMessage =
 export type EdgeControlPlaneMessage =
   | EdgeHelloAckMessage
   | EdgeDesiredStateMessage
+  | EdgeInstallationControlMessage
   | EdgeMcpRequestEnvelope
   | EdgeMcpCancelEnvelope;
 
@@ -196,6 +266,21 @@ export function selectHighestMutualEdgeProtocolVersion(
   return [...supportedVersions].sort((left, right) => right - left).find((version) => peer.has(version));
 }
 
+/** Adapt desired state without exposing recipes unsupported by older agents. @pk */
+export function adaptDesiredStateForEdgeProtocol(
+  state: EdgeDesiredStateMessage,
+  version: EdgeProtocolVersion,
+): EdgeDesiredStateMessage {
+  const deployments = state.deployments.map((deployment) => {
+    if (version >= 3 || !deployment.installationRecipe) return deployment;
+    const launchOnly = { ...deployment };
+    delete (launchOnly as { installationRecipe?: InstallationRecipe }).installationRecipe;
+    delete (launchOnly as { installationDigest?: InstallationDigest }).installationDigest;
+    return { ...launchOnly, launchDigest: deployment.recipe.digest, requiresAgentUpgrade: true };
+  });
+  return Object.freeze({ ...state, version, deployments: Object.freeze(deployments) });
+}
+
 /** Validate bounded protocol-v2 observed facts and dynamic report fields. @pk */
 export function validateEdgePresenceReport(message: EdgePresenceReportMessage): void {
   validateBoundedString(message.observed.platform, "platform", 64);
@@ -219,6 +304,9 @@ export function validateEdgePresenceReport(message: EdgePresenceReportMessage): 
       throw new TypeError("readiness.status is invalid");
     }
     validateTimestamp(readiness.observedAt, "readiness.observedAt");
+    if (readiness.installationDigest !== undefined) validateDigest(readiness.installationDigest, "readiness.installationDigest");
+    if (readiness.launchDigest !== undefined) validateDigest(readiness.launchDigest, "readiness.launchDigest");
+    if (readiness.desiredVersion !== undefined) validateNonNegativeInteger(readiness.desiredVersion, "readiness.desiredVersion", Number.MAX_SAFE_INTEGER);
   }
 }
 
@@ -240,19 +328,74 @@ function validateProtocolShell(candidate: Record<string, unknown>): void {
   validateBoundedString(candidate.edgeNodeId, "edgeNodeId", 160);
   validateNonNegativeInteger(candidate.connectionGeneration, "connectionGeneration", Number.MAX_SAFE_INTEGER);
   if (candidate.kind === "edge.presence") {
-    if (candidate.version !== 2) throw new TypeError("edge.presence requires protocol version 2");
+    if (candidate.version !== 2 && candidate.version !== 3) throw new TypeError("edge.presence requires protocol version 2 or 3");
     validateEdgePresenceReport(candidate as unknown as EdgePresenceReportMessage);
+  } else if (candidate.kind === "edge.desired-state") {
+    validateDesiredState(candidate as unknown as EdgeDesiredStateMessage);
+  } else if (candidate.kind === "edge.installation-status") {
+    if (candidate.version !== 3) throw new TypeError("installation status requires protocol version 3");
+    validateInstallationStatus(candidate);
+  } else if (candidate.kind === "edge.installation-control") {
+    if (candidate.version !== 3) throw new TypeError("installation control requires protocol version 3");
+    validateInstallationControl(candidate);
+  } else if (candidate.kind === "edge.installation-approval") {
+    if (candidate.version !== 3) throw new TypeError("installation approval requires protocol version 3");
+    validateInstallationApproval(candidate);
   } else if (candidate.kind === "edge.heartbeat") {
     validateTimestamp(candidate.sentAt, "sentAt");
-    if (candidate.capacity !== undefined && candidate.version !== 2) throw new TypeError("capacity requires protocol version 2");
-    if (candidate.load !== undefined && typeof candidate.load === "object" && candidate.version !== 2) {
-      throw new TypeError("structured load requires protocol version 2");
+    if (candidate.capacity !== undefined && candidate.version !== 2 && candidate.version !== 3) throw new TypeError("capacity requires protocol version 2 or 3");
+    if (candidate.load !== undefined && typeof candidate.load === "object" && candidate.version !== 2 && candidate.version !== 3) {
+      throw new TypeError("structured load requires protocol version 2 or 3");
     }
   }
 }
 
 function isEdgeProtocolVersion(value: unknown): value is EdgeProtocolVersion {
-  return value === 1 || value === 2;
+  return value === 1 || value === 2 || value === 3;
+}
+
+function validateDesiredState(message: EdgeDesiredStateMessage): void {
+  validateNonNegativeInteger(message.desiredVersion, "desiredVersion", Number.MAX_SAFE_INTEGER);
+  if (!Array.isArray(message.deployments) || message.deployments.length > 256) throw new TypeError("deployments must contain at most 256 entries");
+  for (const deployment of message.deployments) {
+    validateBoundedString(deployment.deploymentId, "deploymentId", 160);
+    if (deployment.installationRecipe) {
+      if (message.version !== 3) throw new TypeError("installation recipes require protocol version 3");
+      if (deployment.installationDigest !== deployment.installationRecipe.digest) throw new TypeError("installation digest correlation mismatch");
+      if (deployment.launchDigest !== deployment.recipe.digest) throw new TypeError("launch digest correlation mismatch");
+    }
+  }
+}
+
+function validateInstallationStatus(candidate: Record<string, unknown>): void {
+  validateBoundedString(candidate.deploymentId, "deploymentId", 160);
+  validateNonNegativeInteger(candidate.desiredVersion, "desiredVersion", Number.MAX_SAFE_INTEGER);
+  validateDigest(candidate.installationDigest, "installationDigest");
+  validateDigest(candidate.launchDigest, "launchDigest");
+  if (!["assigned", "checking", "approval-required", "installing", "installed", "configuring", "starting", "ready", "degraded", "failed", "blocked", "removing", "removed"].includes(String(candidate.state))) throw new TypeError("installation state is invalid");
+  if (typeof candidate.retryable !== "boolean") throw new TypeError("installation retryable must be boolean");
+  validateTimestamp(candidate.observedAt, "observedAt");
+}
+
+function validateInstallationControl(candidate: Record<string, unknown>): void {
+  validateBoundedString(candidate.deploymentId, "deploymentId", 160);
+  validateNonNegativeInteger(candidate.desiredVersion, "desiredVersion", Number.MAX_SAFE_INTEGER);
+  validateDigest(candidate.installationDigest, "installationDigest");
+  validateBoundedString(candidate.requestId, "requestId", 160);
+  if (candidate.action !== "retry" && candidate.action !== "remove") throw new TypeError("installation control action is invalid");
+}
+
+function validateInstallationApproval(candidate: Record<string, unknown>): void {
+  validateBoundedString(candidate.deploymentId, "deploymentId", 160);
+  validateNonNegativeInteger(candidate.desiredVersion, "desiredVersion", Number.MAX_SAFE_INTEGER);
+  validateDigest(candidate.installationDigest, "installationDigest");
+  validateDigest(candidate.approvalDigest, "approvalDigest");
+  if (!["approved", "denied", "revoked"].includes(String(candidate.decision)) || typeof candidate.cleanup !== "boolean") throw new TypeError("installation approval is invalid");
+  validateTimestamp(candidate.decidedAt, "decidedAt");
+}
+
+function validateDigest(value: unknown, field: string): void {
+  if (typeof value !== "string" || !/^sha256:[a-f0-9]{64}$/i.test(value)) throw new TypeError(`${field} must be a sha256 digest`);
 }
 
 function validateBoundedString(value: unknown, field: string, maxLength: number): asserts value is string {
