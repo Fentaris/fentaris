@@ -7,6 +7,7 @@ import {
   LAUNCH_RECIPE_VERSION,
   edgeError,
   isRuntimeValueToken,
+  isInstalledArtifactReference,
   type LaunchRecipe,
   type SetupField,
   type SetupFieldAccess,
@@ -144,6 +145,7 @@ export interface LocalSetupManagerOptions {
   readonly grantId?: () => string;
   readonly onGrantRevoked?: (grantId: string, deploymentIds: readonly string[]) => void | Promise<void>;
   readonly telemetry?: EdgeTelemetry;
+  readonly resolveInstalledArtifact?: (reference: import("@fentaris/core").InstalledArtifactReference) => Promise<string>;
 }
 
 /** Local setup/grant reconciliation and launch-plan compilation. */
@@ -288,10 +290,16 @@ export class LocalSetupManager {
     const args = await Promise.all(requirement.recipe.args.map(resolve));
     const env: Record<string, string> = {};
     for (const [name, value] of Object.entries(requirement.recipe.env)) env[name] = await resolve(value);
+    const command = typeof requirement.recipe.command === "string"
+      ? requirement.recipe.command
+      : isInstalledArtifactReference(requirement.recipe.command) && this.options.resolveInstalledArtifact
+        ? await this.options.resolveInstalledArtifact(requirement.recipe.command)
+        : undefined;
+    if (!command) throw edgeError("EDGE_SETUP_REQUIRED", "Installed launch artifact is missing or stale.");
     return {
       deploymentId: requirement.deploymentId,
       recipeDigest: requirement.recipe.digest,
-      command: requirement.recipe.command,
+      command,
       args,
       env,
     };

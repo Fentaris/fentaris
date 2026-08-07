@@ -18,50 +18,50 @@
 
 ## 3. Local Persistence and Reconciliation
 
-- [ ] 3.1 Add protected local persistence for installation records, attempts, active artifact pointers, approvals, retention references, and terminal results
-- [ ] 3.2 Implement per-installation-root mutation locking and idempotent desired-state reconciliation
-- [ ] 3.3 Implement crash recovery that terminates or proves termination of orphaned installer process trees and marks interrupted attempts explicitly
-- [ ] 3.4 Implement explicit retry with new attempt identity while preserving prior bounded audit history
-- [ ] 3.5 Implement reference-counted managed artifact retention and removal without deleting non-Fentaris host content
+- [x] 3.1 Add protected local persistence for installation records, attempts, active artifact pointers, approvals, retention references, and terminal results
+- [x] 3.2 Implement per-installation-root mutation locking and idempotent desired-state reconciliation
+- [x] 3.3 Implement crash recovery that terminates or proves termination of orphaned installer process trees and marks interrupted attempts explicitly
+- [x] 3.4 Implement explicit retry with new attempt identity while preserving prior bounded audit history
+- [x] 3.5 Implement reference-counted managed artifact retention and removal without deleting non-Fentaris host content
 
 ## 4. Source Resolution and Integrity
 
-- [ ] 4.1 Implement immutable Git source staging with exact commit verification, bounded submodule policy, and canonical path containment
-- [ ] 4.2 Implement integrity-pinned archive download and extraction with size limits, traversal, symlink, and special-file rejection
-- [ ] 4.3 Implement inline-script staging whose complete content participates in recipe and approval identity
-- [ ] 4.4 Implement approved local file/folder source resolution through existing canonical Edge grants
-- [ ] 4.5 Implement the enterprise source resolver adapter path and verify all returned content before provider execution
-- [ ] 4.6 Resolve private-source credentials through protected local setup channels without placing them in URLs, arguments, desired state, or control-plane reports
+- [x] 4.1 Implement immutable Git source staging with exact commit verification, bounded submodule policy, and canonical path containment
+- [x] 4.2 Implement integrity-pinned archive download and extraction with size limits, traversal, symlink, and special-file rejection
+- [x] 4.3 Implement inline-script staging whose complete content participates in recipe and approval identity
+- [x] 4.4 Implement approved local file/folder source resolution through existing canonical Edge grants
+- [x] 4.5 Implement the enterprise source resolver adapter path and verify all returned content before provider execution
+- [x] 4.6 Resolve private-source credentials through protected local setup channels without placing them in URLs, arguments, desired state, or control-plane reports
 
 ## 5. Custom Installer Consent and Execution
 
-- [ ] 5.1 Build the exact effective custom installation review model covering source, digest, script, interpreter, arguments, permissions, limits, outputs, verification, and cleanup
-- [ ] 5.2 Extend terminal/local-control setup interactions to display bounded review material and record explicit approval or denial
-- [ ] 5.3 Bind approval to the complete effective plan and invalidate it when any source, script, permission, verification, or cleanup input changes
-- [ ] 5.4 Implement a managed staging/install directory runner with process-tree supervision, time, output, disk, environment, executable, and no-elevation controls
-- [ ] 5.5 Add platform capability adapters for enforceable filesystem and network isolation and fail closed when required isolation is unavailable
-- [ ] 5.6 Sanitize installer output and errors against protected values before bounded local persistence or control-plane reporting
-- [ ] 5.7 Require separate exact approval before executing a custom cleanup script that can mutate state outside managed-directory deletion
+- [x] 5.1 Build the exact effective custom installation review model covering source, digest, script, interpreter, arguments, permissions, limits, outputs, verification, and cleanup
+- [x] 5.2 Extend terminal/local-control setup interactions to display bounded review material and record explicit approval or denial
+- [x] 5.3 Bind approval to the complete effective plan and invalidate it when any source, script, permission, verification, or cleanup input changes
+- [x] 5.4 Implement a managed staging/install directory runner with process-tree supervision, time, output, disk, environment, executable, and no-elevation controls
+- [x] 5.5 Add platform capability adapters for enforceable filesystem and network isolation and fail closed when required isolation is unavailable
+- [x] 5.6 Sanitize installer output and errors against protected values before bounded local persistence or control-plane reporting
+- [x] 5.7 Require separate exact approval before executing a custom cleanup script that can mutate state outside managed-directory deletion
 
 ## 6. Installation Providers and Activation
 
-- [ ] 6.1 Implement the custom script provider over the shared source, consent, runner, verification, and lifecycle pipeline
-- [ ] 6.2 Implement managed Node package installation with exact versions, integrity checks, lifecycle-script risk disclosure, and managed storage
-- [ ] 6.3 Implement isolated Python package/environment installation with exact dependency identity and managed storage
-- [ ] 6.4 Implement integrity-pinned binary/archive installation and executable verification
-- [ ] 6.5 Implement container-image installation with immutable image digest validation where a governed container runtime is available
-- [ ] 6.6 Implement manual prerequisite detection that returns actionable setup requirements without attempting privileged host installation
-- [ ] 6.7 Implement provider verification and atomic activation of a verified artifact root for new sessions
-- [ ] 6.8 Implement bounded previous-version retention and safe pointer rollback only for verified installations without undeclared external side effects
+- [x] 6.1 Implement the custom script provider over the shared source, consent, runner, verification, and lifecycle pipeline
+- [x] 6.2 Implement managed Node package installation with exact versions, integrity checks, lifecycle-script risk disclosure, and managed storage
+- [x] 6.3 Implement isolated Python package/environment installation with exact dependency identity and managed storage
+- [x] 6.4 Implement integrity-pinned binary/archive installation and executable verification
+- [x] 6.5 Implement container-image installation with immutable image digest validation where a governed container runtime is available
+- [x] 6.6 Implement manual prerequisite detection that returns actionable setup requirements without attempting privileged host installation
+- [x] 6.7 Implement provider verification and atomic activation of a verified artifact root for new sessions
+- [x] 6.8 Implement bounded previous-version retention and safe pointer rollback only for verified installations without undeclared external side effects
 
 ## 7. Setup, Workload, and Runtime Integration
 
-- [ ] 7.1 Sequence installation preflight and verification before existing runtime setup and launch-plan compilation
-- [ ] 7.2 Keep installation approval, source grants, launch recipe consent, and runtime grants independently revocable
-- [ ] 7.3 Resolve installed-artifact references into contained launch commands and reject missing, stale, or escaping outputs
-- [ ] 7.4 Prevent local software discovery from publishing or launching an MCP without an authorized desired deployment
-- [ ] 7.5 Stop dependent workloads when installation authority is revoked and preserve verified artifacts when only runtime setup is denied
-- [ ] 7.6 Keep active session workloads pinned to their verified artifact while routing new sessions only after atomic activation
+- [x] 7.1 Sequence installation preflight and verification before existing runtime setup and launch-plan compilation
+- [x] 7.2 Keep installation approval, source grants, launch recipe consent, and runtime grants independently revocable
+- [x] 7.3 Resolve installed-artifact references into contained launch commands and reject missing, stale, or escaping outputs
+- [x] 7.4 Prevent local software discovery from publishing or launching an MCP without an authorized desired deployment
+- [x] 7.5 Stop dependent workloads when installation authority is revoked and preserve verified artifacts when only runtime setup is denied
+- [x] 7.6 Keep active session workloads pinned to their verified artifact while routing new sessions only after atomic activation
 
 ## 8. Inventory, CLI, Health, and Observability
 

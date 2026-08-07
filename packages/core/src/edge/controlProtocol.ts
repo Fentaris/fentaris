@@ -5,6 +5,7 @@ import type {
   InstallationReasonCode,
   InstallationRecipe,
 } from "./installation.js";
+import { isInstalledArtifactReference } from "./installation.js";
 import type { SetupSchema } from "./setup.js";
 import type {
   EdgeMcpCancelEnvelope,
@@ -363,6 +364,15 @@ function validateDesiredState(message: EdgeDesiredStateMessage): void {
       if (message.version !== 3) throw new TypeError("installation recipes require protocol version 3");
       if (deployment.installationDigest !== deployment.installationRecipe.digest) throw new TypeError("installation digest correlation mismatch");
       if (deployment.launchDigest !== deployment.recipe.digest) throw new TypeError("launch digest correlation mismatch");
+      if (isInstalledArtifactReference(deployment.recipe.command)) {
+        if (deployment.installationRecipe.provider.kind === "manual") throw new TypeError("manual prerequisites cannot provide managed launch artifacts");
+        if (deployment.recipe.command.installationDigest !== deployment.installationRecipe.digest
+          || !deployment.installationRecipe.outputs.some((output: InstallationRecipe["outputs"][number]) => output.name === deployment.recipe.command.output && output.kind === deployment.recipe.command.kind)) {
+          throw new TypeError("installed launch artifact is not declared by the installation recipe");
+        }
+      }
+    } else if (isInstalledArtifactReference(deployment.recipe.command)) {
+      throw new TypeError("installed launch artifact requires an installation recipe");
     }
   }
 }

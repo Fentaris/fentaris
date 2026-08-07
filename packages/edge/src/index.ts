@@ -61,7 +61,40 @@ export type {
   StoredDeviceKeyPair,
   SupervisedProcess,
 } from "./platform.js";
-export { redactEdgeValue, safeEdgeError } from "./redaction.js";
+export { redactEdgeValue, redactInstallerText, safeEdgeError } from "./redaction.js";
+export {
+  BoundedInstallerRunner,
+  FetchInstallationDownloader,
+  InstallationConsentManager,
+  InstallationCoordinator,
+  InstallationExecutionError,
+  ManagedInstallationSourceResolver,
+  NodeInstallationCommandExecutor,
+  NodeInstallationVerificationService,
+  ProtectedInstallationState,
+  SecureTarExtractor,
+  SharedInstallationProvider,
+  TerminalInstallationConsent,
+  buildInstallationReview,
+  commandIsolationAdapter,
+  createDefaultInstallationProviders,
+} from "./installation.js";
+export type {
+  DurableInstallationAttempt,
+  EnterpriseInstallationResolver,
+  InstallationCommandExecutor,
+  InstallationCoordinatorOptions,
+  InstallationDownloadAdapter,
+  InstallationIsolationAdapter,
+  InstallationReconcileRequest,
+  InstallationReviewModel,
+  InstallationReviewPrompter,
+  InstallationStateDocument,
+  InstallationVerificationService,
+  InstallerRunRequest,
+  InstallerRunResult,
+  LocalInstallationGrantResolver,
+} from "./installation.js";
 export {
   LocalSetupManager,
   NodeTerminalSetupPrompter,
@@ -117,6 +150,7 @@ export type {
 export type {
   EdgeAgentRuntimeOptions,
   EdgeConnectionRuntime,
+  EdgeInstallationLocalControl,
   EdgeRuntimeConnection,
 } from "./runtime.js";
 export type {
@@ -198,6 +232,7 @@ export async function main(
       const control = new EdgeLocalControlServer({
         endpoint: { address: edgeLocalControlAddress(paths.dataDir), credential },
         agent: persistent,
+        ...(agent.installationControl() ? { installation: agent.installationControl()! } : {}),
       });
       await persistent.start();
       await control.start();
