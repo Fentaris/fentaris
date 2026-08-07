@@ -1,6 +1,10 @@
 packages:
   - "packages/*"
   - "examples/*"
+  # Nested published-package workspace with its own lockfile; keep it out of
+  # the root install so Changesets version bumps cannot desync pnpm-lock.yaml
+  # before those packages exist on npm.
+  - "!examples/team-governed-proxy"
 
 allowBuilds:
   esbuild: true

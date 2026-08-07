@@ -25,6 +25,9 @@ jobs:
     if: github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Optional AI review must not block merges when the provider has no credits
+    # or returns a transient auth/billing error.
+    continue-on-error: true
 
     steps:
       - name: Checkout
@@ -40,6 +43,7 @@ jobs:
 
       - name: Run Pi review (OpenCode Go)
         id: pi
+        continue-on-error: true
         env:
           # OpenCode Go: env var richiesta dal pi SDK per il lookup del credential
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
