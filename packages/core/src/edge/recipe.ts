@@ -14,6 +14,7 @@ import type { StdioTransportOptions } from "../transports/client/StdioTransport.
 import { isRuntimeValueToken, type RuntimeValueToken } from "./runtimeInput.js";
 import { edgeError } from "./errors.js";
 import type { SetupSchema } from "./setup.js";
+import { isInstalledArtifactReference, type InstalledArtifactReference } from "./installation.js";
 
 /** Launch recipe serialization format version. @pk */
 export const LAUNCH_RECIPE_VERSION = 1;
@@ -23,7 +24,7 @@ export interface LaunchRecipe {
   /** Recipe serialization version. @pk */
   readonly version: number;
   /** Executable command. @pk */
-  readonly command: string;
+  readonly command: string | InstalledArtifactReference;
   /** Argument templates; entries may be runtime-value tokens. @pk */
   readonly args: readonly (string | RuntimeValueToken)[];
   /** Environment templates; values may be runtime-value tokens. @pk */
@@ -128,7 +129,7 @@ export function validateLaunchRecipe(value: unknown): LaunchRecipe {
   if (candidate.version !== LAUNCH_RECIPE_VERSION) {
     throw edgeError("EDGE_PROTOCOL", `unsupported launch recipe version ${String(candidate.version)}`);
   }
-  if (typeof candidate.command !== "string" || candidate.command.trim() === "") {
+  if ((typeof candidate.command !== "string" || candidate.command.trim() === "") && !isInstalledArtifactReference(candidate.command)) {
     throw edgeError("EDGE_PROTOCOL", "launch recipe command is missing");
   }
   if (!Array.isArray(candidate.args) || typeof candidate.env !== "object" || candidate.env === null) {
@@ -142,7 +143,7 @@ export function validateLaunchRecipe(value: unknown): LaunchRecipe {
   const setupFieldRefs = collectRecipeRuntimeRefs(args, env);
   const payload: Omit<LaunchRecipe, "digest"> = {
     version: LAUNCH_RECIPE_VERSION,
-    command: candidate.command,
+    command: typeof candidate.command === "string" ? candidate.command : Object.freeze({ ...candidate.command }),
     args,
     env,
     ...(typeof candidate.stderr === "string" ? { stderr: candidate.stderr as LaunchRecipe["stderr"] } : {}),

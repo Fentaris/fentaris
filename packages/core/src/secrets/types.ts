@@ -27,7 +27,17 @@ export type SecretsManifest = {
   version: 1;
   references: SecretsManifestEntry[];
   envVars?: string[];
+  apiKeys?: SecretsManifestApiKey[];
 };
+
+/**
+ * Non-secret source metadata recorded in the manifest.
+ * @pk
+ */
+export type SecretsManifestSource =
+  | { type: "local" }
+  | { type: "env"; name: string }
+  | { type: "manual"; reason: string };
 
 /**
  * Single manifest entry with string scope encoding.
@@ -36,6 +46,17 @@ export type SecretsManifest = {
 export type SecretsManifestEntry = {
   ref: string;
   scope: string;
+  source?: SecretsManifestSource;
+};
+
+/**
+ * Required API-key sources for one declared Fentaris user.
+ * @pk
+ */
+export type SecretsManifestApiKey = {
+  userId: string;
+  source: SecretsManifestSource;
+  count?: number;
 };
 
 /**

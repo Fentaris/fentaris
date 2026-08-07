@@ -288,5 +288,6 @@ function validateProjectConfig(value: unknown, configPath: string): ProjectConfi
     authDir: config.authDir,
     ...(config.secrets ? { secrets: config.secrets } : {}),
     ...(config.fentaris ? { fentaris: config.fentaris } : {}),
+    ...(config.edge ? { edge: config.edge } : {}),
   };
 }

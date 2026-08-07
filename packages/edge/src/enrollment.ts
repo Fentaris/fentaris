@@ -260,7 +260,20 @@ export class HttpDeviceAuthorizationProvider implements DeviceAuthorizationProvi
     return postJson(`${this.baseUrl}/device/authorize`, { clientId: this.clientId });
   }
   async poll(deviceCode: string): Promise<DeviceAuthorizationPollResult> {
-    return postJson(`${this.baseUrl}/device/token`, { clientId: this.clientId, deviceCode });
+    const response = await fetch(`${this.baseUrl}/device/token`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clientId: this.clientId, deviceCode }),
+    });
+    const body = await response.json() as Record<string, unknown>;
+    if (response.ok) {
+      return { status: "authorized", tokens: body as unknown as EdgeAuthorizationTokens };
+    }
+    if (body.error === "authorization_pending") return { status: "pending" };
+    if (body.error === "slow_down") return { status: "slow-down" };
+    if (body.error === "access_denied") return { status: "denied" };
+    if (body.error === "expired_token") return { status: "expired" };
+    throw new Error(`Edge control-plane request failed with HTTP ${response.status}`);
   }
   async refresh(refreshToken: string): Promise<EdgeAuthorizationTokens> {
     return postJson(`${this.baseUrl}/token/refresh`, { clientId: this.clientId, refreshToken });

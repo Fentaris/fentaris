@@ -260,6 +260,14 @@ Treat device descriptions, tags, observed facts, and MCP child output as untrust
 
 Use durable multi-instance adapters in production. Atomic inventory versions, monotonic connection generations, sticky/round-robin coordination, atomic result consumption, bounded expiry, and idempotent terminal correlation are security boundaries, not only availability optimizations.
 
+### Protect the integrated Edge authority
+
+Treat `.fentaris/edge-control-plane` as credential-bearing authority state. Keep the directory and files owner-only, exclude them from version control and backups that lack equivalent encryption, and set `FENTARIS_AUTH_KEY` from a secret provider. Approval must use `fentaris edge approve`; never edit authority JSON directly.
+
+Set an explicit HTTPS `publicOrigin` behind the trusted TLS terminator. Fentaris ignores hostile `Host` and forwarded headers when generating join and gateway URLs. Keep the reserved Edge route separate from the MCP path, restrict operator socket access to the application owner, and rotate credentials after suspected disclosure.
+
+Local mode is rejected for unsafe multi-instance use. Production replicas need managed adapters with tenant isolation, compare-and-swap desired assignments, monotonic connection generations, durable revocation, and consistent authorization services. Adapter errors fail closed: they must never broaden eligibility or dispatch.
+
 ## Harden Network Exposure
 
 Run public Fentaris deployments behind a reverse proxy or cloud load balancer.

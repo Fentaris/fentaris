@@ -73,7 +73,7 @@ import {
 import { filterToolsByPolicy, toCapabilityRequest } from "../policy.js";
 import { rateLimitKey } from "../rate-limit/index.js";
 import { FentarisAuth } from "../auth.js";
-import { resolveCredentialSource, type CredentialSourceMap } from "../credentials/index.js";
+import { resolveCredentialSource, type CredentialSource, type CredentialSourceMap } from "../credentials/index.js";
 import {
   buildSubjectIndex,
   evaluateGroupPolicies,
@@ -85,6 +85,7 @@ import {
   type User,
 } from "../governance.js";
 import { HttpProxyExposureTransport } from "../transports/exposure/HttpProxyExposureTransport.js";
+import { startIntegratedEdgeControlPlane, type IntegratedEdgeControlPlaneRuntime } from "../transports/exposure/integratedRuntime.js";
 import { ResponseController } from "../types/middleware.js";
 import { FentarisConfigError, assertValidFentarisConfig, validateFentarisConfig, type FentarisDiagnostic } from "../config/index.js";
 import { resolveFentarisConfig } from "../config/resolve.js";
@@ -121,9 +122,16 @@ import {
   type SessionBindingStore,
   type SetupFieldDescriptor,
   type SetupSchema,
+  type EdgeControlPlaneConfig,
+  type SerializableEdgeControlPlaneConfig,
+  validateEdgeControlPlaneConfig,
+  parseSerializableEdgeControlPlaneConfig,
+  mergeEdgeControlPlaneConfig,
 } from "../edge/index.js";
 import type { SessionPinRequest, SessionPinResult } from "../edge/index.js";
 import type { LaunchRecipe } from "../edge/recipe.js";
+import { compileEdgeDeploymentCatalog } from "../edge/integratedReconciliation.js";
+import type { InstallationRecipe } from "../edge/installation.js";
 import { StdioTransport } from "../transports/client/StdioTransport.js";
 import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
 import type { CredentialSourceMetadata, IdentityMetadata, ResolvedSubject, UserContext } from "../types/shared.js";
@@ -165,6 +173,7 @@ type ProjectRuntimeDefaults = {
   port?: number;
   host?: string;
   path?: string;
+  edgeControlPlane?: SerializableEdgeControlPlaneConfig;
 };
 
 function readProjectRuntimeDefaults(fromDir: string = process.cwd()): ProjectRuntimeDefaults {
@@ -192,10 +201,19 @@ function readProjectRuntimeDefaultsFile(configPath: string): ProjectRuntimeDefau
 
   try {
     const config = JSON.parse(readFileSync(configPath, "utf8")) as Record<string, unknown>;
+    const edge = config.edge && typeof config.edge === "object" && !Array.isArray(config.edge)
+      ? config.edge as Record<string, unknown>
+      : undefined;
+    const controlPlaneDiagnostics: FentarisDiagnostic[] = [];
+    const edgeControlPlane = edge?.controlPlane !== undefined
+      ? parseSerializableEdgeControlPlaneConfig(edge.controlPlane, controlPlaneDiagnostics)
+      : undefined;
+    void controlPlaneDiagnostics;
     return {
       ...(typeof config.port === "number" ? { port: config.port } : {}),
       ...(typeof config.host === "string" ? { host: config.host } : {}),
       ...(typeof config.path === "string" ? { path: config.path } : {}),
+      ...(edgeControlPlane ? { edgeControlPlane } : {}),
     };
   } catch {
     return {};
@@ -270,6 +288,8 @@ export type McpProxyOptions = {
   targets?: Record<string, ExecutionTarget>;
   /** Constructor-style per-server setup schemas. @pk */
   setup?: Record<string, Record<string, SetupFieldDescriptor> | SetupSchema>;
+  /** Constructor-style managed installation recipes keyed by MCP server name. @pk */
+  installations?: Record<string, InstallationRecipe>;
   /** Constructor-style placement bindings. @pk */
   placements?: PlacementBindingConfig[];
   /** Agent-facing CLI configuration. @pk */
@@ -328,6 +348,13 @@ export type EdgeRuntimeOptions = {
   control?: ({ readonly enabled: true } & EdgeControlProviderOptions) | { readonly enabled?: false };
   /** Optional managed child-binding manager for explicit orchestration. @pk */
   childBindingManager?: EdgeChildBindingManager;
+  /**
+   * Integrated Edge control-plane configuration. When enabled, `app.start()`
+   * mounts authorization, enrollment, revocation, and gateway routes. Disabled
+   * by default; omitting this field preserves low-level edge wiring only.
+   * @pk
+   */
+  controlPlane?: EdgeControlPlaneConfig;
 };
 
 /**
@@ -412,6 +439,7 @@ export class McpProxy {
   private readonly fluentGroups = new Map<string, FluentGroupDeclaration>();
   private readonly targets = new Map<string, ExecutionTarget>();
   private readonly setupSchemas = new Map<string, SetupSchema>();
+  private readonly installationRecipes = new Map<string, InstallationRecipe>();
   private readonly placementBindings: PlacementBinding[] = [];
   private readonly fluentUsers = new Set<string>();
   private readonly edgeOptions?: EdgeRuntimeOptions;
@@ -423,6 +451,7 @@ export class McpProxy {
   private readonly edgeChildParentSessions = new Set<string>();
   private httpServer: HttpServer | null = null;
   private readonly exposureHandles = new Set<ProxyExposureHandle>();
+  private edgeControlPlaneRuntime?: IntegratedEdgeControlPlaneRuntime;
 
   private static readonly BUILTIN_TARGET_NAMES = new Set<string>([CLOUD_TARGET_NAME]);
 
@@ -466,13 +495,23 @@ export class McpProxy {
     this.defaultPort = options.port ?? projectDefaults.port;
     this.defaultHost = options.host ?? projectDefaults.host;
     this.defaultPath = options.path ?? projectDefaults.path ?? "/mcp";
+    const mergedControlPlane = mergeEdgeControlPlaneConfig(
+      options.edge?.controlPlane,
+      projectDefaults.edgeControlPlane,
+    );
+    this.edgeOptions = options.edge || mergedControlPlane
+      ? {
+          ...options.edge,
+          ...(mergedControlPlane ? { controlPlane: mergedControlPlane } : {}),
+        }
+      : undefined;
     this.runtimeValidationConfig = {
       ...options,
       servers: this.servers,
       groups: this.groups,
       defaults: { credentials: this.defaultCredentials },
+      ...(this.edgeOptions ? { edge: this.edgeOptions } : {}),
     };
-    this.edgeOptions = options.edge;
 
     if (options.edge?.control?.enabled) {
       const configured = options.edge.control.invoker;
@@ -507,6 +546,11 @@ export class McpProxy {
         }
         const built = "version" in schema && "fields" in schema ? (schema as SetupSchema) : createSetupSchema(schema as Record<string, SetupFieldDescriptor>);
         this.setupSchemas.set(serverName, built);
+      }
+    }
+    if (options.installations) {
+      for (const [serverName, recipe] of Object.entries(options.installations)) {
+        if (this.serverByName.has(serverName)) this.installationRecipes.set(serverName, recipe);
       }
     }
     if (options.placements) {
@@ -807,19 +851,20 @@ export class McpProxy {
    * @pk
    */
   edgeSessionPinner(): EdgeSessionPinner | undefined {
-    if (!this.edgeOptions?.deviceResolver) {
+    const deviceResolver = this.edgeOptions?.deviceResolver ?? this.edgeControlPlaneRuntime?.deviceResolver;
+    if (!deviceResolver) {
       return undefined;
     }
     if (!this.edgeSessionPinnerCache) {
       const pinner = new EdgeSessionPinner({
         targets: this.targets,
         bindings: this.placementBindings as readonly PlacementBindingModel[],
-        deviceResolver: this.edgeOptions.deviceResolver,
-        store: this.edgeOptions.sessionBindingStore,
-        expiry: this.edgeOptions.sessionBindingExpiry,
-        selectionStore: this.edgeOptions.sessionSelectionStore,
+        deviceResolver,
+        store: this.edgeOptions?.sessionBindingStore,
+        expiry: this.edgeOptions?.sessionBindingExpiry,
+        selectionStore: this.edgeOptions?.sessionSelectionStore,
       });
-      if (this.edgeOptions.sessionBindingListener) {
+      if (this.edgeOptions?.sessionBindingListener) {
         pinner.addListener(this.edgeOptions.sessionBindingListener);
       }
       this.edgeSessionPinnerCache = pinner;
@@ -863,7 +908,7 @@ export class McpProxy {
       if (child.deploymentId !== server.name) {
         throw edgeError("EDGE_PROTOCOL", "Trusted child route does not match the effective tool deployment.");
       }
-      const edgeTransport = this.edgeOptions?.transport;
+      const edgeTransport = this.edgeOptions?.transport ?? this.edgeControlPlaneRuntime?.transport;
       if (!edgeTransport) throw edgeError("EDGE_UNAVAILABLE", "No Edge transport is configured for explicit invocation.");
       context.transport = {
         ...context.transport,
@@ -919,7 +964,8 @@ export class McpProxy {
       return server.withProxyContext(context, cloud);
     }
 
-    if (this.edgeOptions?.capabilityCache && isDiscoveryOperation(context.operation)) {
+    const capabilityCache = this.edgeOptions?.capabilityCache ?? this.edgeControlPlaneRuntime?.capabilityCache;
+    if (capabilityCache && isDiscoveryOperation(context.operation)) {
       const tenantId = metadataString(metadata, "tenantId")
         ?? (typeof context.subject?.metadata?.tenantId === "string" ? context.subject.metadata.tenantId : undefined)
         ?? "default";
@@ -929,7 +975,7 @@ export class McpProxy {
         deploymentId: server.name,
         tenantId,
       };
-      const discovery = this.edgeOptions.capabilityCache.discoveryTransport(tenantId, server.name);
+      const discovery = capabilityCache.discoveryTransport(tenantId, server.name);
       const run = () => edge(discovery);
       return discovery.withProxyContext ? discovery.withProxyContext(context, run) : run();
     }
@@ -940,7 +986,7 @@ export class McpProxy {
         details: { targetName: placement.targetName, serverName: server.name },
       });
     }
-    const edgeTransport = this.edgeOptions?.transport;
+    const edgeTransport = this.edgeOptions?.transport ?? this.edgeControlPlaneRuntime?.transport;
     if (!edgeTransport) {
       throw edgeError("EDGE_UNAVAILABLE", "No edge transport is configured for the selected target.", {
         details: { targetName: placement.targetName, serverName: server.name },
@@ -1220,22 +1266,57 @@ export class McpProxy {
 
     const startedAt = Date.now();
     const result = await this.lifecycle.start(async () => {
+      await this.assertRuntimeCredentialsAvailable();
       const port = options.port ?? this.defaultPort ?? 3000;
       const host = options.host ?? this.defaultHost;
       const path = options.path ?? this.defaultPath;
-      const handle = await this.listenInternal(
-        new HttpProxyExposureTransport({
-          port,
-          host,
-          path,
-          onStarted: () => {
-            this.printStartupBanner(port, path, host);
-            callback?.();
-          },
-        }),
-      );
-      this.httpServer = handle.server;
-      return this.httpServer;
+      let httpRoutes: IntegratedEdgeControlPlaneRuntime["httpRoutes"] | undefined;
+      let upgradeRoutes: IntegratedEdgeControlPlaneRuntime["upgradeRoutes"] | undefined;
+
+      try {
+        if (this.edgeOptions?.controlPlane?.enabled === true) {
+          const catalog = compileEdgeDeploymentCatalog({
+            servers: this.serverCatalog.allServers(),
+            targets: this.targets,
+            bindings: this.placementBindings as readonly PlacementBindingModel[],
+            setupSchemas: this.setupSchemas,
+            installationRecipes: this.installationRecipes,
+          });
+          this.edgeControlPlaneRuntime = await startIntegratedEdgeControlPlane({
+            controlPlane: this.edgeOptions.controlPlane,
+            listenerHost: host ?? "127.0.0.1",
+            listenerPort: port,
+            catalog,
+            groupsForSubject: (subjectId) => (this.subjectIndex?.groupsFor(subjectId) ?? []).map((group) => group.id),
+            telemetry: this.edgeOptions.telemetry,
+            ...(this.edgeOptions.controlPlane.publicOrigin
+              ? { publicOrigin: this.edgeOptions.controlPlane.publicOrigin }
+              : {}),
+          });
+          httpRoutes = this.edgeControlPlaneRuntime.httpRoutes;
+          upgradeRoutes = this.edgeControlPlaneRuntime.upgradeRoutes;
+        }
+
+        const handle = await this.listenInternal(
+          new HttpProxyExposureTransport({
+            port,
+            host,
+            path,
+            ...(httpRoutes ? { httpRoutes } : {}),
+            ...(upgradeRoutes ? { upgradeRoutes } : {}),
+            onStarted: () => {
+              this.printStartupBanner(port, path, host);
+              callback?.();
+            },
+          }),
+        );
+        this.httpServer = handle.server;
+        return this.httpServer;
+      } catch (error) {
+        await this.edgeControlPlaneRuntime?.close().catch(() => undefined);
+        this.edgeControlPlaneRuntime = undefined;
+        throw error;
+      }
     }, { startupTimeoutMs: options.startupTimeoutMs ?? this.lifecycleDefaults.startupTimeoutMs });
 
     if (!result && this.httpServer) {
@@ -1278,7 +1359,10 @@ export class McpProxy {
       return this.listenInternal(transport);
     }
 
-    return this.lifecycle.start(() => this.listenInternal(transport), {
+    return this.lifecycle.start(async () => {
+      await this.assertRuntimeCredentialsAvailable();
+      return this.listenInternal(transport);
+    }, {
       startupTimeoutMs: this.lifecycleDefaults.startupTimeoutMs,
     }) as Promise<THandle>;
   }
@@ -1308,6 +1392,47 @@ export class McpProxy {
     if (edgeDiagnostics.length > 0) {
       throw new FentarisConfigError(edgeDiagnostics);
     }
+  }
+
+  private async assertRuntimeCredentialsAvailable(): Promise<void> {
+    const requirements = new Map<string, { source: CredentialSource; usages: string[] }>();
+    const add = (source: CredentialSource, usage: string) => {
+      const key = credentialReadinessKey(source);
+      const existing = requirements.get(key);
+      if (existing) existing.usages.push(usage);
+      else requirements.set(key, { source, usages: [usage] });
+    };
+
+    for (const [reference, source] of Object.entries(this.defaultCredentials)) add(source, `default credential ${reference}`);
+    for (const group of this.groups) {
+      for (const [reference, source] of Object.entries(group.credentials)) add(source, `group ${group.id} credential ${reference}`);
+      for (const user of group.users) {
+        for (const [reference, source] of Object.entries(user.credentials)) add(source, `user ${user.id} credential ${reference}`);
+        for (const source of user.apiKeys) add(source, `user ${user.id} API key`);
+      }
+    }
+
+    const unavailable: Array<{ source: string; locator: string; usages: string[] }> = [];
+    await Promise.all([...requirements.values()].map(async (requirement) => {
+      try {
+        await resolveCredentialSource(requirement.source);
+      } catch {
+        unavailable.push({
+          source: requirement.source.type,
+          locator: requirement.source.type === "env" ? requirement.source.name : requirement.source.path,
+          usages: [...new Set(requirement.usages)].sort(),
+        });
+      }
+    }));
+
+    if (unavailable.length === 0) return;
+    unavailable.sort((left, right) => `${left.source}:${left.locator}`.localeCompare(`${right.source}:${right.locator}`));
+    const lines = unavailable.flatMap((entry) => entry.usages.map((usage) => `- ${usage} (${entry.source}:${entry.locator})`));
+    throw new FentarisRuntimeError(`Declared credentials are unavailable:\n${lines.join("\n")}`, {
+      code: "FENTARIS_CREDENTIALS_UNAVAILABLE",
+      hints: ["Run fentaris secrets setup before starting the proxy."],
+      context: { requirements: unavailable },
+    });
   }
 
   /**
@@ -1506,6 +1631,11 @@ export class McpProxy {
       }
     }
 
+    diagnostics.push(...validateEdgeControlPlaneConfig(this.edgeOptions?.controlPlane, {
+      mcpPath: this.defaultPath,
+      listenerHost: this.defaultHost,
+    }));
+
     return diagnostics;
   }
 
@@ -1572,6 +1702,10 @@ export class McpProxy {
       await Promise.all([...this.exposureHandles].map((handle) => handle.close()));
       this.exposureHandles.clear();
       this.httpServer = null;
+      if (this.edgeControlPlaneRuntime) {
+        await this.edgeControlPlaneRuntime.close();
+        this.edgeControlPlaneRuntime = undefined;
+      }
       await Promise.all(this.serverCatalog.allServers().map((server) => server.close()));
       // Remove every session-target binding and notify dependent workloads. @pk
       await this.shutdownEdgeSessions();
@@ -1601,7 +1735,7 @@ export class McpProxy {
    * @pk
    */
   async health(): Promise<HealthReport> {
-    const report = await runHealthChecks({
+    let report = await runHealthChecks({
       config: this.healthConfig,
       state: {
         lifecycle: this.state(),
@@ -1614,6 +1748,24 @@ export class McpProxy {
       },
       emitRuntimeEvent: (event) => this.emitRuntimeEvent(event),
     });
+    if (this.edgeControlPlaneRuntime) {
+      const checkedAt = new Date();
+      const startedAt = Date.now();
+      const edge = await this.edgeControlPlaneRuntime.health();
+      const edgeStatus = edge.status === "down" ? "down" : edge.status === "degraded" ? "degraded" : "ok";
+      report = {
+        ...report,
+        status: healthStatusMax(report.status, edgeStatus),
+        checks: [...report.checks, {
+          name: "edge-control-plane",
+          status: edgeStatus,
+          message: edgeStatus === "ok" ? "Integrated Edge control plane is ready" : edge.warnings[0] ?? "Integrated Edge control plane is unavailable",
+          durationMs: Date.now() - startedAt,
+          checkedAt,
+          metadata: edge,
+        }],
+      };
+    }
     if (report.status === "degraded" && this.state().state === "degraded" && isOnlyLifecycleCheckDegraded(report)) {
       await this.lifecycle.markReady();
       return this.health();
@@ -3785,6 +3937,12 @@ function hasDeclaredApiKeys(groups: Group[]): boolean {
   return groups.some((group) => group.users.some((user) => user.apiKeys.length > 0));
 }
 
+function credentialReadinessKey(source: CredentialSource): string {
+  return source.type === "env"
+    ? `env:${source.name}`
+    : `json:${source.file ?? ""}:${source.path}:${source.keyEnv ?? ""}:${String(source.key ?? "")}`;
+}
+
 function declaredApiKeyIdentityStrategy(groups: () => Group[]): IdentityStrategy | undefined {
   if (!hasDeclaredApiKeys(groups())) {
     return undefined;
@@ -3904,6 +4062,11 @@ function isOnlyLifecycleCheckDegraded(report: HealthReport): boolean {
     }
     return check.status === "ok";
   });
+}
+
+function healthStatusMax(left: HealthReport["status"], right: HealthReport["status"]): HealthReport["status"] {
+  const rank: Record<HealthReport["status"], number> = { ok: 0, unknown: 1, degraded: 2, down: 3 };
+  return rank[left] >= rank[right] ? left : right;
 }
 
 function normalizeAutoLog(autoLog: McpProxyOptions["autoLog"] | undefined): Required<AutoLogOptions> | null {

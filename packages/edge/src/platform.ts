@@ -117,21 +117,33 @@ export class ProtectedJsonStore<T> implements JsonStore<T> {
  */
 export class ProtectedFileCredentialStore implements CredentialStore {
   private readonly store: ProtectedJsonStore<Record<string, string>>;
+  private pending: Promise<void> = Promise.resolve();
   constructor(file: string) {
     this.store = new ProtectedJsonStore(file);
   }
   async get(name: string) {
+    await this.pending;
     return (await this.store.load())?.[name];
   }
   async set(name: string, value: string) {
-    const credentials = await this.store.load() ?? {};
-    await this.store.save({ ...credentials, [name]: value });
+    await this.enqueue(async () => {
+      const credentials = await this.store.load() ?? {};
+      await this.store.save({ ...credentials, [name]: value });
+    });
   }
   async delete(name: string) {
-    const credentials = await this.store.load() ?? {};
-    delete credentials[name];
-    if (Object.keys(credentials).length === 0) await this.store.delete();
-    else await this.store.save(credentials);
+    await this.enqueue(async () => {
+      const credentials = await this.store.load() ?? {};
+      delete credentials[name];
+      if (Object.keys(credentials).length === 0) await this.store.delete();
+      else await this.store.save(credentials);
+    });
+  }
+
+  private async enqueue(operation: () => Promise<void>): Promise<void> {
+    const current = this.pending.catch(() => undefined).then(operation);
+    this.pending = current;
+    await current;
   }
 }
 
@@ -173,4 +185,3 @@ function childHandle(child: ChildProcess): SupervisedProcess {
 function isNotFound(error: unknown): boolean {
   return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT";
 }
-

@@ -7,6 +7,7 @@ import {
   select as setupSelect,
   string as setupString,
 } from "./setup.js";
+import { install as edgeInstall } from "./installation.js";
 
 /**
  * Reusable named execution targets and logical device selectors.
@@ -187,6 +188,7 @@ export const edge = Object.assign(
     boolean: setupBoolean,
     number: setupNumber,
     select: setupSelect,
+    install: edgeInstall,
   },
 );
 

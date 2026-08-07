@@ -13,6 +13,15 @@ export function safeEdgeError(error: unknown): { name: string; message: string }
   };
 }
 
+/** Redact known protected values and common credential/path patterns from installer diagnostics. */
+export function redactInstallerText(message: string, protectedValues: readonly string[] = []): string {
+  let redacted = redactText(message);
+  for (const value of protectedValues.filter(Boolean).sort((left, right) => right.length - left.length)) {
+    redacted = redacted.split(value).join("[REDACTED]");
+  }
+  return redacted.slice(0, 32_768);
+}
+
 function redactText(message: string): string {
   return message
     .replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]")

@@ -11,6 +11,7 @@ import type {
   EdgeReadinessStore,
   EdgePresenceStore,
 } from "./inventory.js";
+import type { InstallationDigest, InstallationLifecycleState, InstallationReasonCode } from "./installation.js";
 
 /** Authenticated inventory-query context. @pk */
 export interface EdgeInventoryContext {
@@ -40,6 +41,17 @@ export interface EdgePublicReadinessSummary {
   readonly resourceCount?: number;
   readonly reasonCategory?: string;
   readonly nextActions?: readonly string[];
+  readonly desiredVersion?: number;
+  readonly launchDigest?: string;
+  readonly installation?: {
+    readonly state: InstallationLifecycleState;
+    readonly digest?: InstallationDigest;
+    readonly retryable: boolean;
+    readonly attemptId?: string;
+    readonly reasonCode?: InstallationReasonCode;
+  };
+  readonly setup: { readonly state: "pending" | "ready" | "blocked" | "not-started" };
+  readonly workload: { readonly state: "not-started" | "starting" | "ready" | "degraded" | "stopped" };
 }
 
 /** Agent-visible Edge inventory view. @pk */
@@ -89,6 +101,8 @@ export interface EdgeSelectionRequirements {
   readonly platforms?: readonly string[];
   readonly pool?: string;
   readonly deploymentId?: string;
+  readonly installationDigest?: InstallationDigest;
+  readonly launchDigest?: string;
 }
 
 /** Ranked preference understood by the reference selector. @pk */
@@ -348,6 +362,19 @@ export class EdgeInventoryService {
         ...(manifest ? { toolCount: manifest.tools.length, resourceCount: manifest.resources.length } : {}),
         ...(value.reasonCategory ? { reasonCategory: value.reasonCategory } : {}),
         ...(value.nextActions ? { nextActions: value.nextActions } : {}),
+        ...(value.desiredVersion === undefined ? {} : { desiredVersion: value.desiredVersion }),
+        ...(value.launchDigest === undefined ? {} : { launchDigest: value.launchDigest }),
+        ...(value.installationState === undefined ? {} : {
+          installation: Object.freeze({
+            state: value.installationState,
+            ...(value.installationDigest ? { digest: value.installationDigest } : {}),
+            retryable: value.retryable ?? false,
+            ...(value.attemptId ? { attemptId: value.attemptId } : {}),
+            ...(value.reasonCode ? { reasonCode: value.reasonCode } : {}),
+          }),
+        }),
+        setup: Object.freeze({ state: setupState(value.status, value.installationState) }),
+        workload: Object.freeze({ state: workloadState(value.status, value.installationState) }),
       }));
     }
     const status: EdgePresenceStatus = presence?.status ?? "offline";
@@ -424,7 +451,24 @@ function matchesRequirements(device: EdgePublicDeviceView, requirements: EdgeSel
     && (requirements.platforms === undefined || (device.platform !== undefined && requirements.platforms.includes(device.platform)))
     && (requirements.pool === undefined || device.pools.includes(requirements.pool))
     && (requirements.deploymentId === undefined || device.readiness.some((value) => value.deploymentId === requirements.deploymentId
-      && value.status === "ready" && value.fresh));
+      && value.status === "ready" && value.fresh
+      && (requirements.installationDigest === undefined || value.installation?.digest === requirements.installationDigest)
+      && (requirements.launchDigest === undefined || value.launchDigest === requirements.launchDigest)));
+}
+
+function setupState(status: EdgeDeploymentReadinessStatus, installation: InstallationLifecycleState | undefined): EdgePublicReadinessSummary["setup"]["state"] {
+  if (installation && !["installed", "configuring", "starting", "ready", "degraded"].includes(installation)) return "not-started";
+  if (status === "ready") return "ready";
+  if (status === "setup-required") return "pending";
+  return "blocked";
+}
+
+function workloadState(status: EdgeDeploymentReadinessStatus, installation: InstallationLifecycleState | undefined): EdgePublicReadinessSummary["workload"]["state"] {
+  if (status === "ready") return "ready";
+  if (installation === "starting") return "starting";
+  if (installation === "degraded") return "degraded";
+  if (status === "blocked" || status === "unavailable" || status === "stale") return "stopped";
+  return "not-started";
 }
 
 function compareDevices(

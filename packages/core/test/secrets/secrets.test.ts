@@ -66,6 +66,39 @@ describe("secrets", () => {
     expect(parsed.envVars).toEqual(["GITHUB_TOKEN"]);
   });
 
+  it("round-trips source metadata and API-key requirements", () => {
+    const parsed = parseManifest(JSON.parse(serializeManifest({
+      version: 1,
+      references: [
+        { ref: "github.token", scope: "default", source: { type: "local" } },
+        { ref: "linear.token", scope: "user:alice", source: { type: "env", name: "LINEAR_TOKEN" } },
+      ],
+      apiKeys: [
+        { userId: "operator", source: { type: "env", name: "OPERATOR_API_KEY" } },
+        { userId: "admin", source: { type: "local" }, count: 2 },
+      ],
+    })));
+
+    expect(parsed.references).toEqual([
+      { ref: "github.token", scope: "default", source: { type: "local" } },
+      { ref: "linear.token", scope: "user:alice", source: { type: "env", name: "LINEAR_TOKEN" } },
+    ]);
+    expect(parsed.apiKeys).toEqual([
+      { userId: "admin", source: { type: "local" }, count: 2 },
+      { userId: "operator", source: { type: "env", name: "OPERATOR_API_KEY" } },
+    ]);
+  });
+
+  it("keeps legacy version 1 manifest entries as implicit local credentials", () => {
+    expect(parseManifest({
+      version: 1,
+      references: [{ ref: "github.token", scope: "default" }],
+    })).toEqual({
+      version: 1,
+      references: [{ ref: "github.token", scope: "default" }],
+    });
+  });
+
   it("unsets credentials", async () => {
     const dir = await createDir("fentaris-secrets-unset-");
     const backend = await LocalSecretsBackend.open({ dir, key });

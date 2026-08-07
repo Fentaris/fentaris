@@ -168,6 +168,32 @@ The current recipe requires missing consent or a folder, file, secret, or scalar
 
 Run `fentaris-edge status`, complete the local prompt, and retry with the same desired-state version.
 
+### Edge installation requires approval
+
+Review the exact current plan locally, then approve or deny it. A previous decision does not apply after the source, command, permissions, verification, cleanup plan, or local policy changes.
+
+```bash theme={null}
+fentaris edge installation review <deployment-id> --json
+fentaris edge installation approve <deployment-id> --yes --json
+```
+
+For custom cleanup with external side effects, repeat review and approval with `--cleanup` before running `cleanup`.
+
+### Edge installation failed or was interrupted
+
+Inspect the bounded reason code and retryability in installation status. Retry only explicit retryable failures; the new attempt preserves the previous diagnostics.
+
+```bash theme={null}
+fentaris edge installation status <deployment-id> --json
+fentaris edge installation retry <deployment-id> --yes --json
+```
+
+`source-integrity-failed`, `unsupported-platform`, `manual-prerequisite-required`, `approval-denied`, and `agent-upgrade-required` need a source, device, local prerequisite, approval, or agent change rather than blind retry.
+
+### Edge installation is blocked by agent compatibility
+
+The assignment requires protocol v3 managed installation but the connected agent negotiated an older protocol. Upgrade the Edge agent or move the assignment to a compatible device. Fentaris does not silently reinterpret the installer as a launch command.
+
 ### Edge command is denied
 
 The local executable/package allowlist rejected the recipe. Add the exact
@@ -275,14 +301,30 @@ If the key is lost for a disposable local project, reinitialize the project or r
 
 ### Secret command asks for a key
 
-`fentaris secrets set` needs the local auth key. The CLI checks `--key`, the exported `FENTARIS_AUTH_KEY`, and the discovered project `.env` before opening the interactive prompt.
+`fentaris secrets set` needs a local auth key. When the project has no encrypted credential store and no configured key, the CLI generates a random key in the project `.env` on the first write.
 
 ```bash theme={null}
-printf 'FENTARIS_AUTH_KEY=<key>\n' >> .env
 fentaris secrets set github.token --user admin
 ```
 
-Run the command inside the project or one of its subdirectories so the CLI can discover the correct `.env`. An exported `FENTARIS_AUTH_KEY` overrides the value in `.env`.
+Run the command inside the project or one of its subdirectories so the CLI can discover the correct `.env`. An explicit `--key` overrides an exported `FENTARIS_AUTH_KEY`, which overrides the value in `.env`.
+
+If `credentials.enc.json` already exists, Fentaris does not generate a replacement key because that would make the existing data unreadable. Restore the original key in `.env` or your secret manager.
+
+### Proxy fails with `FENTARIS_CREDENTIALS_UNAVAILABLE`
+
+The proxy now resolves every declared default, group, user, and API-key credential before it opens its first HTTP, Edge, or custom transport. A missing environment variable, absent JSON path, unreadable file, or wrong local encryption key prevents startup. One error lists all affected references and users without exposing secret values.
+
+Run the guided setup from the project root:
+
+```bash theme={null}
+fentaris secrets setup --dry-run
+fentaris secrets setup
+```
+
+For a deployment or CI job, provide all third-party values first and use `fentaris secrets setup --non-interactive --yes --json`. Fentaris generates local API keys but never invents third-party tokens. If the source uses a custom file or non-standard JSON path, follow the manual action reported by setup.
+
+If setup created `.env` but an older project still reports the key as missing, make its start script load the file (`node --env-file-if-exists=.env dist/index.js`) or export the variables through the deployment environment. Newly generated Fentaris projects already use this form.
 
 ### Auth setup requires interactive input
 
@@ -454,6 +496,28 @@ git rm --cached .fentaris/credentials.enc.json
 Keep `.fentaris/credentials.enc.json` private. Commit only `.fentaris/secrets.manifest.json`.
 
 ## Documentation Issues
+
+## Integrated Edge Control Plane
+
+### `fentaris edge approve` cannot reach the local authority
+
+Run the command from the same project and operating-system account as the running app. Confirm `edge.controlPlane.enabled` is true, then run `fentaris doctor --runtime`. The operator endpoint descriptor and socket are created beneath the protected Edge state directory and removed during clean shutdown. Do not recreate or edit them manually.
+
+### The gateway URL is wrong or rejected
+
+Set `edge.controlPlane.publicOrigin` to the externally reachable canonical origin. Use HTTPS for every non-loopback host, keep `basePath` distinct from the MCP path, and ensure the reverse proxy forwards WebSocket upgrades. Request `Host` and `Forwarded` headers do not override the configured origin.
+
+### A connected device has no tools
+
+Check the device is assigned to the authenticated subject, the placement selector matches, local setup is approved, the desired and connection generations are current, and the reported manifest matches the desired recipe digest. Reconnect stale devices after fixing setup. Fentaris withholds uncertain deployments instead of publishing partial capabilities.
+
+### Managed mode fails startup
+
+Provide all durable managed adapters, including authorization/token/enrollment services and the desired-assignment store. In-memory reference adapters are single-process and intentionally rejected for multi-instance mode. Use health and adapter diagnostics to identify the missing or unsafe contract.
+
+### Recovery and rollback
+
+Restore the protected authority directory only from a consistent encrypted backup, then start one local instance and inspect health before allowing joins. To roll back the feature, stop assigning new Edge placements, revoke affected devices if credentials may have escaped, set `edge.controlPlane.enabled` to false, and restart. Do not downgrade or hand-edit stored schema records.
 
 ### Generated API reference is stale
 

@@ -1,23 +1,25 @@
-# Agent-native Edge Control
+# Integrated Edge Control Plane
 
-This application factory demonstrates policy-filtered inventory, declarative session selection, explicit single-device calls, shared-pool selectors, and bounded parallel fan-out.
+This example enables the supported single-process local Edge control plane with `edge.controlPlane` and starts it with `app.start()`. The application compiles the MCP declaration, setup schema, placement, and target into desired state automatically; there is no application-authored gateway, inventory, resolver, or capability-cache wiring.
 
-Select a ready Xcode worker before transparent calls:
+Start the application, then authorize an agent:
 
-```json
-{"name":"edge__select","arguments":{"target":"build-workers","selector":{"requires":{"pool":"workers","features":["xcode"]},"prefer":["lowest-load"]}}}
+```bash
+fentaris edge approve ABCD-EFGH --subject alice
+npx @fentaris/edge join http://127.0.0.1:4000/_fentaris/edge --name "Alice laptop"
 ```
 
-Call one public device explicitly:
+The new device is reconciled while the application remains running. After the local setup approval, its capabilities become eligible for normal policy-controlled MCP discovery and dispatch.
 
-```json
-{"name":"edge__call","arguments":{"device":{"name":"Mac Studio","inventoryVersion":4},"tool":"builder__check","arguments":{"project":"app"}}}
+## Two-user hot plug
+
+Keep the application running and join two agents, approving each code for its real subject:
+
+```bash
+fentaris edge approve ALICE-01 --subject alice --yes --json
+fentaris edge approve BOB-0002 --subject bob --yes --json
 ```
 
-Run the same effective tool over a bounded shared pool:
+The `userDefaultDevice()` selector gives Alice only Alice's approved default device and Bob only Bob's. Each enrollment independently triggers desired-state publication and capability discovery; neither the MCP catalog nor the application process is restarted. Add an administrator group-scoped placement when administrators should receive the broader eligible deployment set—authorization still does not bypass device readiness or manifest gates.
 
-```json
-{"name":"edge__call_many","arguments":{"selector":{"requires":{"pool":"workers","features":["xcode"]}},"tool":"builder__check","arguments":{"project":"app"},"concurrency":2,"deadlineMs":60000,"failurePolicy":"collect"}}
-```
-
-The in-memory stores keep the example compact and are not production-ready. Replace every store, channel, pool-selection, and result-correlation adapter with durable multi-instance implementations before deployment.
+Local mode stores protected authority state under `.fentaris/edge-control-plane` and is intentionally single-process. Use managed adapters for multi-instance production deployments.

@@ -75,11 +75,13 @@ const edgeCommandSpec: CliCommandSpec = {
     title: "Commands",
     commands: [
       { name: "join", summary: "Enroll this computer and configure persistent operation." },
+      { name: "approve", summary: "Approve an exact pending local Edge authorization code." },
       { name: "run", summary: "Run the enrolled Edge agent in the foreground." },
       { name: "service", summary: "Manage the local persistent Edge service." },
       { name: "list", summary: "List policy-visible Edge devices." },
       { name: "get", summary: "Inspect one policy-visible Edge device." },
       { name: "status", summary: "Show local or remote Edge status." },
+      { name: "installation", summary: "Review and operate local managed MCP installations." },
       { name: "update", summary: "Update user-managed device metadata." },
       { name: "disconnect", summary: "Disconnect a device without revoking identity." },
       { name: "revoke", summary: "Revoke a device identity." },
@@ -98,6 +100,19 @@ const edgeCommandSpec: CliCommandSpec = {
         { name: "tag", valueName: "TAG", repeatable: true, description: "Add a descriptive tag. Repeat for multiple tags." },
         { name: "service", description: "Require persistent service installation." },
         { name: "no-service", description: "Enroll without installing a persistent service." },
+        ...edgeJsonOptions,
+      ],
+    },
+    approve: {
+      name: "approve", path: ["edge", "approve"], description: "Approve an exact pending Edge authorization through the protected local operator channel.",
+      details: ["Example: fentaris edge approve ABCD-EFGH --subject alice --tenant default --yes --json"],
+      usage: "fentaris edge approve [OPTIONS] <user-code>",
+      arguments: [{ name: "user-code", required: true, description: "Exact short-lived code displayed by the joining Edge." }],
+      options: [
+        { name: "subject", valueName: "SUBJECT", description: "Required Fentaris subject receiving the device grant." },
+        { name: "tenant", valueName: "TENANT", description: "Tenant of the pending authorization. [default: default]" },
+        { name: "actor", valueName: "ACTOR", description: "Auditable local operator identity. [default: current OS user]" },
+        { name: "yes", description: "Confirm this exact approval without prompting." },
         ...edgeJsonOptions,
       ],
     },
@@ -129,6 +144,31 @@ const edgeCommandSpec: CliCommandSpec = {
       name: "status", path: ["edge", "status"], description: "Show local or policy-visible remote Edge status.",
       usage: "fentaris edge status [OPTIONS] [device]",
       arguments: [{ name: "device", description: "Public remote device name; omit for the local installation." }], options: edgeDiscoveryOptions,
+    },
+    installation: {
+      name: "installation", path: ["edge", "installation"], description: "Review and operate managed MCP installations through the protected local Edge channel.",
+      details: ["Examples: fentaris edge installation status --json; fentaris edge installation review filesystem --json; fentaris edge installation approve filesystem --yes --json"],
+      usage: "fentaris edge installation <status|review|approve|deny|retry|revoke|cleanup> [deployment-id] [OPTIONS]",
+      commandGroups: [{ title: "Commands", commands: [
+        { name: "status", summary: "Show separated installation, setup, workload, and readiness state." },
+        { name: "review", summary: "Display bounded exact installer review material." },
+        { name: "approve", summary: "Approve the exact current installer plan locally." },
+        { name: "deny", summary: "Deny the exact current installer plan locally." },
+        { name: "retry", summary: "Retry one retryable failed installation with a new attempt." },
+        { name: "revoke", summary: "Revoke local installation approval and stop dependent workloads." },
+        { name: "cleanup", summary: "Remove managed artifacts; custom external cleanup needs separate approval." },
+      ] }],
+      options: [{ name: "help", short: "h", description: "Print help" }],
+      commands: Object.fromEntries(["status", "review", "approve", "deny", "retry", "revoke", "cleanup"].map((name) => [name, {
+        name, path: ["edge", "installation", name], description: `${name[0]!.toUpperCase()}${name.slice(1)} a managed installation.`,
+        usage: `fentaris edge installation ${name} ${name === "status" ? "[deployment-id]" : "<deployment-id>"} [OPTIONS]`,
+        arguments: [{ name: "deployment-id", required: name !== "status", description: "Explicit desired deployment ID." }],
+        options: [
+          ...(["approve", "deny", "retry", "revoke", "cleanup"].includes(name) ? [{ name: "yes", description: "Confirm the local mutation without prompting." }] : []),
+          ...(["review", "approve", "deny"].includes(name) ? [{ name: "cleanup", description: "Target the separately reviewed custom cleanup plan." }] : []),
+          ...edgeJsonOptions,
+        ],
+      }])) as Record<string, CliCommandSpec>,
     },
     update: {
       name: "update", path: ["edge", "update"], description: "Update user-managed Edge device metadata.",
@@ -345,6 +385,7 @@ export const cliSpec: CliCommandSpec = {
           title: "Commands",
           commands: [
             { name: "set", summary: "Store a local credential value." },
+            { name: "setup", summary: "Configure all discovered project credentials." },
             { name: "list", summary: "List required and stored credentials." },
             { name: "unset", summary: "Remove a local credential value." },
             { name: "manifest", summary: "Generate or check the secrets manifest." },
@@ -354,6 +395,24 @@ export const cliSpec: CliCommandSpec = {
       ],
       options: [{ name: "help", short: "h", description: "Print help" }],
       commands: {
+        setup: {
+          name: "setup",
+          path: ["secrets", "setup"],
+          description: "Discover and configure all required project credentials.",
+          usage: "fentaris secrets setup [OPTIONS]",
+          details: [
+            "Generates missing Fentaris API keys, prompts for external values in interactive mode, and writes only after the setup plan is complete.",
+            "JSON and non-interactive runs never prompt and make no changes while required external values are unavailable.",
+          ],
+          options: [
+            { name: "entrypoint", valueName: "PATH", description: "Entrypoint to scan instead of the configured project entrypoint." },
+            { name: "dry-run", description: "Show the setup plan without creating keys or changing files." },
+            { name: "yes", description: "Apply the setup plan without confirmation." },
+            { name: "json", description: "Output the canonical machine-readable setup envelope." },
+            localSecretsKeyOption,
+            { name: "help", short: "h", description: "Print help" },
+          ],
+        },
         set: {
           name: "set",
           path: ["secrets", "set"],

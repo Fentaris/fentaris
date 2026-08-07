@@ -128,7 +128,7 @@ function desiredState(version: number): EdgeDesiredStateMessage {
 }
 
 describe("EdgeWebSocketGateway", () => {
-  it("negotiates v1 for legacy agents and v2 for current agents", async () => {
+  it("negotiates v1 for legacy agents and v3 for current agents", async () => {
     const legacy = await fixture();
     const legacySocket = new TestSocket();
     const legacyPending = legacy.gateway.accept(legacySocket, "secret");
@@ -137,15 +137,16 @@ describe("EdgeWebSocketGateway", () => {
     expect(legacySocket.sent[0]).toMatchObject({ version: 1, protocolVersion: 1 });
 
     const current = await fixture();
-    expect((await connect(current.gateway)).record.protocolVersion).toBe(2);
+    expect((await connect(current.gateway)).record.protocolVersion).toBe(3);
   });
 
-  it("persists authenticated v2 facts, presence, readiness, and freshness", async () => {
+  it("persists authenticated current-protocol facts, presence, readiness, and freshness", async () => {
     let now = 100;
     const { gateway, devices, presence, readiness } = await fixture({ now: () => now });
+    await gateway.publishDesiredState(desiredState(1));
     const { socket } = await connect(gateway);
     socket.receive({
-      version: 2,
+      version: EDGE_PROTOCOL_VERSION,
       kind: "edge.presence",
       tenantId: "tenant-1",
       edgeNodeId: "node-1",
@@ -153,18 +154,18 @@ describe("EdgeWebSocketGateway", () => {
       observed: { platform: "darwin", architecture: "arm64", agentVersion: "0.1.0", executionFeatures: ["mcp-stdio"], reportedAt: 99 },
       capacity: { maxConcurrent: 4, available: 3, reportedAt: 99 },
       load: { active: 1, queued: 0, utilization: 0.25, reportedAt: 99 },
-      readiness: [{ deploymentId: "filesystem", status: "ready", observedAt: 99 }],
+      readiness: [{ deploymentId: "fixture", status: "ready", desiredVersion: 1, observedAt: 99 }],
       reportedAt: 99,
     });
     await vi.waitFor(async () => {
       expect((await devices.get("tenant-1", "node-1"))?.observed?.platform).toBe("darwin");
       expect((await presence.get("tenant-1", "node-1"))?.credentialId).toBe("credential-1");
-      expect((await readiness.get("tenant-1", "node-1", "filesystem"))?.connectionGeneration).toBe(1);
+      expect((await readiness.get("tenant-1", "node-1", "fixture"))?.connectionGeneration).toBe(1);
     });
 
     now = 120;
     socket.receive({
-      version: 2,
+      version: EDGE_PROTOCOL_VERSION,
       kind: "edge.heartbeat",
       tenantId: "tenant-1",
       edgeNodeId: "node-1",

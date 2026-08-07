@@ -17,6 +17,14 @@ npx @fentaris/edge join https://fentaris.example \
 
 Open the displayed verification URL and enter the user code. Join creates a random device keypair, proves possession, enrolls the device, and installs a per-user background service when the platform permits it. No global package installation is required for the `npx` form.
 
+For an application using the integrated local control plane, approve the displayed code from the application project:
+
+```bash theme={null}
+fentaris edge approve ABCD-EFGH --subject alice
+```
+
+Approval travels through an owner-only local operator socket. The CLI does not read or mutate the protected authority database. Enrollment, connection, desired-state reconciliation, and capability publication then happen without custom gateway wiring.
+
 If native service installation is unavailable, the device stays enrolled and the command returns `fentaris edge run` as the foreground fallback. Pass `--no-service` to choose foreground operation or `--service` to fail unless persistent installation succeeds.
 
 The local executable allowlist is deny-by-default. Set
@@ -52,6 +60,78 @@ app.user("alice").mcp("filesystem").target("personal");
 ```
 
 The local prompt shows the recipe digest and requested access. Approving a folder stores its canonical path locally and reports only an opaque grant ID.
+
+## Install an Assigned MCP Server
+
+Declare installation separately from the launch recipe. Managed installation supports exact Node package versions with integrity, exact Python versions with hashes, immutable binary archives, container image digests, custom sources, and manual prerequisites.
+
+```ts theme={null}
+const installer = edge.install.custom({
+  source: {
+    kind: "git",
+    repository: "https://github.com/example/filesystem-mcp-installer.git",
+    commit: "0123456789abcdef0123456789abcdef01234567",
+  },
+  entrypoint: "install.sh",
+  interpreter: "sh",
+}, {
+  permissions: {
+    network: "source-only",
+    requireNetworkIsolation: true,
+    executables: ["sh"],
+  },
+  verification: [{ kind: "executable", target: "bin/filesystem-mcp" }],
+  outputs: [{ name: "server", kind: "executable", path: "bin/filesystem-mcp" }],
+});
+
+app.mcp("filesystem", {
+  transport: stdio({ command: installedArtifact(installer, "server") }),
+});
+```
+
+Git recipes require an exact 40-character commit. Archives, packages, distributions, and containers require immutable digests or hashes. Private source credentials are resolved from the local encrypted credential store and are never placed in command arguments, desired state, inventory, or review output.
+
+Custom installers require local review of the exact source identity, entrypoint, arguments, permissions, outputs, verification, cleanup plan, and effective policy digest. Denial and revocation are sticky. Any effective-plan change creates a new approval identity. A custom cleanup with external side effects requires a separate `--cleanup` review and approval.
+
+<Warning>
+  Fentaris rejects floating Git refs, credentials embedded in URLs, archive traversal, symlinks escaping staging, submodules, undeclared executables, elevation, and required isolation that the device cannot enforce.
+</Warning>
+
+Keep desktop applications as manual prerequisites:
+
+```ts theme={null}
+const desktopApp = edge.install.manual({
+  requirement: "Example Desktop MCP 3.2",
+  detect: { kind: "executable", target: "example-desktop-mcp", expectedVersion: "3.2.0" },
+  nextAction: "Install Example Desktop MCP 3.2 from the approved vendor package, then retry locally.",
+}, {
+  outputs: [{ name: "server", kind: "executable", path: "example-desktop-mcp" }],
+  cleanup: { kind: "manual" },
+});
+```
+
+Fentaris detects this prerequisite but does not download, elevate, install, update, or remove it.
+
+## Review and Recover Installations
+
+```bash theme={null}
+fentaris edge installation status --json
+fentaris edge installation review filesystem --json
+fentaris edge installation approve filesystem --yes --json
+fentaris edge installation retry filesystem --yes --json
+```
+
+For a custom external cleanup, review and approve the cleanup identity separately before removal:
+
+```bash theme={null}
+fentaris edge installation review filesystem --cleanup --json
+fentaris edge installation approve filesystem --cleanup --yes --json
+fentaris edge installation cleanup filesystem --yes --json
+```
+
+Lifecycle states distinguish assignment, checking, approval, installation, verification, setup, startup, readiness, degradation, failure, removal, and rollback. Retried failures create a new attempt; they do not overwrite diagnostics. Updates install into a digest-addressed root and activate only after verification. Shared artifacts are deleted only after their final deployment reference is removed.
+
+Protocol v3 carries correlated installation and launch digests. Older agents can continue compatible transparent execution, but a deployment requiring managed installation remains blocked with `agent-upgrade-required` until an eligible agent connects.
 
 ## Inspect and Disconnect
 

@@ -40,11 +40,20 @@ describe("EdgeCapabilityCache", () => {
     });
 
     await cache.update(manifest());
+    await cache.setOnline("tenant-1", "fixture", true);
     await expect(cache.state("tenant-1", "fixture")).resolves.toMatchObject({
       status: "ready",
       cacheAgeMs: 20,
       manifest: { recipeDigest: "sha256:one" },
     });
+    // One online node remains available when another goes offline.
+    await cache.setOnline("tenant-1", "fixture", true, "node-a");
+    await cache.setOnline("tenant-1", "fixture", true, "node-b");
+    await cache.setOnline("tenant-1", "fixture", false, "node-a");
+    await expect(cache.state("tenant-1", "fixture")).resolves.toMatchObject({ status: "ready" });
+    await cache.setOnline("tenant-1", "fixture", false, "node-b");
+    await cache.setOnline("tenant-1", "fixture", false, "*");
+    await expect(cache.state("tenant-1", "fixture")).resolves.toMatchObject({ status: "offline-cached" });
     await cache.setOnline("tenant-1", "fixture", false);
     now = 150;
     await expect(cache.state("tenant-1", "fixture")).resolves.toMatchObject({
@@ -78,6 +87,7 @@ describe("EdgeCapabilityCache", () => {
 
     await cache.setDesiredRecipe("tenant-1", "fixture", "sha256:one");
     await cache.update(manifest());
+    await cache.setOnline("tenant-1", "fixture", true);
     const alice = await proxy.listTools(
       undefined,
       { id: "alice" },

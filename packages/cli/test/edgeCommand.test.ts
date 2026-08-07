@@ -20,6 +20,8 @@ function backend(): EdgeOperatorBackend & Record<string, ReturnType<typeof vi.fn
     update: vi.fn(async (device) => success({ device: { name: device, inventoryVersion: 3 } })),
     disconnect: vi.fn(async (device) => success({ device: { name: device }, status: "disconnected" })),
     revoke: vi.fn(async (device) => success({ device: { name: device }, status: "revoked" })),
+    installation: vi.fn(async (action, deploymentId) => success({ action, deploymentId, installation: "ready", setup: "ready", workload: "ready", readiness: "ready" })),
+    approve: vi.fn(async (userCode, decision) => success({ status: "approved", userCode, ...decision })),
   } as EdgeOperatorBackend & Record<string, ReturnType<typeof vi.fn>>;
 }
 
@@ -62,6 +64,14 @@ describe("fentaris edge command parsing and help", () => {
     expect(io.output.join("\n")).toContain("--tag <TAG>");
     expect(io.output.join("\n")).toContain("fentaris edge join https://control.example");
   });
+
+  it("documents the protected approval command and stable machine flags", async () => {
+    const io = runtime();
+    await expect(main(["edge", "approve", "--help"], io.value)).resolves.toBe(0);
+    expect(io.output.join("\n")).toContain("protected local operator channel");
+    expect(io.output.join("\n")).toContain("--subject <SUBJECT>");
+    expect(io.output.join("\n")).toContain("--json");
+  });
 });
 
 describe("fentaris edge canonical behavior", () => {
@@ -78,6 +88,37 @@ describe("fentaris edge canonical behavior", () => {
       installService: true,
     }));
     expect(JSON.parse(io.output[0]!)).toEqual(expect.objectContaining({ ok: true, pagination: null, warnings: [], nextActions: [] }));
+  });
+
+  it("approves an exact code with confirmation and canonical JSON", async () => {
+    const io = runtime(true);
+    const service = backend();
+    const command = parseCommand(["edge", "approve", "ABCD-EFGH", "--subject", "alice", "--tenant", "default", "--actor", "operator", "--yes", "--json"]);
+    if (command.kind !== "ok") throw new Error("parse failed");
+    await expect(runEdge(command.command, io.value, service)).resolves.toBe(0);
+    expect(service.approve).toHaveBeenCalledWith("ABCD-EFGH", expect.objectContaining({
+      tenantId: "default",
+      subjectId: "alice",
+      actorId: "operator",
+      approvedAt: expect.any(Number),
+    }));
+    expect(JSON.parse(io.output[0]!)).toMatchObject({ ok: true, pagination: null, warnings: [], nextActions: [] });
+  });
+
+  it("refuses unconfirmed or subject-less approval", async () => {
+    const service = backend();
+    const missingIo = runtime(true);
+    const missing = parseCommand(["edge", "approve", "ABCD-EFGH", "--json"]);
+    if (missing.kind !== "ok") throw new Error("parse failed");
+    await expect(runEdge(missing.command, missingIo.value, service)).resolves.toBe(2);
+    expect(JSON.parse(missingIo.output[0]!)).toMatchObject({ ok: false, error: { code: "EDGE_CLI_USAGE" } });
+
+    const unconfirmedIo = runtime(true);
+    const unconfirmed = parseCommand(["edge", "approve", "ABCD-EFGH", "--subject", "alice", "--json"]);
+    if (unconfirmed.kind !== "ok") throw new Error("parse failed");
+    await expect(runEdge(unconfirmed.command, unconfirmedIo.value, service)).resolves.toBe(2);
+    expect(service.approve).not.toHaveBeenCalled();
+    expect(JSON.parse(unconfirmedIo.output[0]!)).toMatchObject({ ok: false, error: { code: "CONFIRMATION_REQUIRED" } });
   });
 
   it("passes compact pagination and identity options to discovery", async () => {
@@ -134,5 +175,28 @@ describe("fentaris edge canonical behavior", () => {
     if (command.kind !== "ok") throw new Error("parse failed");
     await runEdge(command.command, io.value, service);
     expect(io.output).toEqual(["ready"]);
+  });
+
+  it("requires explicit confirmation for installation mutations and preserves canonical JSON", async () => {
+    const io = runtime(true);
+    const service = backend();
+    const denied = parseCommand(["edge", "installation", "retry", "filesystem", "--json"]);
+    if (denied.kind !== "ok") throw new Error("parse failed");
+    await expect(runEdge(denied.command, io.value, service)).resolves.toBe(2);
+    expect(service.installation).not.toHaveBeenCalled();
+    expect(JSON.parse(io.output[0]!)).toMatchObject({ ok: false, error: { code: "CONFIRMATION_REQUIRED" } });
+
+    const approvedIo = runtime(true);
+    const approved = parseCommand(["edge", "installation", "retry", "filesystem", "--yes", "--json"]);
+    if (approved.kind !== "ok") throw new Error("parse failed");
+    await expect(runEdge(approved.command, approvedIo.value, service)).resolves.toBe(0);
+    expect(service.installation).toHaveBeenCalledWith("retry", "filesystem", { cleanup: false });
+    expect(JSON.parse(approvedIo.output[0]!)).toMatchObject({ ok: true, data: { installation: "ready", setup: "ready", workload: "ready", readiness: "ready" }, pagination: null, warnings: [], nextActions: [] });
+
+    const cleanupApprovalIo = runtime(true);
+    const cleanupApproval = parseCommand(["edge", "installation", "approve", "filesystem", "--cleanup", "--yes", "--json"]);
+    if (cleanupApproval.kind !== "ok") throw new Error("parse failed");
+    await expect(runEdge(cleanupApproval.command, cleanupApprovalIo.value, service)).resolves.toBe(0);
+    expect(service.installation).toHaveBeenLastCalledWith("approve", "filesystem", { cleanup: true });
   });
 });

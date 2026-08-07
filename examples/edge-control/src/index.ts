@@ -1,62 +1,48 @@
 import {
-  EdgeChildBindingManager,
-  EdgeInventoryService,
-  EdgeSessionSelectionService,
-  InMemoryEdgeChildBindingStore,
-  InMemoryEdgeDeviceRegistry,
-  InMemoryEdgePresenceStore,
-  InMemoryEdgeReadinessStore,
-  InMemoryEdgeSessionSelectionStore,
-  InMemorySessionBindingStore,
   McpProxy,
   McpServer,
   Policy,
-  type EdgeInventoryAuthorizer,
-  type FentarisTransport,
+  StdioTransport,
+  edge,
+  runtime,
 } from "@fentaris/core";
 
-/** Agent-native discovery, declarative selection, explicit calls, and bounded fan-out. */
-export function createEdgeControlApp(options: {
-  workloadDiscoveryTransport: FentarisTransport;
-  edgeTransport: FentarisTransport;
-  authorizer: EdgeInventoryAuthorizer;
-}): McpProxy {
-  const devices = new InMemoryEdgeDeviceRegistry();
-  const presence = new InMemoryEdgePresenceStore();
-  const readiness = new InMemoryEdgeReadinessStore();
-  const selectionsStore = new InMemoryEdgeSessionSelectionStore();
-  const bindings = new InMemorySessionBindingStore();
-  const inventory = new EdgeInventoryService({ devices, presence, readiness, authorizer: options.authorizer });
-  const selections = new EdgeSessionSelectionService({ selections: selectionsStore, bindings, inventory });
-
+/** A self-contained local app: no gateway, inventory, or resolver wiring. */
+export function createEdgeControlApp(): McpProxy {
   return new McpProxy({
-    servers: [new McpServer({ name: "builder", transport: options.workloadDiscoveryTransport })],
-    policy: new Policy({ name: "edge-agents" })
-      .mcp("builder").allow("*")
-      .mcp("edge").allow("list")
-      .mcp("edge").allow("get")
-      .mcp("edge").allow("select")
-      .mcp("edge").allow("call")
-      .mcp("edge").allow("call_many"),
+    port: 4000,
+    host: "127.0.0.1",
+    servers: [new McpServer({
+      name: "workspace",
+      transport: new StdioTransport({
+        command: "workspace-mcp",
+        args: ["--root", runtime.input("workspace")],
+      }),
+    })],
+    policy: Policy.allowAll(),
+    targets: {
+      personal: edge({ device: edge.userDefaultDevice() }),
+    },
+    setup: {
+      workspace: {
+        workspace: edge.folder({ access: "read-write" }),
+      },
+    },
+    placements: [
+      { serverName: "workspace", scope: "global", targetName: "personal" },
+    ],
     edge: {
-      transport: options.edgeTransport,
-      sessionBindingStore: bindings,
-      sessionSelectionStore: selectionsStore,
-      childBindingManager: new EdgeChildBindingManager({ store: new InMemoryEdgeChildBindingStore() }),
-      control: {
+      controlPlane: {
         enabled: true,
-        inventory,
-        selections,
-        defaultTargetName: "build-workers",
-        limits: {
-          maxDevices: 4,
-          maxConcurrency: 2,
-          maxDeadlineMs: 60_000,
-          maxSelectorCandidates: 50,
-          maxChildBytes: 500_000,
-          maxAggregateBytes: 1_500_000,
-        },
+        mode: "local",
+        publicOrigin: "http://127.0.0.1:4000",
       },
     },
   });
+}
+
+export async function startEdgeControlApp(): Promise<McpProxy> {
+  const app = createEdgeControlApp();
+  await app.start();
+  return app;
 }

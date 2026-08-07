@@ -26,11 +26,10 @@ All four commands should exit successfully before provisioning local identity.
 
 ## Provision API-key identities
 
-Choose an encryption key outside the repository and keep it in the same shell
-session. Do not put it in `.env`, source code, documentation, or Git:
+Let the CLI generate a project-local encryption key in the ignored `.env` on
+the first credential write:
 
 ```bash
-export FENTARIS_AUTH_KEY="<choose-a-local-encryption-key>"
 pnpm exec fentaris auth api-key add reader --generate --non-interactive
 pnpm exec fentaris auth api-key add maintainer --generate --non-interactive
 ```
@@ -56,8 +55,9 @@ Proxy ready
 Listening on: http://127.0.0.1:4100/mcp
 ```
 
-In a second shell, keep the same `FENTARIS_AUTH_KEY` available and export the
-same client API key used for the curl tests so doctor can authenticate:
+In a second shell, export the same client API key used for the curl tests so
+doctor can authenticate. The project script loads `FENTARIS_AUTH_KEY` from
+`.env` automatically:
 
 ```bash
 export FENTARIS_API_KEY="$READER_API_KEY"

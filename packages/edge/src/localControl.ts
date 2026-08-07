@@ -4,11 +4,14 @@ import { createConnection, createServer, type Server, type Socket } from "node:n
 import { edgeError } from "@fentaris/core";
 import type { EdgePersistentAgent } from "./daemon.js";
 
-export type EdgeLocalControlCommand = "status" | "reconnect" | "stop" | "setup-handoff";
+export type EdgeLocalControlCommand = "status" | "reconnect" | "stop" | "setup-handoff"
+  | "installation-status" | "installation-review" | "installation-approve" | "installation-deny"
+  | "installation-retry" | "installation-revoke" | "installation-cleanup";
 
 export interface EdgeLocalControlRequest {
   readonly credential: string;
   readonly command: EdgeLocalControlCommand;
+  readonly parameters?: Readonly<Record<string, unknown>>;
 }
 
 export interface EdgeLocalControlResponse {
@@ -26,6 +29,15 @@ export interface EdgeLocalControlServerOptions {
   readonly endpoint: EdgeLocalControlEndpoint;
   readonly agent: EdgePersistentAgent;
   readonly onSetupHandoff?: () => unknown | Promise<unknown>;
+  readonly installation?: {
+    status(parameters: Readonly<Record<string, unknown>>): unknown | Promise<unknown>;
+    review(parameters: Readonly<Record<string, unknown>>): unknown | Promise<unknown>;
+    approve(parameters: Readonly<Record<string, unknown>>): unknown | Promise<unknown>;
+    deny(parameters: Readonly<Record<string, unknown>>): unknown | Promise<unknown>;
+    retry(parameters: Readonly<Record<string, unknown>>): unknown | Promise<unknown>;
+    revoke(parameters: Readonly<Record<string, unknown>>): unknown | Promise<unknown>;
+    cleanup(parameters: Readonly<Record<string, unknown>>): unknown | Promise<unknown>;
+  };
   readonly maxRequestBytes?: number;
 }
 
@@ -104,6 +116,18 @@ export class EdgeLocalControlServer {
         return { ok: true, data: { status: "stopping" } };
       case "setup-handoff":
         return { ok: true, data: await this.options.onSetupHandoff?.() ?? { status: "unavailable" } };
+      case "installation-status":
+      case "installation-review":
+      case "installation-approve":
+      case "installation-deny":
+      case "installation-retry":
+      case "installation-revoke":
+      case "installation-cleanup": {
+        const installation = this.options.installation;
+        if (!installation) return { ok: false, error: { code: "EDGE_SETUP_REQUIRED", message: "Managed installation control is unavailable." } };
+        const operation = request.command.slice("installation-".length) as "status" | "review" | "approve" | "deny" | "retry" | "revoke" | "cleanup";
+        return { ok: true, data: await installation[operation](request.parameters ?? {}) };
+      }
       default:
         return { ok: false, error: { code: "EDGE_PROTOCOL", message: "Unsupported local control command." } };
     }
@@ -118,6 +142,7 @@ export class EdgeLocalControlServer {
 export async function callEdgeLocalControl(
   endpoint: EdgeLocalControlEndpoint,
   command: EdgeLocalControlCommand,
+  parameters?: Readonly<Record<string, unknown>>,
 ): Promise<EdgeLocalControlResponse> {
   return new Promise((resolve, reject) => {
     const socket = createConnection(endpoint.address);
@@ -133,7 +158,7 @@ export async function callEdgeLocalControl(
       }
     });
     socket.once("connect", () => {
-      socket.write(`${JSON.stringify({ credential: endpoint.credential, command })}\n`);
+      socket.write(`${JSON.stringify({ credential: endpoint.credential, command, ...(parameters ? { parameters } : {}) })}\n`);
     });
   });
 }

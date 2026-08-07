@@ -12,6 +12,7 @@ import type {
   EdgeCapabilityManifestMessage,
   EdgeDesiredStateAckMessage,
   EdgeDesiredStateMessage,
+  EdgeInstallationStatusMessage,
   EdgeSetupStatusMessage,
 } from "./controlProtocol.js";
 
@@ -112,6 +113,14 @@ export interface EdgeDesiredStateStore {
 export interface EdgeSetupStatusStore {
   get(tenantId: string, edgeNodeId: string, deploymentId: string): Promise<EdgeSetupStatusMessage | undefined>;
   put(status: EdgeSetupStatusMessage): Promise<void>;
+}
+
+/** Replaceable bounded managed-installation lifecycle store. @pk */
+export interface EdgeInstallationStatusStore {
+  get(tenantId: string, edgeNodeId: string, deploymentId: string): Promise<EdgeInstallationStatusMessage | undefined>;
+  list(tenantId: string, edgeNodeId: string): Promise<readonly EdgeInstallationStatusMessage[]>;
+  put(status: EdgeInstallationStatusMessage): Promise<void>;
+  delete(tenantId: string, edgeNodeId: string, deploymentId: string): Promise<void>;
 }
 
 /** Replaceable capability-manifest cache contract. @pk */
@@ -255,7 +264,16 @@ export class InMemoryEdgeDeviceRegistry implements EdgeDeviceRegistry {
 
   async revoke(tenantId: string, edgeNodeId: string): Promise<void> {
     const existing = await this.get(tenantId, edgeNodeId);
-    if (existing) this.devices.set(key(tenantId, edgeNodeId), Object.freeze({ ...existing, revoked: true }));
+    if (existing) {
+      this.devices.set(
+        key(tenantId, edgeNodeId),
+        Object.freeze({
+          ...existing,
+          revoked: true,
+          connectionGeneration: existing.connectionGeneration + 1,
+        }),
+      );
+    }
   }
 
   private assertNameAvailable(tenantId: string, name: string, exceptEdgeNodeId: string): void {
@@ -317,7 +335,43 @@ export class InMemoryEdgeSetupStatusStore implements EdgeSetupStatusStore {
     return this.statuses.get(key(tenantId, edgeNodeId, deploymentId));
   }
   async put(status: EdgeSetupStatusMessage) {
-    this.statuses.set(key(status.tenantId, status.edgeNodeId, status.deploymentId), Object.freeze({ ...status }));
+    const storageKey = key(status.tenantId, status.edgeNodeId, status.deploymentId);
+    const existing = this.statuses.get(storageKey);
+    if (existing && status.connectionGeneration < existing.connectionGeneration) {
+      throw edgeError("EDGE_PROTOCOL", "Setup status belongs to a stale connection generation.");
+    }
+    if (existing && status.connectionGeneration === existing.connectionGeneration && existing.recipeDigest !== status.recipeDigest) {
+      throw edgeError("EDGE_PROTOCOL", "Setup status recipe digest changed within one connection generation.");
+    }
+    this.statuses.set(storageKey, Object.freeze({ ...status }));
+  }
+}
+
+/** Reference single-process managed-installation lifecycle store. @pk */
+export class InMemoryEdgeInstallationStatusStore implements EdgeInstallationStatusStore {
+  private readonly statuses = new Map<string, EdgeInstallationStatusMessage>();
+  async get(tenantId: string, edgeNodeId: string, deploymentId: string) {
+    return this.statuses.get(key(tenantId, edgeNodeId, deploymentId));
+  }
+  async list(tenantId: string, edgeNodeId: string) {
+    return Object.freeze([...this.statuses.values()]
+      .filter((status) => status.tenantId === tenantId && status.edgeNodeId === edgeNodeId)
+      .sort((left, right) => left.deploymentId.localeCompare(right.deploymentId)));
+  }
+  async put(status: EdgeInstallationStatusMessage) {
+    const storageKey = key(status.tenantId, status.edgeNodeId, status.deploymentId);
+    const existing = this.statuses.get(storageKey);
+    if (existing && (status.connectionGeneration < existing.connectionGeneration
+      || status.desiredVersion < existing.desiredVersion
+      || (status.desiredVersion === existing.desiredVersion && status.installationDigest !== existing.installationDigest)
+      || (status.desiredVersion === existing.desiredVersion && status.launchDigest !== existing.launchDigest)
+      || (status.connectionGeneration === existing.connectionGeneration && status.observedAt < existing.observedAt))) {
+      throw edgeError("EDGE_PROTOCOL", "Installation lifecycle report is stale or has mismatched correlation identity.");
+    }
+    this.statuses.set(storageKey, Object.freeze({ ...status }));
+  }
+  async delete(tenantId: string, edgeNodeId: string, deploymentId: string) {
+    this.statuses.delete(key(tenantId, edgeNodeId, deploymentId));
   }
 }
 
@@ -328,7 +382,15 @@ export class InMemoryEdgeCapabilityManifestStore implements EdgeCapabilityManife
     return this.manifests.get(key(tenantId, edgeNodeId, deploymentId));
   }
   async put(manifest: EdgeCapabilityManifestMessage) {
-    this.manifests.set(key(manifest.tenantId, manifest.edgeNodeId, manifest.deploymentId), Object.freeze({ ...manifest }));
+    const storageKey = key(manifest.tenantId, manifest.edgeNodeId, manifest.deploymentId);
+    const existing = this.manifests.get(storageKey);
+    if (existing && manifest.connectionGeneration < existing.connectionGeneration) {
+      throw edgeError("EDGE_PROTOCOL", "Capability manifest belongs to a stale connection generation.");
+    }
+    if (existing && manifest.connectionGeneration === existing.connectionGeneration && manifest.recipeDigest !== existing.recipeDigest) {
+      throw edgeError("EDGE_PROTOCOL", "Capability manifest recipe digest changed within one connection generation.");
+    }
+    this.manifests.set(storageKey, Object.freeze({ ...manifest }));
   }
   async delete(tenantId: string, edgeNodeId: string, deploymentId: string) {
     this.manifests.delete(key(tenantId, edgeNodeId, deploymentId));

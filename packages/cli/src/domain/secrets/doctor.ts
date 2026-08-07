@@ -7,6 +7,8 @@ import {
   parseManifest,
   secretRefKey,
   type SecretRef,
+  type SecretsManifest,
+  type SecretsManifestApiKey,
   type SecretsManifestEntry,
 } from "@fentaris/core";
 import type { HealthResult, ProjectDiscovery, Runtime } from "../../shared/types.js";
@@ -30,7 +32,8 @@ export type SecretsDoctorIssue = {
 
 export async function getSecretsDoctorIssues(project: ProjectDiscovery, runtime: Runtime, options: SecretsDoctorOptions = {}): Promise<SecretsDoctorIssue[]> {
   const issues: SecretsDoctorIssue[] = [];
-  const required = await loadRequiredReferences(project);
+  const manifest = await loadRequiredManifest(project);
+  const required = manifest.references.filter((entry) => entry.source?.type !== "env" && entry.source?.type !== "manual");
   const env = await loadProjectEnv(project.root, runtime.env);
   const key = options.key ?? env.FENTARIS_AUTH_KEY;
   const storeExists = await exists(credentialsPath(project));
@@ -80,6 +83,31 @@ export async function getSecretsDoctorIssues(project: ProjectDiscovery, runtime:
     });
   }
 
+  for (const entry of manifest.references) {
+    if (entry.source?.type === "env" && !env[entry.source.name]?.trim()) {
+      issues.push({
+        status: options.strict ? "fail" : "warn",
+        ref: entry.ref,
+        scope: entry.scope,
+        detail: `Required environment variable ${entry.source.name} is missing.`,
+        hint: `Set ${entry.source.name} in the project .env or deployment environment.`,
+      });
+    } else if (entry.source?.type === "manual") {
+      issues.push({
+        status: options.strict ? "fail" : "warn",
+        ref: entry.ref,
+        scope: entry.scope,
+        detail: entry.source.reason,
+        hint: "Configure this custom credential source manually.",
+      });
+    }
+  }
+
+  for (const requirement of manifest.apiKeys ?? []) {
+    const issue = apiKeyIssue(requirement, stored, env, options.strict === true);
+    if (issue) issues.push(issue);
+  }
+
   for (const tracked of await gitTrackedSecretFiles(project)) {
     issues.push({
       status: "fail",
@@ -121,8 +149,8 @@ export async function secretsDoctorHealthResults(project: ProjectDiscovery, runt
   const issues = await getSecretsDoctorIssues(project, runtime, options);
   const manifestExists = await exists(manifestPath(project));
   const entrypoint = path.join(project.root, project.config.entrypoint);
-  const scanned = await exists(entrypoint) ? await scanEntrypointForSecrets(entrypoint) : { references: [], envVars: [] };
-  const shouldHaveManifest = manifestExists || scanned.references.length > 0;
+  const scanned = await exists(entrypoint) ? await scanEntrypointForSecrets(entrypoint) : { references: [], envVars: [], apiKeys: [], diagnostics: [] };
+  const shouldHaveManifest = manifestExists || scanned.references.length > 0 || scanned.apiKeys.length > 0 || scanned.envVars.length > 0;
   const results: HealthResult[] = shouldHaveManifest
     ? [
         {
@@ -149,18 +177,27 @@ export async function secretsDoctorHealthResults(project: ProjectDiscovery, runt
 }
 
 export async function loadRequiredReferences(project: ProjectDiscovery): Promise<SecretsManifestEntry[]> {
+  return (await loadRequiredManifest(project)).references;
+}
+
+export async function loadRequiredManifest(project: ProjectDiscovery): Promise<SecretsManifest> {
   const manifestFile = manifestPath(project);
   if (await exists(manifestFile)) {
-    const manifest = parseManifest(parseManifestJson(await readFile(manifestFile, "utf8"), manifestFile));
-    return manifest.references;
+    return parseManifest(parseManifestJson(await readFile(manifestFile, "utf8"), manifestFile));
   }
 
   const entrypoint = path.join(project.root, project.config.entrypoint);
   if (await exists(entrypoint)) {
-    return (await scanEntrypointForSecrets(entrypoint)).references;
+    const scanned = await scanEntrypointForSecrets(entrypoint);
+    return {
+      version: 1,
+      references: scanned.references,
+      ...(scanned.envVars.length ? { envVars: scanned.envVars } : {}),
+      ...(scanned.apiKeys.length ? { apiKeys: scanned.apiKeys } : {}),
+    };
   }
 
-  return [];
+  return { version: 1, references: [] };
 }
 
 function parseManifestJson(source: string, filePath: string): unknown {
@@ -172,24 +209,41 @@ function parseManifestJson(source: string, filePath: string): unknown {
   }
 }
 
-export function buildListRows(required: SecretsManifestEntry[], stored: SecretRef[]): Array<{ ref: string; scope: string; kind: string; status: string }> {
+export function buildListRows(required: SecretsManifest, stored: SecretRef[], env: NodeJS.ProcessEnv = process.env): Array<{ ref: string; scope: string; kind: string; status: string }> {
   const storedCredentialsByKey = new Map(
     stored.filter((entry) => entry.kind === "credential").map((entry) => [secretRefKey(entry.ref, entry.scope), entry]),
   );
   const rows: Array<{ ref: string; scope: string; kind: string; status: string }> = [];
   const seen = new Set<string>();
+  const seenApiKeyUsers = new Set<string>();
 
-  for (const entry of required) {
+  for (const entry of required.references) {
     const scope = decodeScope(entry.scope);
     const key = secretRefKey(entry.ref, scope);
     seen.add(key);
     const storedEntry = storedCredentialsByKey.get(key);
+    const status = entry.source?.type === "env"
+      ? env[entry.source.name]?.trim() ? "set" : "missing"
+      : entry.source?.type === "manual"
+        ? "manual"
+        : storedEntry ? "set" : "missing";
     rows.push({
       ref: entry.ref,
       scope: entry.scope,
       kind: "credential",
-      status: storedEntry ? "set" : "missing",
+      status,
     });
+  }
+
+  for (const requirement of required.apiKeys ?? []) {
+    seenApiKeyUsers.add(requirement.userId);
+    const storedEntry = stored.find((entry) => entry.kind === "apiKey" && entry.scope.kind === "user" && entry.scope.id === requirement.userId);
+    const status = requirement.source.type === "env"
+      ? env[requirement.source.name]?.trim() ? "set" : "missing"
+      : requirement.source.type === "manual"
+        ? "manual"
+        : (storedEntry?.count ?? 0) >= (requirement.count ?? 1) ? `${storedEntry?.count ?? 0} keys` : "missing";
+    rows.push({ ref: requirement.userId, scope: `user:${requirement.userId}`, kind: "apiKey", status });
   }
 
   for (const entry of stored) {
@@ -197,6 +251,7 @@ export function buildListRows(required: SecretsManifestEntry[], stored: SecretRe
     if (entry.kind === "credential" && seen.has(key)) {
       continue;
     }
+    if (entry.kind === "apiKey" && entry.scope.kind === "user" && seenApiKeyUsers.has(entry.scope.id)) continue;
     rows.push({
       ref: entry.ref,
       scope: formatScopeLabel(entry.scope),
@@ -206,6 +261,35 @@ export function buildListRows(required: SecretsManifestEntry[], stored: SecretRe
   }
 
   return rows;
+}
+
+function apiKeyIssue(requirement: SecretsManifestApiKey, stored: SecretRef[], env: NodeJS.ProcessEnv, strict: boolean): SecretsDoctorIssue | null {
+  if (requirement.source.type === "env") {
+    return env[requirement.source.name]?.trim() ? null : {
+      status: strict ? "fail" : "warn",
+      ref: requirement.userId,
+      scope: "apiKey",
+      detail: `Required API-key environment variable ${requirement.source.name} is missing.`,
+      hint: `Set ${requirement.source.name} or run fentaris secrets setup.`,
+    };
+  }
+  if (requirement.source.type === "manual") {
+    return {
+      status: strict ? "fail" : "warn",
+      ref: requirement.userId,
+      scope: "apiKey",
+      detail: requirement.source.reason,
+      hint: "Configure this API-key source manually.",
+    };
+  }
+  const storedEntry = stored.find((entry) => entry.kind === "apiKey" && entry.scope.kind === "user" && entry.scope.id === requirement.userId);
+  return (storedEntry?.count ?? 0) >= (requirement.count ?? 1) ? null : {
+    status: strict ? "fail" : "warn",
+    ref: requirement.userId,
+    scope: "apiKey",
+    detail: `Required local API key is missing (${storedEntry?.count ?? 0}/${requirement.count ?? 1}).`,
+    hint: `Run fentaris auth api-key add ${requirement.userId} --generate or fentaris secrets setup.`,
+  };
 }
 
 async function gitTrackedSecretFiles(project: ProjectDiscovery): Promise<string[]> {

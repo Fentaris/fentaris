@@ -73,6 +73,7 @@ describe("EdgeAgentRuntime", () => {
     const runtime = new EdgeAgentRuntime({ setup, supervisor });
     runtimeRef.current = runtime;
     runtime.connected({
+      protocolVersion: EDGE_PROTOCOL_VERSION,
       claims: {
         tenantId: "tenant-1",
         edgeNodeId: "node-1",
@@ -202,6 +203,7 @@ describe("EdgeAgentRuntime", () => {
       supervisor: supervisor as unknown as EdgeWorkloadSupervisor,
     });
     runtime.connected({
+      protocolVersion: EDGE_PROTOCOL_VERSION,
       claims: {
         tenantId: "tenant-1",
         edgeNodeId: "node-1",

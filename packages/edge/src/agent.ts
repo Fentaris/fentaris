@@ -5,6 +5,7 @@ import {
   EDGE_PROTOCOL_VERSION,
   EDGE_SUPPORTED_PROTOCOL_VERSIONS,
   edgeError,
+  InMemoryInstallationMutationLock,
   parseEdgeProtocolMessage,
   type EdgeAgentMessage,
   type EdgeControlPlaneMessage,
@@ -30,6 +31,7 @@ import {
   type EdgeConnectionRuntime,
   type EdgeRuntimeSummary,
   type EdgeRuntimeSummaryProvider,
+  type EdgeInstallationLocalControl,
 } from "./runtime.js";
 import {
   LocalSetupManager,
@@ -42,6 +44,16 @@ import {
   ExecutableAllowlistPolicy,
 } from "./supervisor.js";
 import { StdioEdgeWorkloadFactory } from "./stdioWorkload.js";
+import {
+  BoundedInstallerRunner,
+  InstallationConsentManager,
+  InstallationCoordinator,
+  ManagedInstallationSourceResolver,
+  ProtectedInstallationState,
+  commandIsolationAdapter,
+  createDefaultInstallationProviders,
+  type InstallationStateDocument,
+} from "./installation.js";
 
 export type { EdgeRuntimeSummary, EdgeRuntimeSummaryProvider } from "./runtime.js";
 
@@ -131,6 +143,10 @@ export class EdgeAgent {
     };
   }
 
+  installationControl(): EdgeInstallationLocalControl | undefined {
+    return this.options.runtime?.installationControl?.();
+  }
+
   async disconnect(): Promise<void> {
     const active = this.active;
     this.active = undefined;
@@ -156,7 +172,7 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
     }
     const socket = this.webSocketFactory(url.toString());
     const nonce = randomBytes(32).toString("base64url");
-    const proof = sign(null, Buffer.from(`${input.edgeNodeId}.${nonce}`), input.privateKey).toString("base64url");
+    const proof = sign(null, Buffer.from(`${input.edgeNodeId}.${nonce}.edge.hello`), input.privateKey).toString("base64url");
     let ack: EdgeHelloAckMessage | undefined;
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     let runtimeDisconnected = false;
@@ -203,8 +219,6 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
           nonce,
           proof,
           deviceCredential: input.deviceCredential,
-          accessToken: input.accessToken,
-          publicKey: input.publicKey,
         }));
       }, { once: true });
       socket.addEventListener("message", (event) => {
@@ -220,11 +234,11 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
               }
               ack = message;
               const publishPresence = async () => {
-                if (!ack || ack.protocolVersion !== 2) return;
+                if (!ack || ack.protocolVersion < 2) return;
                 const snapshot = await input.runtime?.presenceSnapshot?.() ?? { readiness: [] };
                 const reportedAt = Date.now();
                 await send({
-                  version: 2,
+                  version: ack.protocolVersion as 2 | 3,
                   kind: "edge.presence",
                   tenantId: ack.tenantId,
                   edgeNodeId: ack.edgeNodeId,
@@ -235,6 +249,7 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
                 });
               };
               await input.runtime?.connected({
+                protocolVersion: message.protocolVersion,
                 claims: {
                   tenantId: message.tenantId,
                   edgeNodeId: message.edgeNodeId,
@@ -247,7 +262,7 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
               heartbeat = setInterval(() => {
                 if (!ack || socket.readyState !== WebSocket.OPEN) return;
                 void (async () => {
-                  const snapshot = ack?.protocolVersion === 2
+                  const snapshot = ack && ack.protocolVersion >= 2
                     ? await input.runtime?.presenceSnapshot?.() ?? { readiness: [] }
                     : undefined;
                   await send({
@@ -271,6 +286,7 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
             }
             if (
               message.kind !== "edge.desired-state"
+              && message.kind !== "edge.installation-control"
               && message.kind !== "mcp.request"
               && message.kind !== "mcp.cancel"
             ) {
@@ -332,6 +348,7 @@ export function createDefaultEdgeAgent(options: DefaultAgentOptions): EdgeAgent 
     hostnameLabel: hostname,
   });
   const runtimeRef: { current?: EdgeAgentRuntime } = {};
+  const installationRef: { current?: InstallationCoordinator } = {};
   const setup = new LocalSetupManager({
     store: new ProtectedJsonStore<LocalGrantDatabase>(path.join(platform.paths.dataDir, "grants.json")),
     credentials: platform.credentialStore,
@@ -339,6 +356,10 @@ export function createDefaultEdgeAgent(options: DefaultAgentOptions): EdgeAgent 
     onGrantRevoked: async (_grantId, deploymentIds) => {
       const activeSupervisor = supervisor;
       await Promise.all(deploymentIds.map((deploymentId) => activeSupervisor.blockDeployment(deploymentId)));
+    },
+    resolveInstalledArtifact: (reference) => {
+      if (!installationRef.current) throw edgeError("EDGE_SETUP_REQUIRED", "Managed installation is not initialized.");
+      return installationRef.current.resolveArtifact(reference);
     },
   });
   const supervisor = new EdgeWorkloadSupervisor({
@@ -355,7 +376,30 @@ export function createDefaultEdgeAgent(options: DefaultAgentOptions): EdgeAgent 
       return runtimeRef.current.reportCapabilityManifest(deploymentId, recipeDigest, manifest);
     },
   });
-  const runtime = new EdgeAgentRuntime({ setup, supervisor });
+  const installationState = new ProtectedInstallationState(
+    new ProtectedJsonStore<InstallationStateDocument>(path.join(platform.paths.dataDir, "installations.json")),
+  );
+  const installationConsent = new InstallationConsentManager(installationState);
+  const installationRunner = new BoundedInstallerRunner(commandIsolationAdapter({
+    executable: process.env.FENTARIS_EDGE_INSTALLATION_SANDBOX,
+  }));
+  const installationSource = new ManagedInstallationSourceResolver({
+    credentials: platform.credentialStore,
+    local: { resolve: (grantRef) => setup.resolveGrantedPath(grantRef) },
+  });
+  const installation = new InstallationCoordinator({
+    state: installationState,
+    consent: installationConsent,
+    lock: new InMemoryInstallationMutationLock(),
+    providers: createDefaultInstallationProviders({ source: installationSource, runner: installationRunner }),
+    installationRoot: path.join(platform.paths.dataDir, "managed-installations"),
+    stagingRoot: path.join(platform.paths.dataDir, "installation-staging"),
+    terminateProcess: async (pid) => {
+      try { process.kill(process.platform === "win32" ? pid : -pid, "SIGKILL"); } catch { /* already stopped */ }
+    },
+  });
+  installationRef.current = installation;
+  const runtime = new EdgeAgentRuntime({ setup, supervisor, installation });
   runtimeRef.current = runtime;
   return new EdgeAgent({
     enrollment,

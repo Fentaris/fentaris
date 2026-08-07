@@ -27,7 +27,7 @@ const presence = (overrides: Record<string, unknown> = {}) => ({
 
 describe("Edge protocol v2", () => {
   it("negotiates the highest mutual version and retains v1 compatibility", () => {
-    expect(EDGE_PROTOCOL_VERSION).toBe(2);
+    expect(EDGE_PROTOCOL_VERSION).toBe(3);
     expect(selectHighestMutualEdgeProtocolVersion([1, 2])).toBe(2);
     expect(selectHighestMutualEdgeProtocolVersion([1])).toBe(1);
     expect(selectHighestMutualEdgeProtocolVersion([99])).toBeUndefined();

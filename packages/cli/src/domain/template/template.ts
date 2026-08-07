@@ -24,9 +24,9 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
           private: true,
           type: "module",
           scripts: {
-            dev: "tsx src/index.ts",
+            dev: "tsx --env-file-if-exists=.env src/index.ts",
             build: "tsc -p tsconfig.json",
-            start: "node dist/index.js",
+            start: "node --env-file-if-exists=.env dist/index.js",
           },
           dependencies: {
             "@fentaris/core": coreRange,
@@ -66,6 +66,13 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
           host: "127.0.0.1",
           path: input.proxyPath,
           authDir,
+          edge: {
+            controlPlane: {
+              enabled: false,
+              mode: "local",
+              stateDir: "edge-control-plane",
+            },
+          },
         },
         null,
         2,

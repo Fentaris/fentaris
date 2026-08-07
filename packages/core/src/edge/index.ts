@@ -76,6 +76,81 @@ export {
 } from "./recipe.js";
 export type { LaunchRecipe } from "./recipe.js";
 
+export {
+  INSTALLATION_RECIPE_VERSION,
+  IN_MEMORY_INSTALLATION_ADAPTER_WARNING,
+  InMemoryInstallationApprovalStore,
+  InMemoryInstallationArtifactStore,
+  InMemoryInstallationAttemptStore,
+  InMemoryInstallationLifecycleStore,
+  InMemoryInstallationMutationLock,
+  canonicalizeInstallationValue,
+  compileInstallationRecipe,
+  computeInstallationDigest,
+  install,
+  installationApprovalDigest,
+  installedArtifact,
+  isInstalledArtifactReference,
+  normalizeInstallationReadiness,
+  parseInstallationRecipe,
+  serializeInstallationRecipe,
+  validateInstallationRecipe,
+} from "./installation.js";
+export type {
+  ArchiveInstallationSource,
+  BinaryInstallationProvider,
+  ContainerInstallationProvider,
+  CustomInstallationProvider,
+  EnterpriseInstallationSource,
+  GitInstallationSource,
+  InlineInstallationSource,
+  InstallationApprovalRecord,
+  InstallationApprovalStore,
+  InstallationArtifactRecord,
+  InstallationArtifactStore,
+  InstallationAttemptStore,
+  InstallationAttemptSummary,
+  InstallationBuilderDefaults,
+  InstallationCleanup,
+  InstallationDigest,
+  InstallationFilesystemPermission,
+  InstallationLifecycleState,
+  InstallationLifecycleStore,
+  InstallationLifecycleSummary,
+  InstallationLimits,
+  InstallationMutationLock,
+  InstallationNetworkMode,
+  InstallationOutput,
+  InstallationOutputKind,
+  InstallationPermissions,
+  InstallationPlatformConstraint,
+  InstallationProvider,
+  InstallationProviderAdapter,
+  InstallationProviderContext,
+  InstallationProviderKind,
+  InstallationReasonCode,
+  InstallationRecipe,
+  InstallationRecipeInput,
+  InstallationResolvedSource,
+  InstallationRetention,
+  InstallationSource,
+  InstallationSourceResolver,
+  InstallationVerification,
+  InstalledArtifactReference,
+  LocalInstallationSource,
+  ManualInstallationProvider,
+  NodePackageInstallationProvider,
+  PythonInstallationProvider,
+} from "./installation.js";
+
+export { EdgeInstallationTelemetry, edgeInstallationHealth } from "./installationObservability.js";
+export type {
+  EdgeInstallationHealthOptions,
+  EdgeInstallationRuntimeEvent,
+  EdgeInstallationRuntimeEventName,
+  EdgeInstallationTelemetrySink,
+} from "./installationObservability.js";
+
 export { EDGE_ERROR_CODES, edgeError, isEdgeError } from "./errors.js";
 export type { EdgeError, EdgeErrorCode, EdgeErrorOptions } from "./errors.js";
 
@@ -198,6 +273,7 @@ export {
   EDGE_PROTOCOL_MIN_VERSION,
   EDGE_PROTOCOL_VERSION,
   EDGE_SUPPORTED_PROTOCOL_VERSIONS,
+  adaptDesiredStateForEdgeProtocol,
   parseEdgeProtocolMessage,
   selectHighestMutualEdgeProtocolVersion,
   validateEdgePresenceReport,
@@ -213,6 +289,9 @@ export type {
   EdgeHelloAckMessage,
   EdgeHelloMessage,
   EdgeLifecycleMessage,
+  EdgeInstallationApprovalMessage,
+  EdgeInstallationControlMessage,
+  EdgeInstallationStatusMessage,
   EdgePresenceReportMessage,
   EdgeProtocolVersion,
   EdgeReadinessReport,
@@ -227,6 +306,7 @@ export {
   InMemoryEdgeConnectionStore,
   InMemoryEdgeDesiredStateStore,
   InMemoryEdgeDeviceRegistry,
+  InMemoryEdgeInstallationStatusStore,
   InMemoryEdgeSetupStatusStore,
 } from "./controlPlane.js";
 export type {
@@ -243,6 +323,7 @@ export type {
   EdgeInventoryListPage,
   EdgeInventoryRecord,
   EdgeInventoryUpdate,
+  EdgeInstallationStatusStore,
   EdgeSetupStatusStore,
 } from "./controlPlane.js";
 
@@ -315,9 +396,124 @@ export type {
   EdgeGatewayAuthenticator,
   EdgeGatewayAuthorization,
   EdgeGatewayAuthorizer,
+  EdgeGatewayEventSink,
   EdgeGatewaySocket,
   EdgeWebSocketGatewayOptions,
 } from "./gateway.js";
+
+export {
+  EDGE_CONTROL_PLANE_DEFAULT_BASE_PATH,
+  EDGE_CONTROL_PLANE_DEFAULT_STATE_DIR,
+  EDGE_CONTROL_PLANE_DEFAULTS,
+  SERIALIZABLE_EDGE_CONTROL_PLANE_KEYS,
+  buildEdgeControlPlaneUrls,
+  mergeEdgeControlPlaneConfig,
+  normalizeEdgeControlPlaneConfig,
+  parseSerializableEdgeControlPlaneConfig,
+  validateEdgeControlPlaneConfig,
+} from "./integratedConfig.js";
+export type {
+  EdgeAssignmentResolver,
+  EdgeControlPlaneConfig,
+  EdgeControlPlaneManagedAdapters,
+  EdgeControlPlaneManagedServices,
+  EdgeControlPlaneMode,
+  EdgeDeviceApprovalAdapter,
+  EdgeDeviceApprovalDecision,
+  NormalizedEdgeControlPlaneConfig,
+  SerializableEdgeControlPlaneConfig,
+} from "./integratedConfig.js";
+
+export {
+  compileEdgeDeploymentCatalog,
+  deriveEligibleEdgeDeployments,
+  IntegratedEdgeDeviceResolver,
+  IntegratedEdgeReconciler,
+  LocalEdgeDesiredAssignmentStore,
+} from "./integratedReconciliation.js";
+export type {
+  CompileEdgeDeploymentCatalogOptions,
+  EdgeDeploymentCatalog,
+  EdgeDeploymentCatalogDiagnostic,
+  EdgeDeploymentCatalogEntry,
+  EdgeDeploymentWithheldReason,
+  EdgeEligibilityContext,
+  EdgeEligibilityResult,
+  IntegratedEdgeReconcilerOptions,
+} from "./integratedReconciliation.js";
+
+export { IntegratedEdgeGatewayBridge } from "./integratedBridge.js";
+export type { IntegratedEdgeBridgeOptions } from "./integratedBridge.js";
+
+export {
+  EDGE_CONTROL_PLANE_ERROR_CODES,
+  edgeControlPlaneError,
+  isEdgeControlPlaneErrorBody,
+} from "./integratedProtocol.js";
+export type {
+  EdgeAuthenticatedHelloProof,
+  EdgeAuthenticatedHelloResult,
+  EdgeControlPlaneErrorBody,
+  EdgeControlPlaneErrorCode,
+  EdgeControlPlaneTokenResponse,
+  EdgeDeviceAuthorizeRequest,
+  EdgeDeviceAuthorizeResponse,
+  EdgeDeviceTokenRequest,
+  EdgeEnrollRequest,
+  EdgeEnrollResponse,
+  EdgeRevokeRequest,
+  EdgeTokenRefreshRequest,
+} from "./integratedProtocol.js";
+
+export type {
+  EdgeApprovalService,
+  EdgeAuthorizationSession,
+  EdgeDesiredAssignmentSnapshot,
+  EdgeDesiredAssignmentStore,
+  EdgeDeviceAuthorizationService,
+  EdgeEnrolledDeviceAuthority,
+  EdgeEnrolledDeviceStore,
+  EdgeEnrollmentService,
+  EdgeLocalOperatorChannel,
+  EdgeReconciliationTrigger,
+  EdgeReconciliationTriggerService,
+  EdgeTokenIssuanceService,
+} from "./integratedServices.js";
+
+export {
+  EDGE_LOCAL_AUTHORITY_SCHEMA_VERSION,
+  LOCAL_EDGE_AUTHORITY_ADAPTER_DIAGNOSTICS,
+  EdgeLocalAuthorityStore,
+  compareSecretHash,
+  hashSecret,
+  normalizeUserCode,
+  redactEdgeAuthorityValue,
+} from "./integratedLocalStore.js";
+export type {
+  EdgeEncryptedBlob,
+  EdgeLocalAuthorityDocument,
+  EdgeLocalAuthorityStoreOptions,
+  EdgeLocalRefreshCredential,
+  EdgeLocalServerIdentity,
+} from "./integratedLocalStore.js";
+
+export {
+  EdgeLocalOperatorClient,
+  EdgeLocalOperatorServer,
+  createEdgeLocalOperatorEndpoint,
+  readEdgeLocalOperatorEndpoint,
+} from "./integratedOperatorChannel.js";
+export type {
+  EdgeLocalOperatorCommand,
+  EdgeLocalOperatorClientRequest,
+  EdgeLocalOperatorEndpoint,
+  EdgeLocalOperatorRequest,
+  EdgeLocalOperatorResponse,
+  EdgeLocalOperatorServerOptions,
+} from "./integratedOperatorChannel.js";
+
+export { IntegratedEdgeAuthServices } from "./integratedAuthServices.js";
+export type { IntegratedAuthServicesOptions } from "./integratedAuthServices.js";
 
 export {
   EdgeCapabilityCache,
