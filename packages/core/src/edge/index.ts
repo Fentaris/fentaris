@@ -396,6 +396,7 @@ export type {
   EdgeGatewayAuthenticator,
   EdgeGatewayAuthorization,
   EdgeGatewayAuthorizer,
+  EdgeGatewayEventSink,
   EdgeGatewaySocket,
   EdgeWebSocketGatewayOptions,
 } from "./gateway.js";
@@ -415,12 +416,34 @@ export type {
   EdgeAssignmentResolver,
   EdgeControlPlaneConfig,
   EdgeControlPlaneManagedAdapters,
+  EdgeControlPlaneManagedServices,
   EdgeControlPlaneMode,
   EdgeDeviceApprovalAdapter,
   EdgeDeviceApprovalDecision,
   NormalizedEdgeControlPlaneConfig,
   SerializableEdgeControlPlaneConfig,
 } from "./integratedConfig.js";
+
+export {
+  compileEdgeDeploymentCatalog,
+  deriveEligibleEdgeDeployments,
+  IntegratedEdgeDeviceResolver,
+  IntegratedEdgeReconciler,
+  LocalEdgeDesiredAssignmentStore,
+} from "./integratedReconciliation.js";
+export type {
+  CompileEdgeDeploymentCatalogOptions,
+  EdgeDeploymentCatalog,
+  EdgeDeploymentCatalogDiagnostic,
+  EdgeDeploymentCatalogEntry,
+  EdgeDeploymentWithheldReason,
+  EdgeEligibilityContext,
+  EdgeEligibilityResult,
+  IntegratedEdgeReconcilerOptions,
+} from "./integratedReconciliation.js";
+
+export { IntegratedEdgeGatewayBridge } from "./integratedBridge.js";
+export type { IntegratedEdgeBridgeOptions } from "./integratedBridge.js";
 
 export {
   EDGE_CONTROL_PLANE_ERROR_CODES,
@@ -478,9 +501,11 @@ export {
   EdgeLocalOperatorClient,
   EdgeLocalOperatorServer,
   createEdgeLocalOperatorEndpoint,
+  readEdgeLocalOperatorEndpoint,
 } from "./integratedOperatorChannel.js";
 export type {
   EdgeLocalOperatorCommand,
+  EdgeLocalOperatorClientRequest,
   EdgeLocalOperatorEndpoint,
   EdgeLocalOperatorRequest,
   EdgeLocalOperatorResponse,

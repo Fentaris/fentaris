@@ -30,6 +30,7 @@ import type {
   EdgeDeviceAuthorizationService,
   EdgeEnrollmentService,
   EdgeTokenIssuanceService,
+  EdgeEnrolledDeviceAuthority,
 } from "./integratedServices.js";
 import {
   EdgeLocalAuthorityStore,
@@ -49,6 +50,8 @@ export type IntegratedAuthServicesOptions = {
   readonly now?: () => number;
   readonly telemetry?: EdgeTelemetry;
   readonly random?: () => string;
+  readonly onEnrolled?: (device: EdgeEnrolledDeviceAuthority, request: EdgeEnrollRequest) => void | Promise<void>;
+  readonly onRevoked?: (device: EdgeEnrolledDeviceAuthority) => void | Promise<void>;
 };
 
 type AccessTokenRecord = {
@@ -323,7 +326,7 @@ export class IntegratedEdgeAuthServices
     const edgeNodeId = this.random();
     const deviceCredential = this.random();
     const now = this.now();
-    await this.options.store.putEnrolledDevice({
+    const authority: EdgeEnrolledDeviceAuthority = {
       tenantId: access.tenantId,
       edgeNodeId,
       subjectId: access.subjectId,
@@ -333,7 +336,8 @@ export class IntegratedEdgeAuthServices
       enrolledAt: now,
       revoked: false,
       connectionGeneration: 1,
-    });
+    };
+    await this.options.store.putEnrolledDevice(authority);
 
     // Bind remaining refresh material to the enrolled device and drop the one-time access token.
     this.accessTokens.delete(hashSecret(request.accessToken));
@@ -356,6 +360,7 @@ export class IntegratedEdgeAuthServices
       subjectId: access.subjectId,
       edgeNodeId,
     });
+    await this.options.onEnrolled?.(authority, request);
 
     return {
       edgeNodeId,
@@ -377,6 +382,8 @@ export class IntegratedEdgeAuthServices
       throw confidentialError(EDGE_CONTROL_PLANE_ERROR_CODES.unauthorized, "Revocation was rejected.");
     }
     await this.revokeDeviceTokens(access.tenantId, request.edgeNodeId);
+    const revoked = await this.options.store.getEnrolledDevice(access.tenantId, request.edgeNodeId);
+    if (revoked) await this.options.onRevoked?.(revoked);
     this.emit("edge.device.revoked", {
       tenantId: access.tenantId,
       edgeNodeId: request.edgeNodeId,
@@ -397,7 +404,7 @@ export class IntegratedEdgeAuthServices
     if (!verifyDeviceProof(device.publicKey, payload, proof.proof)) {
       return { status: "rejected", error: EDGE_CONTROL_PLANE_ERROR_CODES.unauthorized };
     }
-    const protocolVersion = Math.max(...proof.protocolVersions.filter((version) => version === 1 || version === 2));
+    const protocolVersion = Math.max(...proof.protocolVersions.filter((version) => version === 1 || version === 2 || version === 3));
     if (!Number.isFinite(protocolVersion) || protocolVersion < 1) {
       return { status: "rejected", error: EDGE_CONTROL_PLANE_ERROR_CODES.invalid_request };
     }

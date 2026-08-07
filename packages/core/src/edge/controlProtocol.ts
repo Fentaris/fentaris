@@ -44,6 +44,8 @@ export interface EdgeHelloMessage {
   readonly supportedVersions: readonly number[];
   readonly nonce: string;
   readonly proof: string;
+  /** Enrolled opaque device credential carried inside the protected WebSocket channel. @pk */
+  readonly deviceCredential?: string;
 }
 
 export interface EdgeHelloAckMessage extends EdgeProtocolClaims {
@@ -323,6 +325,9 @@ function validateProtocolShell(candidate: Record<string, unknown>): void {
     validateBoundedString(candidate.edgeNodeId, "edgeNodeId", 160);
     validateBoundedString(candidate.nonce, "nonce", 512);
     validateBoundedString(candidate.proof, "proof", 4096);
+    if (candidate.deviceCredential !== undefined) {
+      validateBoundedString(candidate.deviceCredential, "deviceCredential", 4096);
+    }
     return;
   }
   validateBoundedString(candidate.tenantId, "tenantId", 160);

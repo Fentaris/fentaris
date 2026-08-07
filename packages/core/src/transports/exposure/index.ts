@@ -20,5 +20,6 @@ export { acceptEdgeGatewayWebSocket, randomWebSocketKey } from "./edgeGatewayWeb
 export { startIntegratedEdgeControlPlane } from "./integratedRuntime.js";
 export type {
   IntegratedEdgeControlPlaneRuntime,
+  IntegratedEdgeControlPlaneHealth,
   IntegratedEdgeControlPlaneRuntimeOptions,
 } from "./integratedRuntime.js";

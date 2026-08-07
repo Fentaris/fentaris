@@ -138,7 +138,7 @@ export class HttpProxyExposureTransport implements ProxyExposureTransport<HttpPr
       }
     });
 
-    server.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    server.on?.("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
       const pathname = normalizeExposurePath((req.url ?? "/").split("?")[0] ?? "/");
       const upgrade = this.options.upgradeRoutes?.find(
         (route) => normalizeExposurePath(route.path) === pathname,

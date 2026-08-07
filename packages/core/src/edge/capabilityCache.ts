@@ -9,6 +9,8 @@ import { edgeError } from "./errors.js";
 
 export interface EdgeCapabilityManifest {
   readonly tenantId: string;
+  readonly edgeNodeId?: string;
+  readonly connectionGeneration?: number;
   readonly deploymentId: string;
   readonly recipeDigest: string;
   readonly capturedAt: number;

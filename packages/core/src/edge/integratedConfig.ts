@@ -21,6 +21,12 @@ import type {
   EdgeReadinessStore,
   EdgeSessionSelectionStore,
 } from "./inventory.js";
+import type {
+  EdgeDesiredAssignmentStore,
+  EdgeDeviceAuthorizationService,
+  EdgeEnrollmentService,
+  EdgeTokenIssuanceService,
+} from "./integratedServices.js";
 
 /** Integrated control-plane deployment mode. @pk */
 export type EdgeControlPlaneMode = "local" | "managed";
@@ -98,6 +104,13 @@ export interface EdgeAssignmentResolver {
   }): Promise<readonly string[]>;
 }
 
+/** Managed authorization/enrollment services owned by the deployment identity boundary. @pk */
+export type EdgeControlPlaneManagedServices = {
+  readonly authorization: EdgeDeviceAuthorizationService;
+  readonly tokens: EdgeTokenIssuanceService;
+  readonly enrollment: EdgeEnrollmentService;
+};
+
 /** Durable/managed adapters required when `mode: "managed"`. @pk */
 export type EdgeControlPlaneManagedAdapters = {
   readonly deviceRegistry: EdgeDeviceRegistry;
@@ -107,6 +120,8 @@ export type EdgeControlPlaneManagedAdapters = {
   readonly connectionStore: EdgeConnectionStore;
   readonly presenceStore: EdgePresenceStore;
   readonly readinessStore: EdgeReadinessStore;
+  readonly assignmentStore: EdgeDesiredAssignmentStore;
+  readonly services: EdgeControlPlaneManagedServices;
   readonly sessionSelectionStore?: EdgeSessionSelectionStore;
   readonly childBindingStore?: EdgeChildBindingStore;
   readonly channelBroker?: EdgeChannelBroker;
@@ -691,6 +706,8 @@ function validateManagedAdapters(
     "connectionStore",
     "presenceStore",
     "readinessStore",
+    "assignmentStore",
+    "services",
   ] as const;
 
   if (!config.adapters) {

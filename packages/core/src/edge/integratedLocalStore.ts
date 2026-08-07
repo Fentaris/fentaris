@@ -13,7 +13,6 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import {
-  chmod,
   mkdir,
   open,
   readFile,
@@ -276,6 +275,15 @@ export class EdgeLocalAuthorityStore {
       };
     });
     return result;
+  }
+
+  async removeDesiredAssignment(tenantId: string, edgeNodeId: string): Promise<void> {
+    await this.mutate((document) => ({
+      ...document,
+      desiredAssignments: Object.freeze(document.desiredAssignments.filter(
+        (entry) => !(entry.tenantId === tenantId && entry.edgeNodeId === edgeNodeId),
+      )),
+    }));
   }
 
   decryptSigningKey(): Buffer {

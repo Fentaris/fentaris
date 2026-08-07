@@ -172,7 +172,7 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
     }
     const socket = this.webSocketFactory(url.toString());
     const nonce = randomBytes(32).toString("base64url");
-    const proof = sign(null, Buffer.from(`${input.edgeNodeId}.${nonce}`), input.privateKey).toString("base64url");
+    const proof = sign(null, Buffer.from(`${input.edgeNodeId}.${nonce}.edge.hello`), input.privateKey).toString("base64url");
     let ack: EdgeHelloAckMessage | undefined;
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     let runtimeDisconnected = false;
@@ -219,8 +219,6 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
           nonce,
           proof,
           deviceCredential: input.deviceCredential,
-          accessToken: input.accessToken,
-          publicKey: input.publicKey,
         }));
       }, { once: true });
       socket.addEventListener("message", (event) => {

@@ -4,7 +4,11 @@
  */
 
 import { EDGE_CONTROL_PLANE_ERROR_CODES, edgeControlPlaneError } from "../../edge/integratedProtocol.js";
-import type { IntegratedEdgeAuthServices } from "../../edge/integratedAuthServices.js";
+import type {
+  EdgeDeviceAuthorizationService,
+  EdgeEnrollmentService,
+  EdgeTokenIssuanceService,
+} from "../../edge/integratedServices.js";
 import type {
   ProxyExposureHttpRoute,
 } from "./routeRegistry.js";
@@ -13,7 +17,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 export type EdgeControlPlaneRouteOptions = {
   readonly basePath: string;
-  readonly auth: IntegratedEdgeAuthServices;
+  readonly auth: EdgeDeviceAuthorizationService & EdgeTokenIssuanceService & EdgeEnrollmentService;
   readonly maxRequestBytes: number;
 };
 

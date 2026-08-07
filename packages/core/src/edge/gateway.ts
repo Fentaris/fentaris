@@ -5,10 +5,14 @@ import {
   parseEdgeProtocolMessage,
   selectHighestMutualEdgeProtocolVersion,
   type EdgeAgentMessage,
+  type EdgeCapabilityManifestMessage,
+  type EdgeDesiredStateAckMessage,
   type EdgeDesiredStateMessage,
   type EdgeHelloMessage,
+  type EdgeInstallationStatusMessage,
   type EdgePresenceReportMessage,
   type EdgeProtocolMessage,
+  type EdgeSetupStatusMessage,
 } from "./controlProtocol.js";
 import type {
   EdgeCapabilityManifestStore,
@@ -62,6 +66,17 @@ export interface EdgeGatewayAuthorizer {
   authorize(input: EdgeGatewayAuthorization): Promise<boolean>;
 }
 
+/** Authenticated gateway events consumed by the integrated inventory bridge. @pk */
+export interface EdgeGatewayEventSink {
+  connected?(connection: EdgeConnectionRecord): void | Promise<void>;
+  disconnected?(connection: EdgeConnectionRecord): void | Promise<void>;
+  desiredAcknowledged?(message: EdgeDesiredStateAckMessage): void | Promise<void>;
+  setupChanged?(message: EdgeSetupStatusMessage): void | Promise<void>;
+  manifestChanged?(message: EdgeCapabilityManifestMessage): void | Promise<void>;
+  presenceChanged?(message: EdgePresenceReportMessage): void | Promise<void>;
+  installationChanged?(message: EdgeInstallationStatusMessage): void | Promise<void>;
+}
+
 /** Configuration for the reference outbound WebSocket gateway. @pk */
 export interface EdgeWebSocketGatewayOptions {
   authenticator: EdgeGatewayAuthenticator;
@@ -80,6 +95,7 @@ export interface EdgeWebSocketGatewayOptions {
   now?: () => number;
   connectionId?: () => string;
   telemetry?: EdgeTelemetry;
+  events?: EdgeGatewayEventSink;
 }
 
 type ActiveConnection = {
@@ -247,6 +263,15 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel, EdgeConnectio
     return expired;
   }
 
+  /** Stop accepting routed work and close every active generation idempotently. @pk */
+  async close(reason = "runtime-shutdown"): Promise<void> {
+    for (const active of [...this.active.values()]) {
+      await this.cleanup(active);
+      active.socket.close(1001, reason);
+    }
+    this.mcpHandlers.clear();
+  }
+
   private async establish(
     socket: EdgeGatewaySocket,
     credential: string,
@@ -258,7 +283,7 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel, EdgeConnectio
     if (protocolVersion === undefined) {
       throw edgeError("EDGE_PROTOCOL", "No compatible edge protocol version.");
     }
-    const identity = await this.options.authenticator.authenticate(credential, hello);
+    const identity = await this.options.authenticator.authenticate(hello.deviceCredential ?? credential, hello);
     if (identity.tenantId !== hello.tenantId || identity.edgeNodeId !== hello.edgeNodeId) {
       throw edgeError("EDGE_PROTOCOL", "Authenticated device does not match hello routing claims.");
     }
@@ -312,6 +337,7 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel, EdgeConnectio
       await this.authorize("outbound", active, message);
       await this.sendFrame(active, message);
     }
+    await this.options.events?.connected?.(record);
     return active;
   }
 
@@ -340,18 +366,25 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel, EdgeConnectio
         return;
       case "edge.presence":
         await this.persistPresence(active, message);
+        await this.options.events?.presenceChanged?.(message);
         return;
       case "edge.desired-state.ack":
         await this.options.desiredStateStore.acknowledge(message);
+        await this.options.events?.desiredAcknowledged?.(message);
         return;
       case "edge.setup-status":
+        await this.assertSetupCorrelation(message);
         await this.options.setupStatusStore.put(message);
+        await this.options.events?.setupChanged?.(message);
         return;
       case "edge.capability-manifest":
+        await this.assertManifestCorrelation(message);
         await this.options.capabilityManifestStore.put(message);
+        await this.options.events?.manifestChanged?.(message);
         return;
       case "edge.installation-status":
         await this.options.installationStatusStore?.put(message);
+        await this.options.events?.installationChanged?.(message);
         return;
       case "edge.installation-approval":
         return;
@@ -391,6 +424,24 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel, EdgeConnectio
     if (!desired || desired.desiredVersion !== message.desiredVersion || !deployment
       || deployment.installationDigest !== message.installationDigest) {
       throw edgeError("EDGE_PROTOCOL", "Installation message is stale or does not match current desired state.");
+    }
+  }
+
+  private async assertSetupCorrelation(message: EdgeSetupStatusMessage): Promise<void> {
+    const desired = await this.options.desiredStateStore.get(message.tenantId, message.edgeNodeId);
+    const deployment = desired?.deployments.find((candidate) => candidate.deploymentId === message.deploymentId);
+    if (!deployment
+      || deployment.recipe.digest !== message.recipeDigest
+      || deployment.setupSchema.version !== message.setupSchemaVersion) {
+      throw edgeError("EDGE_PROTOCOL", "Setup report is stale or does not match current desired state.");
+    }
+  }
+
+  private async assertManifestCorrelation(message: EdgeCapabilityManifestMessage): Promise<void> {
+    const desired = await this.options.desiredStateStore.get(message.tenantId, message.edgeNodeId);
+    const deployment = desired?.deployments.find((candidate) => candidate.deploymentId === message.deploymentId);
+    if (!deployment || deployment.recipe.digest !== message.recipeDigest) {
+      throw edgeError("EDGE_PROTOCOL", "Capability manifest is stale or does not match current desired state.");
     }
   }
 
@@ -476,6 +527,7 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel, EdgeConnectio
       ...(message.load ? { load: message.load } : {}),
     });
     for (const readiness of message.readiness) {
+      await this.assertReadinessCorrelation(active, readiness);
       await this.options.readinessStore?.put({
         tenantId: active.record.tenantId,
         edgeNodeId: active.record.edgeNodeId,
@@ -483,6 +535,21 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel, EdgeConnectio
         connectionGeneration: active.record.connectionGeneration,
         ...readiness,
       });
+    }
+  }
+
+  private async assertReadinessCorrelation(
+    active: ActiveConnection,
+    readiness: EdgePresenceReportMessage["readiness"][number],
+  ): Promise<void> {
+    const desired = await this.options.desiredStateStore.get(active.record.tenantId, active.record.edgeNodeId);
+    const deployment = desired?.deployments.find((candidate) => candidate.deploymentId === readiness.deploymentId);
+    if (!desired || !deployment
+      || (readiness.desiredVersion !== undefined && readiness.desiredVersion !== desired.desiredVersion)
+      || (readiness.launchDigest !== undefined && readiness.launchDigest !== deployment.recipe.digest)
+      || (readiness.recipeVersion !== undefined && readiness.recipeVersion !== deployment.recipe.version)
+      || (readiness.installationDigest !== undefined && readiness.installationDigest !== deployment.installationDigest)) {
+      throw edgeError("EDGE_PROTOCOL", "Readiness report is stale or does not match current desired state.");
     }
   }
 
@@ -518,6 +585,7 @@ export class EdgeWebSocketGateway implements EdgeTransportChannel, EdgeConnectio
       active.record.edgeNodeId,
       active.record.connectionGeneration,
     );
+    await this.options.events?.disconnected?.(active.record);
     await this.options.telemetry?.emit({
       name: "edge.connection.generation",
       tenantId: active.record.tenantId,

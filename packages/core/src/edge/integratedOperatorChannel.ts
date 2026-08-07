@@ -4,8 +4,8 @@
  * @pk
  */
 
-import { randomBytes, timingSafeEqual } from "node:crypto";
-import { chmod, rm } from "node:fs/promises";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createConnection, createServer, type Server, type Socket } from "node:net";
 import path from "node:path";
@@ -43,9 +43,16 @@ export type EdgeLocalOperatorResponse = {
   readonly error?: { readonly code: string; readonly message: string };
 };
 
+export type EdgeLocalOperatorClientRequest = EdgeLocalOperatorRequest extends infer Request
+  ? Request extends { readonly credential: string }
+    ? Omit<Request, "credential"> & { readonly credential?: string }
+    : never
+  : never;
+
 export type EdgeLocalOperatorEndpoint = {
   readonly address: string;
   readonly credential: string;
+  readonly descriptorPath?: string;
 };
 
 export type EdgeLocalOperatorServerOptions = {
@@ -62,13 +69,22 @@ export type EdgeLocalOperatorServerOptions = {
 
 /** Create a short Unix-socket endpoint path and random credential. @pk */
 export function createEdgeLocalOperatorEndpoint(stateDirectory: string): EdgeLocalOperatorEndpoint {
-  // Keep the socket path short for macOS sockaddr limits while remaining
-  // discoverable from the authority directory via a sidecar pointer file later.
-  void stateDirectory;
+  const identity = createHash("sha256").update(path.resolve(stateDirectory)).digest("hex").slice(0, 12);
   return {
-    address: path.join(tmpdir(), `fe-op-${randomBytes(6).toString("hex")}.sock`),
+    address: path.join(tmpdir(), `fe-op-${identity}.sock`),
     credential: randomBytes(32).toString("base64url"),
+    descriptorPath: path.join(stateDirectory, "operator.json"),
   };
+}
+
+/** Read the running owner-protected operator endpoint without opening authority state. @pk */
+export async function readEdgeLocalOperatorEndpoint(stateDirectory: string): Promise<EdgeLocalOperatorEndpoint> {
+  const descriptorPath = path.join(stateDirectory, "operator.json");
+  const value = JSON.parse(await readFile(descriptorPath, "utf8")) as Record<string, unknown>;
+  if (typeof value.address !== "string" || typeof value.credential !== "string") {
+    throw edgeError("EDGE_UNAVAILABLE", "Local Edge operator endpoint is malformed.");
+  }
+  return { address: value.address, credential: value.credential, descriptorPath };
 }
 
 /**
@@ -104,6 +120,14 @@ export class EdgeLocalOperatorServer implements EdgeLocalOperatorChannel {
     if (process.platform !== "win32") {
       await chmod(this.options.endpoint.address, 0o600);
     }
+    if (this.options.endpoint.descriptorPath) {
+      await mkdir(path.dirname(this.options.endpoint.descriptorPath), { recursive: true, mode: 0o700 });
+      await writeFile(this.options.endpoint.descriptorPath, `${JSON.stringify({
+        address: this.options.endpoint.address,
+        credential: this.options.endpoint.credential,
+      })}\n`, { mode: 0o600 });
+      if (process.platform !== "win32") await chmod(this.options.endpoint.descriptorPath, 0o600);
+    }
   }
 
   async close(): Promise<void> {
@@ -122,6 +146,9 @@ export class EdgeLocalOperatorServer implements EdgeLocalOperatorChannel {
     }
     if (process.platform !== "win32") {
       await rm(this.options.endpoint.address, { force: true });
+    }
+    if (this.options.endpoint.descriptorPath) {
+      await rm(this.options.endpoint.descriptorPath, { force: true });
     }
   }
 
@@ -223,7 +250,7 @@ export class EdgeLocalOperatorServer implements EdgeLocalOperatorChannel {
 export class EdgeLocalOperatorClient {
   constructor(private readonly endpoint: EdgeLocalOperatorEndpoint) {}
 
-  async request(request: Omit<EdgeLocalOperatorRequest, "credential"> & { readonly credential?: string }): Promise<EdgeLocalOperatorResponse> {
+  async request(request: EdgeLocalOperatorClientRequest): Promise<EdgeLocalOperatorResponse> {
     const payload: EdgeLocalOperatorRequest = {
       ...request,
       credential: request.credential ?? this.endpoint.credential,
