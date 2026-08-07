@@ -164,25 +164,6 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
-  examples/team-governed-proxy:
-    dependencies:
-      '@fentaris/core':
-        specifier: ^2.3.0
-        version: 2.3.1
-      tsx:
-        specifier: ^4.23.1
-        version: 4.23.8
-    devDependencies:
-      '@fentaris/cli':
-        specifier: ^1.4.0
-        version: 1.4.2
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
   packages/approval-telegram:
     dependencies:
       '@fentaris/core':
@@ -511,13 +492,6 @@ packages:
   '@eslint/plugin-kit@0.7.1':
     resolution: {integrity: sha512-rZAP3aVgB9ds9KOeUSL+zZ21hPmo8dh6fnIFwRQj5EAZl9gzR7wxYbYXYysAM8CTqGmUGyp2S4kUdV17MnGuWQ==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
-
-  '@fentaris/cli@1.4.2':
-    resolution: {integrity: sha512-ri/PSEPy6rX2U8tRgFkaAAnuW4glaLfnEzEiO+TjAm8v6qsZJTMhoxtdIwC6k4roLv6OuQZNpjtw7XufHD7iSA==}
-    hasBin: true
-
-  '@fentaris/core@2.3.1':
-    resolution: {integrity: sha512-e/pWXZJnXPouJFEJwfIdW2Egb/PF5gyKXERQBWydnJv/oHL6g1v8MiMzuhCpgi168uwagzK5k0gzJl6lny4Rfg==}
 
   '@gerrit0/mini-shiki@3.23.0':
     resolution: {integrity: sha512-bEMORlG0cqdjVyCEuU0cDQbORWX+kYCeo0kV1lbxF5bt4r7SID2l9bqsxJEM0zndaxpOUT7riCyIVEuqq/Ynxg==}
@@ -2221,22 +2195,6 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
-  '@fentaris/cli@1.4.2':
-    dependencies:
-      '@fentaris/core': 2.3.1
-      semver: 7.8.5
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - supports-color
-
-  '@fentaris/core@2.3.1':
-    dependencies:
-      '@modelcontextprotocol/sdk': 1.30.0(zod@4.4.3)
-      zod: 4.4.3
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - supports-color
-
   '@gerrit0/mini-shiki@3.23.0':
     dependencies:
       '@shikijs/engine-oniguruma': 3.23.0
@@ -2751,6 +2709,7 @@ snapshots:
       '@esbuild/win32-arm64': 0.28.1
       '@esbuild/win32-ia32': 0.28.1
       '@esbuild/win32-x64': 0.28.1
+    optional: true
 
   escape-html@1.0.3: {}
 
@@ -3488,6 +3447,7 @@ snapshots:
       esbuild: 0.28.1
     optionalDependencies:
       fsevents: 2.3.3
+    optional: true
 
   type-check@0.4.0:
     dependencies:
