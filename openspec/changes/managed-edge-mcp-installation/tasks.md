@@ -75,20 +75,20 @@
 
 ## 9. Verification and Security Tests
 
-- [ ] 9.1 Add core tests for recipe canonicalization, digest invalidation, builder validation, lifecycle normalization, and protocol compatibility
-- [ ] 9.2 Add source tests for floating-reference rejection, digest mismatch, archive traversal, symlink escape, submodule policy, and private credential redaction
-- [ ] 9.3 Add consent tests proving exact approval binding, denial stickiness, independent revocation, changed-plan reapproval, and custom cleanup approval
-- [ ] 9.4 Add bounded-runner tests for timeout, output and disk limits, process-tree cleanup, environment allowlisting, executable denial, elevation rejection, and unavailable isolation
-- [ ] 9.5 Add provider conformance tests covering preflight, install, verify, activation, failed verification, retry, update, and removal
-- [ ] 9.6 Add lifecycle persistence tests for replay, concurrent reconciliation, crash interruption, reconnect, reference counting, and stale message rejection
-- [ ] 9.7 Add end-to-end tests from live desired-state assignment through installation, setup, MCP initialization, capability publication, selection, invocation, update, and removal
-- [ ] 9.8 Add mixed-state inventory tests proving one online Edge can expose ready, installing, blocked, degraded, and failed deployments without leaking hidden deployments
-- [ ] 9.9 Run focused package tests followed by repository build, typecheck, lint, and strict OpenSpec validation
+- [x] 9.1 Add core tests for recipe canonicalization, digest invalidation, builder validation, lifecycle normalization, and protocol compatibility
+- [x] 9.2 Add source tests for floating-reference rejection, digest mismatch, archive traversal, symlink escape, submodule policy, and private credential redaction
+- [x] 9.3 Add consent tests proving exact approval binding, denial stickiness, independent revocation, changed-plan reapproval, and custom cleanup approval
+- [x] 9.4 Add bounded-runner tests for timeout, output and disk limits, process-tree cleanup, environment allowlisting, executable denial, elevation rejection, and unavailable isolation
+- [x] 9.5 Add provider conformance tests covering preflight, install, verify, activation, failed verification, retry, update, and removal
+- [x] 9.6 Add lifecycle persistence tests for replay, concurrent reconciliation, crash interruption, reconnect, reference counting, and stale message rejection
+- [x] 9.7 Add end-to-end tests from live desired-state assignment through installation, setup, MCP initialization, capability publication, selection, invocation, update, and removal
+- [x] 9.8 Add mixed-state inventory tests proving one online Edge can expose ready, installing, blocked, degraded, and failed deployments without leaking hidden deployments
+- [x] 9.9 Run focused package tests followed by repository build, typecheck, lint, and strict OpenSpec validation
 
 ## 10. Documentation and Release
 
-- [ ] 10.1 Document installation providers, immutable source rules, custom script review, local consent, private-source credentials, and security boundaries
-- [ ] 10.2 Document lifecycle states, CLI recovery flows, manual prerequisites, update/removal semantics, and agent compatibility behavior
-- [ ] 10.3 Add a safe example using a pinned custom Git MCP installer and a separate manual desktop-application prerequisite
-- [ ] 10.4 Regenerate API reference for new public Edge installation contracts and builders
-- [ ] 10.5 Add a minor Changeset for affected published Fentaris packages
+- [x] 10.1 Document installation providers, immutable source rules, custom script review, local consent, private-source credentials, and security boundaries
+- [x] 10.2 Document lifecycle states, CLI recovery flows, manual prerequisites, update/removal semantics, and agent compatibility behavior
+- [x] 10.3 Add a safe example using a pinned custom Git MCP installer and a separate manual desktop-application prerequisite
+- [x] 10.4 Regenerate API reference for new public Edge installation contracts and builders
+- [x] 10.5 Add a minor Changeset for affected published Fentaris packages

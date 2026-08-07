@@ -168,6 +168,32 @@ The current recipe requires missing consent or a folder, file, secret, or scalar
 
 Run `fentaris-edge status`, complete the local prompt, and retry with the same desired-state version.
 
+### Edge installation requires approval
+
+Review the exact current plan locally, then approve or deny it. A previous decision does not apply after the source, command, permissions, verification, cleanup plan, or local policy changes.
+
+```bash theme={null}
+fentaris edge installation review <deployment-id> --json
+fentaris edge installation approve <deployment-id> --yes --json
+```
+
+For custom cleanup with external side effects, repeat review and approval with `--cleanup` before running `cleanup`.
+
+### Edge installation failed or was interrupted
+
+Inspect the bounded reason code and retryability in installation status. Retry only explicit retryable failures; the new attempt preserves the previous diagnostics.
+
+```bash theme={null}
+fentaris edge installation status <deployment-id> --json
+fentaris edge installation retry <deployment-id> --yes --json
+```
+
+`source-integrity-failed`, `unsupported-platform`, `manual-prerequisite-required`, `approval-denied`, and `agent-upgrade-required` need a source, device, local prerequisite, approval, or agent change rather than blind retry.
+
+### Edge installation is blocked by agent compatibility
+
+The assignment requires protocol v3 managed installation but the connected agent negotiated an older protocol. Upgrade the Edge agent or move the assignment to a compatible device. Fentaris does not silently reinterpret the installer as a launch command.
+
 ### Edge command is denied
 
 The local executable/package allowlist rejected the recipe. Add the exact
