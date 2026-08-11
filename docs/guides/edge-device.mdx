@@ -23,7 +23,7 @@ For an application using the integrated local control plane, approve the display
 fentaris edge approve ABCD-EFGH --subject alice
 ```
 
-Approval travels through an owner-only local operator socket. The CLI does not read or mutate the protected authority database. Enrollment, connection, desired-state reconciliation, and capability publication then happen without custom gateway wiring.
+Approval travels through an owner-only local operator socket. The CLI does not read or mutate the protected authority database. Enrollment, connection, desired-state reconciliation, and capability publication then happen without custom gateway wiring. Reconciliation runs a bounded workload probe and publishes its capability manifest before the deployment becomes discoverable.
 
 If native service installation is unavailable, the device stays enrolled and the command returns `fentaris edge run` as the foreground fallback. Pass `--no-service` to choose foreground operation or `--service` to fail unless persistent installation succeeds.
 
@@ -183,13 +183,14 @@ The result contains one terminal entry per resolved device. `fail-fast` stops ne
 ## Revoke the Device
 
 ```bash theme={null}
-fentaris-edge revoke
+fentaris edge revoke "Mac Studio" --yes
 ```
 
-Revocation removes the server-side device authorization, stops the local
-connection, and deletes local identity, grants, and setup secrets. Grant or
-workload denial is also sticky: replaying desired state cannot restart it until
-local consent is renewed.
+Run the command from the application project so the CLI can use its protected
+local operator channel. Revocation removes the durable server-side device
+authorization and stops the active connection. The device must join again with
+a new authorization before it can reconnect. Grant or workload denial is also
+sticky: replaying desired state cannot restart it until local consent is renewed.
 
 ## Placement Examples
 
@@ -243,7 +244,9 @@ An existing session is pinned to its original connection generation. Start a new
 
 Add the exact executable or package to `FENTARIS_EDGE_ALLOWED_EXECUTABLES` or
 `FENTARIS_EDGE_ALLOWED_PACKAGES`, reconnect the agent, then renew consent for
-the recipe digest. Do not allow a shell interpreter as a generic workaround.
+the recipe digest only if it was explicitly denied. A policy-blocked probe is
+reported as `reasonCategory: "executable-policy-denied"`. Do not allow a shell
+interpreter as a generic workaround.
 
 ## Related Documentation
 

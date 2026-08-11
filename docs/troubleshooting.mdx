@@ -132,7 +132,7 @@ stdio({
 
 Then check the policy assigned to the user or group.
 
-For an edge target, an empty list can also mean that no validated capability manifest exists yet. Complete local setup and let the deployment initialize once:
+For an edge target, an empty list can also mean that no validated capability manifest exists yet. Complete local setup and reconnect the agent. The agent starts a bounded capability probe during reconciliation and publishes the manifest before reporting the deployment ready:
 
 ```bash theme={null}
 fentaris-edge status
@@ -196,9 +196,10 @@ The assignment requires protocol v3 managed installation but the connected agent
 
 ### Edge command is denied
 
-The local executable/package allowlist rejected the recipe. Add the exact
+When `fentaris edge status --json` reports `reasonCategory` as
+`executable-policy-denied`, the local executable/package allowlist rejected the recipe. Add the exact
 executable or package to `FENTARIS_EDGE_ALLOWED_EXECUTABLES` or
-`FENTARIS_EDGE_ALLOWED_PACKAGES`, reconnect the agent, and renew local consent.
+`FENTARIS_EDGE_ALLOWED_PACKAGES`, then reconnect the agent.
 
 <Warning>
   Do not allow a generic shell executable to bypass the allowlist. Approve the concrete MCP executable or package.

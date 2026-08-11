@@ -6,6 +6,7 @@
  */
 
 import type { EdgeDeviceApprovalDecision } from "./integratedConfig.js";
+import type { EdgeManagedMetadata, EdgeUserMetadata } from "./inventory.js";
 import type {
   EdgeAuthenticatedHelloProof,
   EdgeAuthenticatedHelloResult,
@@ -49,6 +50,8 @@ export type EdgeEnrolledDeviceAuthority = {
   readonly revoked: boolean;
   readonly revokedAt?: number;
   readonly connectionGeneration: number;
+  readonly user?: EdgeUserMetadata;
+  readonly managed?: EdgeManagedMetadata;
 };
 
 /** Device authorization domain service. @pk */

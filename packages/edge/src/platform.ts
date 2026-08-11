@@ -64,12 +64,22 @@ export interface EdgeLocalConfig {
 }
 
 /** Resolve platform-specific local state paths without using them as identity. */
-export function defaultEdgePaths(home: string = homedir(), platform: NodeJS.Platform = process.platform): EdgePaths {
-  const dataDir = platform === "win32"
-    ? path.join(process.env.LOCALAPPDATA ?? home, "Fentaris", "edge")
+export function defaultEdgePaths(
+  home: string = homedir(),
+  platform: NodeJS.Platform = process.platform,
+  environment: NodeJS.ProcessEnv = process.env,
+): EdgePaths {
+  const configuredStateDir = environment.FENTARIS_EDGE_STATE_DIR?.trim();
+  if (configuredStateDir && !path.isAbsolute(configuredStateDir)) {
+    throw new Error("FENTARIS_EDGE_STATE_DIR must be an absolute path.");
+  }
+  const dataDir = configuredStateDir
+    ? configuredStateDir
+    : platform === "win32"
+    ? path.join(environment.LOCALAPPDATA ?? home, "Fentaris", "edge")
     : platform === "darwin"
       ? path.join(home, "Library", "Application Support", "Fentaris", "edge")
-      : path.join(process.env.XDG_STATE_HOME ?? path.join(home, ".local", "state"), "fentaris", "edge");
+      : path.join(environment.XDG_STATE_HOME ?? path.join(home, ".local", "state"), "fentaris", "edge");
   return {
     dataDir,
     configFile: path.join(dataDir, "config.json"),

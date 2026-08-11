@@ -41,6 +41,10 @@ npx @fentaris/edge join https://fentaris.example --name "Mac Studio" --tag xcode
 fentaris edge join https://fentaris.example --name "Mac Studio" --description "Local builds" --tag xcode
 ```
 
+The command prints the verification URL, user code, and exact approval command as soon as authorization begins. Keep `edge join` running and approve the displayed code from a second terminal.
+
+With `--json`, the final canonical envelope remains on standard output. The pending verification event is emitted immediately as compact JSON on standard error with type `edge.verification_required`, so scripts can surface the approval step without corrupting the final JSON result.
+
 ### `fentaris edge approve <user-code>`
 
 Approve a pending local-mode authorization through the protected operator channel. The command never edits the authority file directly.
@@ -85,6 +89,8 @@ fentaris edge update "Mac Studio" --expected-version 4 --description "Build mach
 
 Discovery commands support `--json`, `--compact`, `--limit`, `--cursor`, `--include`, `--exclude`, and `--as user:<name>|group:<name>`. JSON uses `{ ok, data|error, pagination, warnings, nextActions }`.
 
+Inside a project using the integrated local control plane, these commands use the owner-protected local operator channel automatically. Local discovery supports `--as user:<name>`, `--compact`, `--include`, and `--exclude`; `--as group:<name>` requires a remote control plane. Outside that project, set `FENTARIS_EDGE_CONTROL_PLANE_URL` to use a remote management API.
+
 ### `fentaris edge disconnect|revoke <device>`
 
 Both mutations require an explicit public device name and confirmation. Automation must pass `--yes`.
@@ -95,6 +101,8 @@ fentaris edge revoke "Mac Studio" --yes --json
 ```
 
 `disconnect` closes the active channel without deleting enrollment identity. `revoke` invalidates the device authorization.
+For the integrated local control plane, both operations use the protected operator channel and `revoke` also updates the durable authority store.
+The revoked agent stops reconnecting with `EDGE_UNAUTHORIZED_TARGET`; `fentaris edge status --json` then directs the operator to join it again with a new authorization.
 
 ### `fentaris edge installation <operation> [deployment-id]`
 

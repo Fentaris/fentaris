@@ -87,6 +87,26 @@ describe("integrated Edge deployment planning and reconciliation", () => {
     expect((await assignments.get("default", "node-1"))?.version).toBe(1);
     expect(publish).toHaveBeenCalledTimes(1);
 
+    const restoredDesired = new InMemoryEdgeDesiredStateStore();
+    const restoredPublish = vi.fn((state) => restoredDesired.publish(state));
+    const restoredReconciler = new IntegratedEdgeReconciler({
+      catalog,
+      deviceRegistry: devices,
+      desiredStateStore: restoredDesired,
+      assignmentStore: assignments,
+      publish: restoredPublish,
+    });
+    await restoredReconciler.enqueue({
+      tenantId: "default",
+      edgeNodeId: "node-1",
+      trigger: "application-start",
+    });
+    expect(restoredPublish).toHaveBeenCalledOnce();
+    expect(await restoredDesired.get("default", "node-1")).toMatchObject({
+      desiredVersion: 1,
+      deployments: [{ deploymentId: "github" }],
+    });
+
     const changed = declarations(["--safe"]);
     const changedReconciler = new IntegratedEdgeReconciler({
       catalog: compileEdgeDeploymentCatalog({

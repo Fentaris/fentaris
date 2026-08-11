@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   EdgeLocalAuthorityStore,
   IntegratedEdgeAuthServices,
+  edgeError,
   normalizeEdgeControlPlaneConfig,
 } from "../../src/index.js";
 
@@ -40,7 +41,7 @@ async function createServices() {
 
 describe("integrated Edge auth services", () => {
   it("authorizes, enrolls, refreshes, and revokes a device", async () => {
-    const { auth } = await createServices();
+    const { auth, store } = await createServices();
     const began = await auth.begin({ clientId: "fentaris-edge" });
     expect(began.userCode).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
     expect(await auth.poll({ clientId: "fentaris-edge", deviceCode: began.deviceCode })).toEqual({
@@ -77,6 +78,10 @@ describe("integrated Edge auth services", () => {
     });
     expect(enrolled.gatewayUrl).toBe("ws://127.0.0.1:4000/_fentaris/edge/ws");
     expect(enrolled.deviceCredential.length).toBeGreaterThan(20);
+    expect((await store.getEnrolledDevice("tenant-a", enrolled.edgeNodeId))?.user).toMatchObject({
+      name: "Laptop",
+      tags: [],
+    });
 
     const refreshed = await auth.refresh({
       clientId: "fentaris-edge",
@@ -301,5 +306,54 @@ describe("integrated Edge auth services", () => {
       deviceCredential: enrolled.deviceCredential,
       protocolVersions: [3],
     })).resolves.toMatchObject({ status: "rejected" });
+  });
+
+  it("rolls back durable enrollment when onEnrolled fails", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "fentaris-edge-auth-rollback-"));
+    const store = new EdgeLocalAuthorityStore({ directory, protectionKey: "test-protection-key" });
+    openStores.push(store);
+    await store.open();
+    const config = normalizeEdgeControlPlaneConfig({
+      enabled: true,
+      mode: "local",
+      publicOrigin: "http://127.0.0.1:4000",
+      rateLimitPerMinute: 30,
+    });
+    if (!config) throw new Error("expected normalized config");
+    const auth = new IntegratedEdgeAuthServices({
+      store,
+      config,
+      publicOrigin: "http://127.0.0.1:4000",
+      defaultTenantId: "tenant-a",
+      onEnrolled: async () => {
+        throw edgeError("EDGE_NAME_CONFLICT", "Edge device name is already in use for this tenant.");
+      },
+    });
+
+    const began = await auth.begin({ clientId: "fentaris-edge" });
+    await auth.approve(began.userCode, {
+      tenantId: "tenant-a",
+      subjectId: "alice",
+      actorId: "operator",
+      approvedAt: Date.now(),
+    });
+    const authorized = await auth.poll({ clientId: "fentaris-edge", deviceCode: began.deviceCode });
+    if (authorized.status !== "authorized") throw new Error("expected tokens");
+    const keys = generateKeyPairSync("ed25519", {
+      publicKeyEncoding: { type: "spki", format: "pem" },
+      privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    });
+    const nonce = randomBytes(16).toString("base64url");
+    const proof = sign(null, Buffer.from(`${began.deviceCode}.${nonce}`), keys.privateKey).toString("base64url");
+
+    await expect(auth.enroll({
+      accessToken: authorized.tokens.accessToken,
+      publicKey: keys.publicKey,
+      deviceCode: began.deviceCode,
+      nonce,
+      proof,
+      name: "Laptop",
+    })).rejects.toMatchObject({ code: "EDGE_NAME_CONFLICT" });
+    expect(store.snapshot().enrolledDevices).toEqual([]);
   });
 });

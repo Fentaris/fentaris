@@ -72,6 +72,12 @@ describe("fentaris edge command parsing and help", () => {
     expect(io.output.join("\n")).toContain("--subject <SUBJECT>");
     expect(io.output.join("\n")).toContain("--json");
   });
+
+  it("documents the cross-platform Edge state override", async () => {
+    const io = runtime();
+    await expect(main(["--help"], io.value)).resolves.toBe(0);
+    expect(io.output.join("\n")).toContain("FENTARIS_EDGE_STATE_DIR");
+  });
 });
 
 describe("fentaris edge canonical behavior", () => {
@@ -88,6 +94,36 @@ describe("fentaris edge canonical behavior", () => {
       installService: true,
     }));
     expect(JSON.parse(io.output[0]!)).toEqual(expect.objectContaining({ ok: true, pagination: null, warnings: [], nextActions: [] }));
+  });
+
+  it("emits verification details while join is still pending", async () => {
+    const io = runtime();
+    const service = backend();
+    let finishJoin!: () => void;
+    const pending = new Promise<void>((resolve) => { finishJoin = resolve; });
+    service.join.mockImplementation(async (input) => {
+      input.onVerification?.({ verificationUri: "https://control.example/verify", userCode: "ABCD-EFGH" });
+      await pending;
+      return success({ status: "enrolled", device: { name: "Mac Studio" } });
+    });
+    const command = parseCommand(["edge", "join", "https://control.example", "--no-service", "--json"]);
+    if (command.kind !== "ok") throw new Error("parse failed");
+
+    const running = runEdge(command.command, io.value, service);
+    await vi.waitFor(() => expect(io.errors).toHaveLength(1));
+    expect(io.output).toEqual([]);
+    expect(JSON.parse(io.errors[0]!)).toEqual({
+      type: "edge.verification_required",
+      data: { verificationUri: "https://control.example/verify", userCode: "ABCD-EFGH" },
+      nextAction: {
+        description: "Approve this Edge device",
+        command: "fentaris edge approve 'ABCD-EFGH' --subject <subject>",
+      },
+    });
+
+    finishJoin();
+    await expect(running).resolves.toBe(0);
+    expect(JSON.parse(io.output[0]!)).toMatchObject({ ok: true, data: { status: "enrolled" } });
   });
 
   it("approves an exact code with confirmation and canonical JSON", async () => {

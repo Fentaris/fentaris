@@ -43,6 +43,7 @@ import {
   createEdgeLocalOperatorEndpoint,
 } from "../../edge/integratedOperatorChannel.js";
 import { edgeError } from "../../edge/errors.js";
+import { DefaultEdgeControlPlaneService } from "../../edge/management.js";
 import {
   IntegratedEdgeDeviceResolver,
   IntegratedEdgeReconciler,
@@ -171,13 +172,13 @@ export async function startIntegratedEdgeControlPlane(
           subjectId: device.subjectId,
           revoked: false,
           connectionGeneration: device.connectionGeneration,
-          user: {
+          user: device.user ?? {
             name: request.name ?? request.hostnameLabel ?? `edge-${device.edgeNodeId.slice(0, 8)}`,
             description: request.description,
             tags: Object.freeze([...(request.tags ?? [])]),
             updatedAt: now,
           },
-          managed: { aliases: Object.freeze([]), pools: Object.freeze([]), updatedAt: now },
+          managed: device.managed ?? { aliases: Object.freeze([]), pools: Object.freeze([]), updatedAt: now },
         });
         await reconciler?.enqueue({ tenantId: device.tenantId, edgeNodeId: device.edgeNodeId, trigger: "enrollment" });
       },
@@ -266,6 +267,18 @@ export async function startIntegratedEdgeControlPlane(
     readiness: readinessStore,
     desired: desiredStateStore,
   });
+  const management = new DefaultEdgeControlPlaneService(
+    deviceRegistry,
+    connectionStore,
+    gateway,
+    {
+      revoke: async (device) => {
+        await auth.revokeDeviceTokens(device.tenantId, device.edgeNodeId);
+        await deviceRegistry.revoke(device.tenantId, device.edgeNodeId);
+        await reconciler.enqueue({ tenantId: device.tenantId, edgeNodeId: device.edgeNodeId, trigger: "revocation" });
+      },
+    },
+  );
 
   const routes = createEdgeControlPlaneRoutes({
     basePath: config.basePath,
@@ -302,6 +315,8 @@ export async function startIntegratedEdgeControlPlane(
           subjectId: device.subjectId,
           revoked: device.revoked,
           connectionGeneration: device.connectionGeneration,
+          ...(device.user ? { user: device.user } : {}),
+          ...(device.managed ? { managed: device.managed } : {}),
         });
         if (!device.revoked) {
           await reconciler.enqueue({ tenantId: device.tenantId, edgeNodeId: device.edgeNodeId, trigger: "application-start" });
@@ -311,6 +326,7 @@ export async function startIntegratedEdgeControlPlane(
       operator = new EdgeLocalOperatorServer({
         endpoint: operatorEndpoint,
         approval: auth,
+        management,
         status: async () => {
           const snapshot = localStore.snapshot();
           return {

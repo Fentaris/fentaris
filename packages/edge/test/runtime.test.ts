@@ -99,6 +99,11 @@ describe("EdgeAgentRuntime", () => {
       }],
     });
     expect(sent).toEqual([
+      expect.objectContaining({
+        kind: "edge.capability-manifest",
+        deploymentId: "fixture",
+        tools: [{ name: "status" }],
+      }),
       expect.objectContaining({ kind: "edge.setup-status", status: "ready" }),
       expect.objectContaining({ kind: "edge.desired-state.ack", status: "applied", desiredVersion: 2 }),
     ]);
@@ -126,11 +131,6 @@ describe("EdgeAgentRuntime", () => {
     };
     await runtime.handle(request);
     expect(sent).toContainEqual(expect.objectContaining({
-      kind: "edge.capability-manifest",
-      deploymentId: "fixture",
-      tools: [{ name: "status" }],
-    }));
-    expect(sent).toContainEqual(expect.objectContaining({
       kind: "mcp.result",
       requestId: "request-1",
       result: { content: [{ type: "text", text: "edge-ok" }] },
@@ -155,7 +155,7 @@ describe("EdgeAgentRuntime", () => {
       route: { ...request.route, connectionGeneration: 3 },
     })).rejects.toMatchObject({ code: "EDGE_PROTOCOL" });
     await runtime.disconnected();
-    expect(close).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledTimes(2);
   });
 
   it("serializes concurrent desired-state reconciliation", async () => {

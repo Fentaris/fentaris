@@ -8,11 +8,13 @@ import {
   EdgeLocalOperatorServer,
   compareSecretHash,
   createEdgeLocalOperatorEndpoint,
+  edgeError,
   hashSecret,
   normalizeUserCode,
   redactEdgeAuthorityValue,
   type EdgeApprovalService,
   type EdgeAuthorizationSession,
+  type EdgeControlPlaneService,
 } from "../../src/index.js";
 
 const openStores: EdgeLocalAuthorityStore[] = [];
@@ -28,6 +30,16 @@ afterEach(async () => {
 });
 
 describe("local Edge authority store", () => {
+  it("recovers a lock left by a terminated process", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "fentaris-edge-authority-stale-"));
+    await writeFile(path.join(directory, "authority.lock"), "99999999\n", { mode: 0o600 });
+    const store = new EdgeLocalAuthorityStore({ directory, protectionKey: "test-protection-key", lockTimeoutMs: 100 });
+    openStores.push(store);
+
+    await expect(store.open()).resolves.toMatchObject({ schemaVersion: 1 });
+    expect(await readFile(store.lockPath, "utf8")).toBe(`${process.pid}\n`);
+  });
+
   it("persists server identity across reopen with owner-only files", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "fentaris-edge-authority-"));
     const first = new EdgeLocalAuthorityStore({ directory, protectionKey: "test-protection-key" });
@@ -205,5 +217,73 @@ describe("local Edge operator channel", () => {
     });
     expect(denied.ok).toBe(false);
     expect(denied.error?.code).toBe("unauthorized");
+  });
+
+  it("preserves Edge error codes from local device management", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "fentaris-edge-operator-mgmt-"));
+    const endpoint = createEdgeLocalOperatorEndpoint(directory);
+    const approval: EdgeApprovalService = {
+      async approve() {
+        throw new Error("unused");
+      },
+      async deny() {
+        throw new Error("unused");
+      },
+    };
+    const management = {
+      async list() {
+        throw new Error("unused");
+      },
+      async get() {
+        throw new Error("unused");
+      },
+      async join() {
+        throw new Error("unused");
+      },
+      async update() {
+        throw edgeError("EDGE_INVENTORY_CONFLICT", "Edge inventory version is stale.");
+      },
+      async disconnect() {
+        throw new Error("unused");
+      },
+      async revoke() {
+        throw edgeError("EDGE_UNAUTHORIZED_TARGET", "Edge device is unavailable or unauthorized.");
+      },
+    } as unknown as EdgeControlPlaneService;
+    const server = new EdgeLocalOperatorServer({
+      endpoint,
+      approval,
+      management,
+      status: async () => ({
+        mode: "local",
+        multiInstance: false,
+        pendingApprovals: 0,
+        enrolledDevices: 0,
+      }),
+    });
+    openServers.push(server);
+    await server.start();
+    const client = new EdgeLocalOperatorClient(endpoint);
+
+    const conflict = await client.request({
+      command: "device-update",
+      context: { tenantId: "default" },
+      deviceName: "Laptop",
+      update: { expectedInventoryVersion: 1, updatedAt: Date.now() },
+    });
+    expect(conflict).toMatchObject({
+      ok: false,
+      error: { code: "EDGE_INVENTORY_CONFLICT", message: "Edge inventory version is stale." },
+    });
+
+    const unauthorized = await client.request({
+      command: "device-revoke",
+      context: { tenantId: "default" },
+      deviceName: "Laptop",
+    });
+    expect(unauthorized).toMatchObject({
+      ok: false,
+      error: { code: "EDGE_UNAUTHORIZED_TARGET" },
+    });
   });
 });

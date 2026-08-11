@@ -233,7 +233,10 @@ export const cliSpec: CliCommandSpec = {
     },
   ],
   options: globalOptions,
-  environment: [{ name: "FENTARIS_AUTH_KEY", description: "Encryption key used by the local secrets backend." }],
+  environment: [
+    { name: "FENTARIS_AUTH_KEY", description: "Encryption key used by the local secrets backend." },
+    { name: "FENTARIS_EDGE_STATE_DIR", description: "Absolute directory for local Edge identity and runtime state." },
+  ],
   commands: {
     edge: edgeCommandSpec,
     init: {

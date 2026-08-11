@@ -102,9 +102,10 @@ export class EdgeAgent {
       observedFacts: this.options.observedFacts?.() ?? defaultObservedFacts(),
     });
     const active = this.active;
-    void active.closed?.finally(() => {
-      if (this.active === active) this.active = undefined;
-    });
+    void active.closed?.then(
+      () => { if (this.active === active) this.active = undefined; },
+      () => { if (this.active === active) this.active = undefined; },
+    );
   }
 
   async reconnect(): Promise<void> {
@@ -177,17 +178,25 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     let runtimeDisconnected = false;
     let resolveClosed!: () => void;
-    const closed = new Promise<void>((resolve) => {
+    let rejectClosed!: (error: unknown) => void;
+    const closed = new Promise<void>((resolve, reject) => {
       resolveClosed = resolve;
+      rejectClosed = reject;
     });
-    const disconnectRuntime = async () => {
+    // Embedders may ignore `closed`; keep terminal close metadata available to
+    // awaiters without producing an unhandled rejection in that case.
+    void closed.catch(() => undefined);
+    const disconnectRuntime = async (closeError?: unknown) => {
       if (runtimeDisconnected) return;
       runtimeDisconnected = true;
       if (heartbeat) clearInterval(heartbeat);
       try {
         await input.runtime?.disconnected();
+      } catch (error) {
+        closeError ??= error;
       } finally {
-        resolveClosed();
+        if (closeError) rejectClosed(closeError);
+        else resolveClosed();
       }
     };
     const send = async (message: EdgeAgentMessage) => {
@@ -206,9 +215,10 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
           void disconnectRuntime();
         }
       };
-      socket.addEventListener("error", () => {
-        if (!ack) reject(new Error("Unable to establish the edge gateway connection"));
-      });
+      // The close event carries the gateway's private close code. Wait for it
+      // instead of letting a preceding generic error event erase whether the
+      // identity was rejected/revoked or the network merely failed.
+      socket.addEventListener("error", () => undefined);
       socket.addEventListener("open", () => {
         socket.send(JSON.stringify({
           version: EDGE_PROTOCOL_VERSION,
@@ -298,9 +308,10 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
           }
         });
       });
-      socket.addEventListener("close", () => {
-        void disconnectRuntime();
-        if (!ack) reject(edgeError("EDGE_UNAVAILABLE", "Edge socket closed during authentication."));
+      socket.addEventListener("close", (event) => {
+        const closeError = terminalGatewayClose(event);
+        void disconnectRuntime(closeError);
+        if (!ack) reject(closeError ?? edgeError("EDGE_UNAVAILABLE", "Edge socket closed during authentication."));
       }, { once: true });
     });
     const authenticatedAck = await authenticated;
@@ -312,11 +323,21 @@ export class WebSocketEdgeConnectionClient implements EdgeConnectionClient {
           void disconnectRuntime().then(resolve);
           return;
         }
-        closed.then(resolve);
+        closed.then(resolve, resolve);
         socket.close(1000, "local disconnect");
       }),
     };
   }
+}
+
+function terminalGatewayClose(event: CloseEvent | Event): Error | undefined {
+  const code = "code" in event && typeof event.code === "number" ? event.code : undefined;
+  if (code === 4401 || code === 4403) {
+    return edgeError("EDGE_UNAUTHORIZED_TARGET", "Edge gateway rejected or revoked this device identity.", {
+      details: { closeCode: code },
+    });
+  }
+  return undefined;
 }
 
 function defaultObservedFacts(reportedAt = Date.now()): EdgeObservedFacts {
