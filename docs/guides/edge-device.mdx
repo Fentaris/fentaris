@@ -183,13 +183,14 @@ The result contains one terminal entry per resolved device. `fail-fast` stops ne
 ## Revoke the Device
 
 ```bash theme={null}
-fentaris-edge revoke
+fentaris edge revoke "Mac Studio" --yes
 ```
 
-Revocation removes the server-side device authorization, stops the local
-connection, and deletes local identity, grants, and setup secrets. Grant or
-workload denial is also sticky: replaying desired state cannot restart it until
-local consent is renewed.
+Run the command from the application project so the CLI can use its protected
+local operator channel. Revocation removes the durable server-side device
+authorization and stops the active connection. The device must join again with
+a new authorization before it can reconnect. Grant or workload denial is also
+sticky: replaying desired state cannot restart it until local consent is renewed.
 
 ## Placement Examples
 

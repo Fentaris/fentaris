@@ -43,6 +43,7 @@ import {
   createEdgeLocalOperatorEndpoint,
 } from "../../edge/integratedOperatorChannel.js";
 import { edgeError } from "../../edge/errors.js";
+import { DefaultEdgeControlPlaneService } from "../../edge/management.js";
 import {
   IntegratedEdgeDeviceResolver,
   IntegratedEdgeReconciler,
@@ -266,6 +267,18 @@ export async function startIntegratedEdgeControlPlane(
     readiness: readinessStore,
     desired: desiredStateStore,
   });
+  const management = new DefaultEdgeControlPlaneService(
+    deviceRegistry,
+    connectionStore,
+    gateway,
+    {
+      revoke: async (device) => {
+        await auth.revokeDeviceTokens(device.tenantId, device.edgeNodeId);
+        await deviceRegistry.revoke(device.tenantId, device.edgeNodeId);
+        await reconciler.enqueue({ tenantId: device.tenantId, edgeNodeId: device.edgeNodeId, trigger: "revocation" });
+      },
+    },
+  );
 
   const routes = createEdgeControlPlaneRoutes({
     basePath: config.basePath,
@@ -313,6 +326,7 @@ export async function startIntegratedEdgeControlPlane(
       operator = new EdgeLocalOperatorServer({
         endpoint: operatorEndpoint,
         approval: auth,
+        management,
         status: async () => {
           const snapshot = localStore.snapshot();
           return {

@@ -11,6 +11,7 @@ import {
   defaultEdgePaths,
   EdgeAgent,
   EdgeEnrollmentService,
+  HttpDeviceAuthorizationProvider,
   ProtectedJsonStore,
   WebSocketEdgeConnectionClient,
   runEdgeCli,
@@ -37,11 +38,16 @@ class FakeWebSocket extends EventTarget {
   receive(message: unknown) {
     this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(message) }));
   }
-  close() {
+  close(code = 1000, reason = "") {
     if (this.throwOnClose) throw new Error("close failed");
     if (this.readyState === WebSocket.CLOSED) return;
     this.readyState = WebSocket.CLOSED;
-    this.dispatchEvent(new Event("close"));
+    const event = new Event("close");
+    Object.defineProperties(event, {
+      code: { value: code },
+      reason: { value: reason },
+    });
+    this.dispatchEvent(event);
   }
 }
 
@@ -213,6 +219,22 @@ describe("edge enrollment", () => {
     expect(await sharedPlatform.configStore.load()).toBeUndefined();
     expect(await sharedPlatform.deviceKeyStore.load()).toBeUndefined();
     expect(second.client.revoke).toHaveBeenCalledWith("node-random", "access-token");
+  });
+
+  it("classifies a rejected refresh token as terminal authorization failure", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(
+      JSON.stringify({ error: "invalid_grant" }),
+      { status: 401, headers: { "content-type": "application/json" } },
+    ));
+    try {
+      const provider = new HttpDeviceAuthorizationProvider("https://control.example");
+      await expect(provider.refresh("revoked-refresh-token")).rejects.toMatchObject({
+        code: "EDGE_UNAUTHORIZED_TARGET",
+        details: { status: 401 },
+      });
+    } finally {
+      fetch.mockRestore();
+    }
   });
 });
 
@@ -395,6 +417,59 @@ describe("edge agent and CLI", () => {
     await vi.waitFor(() => expect(runtime.handle).toHaveBeenCalledOnce());
     await connection.close();
     expect(runtime.disconnected).toHaveBeenCalledOnce();
+  });
+
+  it("reports gateway revocation as a terminal connection error", async () => {
+    const keyPair = generateKeyPairSync("ed25519", {
+      publicKeyEncoding: { type: "spki", format: "pem" },
+      privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    });
+    const socket = new FakeWebSocket();
+    const client = new WebSocketEdgeConnectionClient(() => socket as unknown as WebSocket);
+    const pending = client.connect({
+      gatewayUrl: "ws://127.0.0.1:4001/edge",
+      edgeNodeId: "node-1",
+      tenantId: "tenant-1",
+      deviceCredential: "credential",
+      accessToken: "token",
+      publicKey: keyPair.publicKey,
+      privateKey: keyPair.privateKey,
+    });
+    socket.open();
+    socket.receive({
+      version: EDGE_PROTOCOL_VERSION,
+      kind: "edge.hello.ack",
+      tenantId: "tenant-1",
+      edgeNodeId: "node-1",
+      connectionGeneration: 2,
+      protocolVersion: EDGE_PROTOCOL_VERSION,
+      serverTime: 100,
+    });
+    const connection = await pending;
+    socket.close(4403, "revoked");
+    await expect(connection.closed).rejects.toMatchObject({ code: "EDGE_UNAUTHORIZED_TARGET" });
+  });
+
+  it("preserves a terminal gateway close code during authentication", async () => {
+    const keyPair = generateKeyPairSync("ed25519", {
+      publicKeyEncoding: { type: "spki", format: "pem" },
+      privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    });
+    const socket = new FakeWebSocket();
+    const client = new WebSocketEdgeConnectionClient(() => socket as unknown as WebSocket);
+    const pending = client.connect({
+      gatewayUrl: "ws://127.0.0.1:4001/edge",
+      edgeNodeId: "node-1",
+      tenantId: "tenant-1",
+      deviceCredential: "revoked-credential",
+      accessToken: "token",
+      publicKey: keyPair.publicKey,
+      privateKey: keyPair.privateKey,
+    });
+    socket.open();
+    socket.dispatchEvent(new Event("error"));
+    socket.close(4403, "revoked");
+    await expect(pending).rejects.toMatchObject({ code: "EDGE_UNAUTHORIZED_TARGET" });
   });
 
   it("keeps the WebSocket frame queue resolved after a frame handler failure", async () => {

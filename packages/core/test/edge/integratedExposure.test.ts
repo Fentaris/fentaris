@@ -68,6 +68,25 @@ describe("integrated Edge control-plane exposure", () => {
       edgeNodeId: "node-1",
       deploymentIds: ["echo"],
     }]);
+
+    if (!runtime.operator) throw new Error("expected operator channel");
+    const operator = new EdgeLocalOperatorClient(runtime.operator.endpoint);
+    const listed = await operator.request({
+      command: "device-list",
+      context: { tenantId: "default", subjectId: "alice" },
+    });
+    expect(listed).toMatchObject({
+      ok: true,
+      data: { ok: true, data: [{ device: { name: "Alice laptop" }, revoked: false }] },
+    });
+    const revoked = await operator.request({
+      command: "device-revoke",
+      context: { tenantId: "default" },
+      deviceName: "Alice laptop",
+    });
+    expect(revoked).toMatchObject({ ok: true, data: { ok: true, data: { revoked: true } } });
+    expect(runtime.store?.snapshot().enrolledDevices[0]?.revoked).toBe(true);
+    expect(runtime.store?.snapshot().desiredAssignments).toHaveLength(0);
   });
 
   it("serves authorize and token routes from app.start when enabled", async () => {

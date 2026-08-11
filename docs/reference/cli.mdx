@@ -89,6 +89,8 @@ fentaris edge update "Mac Studio" --expected-version 4 --description "Build mach
 
 Discovery commands support `--json`, `--compact`, `--limit`, `--cursor`, `--include`, `--exclude`, and `--as user:<name>|group:<name>`. JSON uses `{ ok, data|error, pagination, warnings, nextActions }`.
 
+Inside a project using the integrated local control plane, these commands use the owner-protected local operator channel automatically. Outside that project, set `FENTARIS_EDGE_CONTROL_PLANE_URL` to use a remote management API.
+
 ### `fentaris edge disconnect|revoke <device>`
 
 Both mutations require an explicit public device name and confirmation. Automation must pass `--yes`.
@@ -99,6 +101,8 @@ fentaris edge revoke "Mac Studio" --yes --json
 ```
 
 `disconnect` closes the active channel without deleting enrollment identity. `revoke` invalidates the device authorization.
+For the integrated local control plane, both operations use the protected operator channel and `revoke` also updates the durable authority store.
+The revoked agent stops reconnecting with `EDGE_UNAUTHORIZED_TARGET`; `fentaris edge status --json` then directs the operator to join it again with a new authorization.
 
 ### `fentaris edge installation <operation> [deployment-id]`
 

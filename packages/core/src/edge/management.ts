@@ -81,6 +81,9 @@ export class DefaultEdgeControlPlaneService implements EdgeControlPlaneService {
     private readonly devices: EdgeDeviceRegistry,
     private readonly connections: EdgeConnectionStore,
     private readonly terminator: EdgeConnectionTerminator,
+    private readonly lifecycle: {
+      readonly revoke?: (device: EdgeDeviceRecord) => Promise<void>;
+    } = {},
   ) {}
 
   async join(request: EdgeJoinRequest): Promise<EdgeManagementResult<EdgeManagedDeviceView>> {
@@ -177,7 +180,8 @@ export class DefaultEdgeControlPlaneService implements EdgeControlPlaneService {
 
   async revoke(context: EdgeManagementContext, deviceName: string): Promise<EdgeManagementResult<EdgeManagedDeviceView>> {
     const record = await this.requireVisible(context, deviceName);
-    await this.devices.revoke(context.tenantId, record.edgeNodeId);
+    if (this.lifecycle.revoke) await this.lifecycle.revoke(record);
+    else await this.devices.revoke(context.tenantId, record.edgeNodeId);
     const connection = await this.connections.get(context.tenantId, record.edgeNodeId);
     if (connection) {
       await this.terminator.disconnect(
