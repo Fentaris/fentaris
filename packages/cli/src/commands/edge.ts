@@ -23,6 +23,11 @@ export interface EdgeCliNextAction {
   readonly command: string;
 }
 
+export interface EdgeJoinVerification {
+  readonly verificationUri: string;
+  readonly userCode: string;
+}
+
 export type EdgeCliEnvelope<T> = {
   readonly ok: true;
   readonly data: T;
@@ -44,6 +49,7 @@ export interface EdgeOperatorBackend {
     readonly tags: readonly string[];
     readonly installService: boolean;
     readonly requireService: boolean;
+    readonly onVerification?: (verification: EdgeJoinVerification) => void;
   }): Promise<EdgeCliEnvelope<unknown>>;
   run(): Promise<EdgeCliEnvelope<unknown>>;
   service(operation: EdgeServiceOperation): Promise<EdgeCliEnvelope<unknown>>;
@@ -88,6 +94,7 @@ export async function runEdge(
           tags: listOption(command.options, "tag") ?? [],
           installService: command.options["no-service"] !== true,
           requireService: command.options.service === true,
+          onVerification: (verification) => printJoinVerification(runtime, command.options, verification),
         });
         break;
       }
@@ -195,7 +202,9 @@ export class DefaultEdgeOperatorBackend implements EdgeOperatorBackend {
       controlPlaneUrl: input.controlPlaneUrl,
       platform: this.platform,
       onVerification: (request) => {
-        verification.push({ verificationUri: request.verificationUri, userCode: request.userCode });
+        const pending = { verificationUri: request.verificationUri, userCode: request.userCode };
+        verification.push(pending);
+        input.onVerification?.(pending);
       },
     });
     const joined = await agent.login({ name: input.name, description: input.description, tags: input.tags });
@@ -410,6 +419,21 @@ function printEnvelope(runtime: Runtime, envelope: EdgeCliEnvelope<unknown>, opt
   }
   for (const warning of envelope.warnings) runtime.out.error(`Warning: ${warning}`);
   for (const action of envelope.nextActions) runtime.out.log(`Next: ${action.command}`);
+}
+
+function printJoinVerification(runtime: Runtime, options: CliOptions, verification: EdgeJoinVerification): void {
+  const approvalCommand = `fentaris edge approve ${shellArg(verification.userCode)} --subject <subject>`;
+  if (options.json === true) {
+    runtime.out.error(JSON.stringify({
+      type: "edge.verification_required",
+      data: verification,
+      nextAction: { description: "Approve this Edge device", command: approvalCommand },
+    }));
+    return;
+  }
+  runtime.out.log(`Verification URL: ${verification.verificationUri}`);
+  runtime.out.log(`User code: ${verification.userCode}`);
+  runtime.out.log(`Approve with: ${approvalCommand}`);
 }
 
 function printFailure(
