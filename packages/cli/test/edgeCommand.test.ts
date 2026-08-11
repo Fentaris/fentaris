@@ -72,6 +72,12 @@ describe("fentaris edge command parsing and help", () => {
     expect(io.output.join("\n")).toContain("--subject <SUBJECT>");
     expect(io.output.join("\n")).toContain("--json");
   });
+
+  it("documents the cross-platform Edge state override", async () => {
+    const io = runtime();
+    await expect(main(["--help"], io.value)).resolves.toBe(0);
+    expect(io.output.join("\n")).toContain("FENTARIS_EDGE_STATE_DIR");
+  });
 });
 
 describe("fentaris edge canonical behavior", () => {

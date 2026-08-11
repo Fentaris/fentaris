@@ -28,6 +28,16 @@ afterEach(async () => {
 });
 
 describe("local Edge authority store", () => {
+  it("recovers a lock left by a terminated process", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "fentaris-edge-authority-stale-"));
+    await writeFile(path.join(directory, "authority.lock"), "99999999\n", { mode: 0o600 });
+    const store = new EdgeLocalAuthorityStore({ directory, protectionKey: "test-protection-key", lockTimeoutMs: 100 });
+    openStores.push(store);
+
+    await expect(store.open()).resolves.toMatchObject({ schemaVersion: 1 });
+    expect(await readFile(store.lockPath, "utf8")).toBe(`${process.pid}\n`);
+  });
+
   it("persists server identity across reopen with owner-only files", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "fentaris-edge-authority-"));
     const first = new EdgeLocalAuthorityStore({ directory, protectionKey: "test-protection-key" });

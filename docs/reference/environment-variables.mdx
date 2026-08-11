@@ -80,6 +80,21 @@ npx @fentaris/edge join https://fentaris.example
 
 Use HTTPS. The enrolled gateway URL must use `wss://`; `ws://` is accepted only for loopback development.
 
+### `FENTARIS_EDGE_STATE_DIR`
+
+Absolute directory used for the local Edge identity, credentials, runtime status, and singleton lock. Set this before every local Edge command when testing an isolated identity or running separate Edge profiles on the same computer.
+
+```bash theme={null}
+export FENTARIS_EDGE_STATE_DIR="/tmp/fentaris-edge-test"
+fentaris edge join http://127.0.0.1:4300/_fentaris/edge --no-service
+```
+
+Without this variable, Fentaris uses the native per-user location: `~/Library/Application Support/Fentaris/edge` on macOS, `%LOCALAPPDATA%\\Fentaris\\edge` on Windows, and `${XDG_STATE_HOME:-~/.local/state}/fentaris/edge` on Linux.
+
+<Warning>
+  Keep the same value for `join`, `run`, `status`, and service management. Changing it selects a different local Edge identity.
+</Warning>
+
 ### `FENTARIS_EDGE_ALLOWED_EXECUTABLES`
 
 Comma-separated exact executable paths or basenames that the edge agent may

@@ -499,6 +499,9 @@ export class EdgeLocalAuthorityStore {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
           throw error;
         }
+        if (await this.recoverStaleLock()) {
+          continue;
+        }
         await sleep(50);
       }
     }
@@ -506,6 +509,28 @@ export class EdgeLocalAuthorityStore {
       "EDGE_PROTOCOL",
       "Local Edge authority store is locked by another process; local mode is single-process only.",
     );
+  }
+
+  private async recoverStaleLock(): Promise<boolean> {
+    let owner: string;
+    try {
+      owner = (await readFile(this.lockPath, "utf8")).trim();
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
+      throw error;
+    }
+    const pid = Number.parseInt(owner, 10);
+    if (Number.isSafeInteger(pid) && pid > 0 && processIsAlive(pid)) return false;
+
+    const stalePath = `${this.lockPath}.stale-${process.pid}-${randomBytes(4).toString("hex")}`;
+    try {
+      await rename(this.lockPath, stalePath);
+      await rm(stalePath, { force: true });
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
+      throw error;
+    }
   }
 
   private async ensureOwnerOnlyDirectory(): Promise<void> {
@@ -523,6 +548,15 @@ export class EdgeLocalAuthorityStore {
     if (!this.document || this.closed) {
       throw edgeError("EDGE_PROTOCOL", "Local Edge authority store is not open.");
     }
+  }
+}
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "ESRCH";
   }
 }
 

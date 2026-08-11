@@ -1,6 +1,5 @@
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import path from "node:path";
 import { generateKeyPairSync, verify } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -9,6 +8,7 @@ import {
   createSetupSchema,
 } from "@fentaris/core";
 import {
+  defaultEdgePaths,
   EdgeAgent,
   EdgeEnrollmentService,
   ProtectedJsonStore,
@@ -23,6 +23,7 @@ import {
   type JsonStore,
   type StoredDeviceKeyPair,
 } from "../src/index.js";
+import path from "node:path";
 
 class FakeWebSocket extends EventTarget {
   readyState = WebSocket.CONNECTING;
@@ -212,6 +213,29 @@ describe("edge enrollment", () => {
     expect(await sharedPlatform.configStore.load()).toBeUndefined();
     expect(await sharedPlatform.deviceKeyStore.load()).toBeUndefined();
     expect(second.client.revoke).toHaveBeenCalledWith("node-random", "access-token");
+  });
+});
+
+describe("edge local paths", () => {
+  it("uses an explicit state directory on every platform", () => {
+    const configured = defaultEdgePaths(
+      "/Users/example",
+      "darwin",
+      { FENTARIS_EDGE_STATE_DIR: "/tmp/isolated-edge-state" },
+    );
+    expect(configured.dataDir).toBe("/tmp/isolated-edge-state");
+    expect(configured.configFile).toBe(path.join(configured.dataDir, "config.json"));
+  });
+
+  it("rejects a relative explicit state directory", () => {
+    expect(() => defaultEdgePaths("/Users/example", "darwin", {
+      FENTARIS_EDGE_STATE_DIR: "./relative-edge-state",
+    })).toThrow(/must be an absolute path/i);
+  });
+
+  it("keeps the native macOS default without an explicit override", () => {
+    expect(defaultEdgePaths("/Users/example", "darwin", {}).dataDir)
+      .toBe("/Users/example/Library/Application Support/Fentaris/edge");
   });
 });
 
