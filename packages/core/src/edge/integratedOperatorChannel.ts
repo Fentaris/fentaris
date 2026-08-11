@@ -9,7 +9,7 @@ import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createConnection, createServer, type Server, type Socket } from "node:net";
 import path from "node:path";
-import { edgeError } from "./errors.js";
+import { edgeError, isEdgeError } from "./errors.js";
 import type { EdgeDeviceApprovalDecision } from "./integratedConfig.js";
 import type { EdgeInventoryListOptions, EdgeInventoryUpdate } from "./controlPlane.js";
 import type { EdgeControlPlaneService, EdgeManagementContext } from "./management.js";
@@ -202,6 +202,7 @@ export class EdgeLocalOperatorServer implements EdgeLocalOperatorChannel {
   private handleSocket(socket: Socket): void {
     let bytes = 0;
     let body = "";
+    let handling = false;
     const max = this.options.maxRequestBytes ?? 16_384;
     socket.setEncoding("utf8");
     socket.on("data", (chunk: string) => {
@@ -216,10 +217,12 @@ export class EdgeLocalOperatorServer implements EdgeLocalOperatorChannel {
       }
       body += chunk;
       const newline = body.indexOf("\n");
-      if (newline === -1) {
+      if (newline === -1 || handling) {
         return;
       }
       const frame = body.slice(0, newline);
+      body = body.slice(newline + 1);
+      handling = true;
       void this.handleFrame(socket, frame);
     });
   }
@@ -315,7 +318,7 @@ export class EdgeLocalOperatorServer implements EdgeLocalOperatorChannel {
       this.respond(socket, {
         ok: false,
         error: {
-          code: "server_error",
+          code: isEdgeError(error) ? error.code : "server_error",
           message: error instanceof Error ? error.message : "Operator request failed.",
         },
       });

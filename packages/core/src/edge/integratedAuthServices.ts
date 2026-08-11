@@ -403,12 +403,20 @@ export class IntegratedEdgeAuthServices
       }
     }
 
+    try {
+      await this.options.onEnrolled?.(authority, request);
+    } catch (error) {
+      // Roll back durable authority so a failed registry/side-effect cannot
+      // leave a restart-blocking orphan after the client sees enrollment fail.
+      await this.options.store.removeEnrolledDevice(access.tenantId, edgeNodeId);
+      throw error;
+    }
+
     this.emit("edge.enrollment.completed", {
       tenantId: access.tenantId,
       subjectId: access.subjectId,
       edgeNodeId,
     });
-    await this.options.onEnrolled?.(authority, request);
 
     return {
       edgeNodeId,

@@ -286,23 +286,29 @@ export class DefaultEdgeOperatorBackend implements EdgeOperatorBackend {
   }
 
   async list(options: EdgeRemoteQuery): Promise<EdgeCliEnvelope<unknown>> {
+    const localGate = await this.localDiscoveryGate(options);
+    if (localGate) return localGate;
     const local = await this.localManagement({
       command: "device-list",
       context: managementContext(options),
       options: { ...(options.limit ? { limit: options.limit } : {}), ...(options.cursor ? { cursor: options.cursor } : {}) },
     });
-    if (local) return local;
+    if (local) return shapeLocalDiscovery(local, options);
     return this.remote("GET", "/edge/devices", undefined, options);
   }
   async get(device: string, options: EdgeRemoteQuery): Promise<EdgeCliEnvelope<unknown>> {
+    const localGate = await this.localDiscoveryGate(options);
+    if (localGate) return localGate;
     const local = await this.localManagement({ command: "device-get", context: managementContext(options), deviceName: device });
-    if (local) return local;
+    if (local) return shapeLocalDiscovery(local, options);
     return this.remote("GET", `/edge/devices/${encodeURIComponent(device)}`, undefined, options);
   }
   async status(device: string | undefined, options: EdgeRemoteQuery): Promise<EdgeCliEnvelope<unknown>> {
     if (device) {
+      const localGate = await this.localDiscoveryGate(options);
+      if (localGate) return localGate;
       const local = await this.localManagement({ command: "device-get", context: managementContext(options), deviceName: device });
-      if (local) return local;
+      if (local) return shapeLocalDiscovery(local, options);
       return this.remote("GET", `/edge/devices/${encodeURIComponent(device)}/status`, undefined, options);
     }
     const credential = await this.platform.credentialStore.get("local-control-credential");
@@ -402,6 +408,26 @@ export class DefaultEdgeOperatorBackend implements EdgeOperatorBackend {
     }
   }
 
+  private async localDiscoveryGate(options: EdgeRemoteQuery): Promise<EdgeCliEnvelope<unknown> | undefined> {
+    if (!(await this.isLocalControlPlane())) return undefined;
+    if (options.as?.startsWith("group:")) {
+      return failure(
+        "EDGE_CLI_USAGE",
+        "Local Edge discovery supports --as user:<name> only; group selectors require a remote control plane.",
+      );
+    }
+    return undefined;
+  }
+
+  private async isLocalControlPlane(): Promise<boolean> {
+    try {
+      const project = await discoverProject(this.runtime.cwd);
+      return project.config.edge?.controlPlane?.mode === "local";
+    } catch {
+      return false;
+    }
+  }
+
   private async localManagement(request: EdgeLocalOperatorClientRequest): Promise<EdgeCliEnvelope<unknown> | undefined> {
     let project;
     try {
@@ -417,11 +443,7 @@ export class DefaultEdgeOperatorBackend implements EdgeOperatorBackend {
       if (!response.ok) {
         return failure(normalizeControlPlaneErrorCode(response.error?.code), response.error?.message ?? "Local Edge management failed.");
       }
-      const envelope = response.data;
-      if (envelope && typeof envelope === "object" && "ok" in envelope) {
-        return envelope as EdgeCliEnvelope<unknown>;
-      }
-      return failure("EDGE_CONTROL_PLANE_ERROR", "Local Edge management returned a malformed response.");
+      return adaptLocalManagementEnvelope(response.data);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === "ENOENT" || code === "ECONNREFUSED") {
@@ -570,10 +592,108 @@ function remoteQuery(options: CliOptions): EdgeRemoteQuery {
 }
 
 function managementContext(options: EdgeRemoteQuery): { tenantId: string; subjectId?: string } {
+  const as = options.as;
+  if (!as) return { tenantId: "default" };
+  const subjectId = as.startsWith("user:") ? as.slice("user:".length) : as;
   return {
     tenantId: "default",
-    ...(options.as ? { subjectId: options.as } : {}),
+    ...(subjectId ? { subjectId } : {}),
   };
+}
+
+function adaptLocalManagementEnvelope(value: unknown): EdgeCliEnvelope<unknown> {
+  if (!value || typeof value !== "object" || !("ok" in value)) {
+    return failure("EDGE_CONTROL_PLANE_ERROR", "Local Edge management returned a malformed response.");
+  }
+  const result = value as {
+    readonly ok: boolean;
+    readonly data?: unknown;
+    readonly pagination?: { readonly nextCursor?: string } | null;
+    readonly warnings?: readonly unknown[];
+    readonly nextActions?: readonly unknown[];
+    readonly error?: { readonly code?: string; readonly message?: string; readonly details?: Readonly<Record<string, unknown>> };
+  };
+  const warnings = (result.warnings ?? []).map((warning) => String(warning));
+  const nextActions = (result.nextActions ?? []).map(adaptLocalNextAction);
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: {
+        code: normalizeControlPlaneErrorCode(result.error?.code),
+        message: result.error?.message ?? "Local Edge management failed.",
+        details: result.error?.details ?? {},
+      },
+      warnings,
+      nextActions,
+    };
+  }
+  return {
+    ok: true,
+    data: result.data,
+    pagination: result.pagination ?? null,
+    warnings,
+    nextActions,
+  };
+}
+
+function adaptLocalNextAction(action: unknown): EdgeCliNextAction {
+  if (action && typeof action === "object" && "description" in action && "command" in action) {
+    const candidate = action as { description: unknown; command: unknown };
+    return {
+      description: String(candidate.description),
+      command: String(candidate.command),
+    };
+  }
+  const description = String(action);
+  if (/reconnect/i.test(description)) {
+    return { description, command: "fentaris edge run" };
+  }
+  if (/join again/i.test(description)) {
+    return { description, command: "fentaris edge join <control-plane-url>" };
+  }
+  return { description, command: "fentaris edge status --json" };
+}
+
+function shapeLocalDiscovery(envelope: EdgeCliEnvelope<unknown>, options: EdgeRemoteQuery): EdgeCliEnvelope<unknown> {
+  if (!envelope.ok) return envelope;
+  const include = options.include ? new Set(options.include) : undefined;
+  const exclude = options.exclude ? new Set(options.exclude) : undefined;
+  const shape = (value: unknown): unknown => {
+    if (!value || typeof value !== "object") return value;
+    const record = value as Record<string, unknown>;
+    if (options.compact === true) {
+      const device = record.device && typeof record.device === "object"
+        ? record.device as Record<string, unknown>
+        : undefined;
+      return {
+        device: device ? { name: device.name, inventoryVersion: device.inventoryVersion } : record.device,
+        revoked: record.revoked,
+        connected: record.connected,
+        ...(record.lastSeenAt === undefined ? {} : { lastSeenAt: record.lastSeenAt }),
+      };
+    }
+    if (!include && !exclude) return value;
+    const next: Record<string, unknown> = {
+      schemaVersion: record.schemaVersion,
+      device: record.device,
+      revoked: record.revoked,
+      connected: record.connected,
+      ...(record.lastSeenAt === undefined ? {} : { lastSeenAt: record.lastSeenAt }),
+    };
+    for (const field of ["user", "observed", "managed"] as const) {
+      if (exclude?.has(field)) continue;
+      if (include && !include.has(field)) continue;
+      if (record[field] !== undefined) next[field] = record[field];
+    }
+    if (!include || include.has("readiness")) {
+      if (!exclude?.has("readiness") && record.readiness !== undefined) next.readiness = record.readiness;
+    }
+    return next;
+  };
+  if (Array.isArray(envelope.data)) {
+    return { ...envelope, data: envelope.data.map(shape) };
+  }
+  return { ...envelope, data: shape(envelope.data) };
 }
 
 function addQuery(url: URL, query: EdgeRemoteQuery): void {
@@ -645,7 +765,9 @@ function normalizeControlPlaneErrorCode(code: string | undefined): string {
     case "access_denied": return "EDGE_JOIN_DENIED";
     case "unauthorized": return "EDGE_DEVICE_REVOKED";
     case "invalid_request": return "EDGE_CONTROL_PLANE_INVALID_CONFIGURATION";
-    default: return "EDGE_COMMAND_FAILED";
+    default:
+      if (code && /^EDGE_[A-Z0-9_]+$/.test(code)) return code;
+      return "EDGE_COMMAND_FAILED";
   }
 }
 

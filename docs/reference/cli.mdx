@@ -89,7 +89,7 @@ fentaris edge update "Mac Studio" --expected-version 4 --description "Build mach
 
 Discovery commands support `--json`, `--compact`, `--limit`, `--cursor`, `--include`, `--exclude`, and `--as user:<name>|group:<name>`. JSON uses `{ ok, data|error, pagination, warnings, nextActions }`.
 
-Inside a project using the integrated local control plane, these commands use the owner-protected local operator channel automatically. Outside that project, set `FENTARIS_EDGE_CONTROL_PLANE_URL` to use a remote management API.
+Inside a project using the integrated local control plane, these commands use the owner-protected local operator channel automatically. Local discovery supports `--as user:<name>`, `--compact`, `--include`, and `--exclude`; `--as group:<name>` requires a remote control plane. Outside that project, set `FENTARIS_EDGE_CONTROL_PLANE_URL` to use a remote management API.
 
 ### `fentaris edge disconnect|revoke <device>`
 

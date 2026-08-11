@@ -359,6 +359,23 @@ export class EdgeLocalAuthorityStore {
     });
   }
 
+  /** Remove a not-yet-committed enrollment after a post-persist side effect fails. @pk */
+  async removeEnrolledDevice(tenantId: string, edgeNodeId: string): Promise<void> {
+    await this.mutate((document) => ({
+      ...document,
+      enrolledDevices: Object.freeze(
+        document.enrolledDevices.filter(
+          (entry) => !(entry.tenantId === tenantId && entry.edgeNodeId === edgeNodeId),
+        ),
+      ),
+      refreshCredentials: Object.freeze(
+        document.refreshCredentials.filter(
+          (entry) => !(entry.tenantId === tenantId && entry.edgeNodeId === edgeNodeId),
+        ),
+      ),
+    }));
+  }
+
   async getEnrolledDevice(tenantId: string, edgeNodeId: string): Promise<EdgeEnrolledDeviceAuthority | undefined> {
     return this.snapshot().enrolledDevices.find(
       (entry) => entry.tenantId === tenantId && entry.edgeNodeId === edgeNodeId,
