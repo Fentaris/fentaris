@@ -252,11 +252,15 @@ export class DefaultEdgeOperatorBackend implements EdgeOperatorBackend {
       ...(agent.installationControl() ? { installation: agent.installationControl()! } : {}),
     });
     await persistent.start();
-    await control.start();
     try {
+      await control.start();
       await persistent.wait();
     } finally {
-      await control.stop();
+      try {
+        await control.stop();
+      } finally {
+        await persistent.stop();
+      }
     }
     return success({ status: "stopped" });
   }

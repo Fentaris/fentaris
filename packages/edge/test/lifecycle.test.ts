@@ -171,6 +171,14 @@ describe("owner-protected local control channel", () => {
   it("uses Windows named-pipe addresses", () => {
     expect(edgeLocalControlAddress("C:\\Users\\Alice\\Fentaris", "win32")).toMatch(/^\\\\\.\\pipe\\fentaris-edge-/);
   });
+
+  it("keeps Unix socket addresses bounded for deeply nested state directories", () => {
+    const directory = path.join(tmpdir(), "nested-state-".repeat(20));
+    const address = edgeLocalControlAddress(directory, "darwin");
+    expect(address.length).toBeLessThan(100);
+    expect(address).toBe(edgeLocalControlAddress(directory, "darwin"));
+    expect(address).not.toContain("nested-state");
+  });
 });
 
 describe("platform service adapters", () => {
