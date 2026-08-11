@@ -106,7 +106,7 @@ async function writeHealthyProject(root: string, authDirectory = ".fentaris"): P
       version: "0.1.0",
       type: "module",
       scripts: { dev: "tsx src/index.ts", build: "tsc -p tsconfig.json", start: "node dist/index.js" },
-      dependencies: { "@fentaris/core": "^2.0.0", tsx: "latest" },
+      dependencies: { "@fentaris/core": "^3.0.0", tsx: "latest" },
       devDependencies: { typescript: "latest" },
     }),
   );
@@ -144,7 +144,7 @@ async function writeSdkOnlyProject(root: string, options: { entrypoint?: string;
       name: "sdk-only-demo",
       version: "0.1.0",
       type: "module",
-      dependencies: { "@fentaris/core": "^2.0.0" },
+      dependencies: { "@fentaris/core": "^3.0.0" },
       ...(options.packageFentaris ? { fentaris: options.packageFentaris } : {}),
     }),
   );
@@ -615,6 +615,7 @@ describe("project template", () => {
     };
     expect(packageJson.scripts).toMatchObject({
       dev: "tsx --env-file-if-exists=.env src/index.ts",
+      typecheck: "tsc -p tsconfig.json --noEmit",
       start: "node --env-file-if-exists=.env dist/index.js",
     });
     expect(packageJson.dependencies).toMatchObject({
@@ -624,6 +625,17 @@ describe("project template", () => {
       "@types/node": "^25.9.1",
       typescript: "^6.0.3",
     });
+  });
+
+  it("renders package-manager-specific script commands", () => {
+    const npmReadme = renderTemplate({ projectName: "demo", packageManager: "npm", port: 4000, proxyPath: "/mcp" }).files["README.md"];
+    const pnpmReadme = renderTemplate({ projectName: "demo", packageManager: "pnpm", port: 4000, proxyPath: "/mcp" }).files["README.md"];
+
+    expect(npmReadme).toContain("npm run dev");
+    expect(npmReadme).toContain("npm run typecheck");
+    expect(npmReadme).not.toContain("npm dev");
+    expect(pnpmReadme).toContain("pnpm dev");
+    expect(pnpmReadme).toContain("pnpm typecheck");
   });
 
   it("only creates a pnpm workspace boundary for pnpm projects", () => {
@@ -663,12 +675,11 @@ describe("core version range in template", () => {
       packageManager: "pnpm",
       port: 4000,
       proxyPath: "/mcp",
-      coreVersionRange: "^2.0.0",
     });
 
     const packageJson = JSON.parse(rendered.files["package.json"] ?? "{}") as { dependencies: Record<string, string> };
-    expect(packageJson.dependencies["@fentaris/core"]).toBe("^2.0.0");
-    expect(rendered.files["README.md"]).toContain("`@fentaris/core` to `^2.0.0`");
+    expect(packageJson.dependencies["@fentaris/core"]).toBe("^3.0.0");
+    expect(rendered.files["README.md"]).toContain("`@fentaris/core` to `^3.0.0`");
   });
 
   it("accepts a custom semver range, dist tag, and workspace reference", () => {
@@ -743,7 +754,7 @@ describe("init --core-version flag", () => {
     ).resolves.toBe(0);
 
     const packageJson = JSON.parse(await readFile(join(dir, "demo", "package.json"), "utf8")) as { dependencies: Record<string, string> };
-    expect(packageJson.dependencies["@fentaris/core"]).toBe("^2.0.0");
+    expect(packageJson.dependencies["@fentaris/core"]).toBe("^3.0.0");
   });
 });
 
@@ -751,7 +762,7 @@ describe("@fentaris/core installed version check", () => {
   it("passes when the installed version satisfies the declared caret range", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
-    await writeInstalledCoreVersion(dir, "2.0.3");
+    await writeInstalledCoreVersion(dir, "3.0.3");
 
     const rt = runtime(dir, { pnpm: true, git: true, docker: true });
     await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
@@ -759,22 +770,22 @@ describe("@fentaris/core installed version check", () => {
     const output = String(vi.mocked(rt.out.log).mock.calls.at(-1)?.[0]);
     expect(output).toContain('"label": "@fentaris/core installed"');
     expect(output).toContain('"status": "pass"');
-    expect(output).toContain("2.0.3");
-    expect(output).toContain("^2.0.0");
+    expect(output).toContain("3.0.3");
+    expect(output).toContain("^3.0.0");
   });
 
   it("warns when the installed version does not satisfy the declared caret range", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
-    await writeInstalledCoreVersion(dir, "1.5.0");
+    await writeInstalledCoreVersion(dir, "2.5.0");
 
     const rt = runtime(dir, { pnpm: true, git: true, docker: true });
     await expect(main(["doctor", "--strict"], rt)).resolves.toBe(1);
 
     const output = vi.mocked(rt.out.log).mock.calls.map((call) => String(call[0])).join("\n");
     expect(output).toContain("@fentaris/core installed");
-    expect(output).toContain("1.5.0");
-    expect(output).toContain("^2.0.0");
+    expect(output).toContain("2.5.0");
+    expect(output).toContain("^3.0.0");
   });
 
   it("honors pre-1.0 caret upper bounds for installed versions", async () => {

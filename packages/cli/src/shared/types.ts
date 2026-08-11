@@ -46,7 +46,7 @@ export type TemplateInput = {
   proxyPath: string;
   /**
    * Version range expression for `@fentaris/core` to embed in the generated
-   * `package.json`. Accepts semver ranges (`^2.0.0`, `~2.0.0`, `2.0.0`),
+   * `package.json`. Accepts semver ranges (`^3.0.0`, `~3.0.0`, `3.0.0`),
    * dist tags (`latest`, `next`), workspace references (`workspace:*`),
    * and local file references (`file:../path`).
    */

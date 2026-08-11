@@ -81,7 +81,7 @@ function resolveCoreVersionOption(command: CliCommand): string {
     return defaultCoreRange;
   }
   if (typeof option !== "string" || option.trim() === "") {
-    throw new Error("--core-version requires a version range string (e.g. ^2.0.0, workspace:*, file:../packages/core).");
+    throw new Error("--core-version requires a version range string (e.g. ^3.0.0, workspace:*, file:../packages/core).");
   }
   return option;
 }

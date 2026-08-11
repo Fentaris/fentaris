@@ -139,7 +139,7 @@ Options:
 * `--package-manager <pm>` - set the generated project's package manager. Supported values: `pnpm`, `npm`, and `bun`. When install runs, this binary must be available on `PATH`.
 * `--port <port>` - set the generated proxy port. Default: `4000`.
 * `--path <path>` - set the generated MCP endpoint path. Default: `/mcp`.
-* `--core-version <range>` - set the version range for `@fentaris/core` written to the generated `package.json`. Default: `^2.0.0`. Accepts semver ranges (`^2.0.0`, `~2.0.0`, `2.0.0`, `>=2.0.0`), dist tags (`latest`, `next`), and workspace/file references (`workspace:*`, `file:../packages/core`). Use `workspace:*` or a `file:` reference to link a generated project against the local Fentaris monorepo.
+* `--core-version <range>` - set the version range for `@fentaris/core` written to the generated `package.json`. Default: `^3.0.0`. Accepts semver ranges (`^3.0.0`, `~3.0.0`, `3.0.0`, `>=3.0.0`), dist tags (`latest`, `next`), and workspace/file references (`workspace:*`, `file:../packages/core`). Use `workspace:*` or a `file:` reference to link a generated project against the local Fentaris monorepo.
 * `--skip-install` - create files without running package installation.
 * `--skip-git` - create files without initializing a git repository.
 
@@ -457,7 +457,7 @@ SDK-only projects can also declare the entrypoint in `package.json`:
 ```json theme={null}
 {
   "dependencies": {
-    "@fentaris/core": "^2.0.0"
+    "@fentaris/core": "^3.0.0"
   },
   "fentaris": {
     "entrypoint": "src/server.ts",
