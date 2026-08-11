@@ -40,7 +40,7 @@ async function createServices() {
 
 describe("integrated Edge auth services", () => {
   it("authorizes, enrolls, refreshes, and revokes a device", async () => {
-    const { auth } = await createServices();
+    const { auth, store } = await createServices();
     const began = await auth.begin({ clientId: "fentaris-edge" });
     expect(began.userCode).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
     expect(await auth.poll({ clientId: "fentaris-edge", deviceCode: began.deviceCode })).toEqual({
@@ -77,6 +77,10 @@ describe("integrated Edge auth services", () => {
     });
     expect(enrolled.gatewayUrl).toBe("ws://127.0.0.1:4000/_fentaris/edge/ws");
     expect(enrolled.deviceCredential.length).toBeGreaterThan(20);
+    expect((await store.getEnrolledDevice("tenant-a", enrolled.edgeNodeId))?.user).toMatchObject({
+      name: "Laptop",
+      tags: [],
+    });
 
     const refreshed = await auth.refresh({
       clientId: "fentaris-edge",

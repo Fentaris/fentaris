@@ -291,8 +291,20 @@ export class IntegratedEdgeReconciler implements EdgeReconciliationTriggerServic
     });
     this.diagnostics.set(key(input.tenantId, input.edgeNodeId), eligibility.withheld);
     const digest = stableDigest(eligibility.deployments);
+    const publishPersistedAssignment = async (snapshot: EdgeDesiredAssignmentSnapshot) => {
+      const desired = await this.options.desiredStateStore.get(input.tenantId, input.edgeNodeId);
+      if (
+        !desired
+        || desired.connectionGeneration !== device.connectionGeneration
+        || desired.desiredVersion !== snapshot.version
+        || stableDigest(desired.deployments) !== digest
+      ) {
+        await this.options.publish(desiredState(input, device, snapshot.version, eligibility.deployments));
+      }
+    };
     let current = await this.options.assignmentStore.get(input.tenantId, input.edgeNodeId);
     if (current?.digest === digest) {
+      await publishPersistedAssignment(current);
       return current;
     }
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -308,18 +320,13 @@ export class IntegratedEdgeReconciler implements EdgeReconciliationTriggerServic
       const result = await this.options.assignmentStore.compareAndSwap(snapshot, current?.version);
       if (result === "conflict") {
         current = await this.options.assignmentStore.get(input.tenantId, input.edgeNodeId);
-        if (current?.digest === digest) return current;
+        if (current?.digest === digest) {
+          await publishPersistedAssignment(current);
+          return current;
+        }
         continue;
       }
-      const state: EdgeDesiredStateMessage = Object.freeze({
-        version: EDGE_PROTOCOL_VERSION,
-        kind: "edge.desired-state",
-        tenantId: input.tenantId,
-        edgeNodeId: input.edgeNodeId,
-        connectionGeneration: device.connectionGeneration,
-        desiredVersion: version,
-        deployments: eligibility.deployments,
-      });
+      const state = desiredState(input, device, version, eligibility.deployments);
       await this.options.publish(state);
       await this.options.telemetry?.emit({
         name: "edge.desired.reconciled",
@@ -338,6 +345,23 @@ export class IntegratedEdgeReconciler implements EdgeReconciliationTriggerServic
     }
     throw edgeError("EDGE_CAPACITY", "Desired-state reconciliation conflicted repeatedly.");
   }
+}
+
+function desiredState(
+  input: { readonly tenantId: string; readonly edgeNodeId: string },
+  device: EdgeDeviceRecord,
+  desiredVersion: number,
+  deployments: readonly EdgeDesiredDeployment[],
+): EdgeDesiredStateMessage {
+  return Object.freeze({
+    version: EDGE_PROTOCOL_VERSION,
+    kind: "edge.desired-state",
+    tenantId: input.tenantId,
+    edgeNodeId: input.edgeNodeId,
+    connectionGeneration: device.connectionGeneration,
+    desiredVersion,
+    deployments,
+  });
 }
 
 export class LocalEdgeDesiredAssignmentStore implements EdgeDesiredAssignmentStore {

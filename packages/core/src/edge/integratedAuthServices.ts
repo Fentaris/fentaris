@@ -377,6 +377,13 @@ export class IntegratedEdgeAuthServices
       enrolledAt: now,
       revoked: false,
       connectionGeneration: 1,
+      user: {
+        name: request.name ?? request.hostnameLabel ?? `edge-${edgeNodeId.slice(0, 8)}`,
+        ...(request.description ? { description: request.description } : {}),
+        tags: Object.freeze([...(request.tags ?? [])]),
+        updatedAt: now,
+      },
+      managed: { aliases: Object.freeze([]), pools: Object.freeze([]), updatedAt: now },
     };
     await this.options.store.putEnrolledDevice(authority);
 
