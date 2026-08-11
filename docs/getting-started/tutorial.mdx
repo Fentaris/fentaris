@@ -10,7 +10,7 @@ This tutorial starts from a generated Fentaris project and turns it into a proxy
 Use the optional agent skills when you want an agent to ask setup questions, choose upstream MCP servers, and validate the project after edits:
 
 ```bash theme={null}
-npx skills add Fentaris/fentaris-skills --skill '*'
+npx skills add Fentaris/fentaris-skills -g -a codex --skill '*'
 ```
 
 Then restart or reload your agent and ask it to use the setup skill:

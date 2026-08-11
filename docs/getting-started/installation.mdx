@@ -44,10 +44,10 @@ Use the core package directly when embedding Fentaris in an existing TypeScript 
 Use the optional agent skills when you want Codex, Claude Code, or another supported agent to guide Fentaris setup, ask workflow questions, configure a proxy project, or modify an existing Fentaris app:
 
 ```bash theme={null}
-npx skills add Fentaris/fentaris-skills --skill '*'
+npx skills add Fentaris/fentaris-skills -g -a codex --skill '*'
 ```
 
-Restart or reload your agent after installation. See [Agent Skills](/getting-started/codex-skills) for install options and example prompts.
+The global install keeps the project directory empty for `fentaris init`. Restart or reload your agent after installation. See [Agent Skills](/getting-started/codex-skills) for other agents, install options, and example prompts.
 
 ## Verify installation
 

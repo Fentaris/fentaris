@@ -57,7 +57,7 @@ The proxy listens on `http://localhost:4000/mcp` by default. Generated projects 
 
 The generated `dev` and `start` scripts load an optional project `.env`. The file is ignored by Git. Fentaris creates `FENTARIS_AUTH_KEY` there only when the first local encrypted credential is written; projects without encrypted credentials do not need a key.
 
-The generated `package.json` pins `@fentaris/core` to a caret range that matches the CLI release (currently `^2.0.0`). This makes local SDK/CLI integration tests deterministic — the app installs the same core the CLI was validated against instead of whatever happens to be `latest` on npm.
+The generated `package.json` pins `@fentaris/core` to a caret range that matches the CLI release (currently `^3.0.0`). This makes local SDK/CLI integration tests deterministic — the app installs the same core the CLI was validated against instead of whatever happens to be `latest` on npm.
 
 <Note>
   `fentaris init` initializes a git repository when git is available. Pass `--skip-git` to create only the project files.

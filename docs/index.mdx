@@ -54,7 +54,7 @@ mode: "wide"
     Use this path when you want Codex, Claude Code, or another supported agent to ask setup questions and create the project with the right users, upstream MCP servers, credentials, and policy defaults.
 
     ```bash theme={null}
-    npx skills add Fentaris/fentaris-skills --skill '*'
+    npx skills add Fentaris/fentaris-skills -g -a codex --skill '*'
     ```
 
     Restart or reload your agent, then ask it to create a Fentaris proxy:

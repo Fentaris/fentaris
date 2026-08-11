@@ -249,7 +249,7 @@ export const cliSpec: CliCommandSpec = {
         { name: "skip-git", description: "Skip git repository initialization." },
         { name: "port", valueName: "PORT", description: "Port written to fentaris.json. [default: 4000]" },
         { name: "path", valueName: "PATH", description: "MCP route path written to fentaris.json. [default: /mcp]" },
-        { name: "core-version", valueName: "RANGE", description: "Version range for @fentaris/core in the generated package.json. Accepts semver ranges (^2.0.0), dist tags (latest), and workspace/file references (workspace:*, file:../packages/core). [default: ^2.0.0]" },
+        { name: "core-version", valueName: "RANGE", description: "Version range for @fentaris/core in the generated package.json. Accepts semver ranges (^3.0.0), dist tags (latest), and workspace/file references (workspace:*, file:../packages/core). [default: ^3.0.0]" },
         { name: "help", short: "h", description: "Print help" },
       ],
     },
