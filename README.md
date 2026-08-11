@@ -214,15 +214,14 @@ Run the project for development:
 fentaris dev
 ```
 
-Run checks:
+From a clean clone, install the locked dependency graph and run the same validation used by CI:
 
 ```bash
-pnpm lint
-pnpm typecheck
-pnpm --filter @fentaris/core test
-pnpm --filter @fentaris/cli test
-pnpm --filter @fentaris/approval-telegram test
+pnpm install --frozen-lockfile
+pnpm verify
 ```
+
+`pnpm verify` runs lint, typecheck, build, and every package test in that order.
 
 Generate docs reference:
 
