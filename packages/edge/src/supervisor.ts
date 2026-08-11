@@ -89,6 +89,7 @@ export class EdgeWorkloadSupervisor {
   private readonly requests = new Map<string, AbortController>();
   private readonly locallyDenied = new Set<string>();
   private readonly blocked = new Set<string>();
+  private readonly reportedManifestRecipes = new Map<string, string>();
   private readonly now: () => number;
   private readonly limits: Required<Pick<
     EdgeWorkloadSupervisorOptions,
@@ -121,11 +122,17 @@ export class EdgeWorkloadSupervisor {
       await this.stopDeployment(deploymentId);
       this.desired.delete(deploymentId);
       this.blocked.delete(deploymentId);
+      this.reportedManifestRecipes.delete(deploymentId);
       results.push({ deploymentId, status: "removed" });
       await this.emitLifecycle(deploymentId, "removed");
     }
     for (const deployment of deployments) {
       const deploymentId = deployment.requirement.deploymentId;
+      const previous = this.desired.get(deploymentId);
+      if (previous && previous.requirement.recipe.digest !== deployment.requirement.recipe.digest) {
+        await this.stopDeployment(deploymentId);
+        this.reportedManifestRecipes.delete(deploymentId);
+      }
       this.desired.set(deploymentId, deployment);
       if (this.locallyDenied.has(deploymentId)) {
         this.blocked.add(deploymentId);
@@ -141,9 +148,21 @@ export class EdgeWorkloadSupervisor {
         results.push({ deploymentId, status: "blocked", reason: `setup-${state.status}` });
         await this.emitLifecycle(deploymentId, `blocked-setup-${state.status}`);
       } else {
-        this.blocked.delete(deploymentId);
-        results.push({ deploymentId, status: "ready" });
-        await this.emitLifecycle(deploymentId, "ready");
+        try {
+          await this.ensureCapabilityManifest(deployment.requirement);
+          this.blocked.delete(deploymentId);
+          results.push({ deploymentId, status: "ready" });
+          await this.emitLifecycle(deploymentId, "ready");
+        } catch (error) {
+          this.blocked.add(deploymentId);
+          await this.stopDeployment(deploymentId);
+          const detailReason = isEdgeError(error) ? error.details?.reasonCategory : undefined;
+          const reason = typeof detailReason === "string"
+            ? detailReason
+            : isEdgeError(error) ? error.code.toLowerCase() : "workload-startup";
+          results.push({ deploymentId, status: "blocked", reason });
+          await this.emitLifecycle(deploymentId, `blocked-${reason}`);
+        }
       }
     }
     return results;
@@ -246,6 +265,9 @@ export class EdgeWorkloadSupervisor {
     for (const controller of this.requests.values()) controller.abort();
     this.requests.clear();
     await Promise.all([...this.workloads.values()].map((record) => this.stopRecord(record)));
+    // Capability manifests are correlated to one connection generation and must
+    // be published again after reconnecting.
+    this.reportedManifestRecipes.clear();
   }
 
   activeWorkloadCount(): number {
@@ -280,21 +302,7 @@ export class EdgeWorkloadSupervisor {
     sessionId: string,
     requirement: DesiredSetupRequirement,
   ): Promise<WorkloadRecord> {
-    const plan = await this.options.setup.compileLaunchPlan(requirement);
-    if (this.options.executablePolicy && !await this.options.executablePolicy.allow(plan)) {
-      throw edgeError("EDGE_WORKLOAD", "Local executable/package policy denied the launch recipe.");
-    }
-    const startup = new AbortController();
-    const workload = await withTimeout(
-      this.options.factory.start(plan, startup.signal),
-      this.limits.startupTimeoutMs,
-      () => startup.abort(),
-      "Edge workload startup timed out",
-    );
-    if (workload.client.capabilityManifest && this.options.reportCapabilityManifest) {
-      const manifest = await workload.client.capabilityManifest();
-      await this.options.reportCapabilityManifest(deploymentId, plan.recipeDigest, manifest);
-    }
+    const { workload } = await this.launchWorkload(requirement);
     const record: WorkloadRecord = {
       key,
       deploymentId,
@@ -307,6 +315,42 @@ export class EdgeWorkloadSupervisor {
     return record;
   }
 
+  private async ensureCapabilityManifest(requirement: DesiredSetupRequirement): Promise<void> {
+    if (!this.options.reportCapabilityManifest) return;
+    if (this.reportedManifestRecipes.get(requirement.deploymentId) === requirement.recipe.digest) return;
+    const { plan, workload } = await this.launchWorkload(requirement);
+    try {
+      if (!workload.client.capabilityManifest) {
+        throw edgeError("EDGE_WORKLOAD", "Edge workload does not support capability discovery.");
+      }
+      const manifest = await workload.client.capabilityManifest();
+      await this.options.reportCapabilityManifest(requirement.deploymentId, plan.recipeDigest, manifest);
+      this.reportedManifestRecipes.set(requirement.deploymentId, plan.recipeDigest);
+    } finally {
+      await this.stopWorkload(workload);
+    }
+  }
+
+  private async launchWorkload(requirement: DesiredSetupRequirement): Promise<{
+    plan: CompiledLocalLaunchPlan;
+    workload: EdgeWorkload;
+  }> {
+    const plan = await this.options.setup.compileLaunchPlan(requirement);
+    if (this.options.executablePolicy && !await this.options.executablePolicy.allow(plan)) {
+      throw edgeError("EDGE_WORKLOAD", "Local executable/package policy denied the launch recipe.", {
+        details: { reasonCategory: "executable-policy-denied" },
+      });
+    }
+    const startup = new AbortController();
+    const workload = await withTimeout(
+      this.options.factory.start(plan, startup.signal),
+      this.limits.startupTimeoutMs,
+      () => startup.abort(),
+      "Edge workload startup timed out",
+    );
+    return { plan, workload };
+  }
+
   private async stopDeployment(deploymentId: string): Promise<void> {
     const records = [...this.workloads.values()].filter((record) => record.deploymentId === deploymentId);
     await Promise.all(records.map((record) => this.stopRecord(record)));
@@ -315,17 +359,21 @@ export class EdgeWorkloadSupervisor {
   private async stopRecord(record: WorkloadRecord): Promise<void> {
     if (this.workloads.get(record.key) !== record) return;
     this.workloads.delete(record.key);
+    await this.stopWorkload(record.workload);
+    await this.emitLifecycle(record.deploymentId, "stopped", record.sessionId);
+  }
+
+  private async stopWorkload(workload: EdgeWorkload): Promise<void> {
     try {
       await withTimeout(
-        record.workload.stopGracefully(),
+        workload.stopGracefully(),
         this.limits.shutdownTimeoutMs,
         undefined,
         "Edge workload graceful shutdown timed out",
       );
     } catch {
-      await record.workload.forceKill();
+      await workload.forceKill();
     }
-    await this.emitLifecycle(record.deploymentId, "stopped", record.sessionId);
   }
 
   private async emitLifecycle(deploymentId: string, outcome: string, sessionId?: string): Promise<void> {
