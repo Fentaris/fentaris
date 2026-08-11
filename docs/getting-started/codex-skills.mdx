@@ -10,10 +10,10 @@ Fentaris ships agent skills that help an agent ask the right setup questions, cr
 Install the skills from the Fentaris skills repository:
 
 ```bash theme={null}
-npx skills add Fentaris/fentaris-skills --skill '*'
+npx skills add Fentaris/fentaris-skills -g -a codex --skill '*'
 ```
 
-Then restart or reload your agent so the new skills are loaded.
+The global, agent-specific install avoids adding skill files to the project before `fentaris init`. Then restart or reload your agent so the new skills are loaded.
 
 ## Included Skills
 
@@ -60,6 +60,8 @@ Install globally for every agent supported by `npx skills`:
 ```bash theme={null}
 npx skills add Fentaris/fentaris-skills -g --all
 ```
+
+Use `--all` only when every supported agent needs the skills. Prefer `-a <agent>` for a single agent; `-a '*'` is not a portable install or removal target.
 
 ### List Skills
 
