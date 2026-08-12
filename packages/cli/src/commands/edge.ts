@@ -460,7 +460,12 @@ export class DefaultEdgeOperatorBackend implements EdgeOperatorBackend {
   }
 
   private definition() {
-    return { executable: process.execPath, args: [process.argv[1] ?? "fentaris", "edge", "run"] };
+    const stateDir = this.runtime.env.FENTARIS_EDGE_STATE_DIR?.trim();
+    return {
+      executable: process.execPath,
+      args: [process.argv[1] ?? "fentaris", "edge", "run"],
+      ...(stateDir ? { environment: { FENTARIS_EDGE_STATE_DIR: stateDir } } : {}),
+    };
   }
 
   private async controlCredential(): Promise<string> {
