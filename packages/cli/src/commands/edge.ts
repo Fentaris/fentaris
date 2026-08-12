@@ -89,7 +89,14 @@ export async function runEdge(
     switch (action) {
       case "join": {
         if (command.options.service === true && command.options["no-service"] === true) {
-          return printFailure(runtime, command.options, "EDGE_CLI_USAGE", "--service and --no-service cannot be used together.", 2);
+          return printFailure(
+            runtime,
+            command.options,
+            "EDGE_CLI_USAGE",
+            "--service and --no-service cannot be used together.",
+            2,
+            nextActionsForEdgeFailure("EDGE_CLI_USAGE", command),
+          );
         }
         envelope = await backend.join({
           controlPlaneUrl: requiredArg(command.args[1], "edge join requires a control-plane URL"),
@@ -141,7 +148,14 @@ export async function runEdge(
         const installationAction = requiredInstallationAction(command.args[1]);
         const deploymentId = command.args[2];
         if (installationAction !== "status" && !deploymentId) {
-          return printFailure(runtime, command.options, "EDGE_CLI_USAGE", `edge installation ${installationAction} requires a deployment ID.`, 2);
+          return printFailure(
+            runtime,
+            command.options,
+            "EDGE_CLI_USAGE",
+            `edge installation ${installationAction} requires a deployment ID.`,
+            2,
+            nextActionsForEdgeFailure("EDGE_CLI_USAGE", command),
+          );
         }
         if (["approve", "deny", "retry", "revoke", "cleanup"].includes(installationAction)
           && !await confirmInstallationMutation(runtime, command.options, installationAction, deploymentId!)) {
@@ -182,15 +196,30 @@ export async function runEdge(
         break;
       }
       default:
-        return printFailure(runtime, command.options, "EDGE_CLI_USAGE", `Unknown edge command "${action ?? ""}".`, 2);
+        return printFailure(
+          runtime,
+          command.options,
+          "EDGE_CLI_USAGE",
+          `Unknown edge command "${action ?? ""}".`,
+          2,
+          nextActionsForEdgeFailure("EDGE_CLI_USAGE", command),
+        );
     }
+    envelope = withFailureNextActions(envelope, command);
     printEnvelope(runtime, envelope, command.options);
     return envelope.ok ? 0 : exitCodeFor(envelope.error.code);
   } catch (error) {
     const code = typeof error === "object" && error !== null && "code" in error
       ? String((error as { code: unknown }).code)
       : "EDGE_COMMAND_FAILED";
-    return printFailure(runtime, command.options, code, error instanceof Error ? error.message : String(error), exitCodeFor(code));
+    return printFailure(
+      runtime,
+      command.options,
+      code,
+      error instanceof Error ? error.message : String(error),
+      exitCodeFor(code),
+      nextActionsForEdgeFailure(code, command),
+    );
   }
 }
 
@@ -510,6 +539,61 @@ function success<T>(
 
 function failure(code: string, message: string, details: Readonly<Record<string, unknown>> = {}): EdgeCliEnvelope<never> {
   return { ok: false, error: { code, message, details }, warnings: [], nextActions: [] };
+}
+
+function withFailureNextActions(envelope: EdgeCliEnvelope<unknown>, command: CliCommand): EdgeCliEnvelope<unknown> {
+  if (envelope.ok || envelope.nextActions.length > 0) return envelope;
+  return { ...envelope, nextActions: nextActionsForEdgeFailure(envelope.error.code, command) };
+}
+
+function nextActionsForEdgeFailure(code: string, command: CliCommand): readonly EdgeCliNextAction[] {
+  const action = command.args[0];
+  const device = action === "update" || action === "disconnect" || action === "revoke" || action === "get" || action === "status"
+    ? command.args[1]
+    : undefined;
+  const deploymentId = action === "installation" ? command.args[2] : undefined;
+
+  switch (code) {
+    case "EDGE_CLI_USAGE":
+      return [{
+        description: "Inspect the command usage",
+        command: `fentaris edge${action ? ` ${action}` : ""} --help`,
+      }];
+    case "EDGE_UNAUTHORIZED_TARGET": {
+      const identity = stringOption(command.options, "as");
+      return [{
+        description: "List Edge devices visible to this identity",
+        command: `fentaris edge list${identity ? ` --as ${shellArg(identity)}` : ""} --json`,
+      }];
+    }
+    case "EDGE_INVENTORY_CONFLICT":
+    case "EDGE_NAME_CONFLICT":
+      if (device) {
+        return [{
+          description: "Inspect the current device record before retrying",
+          command: `fentaris edge get ${shellArg(device)} --json`,
+        }];
+      }
+      break;
+    case "EDGE_SETUP_REQUIRED":
+    case "EDGE_UNRESOLVED_RUNTIME_INPUT":
+      if (deploymentId) {
+        return [{
+          description: "Inspect the managed installation state",
+          command: `fentaris edge installation status ${shellArg(deploymentId)} --json`,
+        }];
+      }
+      break;
+    case "EDGE_UNAVAILABLE":
+    case "EDGE_CAPACITY":
+    case "EDGE_DEVICE_REVOKED":
+    case "EDGE_AUTHORIZATION_CODE_EXPIRED":
+    case "EDGE_JOIN_DENIED":
+    case "LOCAL_EDGE_AUTHORITY_UNAVAILABLE":
+      return [{ description: "Inspect local Edge state and recovery guidance", command: "fentaris edge status --json" }];
+  }
+
+  return [{ description: "Run Fentaris diagnostics", command: "fentaris doctor --json" }];
 }
 
 function printEnvelope(runtime: Runtime, envelope: EdgeCliEnvelope<unknown>, options: CliOptions): void {

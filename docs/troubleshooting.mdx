@@ -135,7 +135,7 @@ Then check the policy assigned to the user or group.
 For an edge target, an empty list can also mean that no validated capability manifest exists yet. Complete local setup and reconnect the agent. The agent starts a bounded capability probe during reconciliation and publishes the manifest before reporting the deployment ready:
 
 ```bash theme={null}
-fentaris-edge status
+fentaris edge status
 ```
 
 ### Edge call returns `EDGE_UNAVAILABLE`
@@ -157,7 +157,7 @@ Expected response shape:
 ```
 
 ```bash theme={null}
-fentaris-edge status
+fentaris edge status
 ```
 
 Reconnect the enrolled device, then start a new downstream MCP session. Fentaris does not silently move an existing stateful session to another device.
@@ -166,7 +166,7 @@ Reconnect the enrolled device, then start a new downstream MCP session. Fentaris
 
 The current recipe requires missing consent or a folder, file, secret, or scalar field is incomplete. A changed recipe digest requires new workload consent; a changed filesystem access level invalidates only that grant.
 
-Run `fentaris-edge status`, complete the local prompt, and retry with the same desired-state version.
+Run `fentaris edge status`, complete the local prompt, and retry with the same desired-state version.
 
 ### Edge installation requires approval
 

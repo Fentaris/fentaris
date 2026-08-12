@@ -5,6 +5,10 @@ description: "Create a Fentaris project, run the local proxy, and connect an MCP
 
 This quickstart uses the Fentaris CLI to generate a ready-to-run local project with one remote HTTP upstream MCP server.
 
+<Note>
+  The generated `specification` upstream requires outbound network access. For a self-contained local-tool example, use [Team-governed proxy](/guides/team-governed-proxy).
+</Note>
+
 ## Choose a Setup Path
 
 <CardGroup cols={3}>
@@ -37,6 +41,8 @@ For automation, pass the project name and scaffold choices explicitly:
 
 ```bash theme={null}
 fentaris init my-proxy --non-interactive --package-manager pnpm --skip-install --skip-git
+cd my-proxy
+pnpm install
 ```
 
 If you omit `--skip-install`, the package manager passed to `--package-manager` must be installed and available on `PATH`.
@@ -91,7 +97,7 @@ Point your MCP client to the endpoint printed by `fentaris dev`, usually:
 http://localhost:4000/mcp
 ```
 
-For a direct curl smoke test, initialize the MCP session and save the response headers:
+Leave `fentaris dev` running. In a second terminal, initialize the MCP session and save the response headers:
 
 ```bash theme={null}
 curl -sS -D headers.txt -o initialize.json -X POST http://127.0.0.1:4000/mcp \
@@ -126,13 +132,47 @@ curl -sS -X POST http://127.0.0.1:4000/mcp \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 ```
 
+## Call the First Tool
+
+Call one tool returned by `tools/list` on the same session:
+
+```bash theme={null}
+curl -sS -X POST http://127.0.0.1:4000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H "mcp-session-id: $SESSION_ID" \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"specification__search","arguments":{"query":"accessibility","limit":1}}}'
+```
+
+The result should contain a successful MCP tool response. If `specification__search` is absent, verify outbound access to the generated upstream and rerun `tools/list`.
+
 <Tip>
   You can also use `npx @modelcontextprotocol/inspector` and point it at `http://127.0.0.1:4000/mcp`.
 </Tip>
 
 For client-specific JSON snippets, see [Client Configs](/guides/client-configs).
 
+## Replace the Development Policy
+
+The generated `Policy.allowAll()` is only for the first local run. Replace the import and `fentaris(...)` declaration in `src/index.ts` with an explicit allow-list before sharing the proxy:
+
+```ts theme={null}
+import { fentaris, policy, streamableHttp } from "@fentaris/core";
+
+const app = fentaris({
+  policy: policy("quickstart")
+    .mcp("specification")
+    .allow("search"),
+});
+```
+
+Keep the generated `app.mcp("specification", ...)` block, restart `fentaris dev`, and initialize a new MCP session. `tools/list` should now expose only `specification__search`; a direct call to another `specification__*` tool should return `not-permitted`.
+
 ## Add a Local Edge Device
+
+<Warning>
+  Edge is an alpha/preview surface. Validate service lifecycle and recovery on every target operating system before rollout. Protocol, CLI, and local state formats may change before a stable release, and the local control-plane mode is not a production multi-instance deployment.
+</Warning>
 
 Enable the disabled-by-default `edge.controlPlane` block in `fentaris.json`, set `publicOrigin` to `http://127.0.0.1:4000`, and restart the app. In one terminal join the device:
 
@@ -156,9 +196,13 @@ Run the local checks before connecting a client:
 fentaris check --offline
 ```
 
-<Tip>
-  Use `fentaris doctor --runtime` when you want to verify the MCP endpoint and enabled integrated Edge routes.
-</Tip>
+With `fentaris dev` still running, verify the full runtime from the second terminal:
+
+```bash theme={null}
+fentaris doctor --runtime
+```
+
+The final runtime check should report that MCP initialize responded at the configured endpoint. If it fails, follow the printed hint and [Troubleshooting](/troubleshooting) before connecting a client.
 
 ## Related Documentation
 

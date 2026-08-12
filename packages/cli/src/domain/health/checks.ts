@@ -843,13 +843,38 @@ async function cliDirectoryResult(cwd: string): Promise<HealthResult> {
 }
 
 async function portResult(port: number): Promise<HealthResult> {
-  const available = await isPortAvailable(port);
+  return portHealthResult(port, await probePort(port));
+}
+
+export type PortProbe =
+  | { kind: "available" }
+  | { kind: "in-use" }
+  | { kind: "blocked"; code?: string; message: string };
+
+export function portHealthResult(port: number, probe: PortProbe): HealthResult {
+  if (probe.kind === "available") {
+    return {
+      group: "Network",
+      label: `localhost:${port}`,
+      status: "pass",
+      detail: "Port is available.",
+    };
+  }
+  if (probe.kind === "in-use") {
+    return {
+      group: "Network",
+      label: `localhost:${port}`,
+      status: "warn",
+      detail: "Port is already in use.",
+      hint: "Stop the conflicting process or change port in fentaris.json.",
+    };
+  }
   return {
     group: "Network",
     label: `localhost:${port}`,
-    status: available ? "pass" : "warn",
-    detail: available ? "Port is available." : "Port is already in use.",
-    hint: available ? undefined : "Stop the conflicting process or change port in fentaris.json.",
+    status: "warn",
+    detail: `Could not test the port${probe.code ? ` (${probe.code})` : ""}: ${probe.message}`,
+    hint: "Allow local loopback binding in the current sandbox or security policy, then rerun fentaris doctor.",
   };
 }
 
@@ -1039,12 +1064,19 @@ function normalizeTimeout(value: number | undefined): number {
   return Number.isFinite(value) && value !== undefined && value > 0 ? value : 10_000;
 }
 
-function isPortAvailable(port: number): Promise<boolean> {
+function probePort(port: number): Promise<PortProbe> {
   return new Promise((resolve) => {
     const server = net.createServer();
-    server.once("error", () => resolve(false));
+    server.once("error", (error) => {
+      if (isNodeError(error, "EADDRINUSE")) {
+        resolve({ kind: "in-use" });
+        return;
+      }
+      const code = error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : undefined;
+      resolve({ kind: "blocked", code, message: error instanceof Error ? error.message : String(error) });
+    });
     server.once("listening", () => {
-      server.close(() => resolve(true));
+      server.close(() => resolve({ kind: "available" }));
     });
     server.listen(port, "127.0.0.1");
   });

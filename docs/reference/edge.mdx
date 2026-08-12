@@ -5,6 +5,10 @@ description: "Reference for targets, setup, routing, adapters, protocol, errors,
 
 Use these APIs to declare governed edge placement and replace reference single-process infrastructure in managed deployments.
 
+<Warning>
+  Edge is an alpha/preview surface. Validate service lifecycle and recovery on every target operating system before rollout. Protocol, CLI, and local state formats may change before a stable release, and the local control-plane mode is not a production multi-instance deployment.
+</Warning>
+
 ## Quick Start
 
 ```ts theme={null}
@@ -211,21 +215,23 @@ Stateful failover and automatic mutation retry are not supported. Lost non-idemp
 
 ## Errors
 
-Stable edge codes:
+Stable edge codes include a bounded cause and a concrete next action:
 
-* `EDGE_PLACEMENT_AMBIGUOUS`
-* `EDGE_UNAUTHORIZED_TARGET`
-* `EDGE_SETUP_REQUIRED`
-* `EDGE_UNAVAILABLE`
-* `EDGE_CAPACITY`
-* `EDGE_SESSION_PINNED`
-* `EDGE_INPUT_INVALID`
-* `EDGE_INVENTORY_CONFLICT`
-* `EDGE_NAME_CONFLICT`
-* `EDGE_PROTOCOL`
-* `EDGE_WORKLOAD`
-* `EDGE_GRANT`
-* `EDGE_UNRESOLVED_RUNTIME_INPUT`
+| Code | Cause | Next action |
+| --- | --- | --- |
+| `EDGE_PLACEMENT_AMBIGUOUS` | More than one placement matches. | Make the user/group target binding explicit, then rerun `fentaris check --offline`. |
+| `EDGE_UNAUTHORIZED_TARGET` | Policy does not allow the requested target. | Inspect the effective identity with `fentaris edge list --as user:<name> --json`, then update policy intentionally. |
+| `EDGE_SETUP_REQUIRED` | Consent or a required local value is missing. | Run `fentaris edge status --json` and complete the reported local setup action. |
+| `EDGE_UNAVAILABLE` | The device or pinned connection generation is offline. | Run `fentaris edge status --json`, reconnect the device, and start a new MCP session. |
+| `EDGE_CAPACITY` | A device, concurrency, deadline, candidate, or byte limit was exceeded. | Narrow the selector or reduce requested concurrency/deadline, then retry. |
+| `EDGE_SESSION_PINNED` | A stateful session is already pinned to a different device. | Start a new MCP session and call `edge__select` before the first Edge-dependent tool. |
+| `EDGE_INPUT_INVALID` | Tool arguments do not match the current schema. | Rerun `tools/list`, inspect the effective tool schema, and retry with valid arguments. |
+| `EDGE_INVENTORY_CONFLICT` | The expected inventory version is stale. | Fetch the device again with `fentaris edge get <device> --json` and retry with its current version. |
+| `EDGE_NAME_CONFLICT` | The requested public device name already exists. | Choose another name and rerun `fentaris edge update` with the current expected version. |
+| `EDGE_PROTOCOL` | Agent and control-plane protocol requirements do not overlap. | Upgrade the Edge agent, then run `fentaris edge status --json`. |
+| `EDGE_WORKLOAD` | The local workload failed setup, startup, or readiness. | Run `fentaris edge status --json`, fix the reported bounded reason, and retry only when marked retryable. |
+| `EDGE_GRANT` | A local grant is missing, expired, denied, or revoked. | Run `fentaris edge status --json` and renew the exact requested consent locally. |
+| `EDGE_UNRESOLVED_RUNTIME_INPUT` | A cloud execution still contains an Edge-only runtime value. | Provide an explicit cloud runtime value or bind the MCP server to an Edge target. |
 
 ## Events and Health
 

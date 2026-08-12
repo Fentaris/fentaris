@@ -3,7 +3,7 @@ title: "Policies"
 description: "Understand how Fentaris controls tool access per user or group."
 ---
 
-Policies decide which upstream tools a user or group can see and call. Generated projects include a limited guest policy and a broader admin policy.
+Policies decide which upstream tools a user or group can see and call. Generated projects start with `Policy.allowAll()` for local development; replace it with an explicit least-privilege policy before sharing the proxy.
 
 ## Allow Rules
 

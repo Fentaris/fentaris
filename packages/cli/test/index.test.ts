@@ -22,6 +22,7 @@ import {
   type Runtime,
 } from "../src/index.js";
 import { defaultRuntime } from "../src/platform/runtime.js";
+import { portHealthResult } from "../src/domain/health/checks.js";
 import { cliVersion, coreVersion } from "../src/shared/constants.js";
 
 const execFile = promisify(execFileWithCallback);
@@ -442,6 +443,25 @@ describe("command routing helpers", () => {
         options: { "value-stdin": true, "non-interactive": true },
       },
     });
+  });
+
+  it("shows non-interactive automation in init help", async () => {
+    const rt = runtime(process.cwd(), { pnpm: true, git: true, docker: true });
+    await expect(main(["init", "--help"], rt)).resolves.toBe(0);
+    const output = vi.mocked(rt.out.log).mock.calls.flat().join("\n");
+    expect(output).toContain("--non-interactive");
+    expect(output).toContain("automation and agent-driven runs");
+  });
+
+  it("distinguishes a blocked loopback bind from a port conflict", () => {
+    expect(portHealthResult(4000, { kind: "blocked", code: "EPERM", message: "operation not permitted" })).toEqual({
+      group: "Network",
+      label: "localhost:4000",
+      status: "warn",
+      detail: "Could not test the port (EPERM): operation not permitted",
+      hint: "Allow local loopback binding in the current sandbox or security policy, then rerun fentaris doctor.",
+    });
+    expect(portHealthResult(4000, { kind: "in-use" }).detail).toBe("Port is already in use.");
   });
 
   it("parses check JSON output", () => {
