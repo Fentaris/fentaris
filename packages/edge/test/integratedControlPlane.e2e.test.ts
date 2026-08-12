@@ -78,6 +78,12 @@ describe("real Edge agent with the integrated control plane", () => {
     await platform.credentialStore.set("access-expires-at", "1");
     await agent.reconnect();
     expect(await platform.credentialStore.get("refresh-token")).not.toBe(oldRefresh);
+    const replay = await fetch(`${controlPlaneUrl}/token/refresh`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clientId: "fentaris-edge", refreshToken: oldRefresh }),
+    });
+    expect(replay.status).toBe(401);
 
     await agent.revoke();
     await expect(agent.status()).resolves.toMatchObject({ enrolled: false, connected: false });
