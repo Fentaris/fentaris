@@ -69,7 +69,10 @@ const edgeCommandSpec: CliCommandSpec = {
   name: "edge",
   path: ["edge"],
   description: "Join, inspect, and operate governed Edge computers.",
-  details: ["Join once, run persistently when supported, and manage only devices visible to the selected Fentaris identity."],
+  details: [
+    "Join once, run persistently when supported, and manage only devices visible to the selected Fentaris identity.",
+    "Alpha/preview: validate service lifecycle and recovery on every target OS before rollout; protocol, CLI, and local state formats may change before stable release.",
+  ],
   usage: "fentaris edge [COMMAND]",
   commandGroups: [{
     title: "Commands",
@@ -253,6 +256,7 @@ export const cliSpec: CliCommandSpec = {
         { name: "port", valueName: "PORT", description: "Port written to fentaris.json. [default: 4000]" },
         { name: "path", valueName: "PATH", description: "MCP route path written to fentaris.json. [default: /mcp]" },
         { name: "core-version", valueName: "RANGE", description: "Version range for @fentaris/core in the generated package.json. Accepts semver ranges (^3.0.0), dist tags (latest), and workspace/file references (workspace:*, file:../packages/core). [default: ^3.0.0]" },
+        { name: "non-interactive", description: "Fail instead of prompting for missing project inputs. Use for automation and agent-driven runs." },
         { name: "help", short: "h", description: "Print help" },
       ],
     },
