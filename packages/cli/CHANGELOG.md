@@ -1,5 +1,30 @@
 # @fentaris/cli
 
+## 1.5.1
+
+### Patch Changes
+
+- da1a47a: Recover stale local authority locks and support an explicit cross-platform Edge state directory.
+- ec2deb6: Improve first-user diagnostics with accurate loopback permission errors, discoverable automation help, Edge alpha/preview guidance, and concrete Edge recovery actions.
+- 64813bd: Route local Edge device management commands through the protected operator channel, including durable revocation and active connection termination.
+- eb7e639: Roll back failed local Edge enrollments, preserve stable management error codes, and normalize local discovery envelopes.
+- 74a7f69: Preserve an explicitly configured Edge state directory in persistent launchd and systemd services.
+- 147f945: Keep local Edge control sockets within platform path limits and clean up the persistent agent when control startup fails.
+- 64813bd: Treat rejected and revoked Edge credentials as terminal, stop reconnect loops, and direct operators to join the device again.
+- 18cd853: Align generated projects with `@fentaris/core` 3, add a typecheck script, and render valid npm script commands in the generated README.
+- 2bf990c: Show Edge device verification details immediately while `fentaris edge join` waits for approval.
+- Updated dependencies [da1a47a]
+- Updated dependencies [4836bf7]
+- Updated dependencies [64813bd]
+- Updated dependencies [eb7e639]
+- Updated dependencies [74a7f69]
+- Updated dependencies [147f945]
+- Updated dependencies [64813bd]
+- Updated dependencies [6599d72]
+- Updated dependencies [0997001]
+  - @fentaris/core@3.0.1
+  - @fentaris/edge@0.3.1
+
 ## 1.5.0
 
 ### Minor Changes

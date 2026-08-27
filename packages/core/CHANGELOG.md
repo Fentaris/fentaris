@@ -1,5 +1,14 @@
 # @fentaris/core
 
+## 3.0.1
+
+### Patch Changes
+
+- da1a47a: Recover stale local authority locks and support an explicit cross-platform Edge state directory.
+- 4836bf7: Persist Edge enrollment metadata so local control-plane restarts preserve device names, tags, and target selection.
+- 64813bd: Route local Edge device management commands through the protected operator channel, including durable revocation and active connection termination.
+- eb7e639: Roll back failed local Edge enrollments, preserve stable management error codes, and normalize local discovery envelopes.
+
 ## 3.0.0
 
 ### Major Changes
