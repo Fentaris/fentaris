@@ -53,6 +53,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Verify publishable packages and upgrade path
+        run: pnpm verify:packages
+
       - name: Create version PR or publish to npm
         id: changesets
         uses: changesets/action@v1

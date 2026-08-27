@@ -223,6 +223,17 @@ pnpm verify
 
 `pnpm verify` runs lint, typecheck, build, and every package test in that order.
 
+Before promoting a release, verify the exact npm tarballs in clean projects:
+
+```bash
+pnpm verify:release
+```
+
+This packs Core, CLI, Edge, and Telegram approval, validates their manifests and
+entrypoints, installs them in an empty project, generates and builds a real CLI
+project, and exercises upgrade, downgrade, reinstall, and re-upgrade from the
+previous published package set. It requires access to the npm registry.
+
 Generate docs reference:
 
 ```bash
