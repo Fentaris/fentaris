@@ -97,7 +97,7 @@ export function telegramApproval(options: TelegramApprovalOptions): Pick<ToolPer
         });
       } catch (error) {
         context.log.error("Telegram approval request failed", {
-          error: error instanceof Error ? error.message : String(error),
+          error: redactTelegramError(error, options.botToken),
           requestId,
           serverName: request.serverName,
           toolName: request.toolName,
@@ -280,6 +280,11 @@ function telegramUrl(apiBaseUrl: string | URL, botToken: string, method: string)
   const normalizedPath = base.pathname.endsWith("/") ? base.pathname : `${base.pathname}/`;
   base.pathname = `${normalizedPath}bot${botToken}/${method}`;
   return base;
+}
+
+function redactTelegramError(error: unknown, botToken: string): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return botToken ? message.replaceAll(botToken, "[REDACTED]") : message;
 }
 
 function formatApprovalMessage(
