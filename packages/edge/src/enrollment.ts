@@ -1,7 +1,7 @@
 import { generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import type { EdgeLocalConfig, EdgePlatform, StoredDeviceKeyPair } from "./platform.js";
 import type { EdgeConnectionRuntime } from "./runtime.js";
-import type { EdgeObservedFacts } from "@fentaris/core";
+import { edgeError, type EdgeObservedFacts } from "@fentaris/core";
 
 export interface DeviceAuthorizationRequest {
   readonly deviceCode: string;
@@ -300,6 +300,20 @@ async function postJson<T>(url: string, body: unknown, bearer?: string): Promise
     },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(`Edge control-plane request failed with HTTP ${response.status}`);
+  if (!response.ok) {
+    if (response.status === 400 || response.status === 401 || response.status === 403) {
+      throw edgeError("EDGE_UNAUTHORIZED_TARGET", "Edge authorization is invalid or has been revoked.", {
+        details: { status: response.status },
+      });
+    }
+    if (response.status === 404) {
+      throw edgeError("EDGE_PROTOCOL", "Edge control-plane endpoint is unavailable at the configured URL.", {
+        details: { status: response.status },
+      });
+    }
+    throw edgeError("EDGE_UNAVAILABLE", `Edge control-plane request failed with HTTP ${response.status}.`, {
+      details: { status: response.status },
+    });
+  }
   return response.json() as Promise<T>;
 }

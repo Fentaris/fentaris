@@ -167,12 +167,18 @@ function result(
 
 function launchdPlist(label: string, definition: EdgeServiceDefinition): string {
   const args = [definition.executable, ...(definition.args ?? [])].map((value) => `<string>${xml(value)}</string>`).join("");
-  return `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>Label</key><string>${xml(label)}</string><key>ProgramArguments</key><array>${args}</array><key>RunAtLoad</key><true/><key>KeepAlive</key><true/></dict></plist>`;
+  const environment = Object.entries(definition.environment ?? {})
+    .map(([key, value]) => `<key>${xml(key)}</key><string>${xml(value)}</string>`)
+    .join("");
+  return `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>Label</key><string>${xml(label)}</string><key>ProgramArguments</key><array>${args}</array>${environment ? `<key>EnvironmentVariables</key><dict>${environment}</dict>` : ""}${definition.workingDirectory ? `<key>WorkingDirectory</key><string>${xml(definition.workingDirectory)}</string>` : ""}<key>RunAtLoad</key><true/><key>KeepAlive</key><true/></dict></plist>`;
 }
 
 function systemdUnit(definition: EdgeServiceDefinition): string {
   const command = [definition.executable, ...(definition.args ?? [])].map(systemdQuote).join(" ");
-  return `[Unit]\nDescription=Fentaris Edge Agent\nAfter=network-online.target\n\n[Service]\nExecStart=${command}\nRestart=on-failure\nRestartSec=5\n${definition.workingDirectory ? `WorkingDirectory=${definition.workingDirectory}\n` : ""}\n[Install]\nWantedBy=default.target\n`;
+  const environment = Object.entries(definition.environment ?? {})
+    .map(([key, value]) => `Environment=${systemdQuote(`${key}=${value}`)}\n`)
+    .join("");
+  return `[Unit]\nDescription=Fentaris Edge Agent\nAfter=network-online.target\n\n[Service]\nExecStart=${command}\nRestart=on-failure\nRestartSec=5\n${definition.workingDirectory ? `WorkingDirectory=${definition.workingDirectory}\n` : ""}${environment}\n[Install]\nWantedBy=default.target\n`;
 }
 
 function windowsCommandLine(executable: string, args: readonly string[]): string {

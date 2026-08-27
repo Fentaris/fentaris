@@ -288,6 +288,7 @@ export class EdgeAgentRuntime implements EdgeConnectionRuntime {
         deploymentId: result.deploymentId,
         status: result.status === "ready" ? "ready" : "setup-required",
         desiredVersion: message.desiredVersion,
+        ...(result.reason ? { reasonCategory: result.reason } : {}),
         ...(lifecycle ? {
           installationDigest: lifecycle.recipeDigest,
           launchDigest: lifecycle.launchDigest,

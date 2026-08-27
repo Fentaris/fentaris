@@ -1,6 +1,8 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { chmod, rm } from "node:fs/promises";
 import { createConnection, createServer, type Server, type Socket } from "node:net";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { edgeError } from "@fentaris/core";
 import type { EdgePersistentAgent } from "./daemon.js";
 
@@ -168,11 +170,11 @@ export function createEdgeLocalControlCredential(): string {
 }
 
 export function edgeLocalControlAddress(dataDirectory: string, platform: NodeJS.Platform = process.platform): string {
+  const suffix = createHash("sha256").update(path.resolve(dataDirectory)).digest("hex").slice(0, 20);
   if (platform === "win32") {
-    const suffix = Buffer.from(dataDirectory).toString("base64url").slice(0, 32);
     return `\\\\.\\pipe\\fentaris-edge-${suffix}`;
   }
-  return `${dataDirectory}/control.sock`;
+  return path.join(tmpdir(), `fe-${suffix}.sock`);
 }
 
 function validCredential(actual: string, expected: string): boolean {

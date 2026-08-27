@@ -213,7 +213,11 @@ export async function main(
       : path.join(process.env.HOME ?? paths.dataDir, ".config", "systemd", "user", "fentaris-edge.service"),
     foregroundCommand: "fentaris edge run",
   });
-  const definition = { executable: process.execPath, args: [process.argv[1] ?? "fentaris-edge", "run"] };
+  const definition = {
+    executable: process.execPath,
+    args: [process.argv[1] ?? "fentaris-edge", "run"],
+    environment: edgeServiceEnvironment(process.env),
+  };
   const operations: EdgeCliOperations = {
     installService: () => service.install(definition),
     service: (operation) => operation === "install" ? service.install(definition) : service[operation](),
@@ -235,11 +239,15 @@ export async function main(
         ...(agent.installationControl() ? { installation: agent.installationControl()! } : {}),
       });
       await persistent.start();
-      await control.start();
       try {
+        await control.start();
         await persistent.wait();
       } finally {
-        await control.stop();
+        try {
+          await control.stop();
+        } finally {
+          await persistent.stop();
+        }
       }
     },
   };
@@ -263,4 +271,9 @@ function resolvePath(value: string): string {
   } catch {
     return value;
   }
+}
+
+function edgeServiceEnvironment(environment: NodeJS.ProcessEnv): Readonly<Record<string, string>> | undefined {
+  const stateDir = environment.FENTARIS_EDGE_STATE_DIR?.trim();
+  return stateDir ? { FENTARIS_EDGE_STATE_DIR: stateDir } : undefined;
 }

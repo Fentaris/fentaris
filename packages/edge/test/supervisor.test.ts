@@ -141,12 +141,19 @@ function supervisor(options: {
 }
 
 describe("EdgeWorkloadSupervisor", () => {
-  it("reconciles desired deployments and creates one idempotent workload per deployment/session", async () => {
+  it("publishes capabilities while reconciling and creates one idempotent workload per deployment/session", async () => {
     const reportCapabilityManifest = vi.fn();
     const fixture = supervisor({ reportCapabilityManifest });
     await expect(fixture.instance.reconcile([{ requirement: requirement() }])).resolves.toEqual([
       { deploymentId: "fixture", status: "ready" },
     ]);
+    expect(fixture.created.edgeFactory.start).toHaveBeenCalledOnce();
+    expect(fixture.created.workloads[0].graceful).toHaveBeenCalledOnce();
+    expect(reportCapabilityManifest).toHaveBeenCalledWith(
+      "fixture",
+      requirement().recipe.digest,
+      expect.objectContaining({ tools: [{ name: "status" }] }),
+    );
 
     const [first, duplicate] = await Promise.all([
       fixture.instance.handleRequest(request({ requestId: "one" })),
@@ -154,25 +161,52 @@ describe("EdgeWorkloadSupervisor", () => {
     ]);
     expect(first.kind).toBe("mcp.result");
     expect(duplicate.kind).toBe("mcp.result");
-    expect(fixture.created.edgeFactory.start).toHaveBeenCalledOnce();
-    expect(reportCapabilityManifest).toHaveBeenCalledWith(
-      "fixture",
-      requirement().recipe.digest,
-      expect.objectContaining({ tools: [{ name: "status" }] }),
-    );
+    expect(fixture.created.edgeFactory.start).toHaveBeenCalledTimes(2);
 
     await fixture.instance.handleRequest(request({ requestId: "three", sessionId: "session-2" }));
-    expect(fixture.created.edgeFactory.start).toHaveBeenCalledTimes(2);
+    expect(fixture.created.edgeFactory.start).toHaveBeenCalledTimes(3);
     expect(fixture.instance.activeWorkloadCount()).toBe(2);
 
     await fixture.instance.endSession("session-1");
     expect(fixture.instance.activeWorkloadCount()).toBe(1);
-    expect(fixture.created.workloads[0].graceful).toHaveBeenCalledOnce();
+    expect(fixture.created.workloads[1].graceful).toHaveBeenCalledOnce();
     await expect(fixture.instance.reconcile([])).resolves.toContainEqual({
       deploymentId: "fixture",
       status: "removed",
     });
     expect(fixture.instance.activeWorkloadCount()).toBe(0);
+  });
+
+  it("republishes capabilities after reconnect and blocks workloads that cannot be discovered", async () => {
+    const reportCapabilityManifest = vi.fn();
+    const fixture = supervisor({ reportCapabilityManifest });
+    await fixture.instance.reconcile([{ requirement: requirement() }]);
+    await fixture.instance.reconcile([{ requirement: requirement() }]);
+    expect(reportCapabilityManifest).toHaveBeenCalledOnce();
+
+    await fixture.instance.shutdown();
+    await fixture.instance.reconcile([{ requirement: requirement() }]);
+    expect(reportCapabilityManifest).toHaveBeenCalledTimes(2);
+
+    const undiscoverableFactory: EdgeWorkloadFactory = {
+      start: vi.fn(async () => ({
+        client: { request: async () => ({}) },
+        stopGracefully: async () => undefined,
+        forceKill: async () => undefined,
+      })),
+    };
+    const undiscoverable = supervisor({
+      edgeFactory: undiscoverableFactory,
+      reportCapabilityManifest: vi.fn(),
+    });
+    await expect(undiscoverable.instance.reconcile([{ requirement: requirement() }])).resolves.toEqual([
+      { deploymentId: "fixture", status: "blocked", reason: "edge_workload" },
+    ]);
+
+    const denied = supervisor({ allow: false, reportCapabilityManifest: vi.fn() });
+    await expect(denied.instance.reconcile([{ requirement: requirement() }])).resolves.toEqual([
+      { deploymentId: "fixture", status: "blocked", reason: "executable-policy-denied" },
+    ]);
   });
 
   it("forwards every MCP operation and enforces executable policy, capacity, output, and setup readiness", async () => {

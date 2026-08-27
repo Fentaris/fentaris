@@ -9,15 +9,19 @@ import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createConnection, createServer, type Server, type Socket } from "node:net";
 import path from "node:path";
-import { edgeError } from "./errors.js";
+import { edgeError, isEdgeError } from "./errors.js";
 import type { EdgeDeviceApprovalDecision } from "./integratedConfig.js";
+import type { EdgeInventoryListOptions, EdgeInventoryUpdate } from "./controlPlane.js";
+import type { EdgeControlPlaneService, EdgeManagementContext } from "./management.js";
 import type {
   EdgeApprovalService,
   EdgeAuthorizationSession,
   EdgeLocalOperatorChannel,
 } from "./integratedServices.js";
 
-export type EdgeLocalOperatorCommand = "approve" | "deny" | "status";
+export type EdgeLocalOperatorCommand =
+  | "approve" | "deny" | "status"
+  | "device-list" | "device-get" | "device-update" | "device-disconnect" | "device-revoke";
 
 export type EdgeLocalOperatorRequest =
   | {
@@ -35,6 +39,25 @@ export type EdgeLocalOperatorRequest =
   | {
       readonly credential: string;
       readonly command: "status";
+    }
+  | {
+      readonly credential: string;
+      readonly command: "device-list";
+      readonly context: EdgeManagementContext;
+      readonly options?: EdgeInventoryListOptions;
+    }
+  | {
+      readonly credential: string;
+      readonly command: "device-get" | "device-disconnect" | "device-revoke";
+      readonly context: EdgeManagementContext;
+      readonly deviceName: string;
+    }
+  | {
+      readonly credential: string;
+      readonly command: "device-update";
+      readonly context: EdgeManagementContext;
+      readonly deviceName: string;
+      readonly update: EdgeInventoryUpdate;
     };
 
 export type EdgeLocalOperatorResponse = {
@@ -58,6 +81,7 @@ export type EdgeLocalOperatorEndpoint = {
 export type EdgeLocalOperatorServerOptions = {
   readonly endpoint: EdgeLocalOperatorEndpoint;
   readonly approval: EdgeApprovalService;
+  readonly management?: EdgeControlPlaneService;
   readonly status: () => Promise<{
     readonly mode: "local";
     readonly multiInstance: false;
@@ -178,6 +202,7 @@ export class EdgeLocalOperatorServer implements EdgeLocalOperatorChannel {
   private handleSocket(socket: Socket): void {
     let bytes = 0;
     let body = "";
+    let handling = false;
     const max = this.options.maxRequestBytes ?? 16_384;
     socket.setEncoding("utf8");
     socket.on("data", (chunk: string) => {
@@ -192,10 +217,12 @@ export class EdgeLocalOperatorServer implements EdgeLocalOperatorChannel {
       }
       body += chunk;
       const newline = body.indexOf("\n");
-      if (newline === -1) {
+      if (newline === -1 || handling) {
         return;
       }
       const frame = body.slice(0, newline);
+      body = body.slice(newline + 1);
+      handling = true;
       void this.handleFrame(socket, frame);
     });
   }
@@ -213,6 +240,45 @@ export class EdgeLocalOperatorServer implements EdgeLocalOperatorChannel {
       }
       if (request.command === "status") {
         this.respond(socket, { ok: true, data: await this.status() });
+        return;
+      }
+      if (
+        request.command === "device-list"
+        || request.command === "device-get"
+        || request.command === "device-update"
+        || request.command === "device-disconnect"
+        || request.command === "device-revoke"
+      ) {
+        if (!this.options.management) {
+          this.respond(socket, { ok: false, error: { code: "unavailable", message: "Local device management is unavailable." } });
+          return;
+        }
+        if (!request.context || typeof request.context.tenantId !== "string" || !request.context.tenantId.trim()) {
+          this.respond(socket, { ok: false, error: { code: "invalid_request", message: "Device management requires a tenant context." } });
+          return;
+        }
+        const management = this.options.management;
+        if (request.command === "device-list") {
+          this.respond(socket, { ok: true, data: await management.list(request.context, request.options) });
+          return;
+        }
+        if (typeof request.deviceName !== "string" || !request.deviceName.trim()) {
+          this.respond(socket, { ok: false, error: { code: "invalid_request", message: "Device management requires a device name." } });
+          return;
+        }
+        if (request.command === "device-get") {
+          this.respond(socket, { ok: true, data: await management.get(request.context, request.deviceName) });
+          return;
+        }
+        if (request.command === "device-update") {
+          this.respond(socket, { ok: true, data: await management.update(request.context, request.deviceName, request.update) });
+          return;
+        }
+        if (request.command === "device-disconnect") {
+          this.respond(socket, { ok: true, data: await management.disconnect(request.context, request.deviceName) });
+          return;
+        }
+        this.respond(socket, { ok: true, data: await management.revoke(request.context, request.deviceName) });
         return;
       }
       if (request.command === "approve") {
@@ -252,7 +318,7 @@ export class EdgeLocalOperatorServer implements EdgeLocalOperatorChannel {
       this.respond(socket, {
         ok: false,
         error: {
-          code: "server_error",
+          code: isEdgeError(error) ? error.code : "server_error",
           message: error instanceof Error ? error.message : "Operator request failed.",
         },
       });

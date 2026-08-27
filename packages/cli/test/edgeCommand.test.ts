@@ -72,6 +72,19 @@ describe("fentaris edge command parsing and help", () => {
     expect(io.output.join("\n")).toContain("--subject <SUBJECT>");
     expect(io.output.join("\n")).toContain("--json");
   });
+
+  it("documents the cross-platform Edge state override", async () => {
+    const io = runtime();
+    await expect(main(["--help"], io.value)).resolves.toBe(0);
+    expect(io.output.join("\n")).toContain("FENTARIS_EDGE_STATE_DIR");
+  });
+
+  it("labels Edge as alpha/preview in command help", async () => {
+    const io = runtime();
+    await expect(main(["edge", "--help"], io.value)).resolves.toBe(0);
+    expect(io.output.join("\n")).toContain("Alpha/preview");
+    expect(io.output.join("\n")).toContain("every target OS");
+  });
 });
 
 describe("fentaris edge canonical behavior", () => {
@@ -88,6 +101,36 @@ describe("fentaris edge canonical behavior", () => {
       installService: true,
     }));
     expect(JSON.parse(io.output[0]!)).toEqual(expect.objectContaining({ ok: true, pagination: null, warnings: [], nextActions: [] }));
+  });
+
+  it("emits verification details while join is still pending", async () => {
+    const io = runtime();
+    const service = backend();
+    let finishJoin!: () => void;
+    const pending = new Promise<void>((resolve) => { finishJoin = resolve; });
+    service.join.mockImplementation(async (input) => {
+      input.onVerification?.({ verificationUri: "https://control.example/verify", userCode: "ABCD-EFGH" });
+      await pending;
+      return success({ status: "enrolled", device: { name: "Mac Studio" } });
+    });
+    const command = parseCommand(["edge", "join", "https://control.example", "--no-service", "--json"]);
+    if (command.kind !== "ok") throw new Error("parse failed");
+
+    const running = runEdge(command.command, io.value, service);
+    await vi.waitFor(() => expect(io.errors).toHaveLength(1));
+    expect(io.output).toEqual([]);
+    expect(JSON.parse(io.errors[0]!)).toEqual({
+      type: "edge.verification_required",
+      data: { verificationUri: "https://control.example/verify", userCode: "ABCD-EFGH" },
+      nextAction: {
+        description: "Approve this Edge device",
+        command: "fentaris edge approve 'ABCD-EFGH' --subject <subject>",
+      },
+    });
+
+    finishJoin();
+    await expect(running).resolves.toBe(0);
+    expect(JSON.parse(io.output[0]!)).toMatchObject({ ok: true, data: { status: "enrolled" } });
   });
 
   it("approves an exact code with confirmation and canonical JSON", async () => {
@@ -165,7 +208,51 @@ describe("fentaris edge canonical behavior", () => {
     const command = parseCommand(["edge", "get", "Private Device", "--json"]);
     if (command.kind !== "ok") throw new Error("parse failed");
     await expect(runEdge(command.command, io.value, service)).resolves.toBe(3);
-    expect(JSON.parse(io.output[0]!)).toMatchObject({ ok: false, error: { code: "EDGE_UNAUTHORIZED_TARGET" } });
+    expect(JSON.parse(io.output[0]!)).toMatchObject({
+      ok: false,
+      error: { code: "EDGE_UNAUTHORIZED_TARGET" },
+      nextActions: [{
+        description: "List Edge devices visible to this identity",
+        command: "fentaris edge list --json",
+      }],
+    });
+  });
+
+  it("renders a concrete recovery command for human failures", async () => {
+    const io = runtime();
+    const service = backend();
+    service.update.mockResolvedValue({
+      ok: false,
+      error: { code: "EDGE_INVENTORY_CONFLICT", message: "The inventory version changed.", details: {} },
+      warnings: [],
+      nextActions: [],
+    });
+    const command = parseCommand(["edge", "update", "Mac Studio", "--expected-version", "2"]);
+    if (command.kind !== "ok") throw new Error("parse failed");
+
+    await expect(runEdge(command.command, io.value, service)).resolves.toBe(5);
+    expect(io.errors).toEqual([
+      "EDGE_INVENTORY_CONFLICT: The inventory version changed.",
+      "Next: fentaris edge get 'Mac Studio' --json",
+    ]);
+  });
+
+  it("preserves recovery actions supplied by the Edge backend", async () => {
+    const io = runtime();
+    const service = backend();
+    service.get.mockResolvedValue({
+      ok: false,
+      error: { code: "EDGE_UNAVAILABLE", message: "Edge is temporarily unavailable.", details: {} },
+      warnings: [],
+      nextActions: [{ description: "Use the operator-selected recovery", command: "fentaris edge service restart" }],
+    });
+    const command = parseCommand(["edge", "get", "Mac Studio", "--json"]);
+    if (command.kind !== "ok") throw new Error("parse failed");
+
+    await expect(runEdge(command.command, io.value, service)).resolves.toBe(4);
+    expect(JSON.parse(io.output[0]!).nextActions).toEqual([
+      { description: "Use the operator-selected recovery", command: "fentaris edge service restart" },
+    ]);
   });
 
   it("renders concise human output for local status", async () => {

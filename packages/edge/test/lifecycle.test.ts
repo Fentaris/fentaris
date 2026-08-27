@@ -171,6 +171,14 @@ describe("owner-protected local control channel", () => {
   it("uses Windows named-pipe addresses", () => {
     expect(edgeLocalControlAddress("C:\\Users\\Alice\\Fentaris", "win32")).toMatch(/^\\\\\.\\pipe\\fentaris-edge-/);
   });
+
+  it("keeps Unix socket addresses bounded for deeply nested state directories", () => {
+    const directory = path.join(tmpdir(), "nested-state-".repeat(20));
+    const address = edgeLocalControlAddress(directory, "darwin");
+    expect(address.length).toBeLessThan(100);
+    expect(address).toBe(edgeLocalControlAddress(directory, "darwin"));
+    expect(address).not.toContain("nested-state");
+  });
 });
 
 describe("platform service adapters", () => {
@@ -184,7 +192,12 @@ describe("platform service adapters", () => {
     };
     return { commands, writes, runner, files };
   };
-  const definition = { executable: "/usr/bin/node", args: ["edge.js", "run"] } as const;
+  const definition = {
+    executable: "/usr/bin/node",
+    args: ["edge.js", "run"],
+    environment: { FENTARIS_EDGE_STATE_DIR: "/tmp/edge & isolated" },
+    workingDirectory: "/tmp/edge <work>",
+  } as const;
 
   it("installs and controls launchd and systemd-user definitions", async () => {
     const launchd = fixture();
@@ -193,6 +206,8 @@ describe("platform service adapters", () => {
     await launchdAdapter.restart();
     await launchdAdapter.uninstall();
     expect(launchd.writes[0]?.[1]).toContain("RunAtLoad");
+    expect(launchd.writes[0]?.[1]).toContain("<key>FENTARIS_EDGE_STATE_DIR</key><string>/tmp/edge &amp; isolated</string>");
+    expect(launchd.writes[0]?.[1]).toContain("<key>WorkingDirectory</key><string>/tmp/edge &lt;work&gt;</string>");
     expect(launchd.commands).toContainEqual(["launchctl", ["bootstrap", "gui/501", "/tmp/edge.plist"]]);
 
     const systemd = fixture();
@@ -201,6 +216,8 @@ describe("platform service adapters", () => {
     await systemdAdapter.restart();
     await systemdAdapter.uninstall();
     expect(systemd.writes[0]?.[1]).toContain("Restart=on-failure");
+    expect(systemd.writes[0]?.[1]).toContain('Environment="FENTARIS_EDGE_STATE_DIR=/tmp/edge & isolated"');
+    expect(systemd.writes[0]?.[1]).toContain("WorkingDirectory=/tmp/edge <work>");
     expect(systemd.commands).toContainEqual(["systemctl", ["--user", "enable", "--now", "fentaris-edge.service"]]);
   });
 

@@ -23,7 +23,7 @@ function request(): ToolCallRequest {
   };
 }
 
-function context(): MiddlewareContext {
+function context(log: Logger = new Logger({ redact: false })): MiddlewareContext {
   return {
     user: { id: "alice" },
     subject: {
@@ -31,7 +31,7 @@ function context(): MiddlewareContext {
       groups: [],
       hasGroup: () => false,
     },
-    log: new Logger({ redact: false }),
+    log,
     res: {
       deny: vi.fn(),
       fail: vi.fn(),
@@ -115,6 +115,30 @@ describe("telegramApproval", () => {
       requestId: "req-failed",
       metadata: { adapter: "telegram" },
     });
+  });
+
+  it("redacts the bot token when a transport error includes the Telegram URL", async () => {
+    const entries: unknown[] = [];
+    const approvalContext = context(new Logger({
+      onWrite: (entry) => entries.push(entry),
+      redact: false,
+    }));
+    const approval = telegramApproval({
+      botToken: "secret-bot-token",
+      chatId: "chat-1",
+      fetch: vi.fn(async (url: string | URL | Request) => {
+        throw new Error(`network failure for ${String(url)}`);
+      }),
+      apiBaseUrl: "https://telegram.test",
+      requestId: "req-redacted",
+    }).approval;
+
+    await expect(approval?.(request(), approvalContext)).resolves.toMatchObject({
+      status: "denied",
+      requestId: "req-redacted",
+    });
+    expect(JSON.stringify(entries)).not.toContain("secret-bot-token");
+    expect(JSON.stringify(entries)).toContain("[REDACTED]");
   });
 
   it("warns when failOpen is explicitly enabled", () => {
