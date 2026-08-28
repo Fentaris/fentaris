@@ -1416,6 +1416,29 @@ describe("secrets", () => {
     expect(rt.prompt.text).not.toHaveBeenCalled();
   });
 
+  it("leaves no local credential state when the first secrets write is declined", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
+    await expect(main(["init", "demo", "--skip-install"], rt)).resolves.toBe(0);
+
+    rt.cwd = join(dir, "demo");
+    delete rt.env.FENTARIS_AUTH_KEY;
+    vi.mocked(rt.prompt.confirm).mockResolvedValueOnce(false);
+
+    await expect(main(["secrets", "set", "github.token"], rt)).resolves.toBe(0);
+    await expect(readFile(join(rt.cwd, ".fentaris", "credentials.enc.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(join(rt.cwd, ".env"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+
+    await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    await writeInstalledCoreVersion(rt.cwd, coreVersion);
+    vi.mocked(rt.out.log).mockClear();
+
+    await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
+    const output = String(vi.mocked(rt.out.log).mock.calls.at(-1)?.[0]);
+    expect(output).not.toContain('"label": "credentials.enc.json"');
+    expect(output).not.toContain('"label": "FENTARIS_AUTH_KEY"');
+  });
+
   it("does not require an auth key when no encrypted store exists", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await mkdir(join(dir, ".fentaris"), { recursive: true });

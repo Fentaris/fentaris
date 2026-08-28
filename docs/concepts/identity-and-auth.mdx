@@ -29,6 +29,8 @@ Fentaris stores only a hash of the API key. `fentaris auth api-key list` shows u
 
 When enabled, local credentials are stored in `.fentaris/credentials.enc.json` and decrypted with `FENTARIS_AUTH_KEY`. New stores use a versioned AES-256-GCM envelope with PBKDF2 key derivation metadata. Existing legacy stores remain readable and are rewritten in the newer format after a successful update.
 
+The first interactive write creates the project key and encrypted store only after confirmation. Declining the review does not make a project appear configured for local credentials.
+
 On Unix platforms, Fentaris writes `credentials.enc.json` with owner-only permissions (`0600`). Automation should pass secret values through `FENTARIS_AUTH_KEY`, `fentaris auth api-key add <user-id> --value-stdin`, and `fentaris secrets set --value-stdin`; interactive prompts are reserved for real terminals so secret values are not echoed in CI logs.
 
 <Note>

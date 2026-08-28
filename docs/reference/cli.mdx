@@ -374,7 +374,7 @@ Generated projects are discovered from `fentaris.json`. SDK-only projects are di
 
 Auth and secrets commands read `FENTARIS_AUTH_KEY` from the exported environment or the discovered project `.env` before prompting. An exported value takes precedence over `.env`.
 
-When `reference` or `--value` is omitted, the command walks through an interactive setup: pick a manifest reference, choose `default`, `user`, or `group` scope, enter the hidden value, review the redacted summary, and confirm before anything is written.
+When `reference` or `--value` is omitted, the command walks through an interactive setup: pick a manifest reference, choose `default`, `user`, or `group` scope, enter the hidden value, review the redacted summary, and confirm before anything is written. Declining the confirmation leaves both `.env` and `.fentaris/credentials.enc.json` unchanged; a new project does not get an empty credential store.
 
 Options:
 
