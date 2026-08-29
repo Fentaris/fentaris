@@ -1,6 +1,6 @@
 ---
 name: fentaris-dev-pr-workflow
-description: Use in the Fentaris repository whenever Codex is asked to implement a new code change, OpenSpec change, fix, refactor, feature, branch, commit, or pull request intended to merge into dev.
+description: Use in the Fentaris repository whenever Codex is asked to implement a new code change, OpenSpec change, fix, refactor, feature, branch, commit, or pull request intended to merge into dev. Also use when the user requests isolated fresh-install verification for that dev PR workflow.
 ---
 
 # Fentaris Dev PR Workflow
@@ -18,6 +18,12 @@ Use this workflow for implementation work before release promotion.
 7. Add or update a Changeset when the change affects published package behavior, unless the user says `no release` or `niente release`.
 8. When finished, summarize the implemented change, commits, verification, release impact, and ask for approval before creating a pull request.
 9. After approval, create a pull request into `dev`.
+
+## Optional Fresh-Install Verification
+
+Do not run an isolated fresh-install verification by default. Run it only when the user explicitly asks for installation tests, a clean-install test, fresh-install verification, or an independent context-free verification before the pull request.
+
+When requested, read [references/fresh-install-verification.md](references/fresh-install-verification.md) and insert that verification gate after the candidate changes and normal repository checks are committed, but before the pre-PR approval message. The reference supplements this workflow; it does not replace or repeat the branch, commit, Changeset, PR-targeting, or approval flow.
 
 ## GitButler
 

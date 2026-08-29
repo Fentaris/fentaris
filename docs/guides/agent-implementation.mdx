@@ -75,6 +75,46 @@ fentaris secrets manifest --check
 fentaris doctor --runtime
 ```
 
+## Review Checklist
+
+Use this checklist before accepting work produced by Codex, Claude Code, Cursor, Pi, or another coding agent. A generated patch is not complete until a reviewer can answer every item from the diff and verification evidence.
+
+### Scope and intent
+
+- [ ] Re-read the original prompt, linked task, and acceptance criteria.
+- [ ] Map each changed file to one requested outcome.
+- [ ] Reject unrelated refactors, dependency upgrades, formatting sweeps, generated output, or configuration changes unless they are explicitly justified.
+- [ ] Confirm that omitted requirements and known limitations are called out in the handoff.
+
+### Manual diff review
+
+- [ ] Read the complete diff, including tests, lockfiles, generated files, workflows, and deletion changes.
+- [ ] Trace user-controlled input through validation, authorization, side effects, errors, and cleanup.
+- [ ] Check failure, cancellation, retry, concurrency, and partial-write paths rather than reviewing only the success path.
+- [ ] Verify that public commands, types, config, output, and documentation still agree.
+
+### Security and privacy
+
+- [ ] Search the diff and test output for API keys, tokens, passwords, private URLs, personal data, `.env` contents, and decrypted credentials.
+- [ ] Confirm that logs and errors redact secret-bearing values and do not expose full request arguments by default.
+- [ ] Confirm that new access paths fail closed and preserve Fentaris identity, policy, and approval checks.
+- [ ] Verify that files containing local credentials remain ignored and use restrictive permissions where supported.
+
+### Verification
+
+- [ ] Run the narrowest relevant tests first and inspect the asserted behavior.
+- [ ] Run `pnpm lint`, `pnpm typecheck`, `pnpm build`, and `pnpm -r test` from a clean dependency install.
+- [ ] For published-package changes, pack and install the candidate tarballs in an empty project instead of testing only workspace links.
+- [ ] Exercise at least one expected success and one expected denial or failure through the real CLI, SDK, or MCP endpoint.
+- [ ] Record skipped checks with the exact blocker; do not report an unrun command as passing.
+
+### Acceptance and traceability
+
+- [ ] Compare observed output with every acceptance criterion and the original prompt.
+- [ ] Confirm the handoff names changed files, commands run, results, release impact, and remaining operator actions.
+- [ ] Record the run in AI Agent Runs with the prompt or task link, agent, branch or commit, review owner, verification evidence, decision, and follow-up work.
+- [ ] Require human review before merge for any non-trivial generated change.
+
 ## Related Documentation
 
 * [Team-governed proxy](/guides/team-governed-proxy)

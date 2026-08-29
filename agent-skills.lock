@@ -1,41 +1,5 @@
 lockfileVersion: '1.0'
 skills:
-  source-command-opsx-apply:
-    specifier: local:imported/source-command-opsx-apply
-    resolved: local:imported/source-command-opsx-apply
-    integrity: sha256:97137fb2eea45a42530c3f40c077e570e38d95afa321c72e4efc12f637327a55
-    name: source-command-opsx-apply
-    canonicalPath: ~/.skillctl/skills/source-command-opsx-apply
-    fetchedAt: '2026-07-08T07:38:54.228Z'
-    provenance:
-      type: local
-  source-command-opsx-archive:
-    specifier: local:imported/source-command-opsx-archive
-    resolved: local:imported/source-command-opsx-archive
-    integrity: sha256:0cd2d4505fcb4aca75e576a610629fa1971cb486a69916848b81ccc6767ae303
-    name: source-command-opsx-archive
-    canonicalPath: ~/.skillctl/skills/source-command-opsx-archive
-    fetchedAt: '2026-07-08T07:38:54.287Z'
-    provenance:
-      type: local
-  source-command-opsx-explore:
-    specifier: local:imported/source-command-opsx-explore
-    resolved: local:imported/source-command-opsx-explore
-    integrity: sha256:f154b216efc8d9939c34aaced75ba6a404d7166f3e47ea2a5a1b572a013b2061
-    name: source-command-opsx-explore
-    canonicalPath: ~/.skillctl/skills/source-command-opsx-explore
-    fetchedAt: '2026-07-08T07:38:54.348Z'
-    provenance:
-      type: local
-  source-command-opsx-propose:
-    specifier: local:imported/source-command-opsx-propose
-    resolved: local:imported/source-command-opsx-propose
-    integrity: sha256:d871483bc8bad2bf9aa45ba3eca55a7a88fbc37d326e3ac6b9cfc28b6fae515f
-    name: source-command-opsx-propose
-    canonicalPath: ~/.skillctl/skills/source-command-opsx-propose
-    fetchedAt: '2026-07-08T07:38:54.411Z'
-    provenance:
-      type: local
   fix-pr-issues:
     specifier: local:imported/fix-pr-issues
     resolved: local:imported/fix-pr-issues
