@@ -1,5 +1,11 @@
 # @fentaris/cli
 
+## 1.5.2
+
+### Patch Changes
+
+- d17a1dd: Avoid creating a project auth key or empty encrypted credential store when an interactive `secrets set` operation is declined.
+
 ## 1.5.1
 
 ### Patch Changes
