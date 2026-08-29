@@ -55,10 +55,6 @@ async function runSecretsSet(command: CliCommand, reference: string | undefined,
   const project = await discoverSecretsProject(runtime.cwd);
   const input = await resolveSecretsSetInput(command, reference, runtime, project);
   const storagePath = path.relative(project.root, credentialsPath(project));
-  const backend = await openLocalSecretsBackend(project, runtime, input.options, { createKeyIfMissing: true });
-  if (!(await backend.credentialsExist())) {
-    await backend.initEmpty();
-  }
   const promptedValue = typeof input.options.value !== "string" && input.options["value-stdin"] !== true;
   if (promptedValue) {
     section(runtime, "Secret value");
@@ -74,6 +70,7 @@ async function runSecretsSet(command: CliCommand, reference: string | undefined,
       return;
     }
   }
+  const backend = await openLocalSecretsBackend(project, runtime, input.options, { createKeyIfMissing: true });
   await backend.set(input.reference, value, scopeFromOptions(input.options));
   section(runtime, "Secrets");
   runtime.out.log(`  ${style.pass(`Stored ${input.reference} as ${secretScope(input.options)} credential.`)}`);
