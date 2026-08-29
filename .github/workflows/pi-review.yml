@@ -41,20 +41,18 @@ jobs:
         with:
           node-version: 24
 
-      - name: Run Pi review (OpenCode Go)
+      - name: Run Pi review (OpenAI)
         id: pi
         continue-on-error: true
         env:
-          # OpenCode Go: env var richiesta dal pi SDK per il lookup del credential
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-        uses: shaftoe/pi-coding-agent-action@v2.23.0
+          # Env var standard usata dal provider OpenAI del Pi SDK.
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        uses: shaftoe/pi-coding-agent-action@v2.27.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # OpenCode Go è un provider built-in di pi: una sola API key,
-          # accesso a tutti i modelli del catalogo (es. minimax-m3, qwen-3.7-plus, ...).
-          provider: ${{ vars.PI_PROVIDER || 'opencode-go' }}
-          model: ${{ vars.PI_MODEL || 'minimax-m3' }}
-          token: ${{ secrets.OPENCODE_API_KEY }}
+          provider: ${{ vars.PI_PROVIDER || 'openai' }}
+          model: ${{ vars.PI_MODEL || 'gpt-5.6-sol' }}
+          token: ${{ secrets.OPENAI_API_KEY }}
           thinking_level: ${{ vars.PI_THINKING_LEVEL || 'medium' }}
           # Tutti i tool built-in dell'action: get_pr_diff, get_issue_or_pr_thread,
           # get_ci_status, create_pull_request_review, create_pull_request,
