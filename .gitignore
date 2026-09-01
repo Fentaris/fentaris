@@ -4,3 +4,18 @@ dist
 *.tsbuildinfo
 tmp
 .DS_Store
+
+# Local AI agent tooling
+.agents/
+.claude/
+.codex/
+.cursor/
+.grok/
+.opencode/
+.pi/
+.github/prompts/
+.github/skills/
+openspec/
+AGENTS.md
+agent-skills.json
+agent-skills.lock
