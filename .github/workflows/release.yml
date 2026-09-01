@@ -38,8 +38,10 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
           
-      - name: Update npm
-        run: npm install -g npm@latest
+      # Changesets 2.x expects npm 11's object-shaped `npm info --json` output.
+      # npm 12 returns an array and makes every workspace package look unpublished.
+      - name: Install npm 11
+        run: npm install -g npm@11.19.1
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
