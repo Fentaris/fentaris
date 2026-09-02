@@ -21,6 +21,8 @@
     "lint:fix": "eslint packages/ --fix",
     "typecheck": "tsc --build",
     "verify": "pnpm lint && pnpm typecheck && pnpm build && pnpm -r test",
+    "verify:edge:practical": "node scripts/edge-verification/run.mjs",
+    "test:edge-verification": "node --test scripts/edge-verification/*.test.mjs",
     "verify:packages": "node scripts/verify-publishable-packages.mjs",
     "verify:release": "pnpm build && pnpm verify:packages",
     "clean": "pnpm -r clean"
