@@ -174,7 +174,9 @@ export function edgeLocalControlAddress(dataDirectory: string, platform: NodeJS.
   if (platform === "win32") {
     return `\\\\.\\pipe\\fentaris-edge-${suffix}`;
   }
-  return path.join(tmpdir(), `fe-${suffix}.sock`);
+  const socketName = `fe-${suffix}.sock`;
+  const preferred = path.join(tmpdir(), socketName);
+  return preferred.length < 100 ? preferred : path.join("/tmp", socketName);
 }
 
 function validCredential(actual: string, expected: string): boolean {
