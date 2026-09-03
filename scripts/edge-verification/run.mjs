@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile } from "node:child_process";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -17,6 +17,7 @@ import {
   runLogged,
   scanAndRedactLogs,
   snapshotTree,
+  verifyCandidateIdentity,
 } from "./lib.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -25,13 +26,15 @@ const options = parseArgs(process.argv.slice(2));
 const attempt = options.attempt ?? await allocateAttempt(path.resolve(repositoryRoot, "../installation_tests"));
 const layout = await initializeAttempt(attempt);
 const candidateRoot = path.resolve(options.candidate ?? repositoryRoot);
+const identityRepository = path.resolve(options.identityRepo ?? candidateRoot);
 const selected = options.phase === "all" ? PHASES : PHASES.filter((phase) => phase.id === options.phase);
 if (selected.length === 0) throw new Error(`Unknown phase: ${options.phase}`);
 
-const identity = await resolveIdentity(candidateRoot, options);
+const identity = await resolveIdentity(identityRepository, options);
+const identityVerification = await verifyCandidateIdentity({ candidateRoot, identityRepository, ...identity });
 const before = await snapshotTree(candidateRoot);
 await writeJson(path.join(layout.logs, "candidate-tree-before.json"), before);
-await writeJson(path.join(attempt, "identity.json"), identity);
+await writeJson(path.join(attempt, "identity.json"), { ...identity, verification: identityVerification });
 
 const environment = {
   CI: "true",
@@ -46,7 +49,18 @@ const results = [];
 const artifacts = [];
 let canaryStatus = options.canary ? "BLOCKED" : "NOT_REQUESTED";
 
-for (const phase of selected) {
+if (!identityVerification.verified) {
+  for (const phase of selected) {
+    results.push({
+      id: phase.id,
+      title: phase.title,
+      scenarios: [...phase.scenarios],
+      status: "blocked",
+      reason: `Candidate identity could not be proven: ${identityVerification.errors.join("; ")}`,
+      commands: [],
+    });
+  }
+} else for (const phase of selected) {
   const project = path.join(layout.projects, phase.id);
   await mkdir(project, { recursive: true, mode: 0o700 });
   await writeJson(path.join(project, "scenario.json"), { phase: phase.id, title: phase.title, scenarios: phase.scenarios });
@@ -57,10 +71,16 @@ for (const phase of selected) {
       result.commands.push(...packageResult.commands);
       artifacts.push(...packageResult.artifacts);
     } else {
-      for (let index = 0; index < phase.commands.length; index += 1) {
-        const [command, args] = phase.commands[index];
-        result.commands.push(await runLogged({ command, args, cwd: candidateRoot, env: environment, logs: layout.logs, id: `${phase.id}-${index + 1}` }));
+      if (artifacts.length === 0) {
+        const focused = await prepareFocusedArtifacts({ candidateRoot, layout, environment });
+        result.commands.push(...focused.commands);
+        artifacts.push(...focused.artifacts);
       }
+      for (let index = 0; index < phase.commands.length; index += 1) {
+        const command = phase.commands[index];
+        result.commands.push(await runLogged({ command: command.command, args: command.args, cwd: candidateRoot, env: environment, logs: layout.logs, id: `${phase.id}-${command.id}` }));
+      }
+      result.commands.push(...await runPracticalScenario({ phase, candidateRoot, project, layout, environment, artifacts }));
     }
     if (phase.id === "05-managed-installation" && options.canary) {
       canaryStatus = await runCanaries({ project, layout, environment, result });
@@ -100,19 +120,18 @@ const changedFiles = compareSnapshots(before, after);
 const leaks = await scanAndRedactLogs(layout.logs, SENTINELS);
 const matrix = buildRequirementMatrix(REQUIREMENT_SOURCES, results);
 const selectedAll = selected.length === PHASES.length;
-const identityComplete = [identity.branch, identity.sourceHead, identity.tree, identity.targetDev].every((value) => value !== "unknown");
 const verdict = coreVerdict({
   selectedAll,
   results,
   matrix,
   leaks,
   changedFiles,
-  nativeRequired: process.platform === "darwin" && !options.nativeService || !identityComplete,
+  nativeRequired: process.platform === "darwin" && !options.nativeService || !identityVerification.verified,
 });
 await writeJson(path.join(attempt, "matrix.json"), matrix);
 await writeFile(path.join(attempt, "MATRIX.md"), renderMatrix(matrix, attempt), { mode: 0o600 });
-await writeFile(path.join(attempt, "REPORT.md"), renderReport({ verdict, canaryStatus, identity, attempt, results, matrix, leaks, changedFiles, artifacts }), { mode: 0o600 });
-await writeJson(path.join(attempt, "result.json"), { verdict, canaryStatus, identity, results, matrix, leaks: leaks.map(({ file }) => file), changedFiles, artifacts });
+await writeFile(path.join(attempt, "REPORT.md"), renderReport({ verdict, canaryStatus, identity, identityVerification, attempt, results, matrix, leaks, changedFiles, artifacts }), { mode: 0o600 });
+await writeJson(path.join(attempt, "result.json"), { verdict, canaryStatus, identity, identityVerification, results, matrix, leaks: leaks.map(({ file }) => file), changedFiles, artifacts });
 console.log(JSON.stringify({ verdict, canaryStatus, attempt, report: path.join(attempt, "REPORT.md") }, null, 2));
 process.exitCode = verdict === "PASS" ? 0 : verdict === "FAIL" ? 1 : 2;
 
@@ -128,16 +147,9 @@ async function packageSmoke(input) {
   await command("install", "pnpm", ["install", "--frozen-lockfile"]);
   await command("verify", "pnpm", ["verify"]);
   await command("verify-release", "pnpm", ["verify:release"]);
-  const packed = [];
-  for (const directory of ["core", "edge", "cli"]) {
-    const packageRoot = path.join(input.candidateRoot, "packages", directory);
-    const beforeFiles = new Set(await readdir(input.layout.artifacts));
-    commands.push(await runLogged({ command: "pnpm", args: ["pack", "--pack-destination", input.layout.artifacts, "--json"], cwd: packageRoot, env: input.environment, logs: input.layout.logs, id: `00-package-smoke-pack-${directory}` }));
-    const created = (await readdir(input.layout.artifacts)).filter((file) => file.endsWith(".tgz") && !beforeFiles.has(file));
-    if (created.length !== 1) throw new Error(`Expected one ${directory} tarball, found ${created.length}.`);
-    const file = path.join(input.layout.artifacts, created[0]);
-    packed.push({ package: directory, file, digest: await hashFile(file) });
-  }
+  const packedResult = await packCandidateArtifacts(input);
+  commands.push(...packedResult.commands);
+  const packed = packedResult.artifacts;
   await writeJson(path.join(input.layout.artifacts, "SHA256.json"), packed);
   const manifest = {
     name: "fentaris-edge-practical-consumer",
@@ -161,6 +173,61 @@ async function packageSmoke(input) {
   commands.push(await runLogged({ command: path.join(input.project, "node_modules/.bin/fentaris"), args: ["--version"], cwd: input.project, env: input.environment, logs: input.layout.logs, id: "00-package-smoke-cli-bin" }));
   commands.push(await runLogged({ command: path.join(input.project, "node_modules/.bin/fentaris-edge"), args: ["not-a-command"], cwd: input.project, env: input.environment, logs: input.layout.logs, id: "00-package-smoke-edge-bin", expectedExitCodes: [2] }));
   return { commands, artifacts: packed };
+}
+
+async function prepareFocusedArtifacts(input) {
+  const commands = [];
+  commands.push(await runLogged({ command: "pnpm", args: ["install", "--frozen-lockfile"], cwd: input.candidateRoot, env: input.environment, logs: input.layout.logs, id: "focused-candidate-install" }));
+  commands.push(await runLogged({ command: "pnpm", args: ["build"], cwd: input.candidateRoot, env: input.environment, logs: input.layout.logs, id: "focused-candidate-build" }));
+  const packed = await packCandidateArtifacts(input, "focused");
+  commands.push(...packed.commands);
+  return { commands, artifacts: packed.artifacts };
+}
+
+async function packCandidateArtifacts(input, prefix = "00-package-smoke") {
+  const commands = [];
+  const artifacts = [];
+  for (const directory of ["core", "edge", "cli"]) {
+    const packageRoot = path.join(input.candidateRoot, "packages", directory);
+    const beforeFiles = new Set(await readdir(input.layout.artifacts));
+    commands.push(await runLogged({ command: "pnpm", args: ["pack", "--pack-destination", input.layout.artifacts, "--json"], cwd: packageRoot, env: input.environment, logs: input.layout.logs, id: `${prefix}-pack-${directory}` }));
+    const created = (await readdir(input.layout.artifacts)).filter((file) => file.endsWith(".tgz") && !beforeFiles.has(file));
+    if (created.length !== 1) throw new Error(`Expected one ${directory} tarball, found ${created.length}.`);
+    const file = path.join(input.layout.artifacts, created[0]);
+    artifacts.push({ package: directory, file, digest: await hashFile(file) });
+  }
+  await writeJson(path.join(input.layout.artifacts, "SHA256.json"), artifacts);
+  return { commands, artifacts };
+}
+
+async function runPracticalScenario(input) {
+  const manifest = {
+    name: `fentaris-edge-${input.phase.id}-consumer`,
+    private: true,
+    type: "module",
+    dependencies: Object.fromEntries(input.artifacts.map((artifact) => [`@fentaris/${artifact.package}`, `file:${artifact.file}`])),
+  };
+  await writeJson(path.join(input.project, "package.json"), manifest);
+  await copyFile(path.join(input.candidateRoot, "scripts/edge-verification/practical.mjs"), path.join(input.project, "practical.mjs"));
+  await copyFile(path.join(input.candidateRoot, "scripts/edge-verification/fixture-mcp.mjs"), path.join(input.project, "fixture-mcp.mjs"));
+  const commands = [];
+  commands.push(await runLogged({
+    command: "npm",
+    args: ["install", "--ignore-scripts", "--no-audit", "--no-fund"],
+    cwd: input.project,
+    env: input.environment,
+    logs: input.layout.logs,
+    id: `${input.phase.id}-consumer-install`,
+  }));
+  commands.push(await runLogged({
+    command: process.execPath,
+    args: ["practical.mjs", input.phase.id],
+    cwd: input.project,
+    env: { ...input.environment, FENTARIS_EDGE_STATE_DIR: path.join(input.project, "edge-state") },
+    logs: input.layout.logs,
+    id: `${input.phase.id}-practical`,
+  }));
+  return commands;
 }
 
 async function runCanaries({ project, layout, environment, result }) {
@@ -225,16 +292,17 @@ function parseArgs(args) {
     if (token === "--") continue;
     if (token === "--native-service") result.nativeService = true;
     else if (token === "--canary") result.canary = true;
-    else if (["--attempt", "--candidate", "--phase", "--branch", "--source-head", "--tree", "--target-dev"].includes(token)) {
+    else if (["--attempt", "--candidate", "--identity-repo", "--phase", "--branch", "--source-head", "--tree", "--target-dev"].includes(token)) {
       const value = args[index += 1];
       if (!value) throw new Error(`${token} requires a value.`);
       const key = token.slice(2).replaceAll(/-([a-z])/g, (_, letter) => letter.toUpperCase());
       result[key] = value;
     } else if (token === "--help") {
-      console.log("Usage: pnpm verify:edge:practical -- --attempt <absolute-path> [--candidate <path>] [--phase <id|all>] [--native-service] [--canary] [--branch <name> --source-head <sha> --tree <sha> --target-dev <sha>]");
+      console.log("Usage: pnpm verify:edge:practical -- --attempt <absolute-path> [--candidate <path>] [--identity-repo <git-path>] [--phase <id|all>] [--native-service] [--canary] [--branch <name> --source-head <sha> --tree <sha> --target-dev <sha>]");
       process.exit(0);
     } else throw new Error(`Unknown argument: ${token}`);
   }
   if (result.attempt && !path.isAbsolute(result.attempt)) throw new Error("--attempt must be absolute.");
+  if (result.identityRepo && !path.isAbsolute(result.identityRepo)) throw new Error("--identity-repo must be absolute.");
   return result;
 }

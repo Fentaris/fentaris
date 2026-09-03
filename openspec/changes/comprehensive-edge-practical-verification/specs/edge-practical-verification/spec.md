@@ -17,6 +17,12 @@ The verification system SHALL run each campaign in a newly allocated `install<N>
 - **THEN** the campaign reports `BLOCKED`
 - **AND** it does not claim that the candidate was tested
 
+#### Scenario: Candidate identity is proven
+- **WHEN** a campaign is allowed to execute
+- **THEN** the named branch resolves to the declared full source commit
+- **AND** that commit resolves to the declared tree and descends from the declared target `dev`
+- **AND** every materialized file, executable mode, and Git blob identity matches the committed tree
+
 ### Requirement: Candidate artifact verification
 The verification system SHALL install the candidate packages from newly packed tarballs in empty consumer projects and SHALL record the filename and SHA-256 identity of every installed tarball.
 
@@ -35,14 +41,22 @@ The campaign SHALL execute the mandatory macOS stages in order from the smallest
 - **WHEN** a campaign runs in core mode
 - **THEN** it executes package smoke, minimal control plane, single-Edge enrollment, basic MCP workload, local setup, managed installation, macOS resilience and launchd, multi-Edge routing, agent-native orchestration, and security soak stages
 - **AND** each stage uses isolated state and retained logs
+- **AND** every stage after package smoke installs the candidate tarballs in its own consumer and records a phase-specific observable result
 
 #### Scenario: Stage fails
 - **WHEN** a mandatory assertion or command exits unexpectedly
 - **THEN** that stage and the campaign report `FAIL`
 - **AND** subsequent cleanup still runs
 
+#### Scenario: Stage command times out
+- **WHEN** a command exceeds its bounded deadline
+- **THEN** the campaign terminates its process group gracefully and then forcibly if needed
+- **AND** waits for exit and retains partial stdout and stderr before continuing
+
 ### Requirement: Complete requirement-to-evidence matrix
 The campaign SHALL map every applicable macOS Edge requirement to at least one executed scenario, observable expectation, result, and retained evidence path.
+
+Each matrix row SHALL name the exact command evidence that satisfies its expectation and SHALL NOT inherit success merely because another requirement from the same source specification passed.
 
 #### Scenario: Core verification is complete
 - **WHEN** every mandatory matrix row passes and no row is skipped

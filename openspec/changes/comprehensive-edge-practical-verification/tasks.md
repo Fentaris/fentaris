@@ -32,3 +32,11 @@
 - [x] 5.2 Commit only this change to `codex/comprehensive-edge-practical-verification` with GitButler and record candidate, tree, target `dev`, and stack identities
 - [x] 5.3 Run a context-free verifier in a newly allocated `../installation_tests/install<N>`, review `REPORT.md` and supporting logs, and remediate compatible failures in new immutable attempts
 - [x] 5.4 Confirm all tasks, mandatory matrix rows, cleanup checks, and deterministic core gates pass; record canary status and remaining platform exclusions
+
+## 6. Review remediation
+
+- [x] 6.1 Prove the materialized candidate commit, tree, branch, and target `dev` ancestry before allowing `PASS`
+- [x] 6.2 Run one installed-tarball, user-observable practical scenario in every phase from `01` through `09`
+- [x] 6.3 Map every requirement to explicit scenario expectations and accept only matching retained evidence
+- [x] 6.4 Terminate timed-out command process groups, escalate to `SIGKILL`, wait for exit, and retain timeout logs
+- [x] 6.5 Add regression coverage, update the maintainer playbook, rerun all normal gates, and produce a new immutable verification attempt

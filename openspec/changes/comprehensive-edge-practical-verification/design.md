@@ -31,15 +31,21 @@ Alternative considered: a single Vitest file. Rejected because it would blur can
 
 The tracked matrix catalog enumerates every applicable Edge requirement and attaches it to one or more scenario IDs. Scenarios may use repository tests, a packed consumer project, or a practical local process. The report fails if a mandatory row lacks a successful executed scenario. This permits incremental scenario implementation without falsely reporting completeness.
 
+Each requirement entry also names an observable expectation and exact command-evidence IDs. A row requires its focused deterministic suite, candidate-tarball installation, and phase-specific installed-package scenario; phase-level success alone is insufficient.
+
 Alternative considered: code-coverage thresholds. Rejected because line coverage does not prove lifecycle, process isolation, CLI envelopes, security boundaries, or installation behavior.
 
 ### Generate reproducible projects from candidate tarballs
 
 The runner packs `@fentaris/core`, `@fentaris/cli`, and `@fentaris/edge`, records SHA-256 values, and writes numbered projects under the attempt. Consumer manifests use absolute `file:` references to those tarballs and never use workspace links or repository `node_modules`.
 
+Before the candidate is installed, the runner proves its declared commit and tree in a caller-supplied identity repository, verifies branch resolution and target ancestry, and compares the materialized file set, executable modes, and Git blob IDs with the committed tree. It does not run phases when that proof fails.
+
 ### Treat repository tests as mandatory evidence for deep deterministic branches
 
 Existing focused tests already exercise many negative conditions with controllable clocks and adapters. Each practical phase runs the narrowest relevant package tests and then performs at least one packed, user-observable scenario. The final stage reruns the aggregate repository and release gates. This prevents fragile reimplementation of protocol fault injection while still proving packaged behavior.
+
+Commands run in isolated process groups. On timeout the runner sends `SIGTERM`, escalates to `SIGKILL`, waits for group termination, and writes the partial stdout and stderr logs before recording failure.
 
 ### Gate native launchd behind an explicit flag
 

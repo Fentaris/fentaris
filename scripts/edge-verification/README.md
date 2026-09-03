@@ -10,6 +10,7 @@ Use a new absolute attempt path. The runner refuses any attempt that already con
 pnpm verify:edge:practical -- \
   --attempt /absolute/path/to/installation_tests/install6 \
   --candidate /absolute/path/to/install6/candidate \
+  --identity-repo /absolute/path/to/fentaris-source \
   --branch codex/comprehensive-edge-practical-verification \
   --source-head <commit-sha> \
   --tree <tree-sha> \
@@ -18,6 +19,8 @@ pnpm verify:edge:practical -- \
 ```
 
 Omit `--attempt` only when the process is allowed to atomically allocate the next `../installation_tests/install<N>`. Never reuse or delete an earlier attempt.
+
+`--identity-repo` must contain the declared commit and target objects. Before running any phase, the harness verifies the full commit and tree IDs, confirms that the named branch resolves to the source head, proves that the target `dev` commit is an ancestor, and compares every materialized candidate file, mode, and Git blob ID with the committed tree. A missing or mismatched proof produces `BLOCKED` without testing or claiming the candidate. A clean clone may omit this flag because its own `.git` directory is used.
 
 ## Focused phases
 
@@ -40,7 +43,9 @@ The phase order is:
 9. `08-agent-orchestration`
 10. `09-security-and-final-soak`
 
-Each directory under `projects/` describes the phase. Deep failure branches use the focused repository tests named in `catalog.mjs`; package smoke additionally packs and installs candidate tarballs in an empty consumer. The complete requirement inventory is tracked in `requirements.mjs`, so a clean commit archive can build the matrix without ignored local OpenSpec state.
+Each directory under `projects/` is an isolated consumer. Phase 00 packs and installs the candidate tarballs; phases 01–09 each install the same three candidate tarballs and run a phase-specific, user-observable scenario from those installed packages. Deep deterministic failure branches additionally use the focused repository tests named in `catalog.mjs`.
+
+The complete requirement inventory is tracked in `requirements.mjs`. Every row declares one scenario, an observable expectation, and exact evidence command IDs. A row passes only when its phase, focused suite, candidate-tarball installation, and installed-package practical scenario all succeed.
 
 ## Native launchd
 
@@ -75,4 +80,4 @@ After a fix, commit the new candidate and allocate `install<N+1>`. Do not rewrit
 
 ## Cleanup boundaries
 
-The runner may create files only in its candidate build tree and assigned attempt. Package caches and temporary files are redirected into the attempt. Native cleanup uses only the generated attempt label and plist. The runner never deletes an attempt, edits protected authority state directly, pushes a branch, opens a pull request, or uses real credentials.
+The runner may create files only in its candidate build tree and assigned attempt. Package caches and temporary files are redirected into the attempt. Timed-out commands run in dedicated process groups: the runner sends `SIGTERM`, escalates to `SIGKILL`, waits for exit, and retains partial stdout/stderr before continuing. Native cleanup uses only the generated attempt label and plist. The runner never deletes an attempt, edits protected authority state directly, pushes a branch, opens a pull request, or uses real credentials.
