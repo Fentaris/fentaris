@@ -174,18 +174,12 @@ describe("owner-protected local control channel", () => {
 
   it("keeps Unix socket addresses bounded for deeply nested state and temporary directories", () => {
     const directory = path.join(tmpdir(), "nested-state-".repeat(20));
-    const originalTemporaryDirectory = process.env.TMPDIR;
-    process.env.TMPDIR = path.join("/private/tmp", "nested-temporary-directory-".repeat(20));
-    try {
-      const address = edgeLocalControlAddress(directory, "darwin");
-      expect(address.length).toBeLessThan(100);
-      expect(address).toBe(edgeLocalControlAddress(directory, "darwin"));
-      expect(address).not.toContain("nested-state");
-      expect(address).toMatch(/^\/tmp\/fe-[a-f0-9]{20}\.sock$/);
-    } finally {
-      if (originalTemporaryDirectory === undefined) delete process.env.TMPDIR;
-      else process.env.TMPDIR = originalTemporaryDirectory;
-    }
+    const temporaryDirectory = path.join("/private/tmp", "nested-temporary-directory-".repeat(20));
+    const address = edgeLocalControlAddress(directory, "darwin", temporaryDirectory);
+    expect(address.length).toBeLessThan(100);
+    expect(address).toBe(edgeLocalControlAddress(directory, "darwin", temporaryDirectory));
+    expect(address).not.toContain("nested-state");
+    expect(address).toMatch(/^\/tmp\/fe-[a-f0-9]{20}\.sock$/);
   });
 });
 

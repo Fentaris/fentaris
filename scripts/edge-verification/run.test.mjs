@@ -4,6 +4,7 @@ import { cp, mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { PHASES, REQUIREMENT_SOURCES } from "./catalog.mjs";
 import {
@@ -57,6 +58,18 @@ test("requires complete evidence and native identity before PASS", () => {
   assert.equal(coreVerdict({ selectedAll: true, results: [{ status: "passed" }], matrix, leaks: [], changedFiles: [], nativeRequired: false }), "PASS");
   assert.equal(coreVerdict({ selectedAll: false, results: [{ status: "passed" }], matrix, leaks: [], changedFiles: [], nativeRequired: false }), "BLOCKED");
   assert.equal(coreVerdict({ selectedAll: true, results: [{ status: "failed" }], matrix, leaks: [], changedFiles: [], nativeRequired: false }), "FAIL");
+  assert.equal(coreVerdict({ selectedAll: true, results: [{ status: "passed" }], matrix, leaks: [], changedFiles: [], nativeRequired: true }), "BLOCKED");
+  assert.equal(coreVerdict({ selectedAll: true, results: [{ status: "passed" }], matrix, leaks: [], changedFiles: [], identityUnverified: true }), "BLOCKED");
+});
+
+test("rejects unknown phases before allocating an immutable attempt", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "edge-phase-guard-"));
+  const script = path.join(path.dirname(fileURLToPath(import.meta.url)), "run.mjs");
+  await assert.rejects(
+    () => execFileAsync(process.execPath, [script, "--attempt", path.join(root, "install0"), "--phase", "not-a-phase"], { cwd: path.dirname(script) }),
+    (error) => /Unknown phase: not-a-phase/.test(`${error?.message ?? ""}\n${error?.stderr ?? ""}`),
+  );
+  await assert.rejects(() => readFile(path.join(root, "install0", ".edge-verification.json")), (error) => error?.code === "ENOENT");
 });
 
 test("builds the tracked requirement matrix without reading source specs", () => {

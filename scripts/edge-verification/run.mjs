@@ -23,12 +23,12 @@ import {
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const options = parseArgs(process.argv.slice(2));
+const selected = options.phase === "all" ? PHASES : PHASES.filter((phase) => phase.id === options.phase);
+if (selected.length === 0) throw new Error(`Unknown phase: ${options.phase}`);
 const attempt = options.attempt ?? await allocateAttempt(path.resolve(repositoryRoot, "../installation_tests"));
 const layout = await initializeAttempt(attempt);
 const candidateRoot = path.resolve(options.candidate ?? repositoryRoot);
 const identityRepository = path.resolve(options.identityRepo ?? candidateRoot);
-const selected = options.phase === "all" ? PHASES : PHASES.filter((phase) => phase.id === options.phase);
-if (selected.length === 0) throw new Error(`Unknown phase: ${options.phase}`);
 
 const identity = await resolveIdentity(identityRepository, options);
 const identityVerification = await verifyCandidateIdentity({ candidateRoot, identityRepository, ...identity });
@@ -126,7 +126,8 @@ const verdict = coreVerdict({
   matrix,
   leaks,
   changedFiles,
-  nativeRequired: process.platform === "darwin" && !options.nativeService || !identityVerification.verified,
+  nativeRequired: process.platform === "darwin" && !options.nativeService,
+  identityUnverified: !identityVerification.verified,
 });
 await writeJson(path.join(attempt, "matrix.json"), matrix);
 await writeFile(path.join(attempt, "MATRIX.md"), renderMatrix(matrix, attempt), { mode: 0o600 });

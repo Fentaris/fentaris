@@ -264,9 +264,9 @@ export async function scanAndRedactLogs(logs, sentinels) {
   return leaks;
 }
 
-export function coreVerdict({ selectedAll, results, matrix, leaks, changedFiles, nativeRequired }) {
+export function coreVerdict({ selectedAll, results, matrix, leaks, changedFiles, nativeRequired = false, identityUnverified = false }) {
   if (results.some((result) => result.status === "failed") || leaks.length > 0 || changedFiles.length > 0) return "FAIL";
-  if (!selectedAll || nativeRequired || matrix.some((row) => row.mandatory && row.status !== "passed")) return "BLOCKED";
+  if (!selectedAll || nativeRequired || identityUnverified || matrix.some((row) => row.mandatory && row.status !== "passed")) return "BLOCKED";
   return "PASS";
 }
 
