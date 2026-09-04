@@ -169,12 +169,18 @@ export function createEdgeLocalControlCredential(): string {
   return randomBytes(32).toString("base64url");
 }
 
-export function edgeLocalControlAddress(dataDirectory: string, platform: NodeJS.Platform = process.platform): string {
+export function edgeLocalControlAddress(
+  dataDirectory: string,
+  platform: NodeJS.Platform = process.platform,
+  temporaryDirectory: string = tmpdir(),
+): string {
   const suffix = createHash("sha256").update(path.resolve(dataDirectory)).digest("hex").slice(0, 20);
   if (platform === "win32") {
     return `\\\\.\\pipe\\fentaris-edge-${suffix}`;
   }
-  return path.join(tmpdir(), `fe-${suffix}.sock`);
+  const socketName = `fe-${suffix}.sock`;
+  const preferred = path.join(temporaryDirectory, socketName);
+  return preferred.length < 100 ? preferred : path.join("/tmp", socketName);
 }
 
 function validCredential(actual: string, expected: string): boolean {

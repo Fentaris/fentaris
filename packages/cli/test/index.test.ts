@@ -126,6 +126,21 @@ async function writeHealthyProject(root: string, authDirectory = ".fentaris"): P
   await writeInstalledCoreVersion(root, coreVersion);
 }
 
+async function unusedLoopbackPort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Expected an ephemeral TCP port.");
+  await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  return address.port;
+}
+
 async function writeInstalledCoreVersion(projectRoot: string, version: string): Promise<void> {
   const installedDir = join(projectRoot, "node_modules", "@fentaris", "core");
   await mkdir(installedDir, { recursive: true });
@@ -1173,6 +1188,10 @@ void app;
   it("prints compact doctor output with summary and issues only", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
+    const configPath = join(dir, "fentaris.json");
+    const config = JSON.parse(await readFile(configPath, "utf8")) as Record<string, unknown>;
+    config.port = await unusedLoopbackPort();
+    await writeFile(configPath, JSON.stringify(config));
     const rt = runtime(dir, { pnpm: true, git: true, docker: true });
     vi.mocked(rt.out.log).mockClear();
 

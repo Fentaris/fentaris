@@ -16,6 +16,12 @@ tmp
 .github/prompts/
 .github/skills/
 openspec/
+!openspec/
+openspec/*
+!openspec/changes/
+openspec/changes/*
+!openspec/changes/comprehensive-edge-practical-verification/
+!openspec/changes/comprehensive-edge-practical-verification/**
 AGENTS.md
 agent-skills.json
 agent-skills.lock
