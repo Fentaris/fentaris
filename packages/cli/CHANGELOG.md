@@ -1,5 +1,12 @@
 # @fentaris/cli
 
+## 1.5.3
+
+### Patch Changes
+
+- Updated dependencies [995f0f9]
+  - @fentaris/edge@0.3.2
+
 ## 1.5.2
 
 ### Patch Changes
