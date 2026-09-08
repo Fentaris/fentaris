@@ -257,8 +257,11 @@ export async function main(
         try {
           await control.stop();
         } finally {
-          await clearEdgeLocalControlAddress(paths.dataDir);
-          await persistent.stop();
+          try {
+            await clearEdgeLocalControlAddress(paths.dataDir);
+          } finally {
+            await persistent.stop();
+          }
         }
       }
     },

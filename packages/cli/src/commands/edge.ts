@@ -297,8 +297,11 @@ export class DefaultEdgeOperatorBackend implements EdgeOperatorBackend {
       try {
         await control.stop();
       } finally {
-        await clearEdgeLocalControlAddress(this.paths.dataDir);
-        await persistent.stop();
+        try {
+          await clearEdgeLocalControlAddress(this.paths.dataDir);
+        } finally {
+          await persistent.stop();
+        }
       }
     }
     const terminal = await persistent.status();
