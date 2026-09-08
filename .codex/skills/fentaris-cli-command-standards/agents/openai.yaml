@@ -1,4 +1,0 @@
-interface:
-  display_name: "Fentaris CLI Command Standards"
-  short_description: "Design Fentaris CLI commands consistently."
-  default_prompt: "Use $fentaris-cli-command-standards when designing, implementing, reviewing, or documenting Fentaris CLI commands."

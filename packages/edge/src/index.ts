@@ -5,7 +5,13 @@ import path from "node:path";
 import { createDefaultEdgeAgent, EdgeAgent, WebSocketEdgeConnectionClient } from "./agent.js";
 import { runEdgeCli, type EdgeCliIo, type EdgeCliOperations } from "./cli.js";
 import { EdgePersistentAgent, FileEdgeSingletonLock, type EdgePersistentStatus } from "./daemon.js";
-import { EdgeLocalControlServer, createEdgeLocalControlCredential, edgeLocalControlAddress } from "./localControl.js";
+import {
+  EdgeLocalControlServer,
+  clearEdgeLocalControlAddress,
+  createEdgeLocalControlCredential,
+  edgeLocalControlAddress,
+  writeEdgeLocalControlAddress,
+} from "./localControl.js";
 import { ProtectedJsonStore, defaultEdgePaths, nodeEdgePlatform } from "./platform.js";
 import { edgeServiceAdapter } from "./service.js";
 
@@ -120,8 +126,11 @@ export type {
 export {
   EdgeLocalControlServer,
   callEdgeLocalControl,
+  clearEdgeLocalControlAddress,
   createEdgeLocalControlCredential,
   edgeLocalControlAddress,
+  resolveEdgeLocalControlAddress,
+  writeEdgeLocalControlAddress,
 } from "./localControl.js";
 export type {
   EdgeLocalControlCommand,
@@ -233,20 +242,26 @@ export async function main(
         credential = createEdgeLocalControlCredential();
         await platform.credentialStore.set(credentialStoreKey, credential);
       }
+      const address = edgeLocalControlAddress(paths.dataDir);
       const control = new EdgeLocalControlServer({
-        endpoint: { address: edgeLocalControlAddress(paths.dataDir), credential },
+        endpoint: { address, credential },
         agent: persistent,
         ...(agent.installationControl() ? { installation: agent.installationControl()! } : {}),
       });
       await persistent.start();
       try {
         await control.start();
+        await writeEdgeLocalControlAddress(paths.dataDir, address);
         await persistent.wait();
       } finally {
         try {
           await control.stop();
         } finally {
-          await persistent.stop();
+          try {
+            await clearEdgeLocalControlAddress(paths.dataDir);
+          } finally {
+            await persistent.stop();
+          }
         }
       }
     },

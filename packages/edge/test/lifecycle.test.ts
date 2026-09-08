@@ -172,12 +172,14 @@ describe("owner-protected local control channel", () => {
     expect(edgeLocalControlAddress("C:\\Users\\Alice\\Fentaris", "win32")).toMatch(/^\\\\\.\\pipe\\fentaris-edge-/);
   });
 
-  it("keeps Unix socket addresses bounded for deeply nested state directories", () => {
+  it("keeps Unix socket addresses bounded for deeply nested state and temporary directories", () => {
     const directory = path.join(tmpdir(), "nested-state-".repeat(20));
-    const address = edgeLocalControlAddress(directory, "darwin");
+    const temporaryDirectory = path.join("/private/tmp", "nested-temporary-directory-".repeat(20));
+    const address = edgeLocalControlAddress(directory, "darwin", temporaryDirectory);
     expect(address.length).toBeLessThan(100);
-    expect(address).toBe(edgeLocalControlAddress(directory, "darwin"));
+    expect(address).toBe(edgeLocalControlAddress(directory, "darwin", temporaryDirectory));
     expect(address).not.toContain("nested-state");
+    expect(address).toMatch(/^\/tmp\/fe-[a-f0-9]{20}\.sock$/);
   });
 });
 
