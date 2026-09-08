@@ -20,8 +20,14 @@ openspec/
 openspec/*
 !openspec/changes/
 openspec/changes/*
-!openspec/changes/comprehensive-edge-practical-verification/
-!openspec/changes/comprehensive-edge-practical-verification/**
+!openspec/changes/archive/
+openspec/changes/archive/*
+!openspec/changes/archive/2026-09-08-comprehensive-edge-practical-verification/
+!openspec/changes/archive/2026-09-08-comprehensive-edge-practical-verification/**
+!openspec/specs/
+openspec/specs/*
+!openspec/specs/edge-practical-verification/
+!openspec/specs/edge-practical-verification/**
 AGENTS.md
 agent-skills.json
 agent-skills.lock
