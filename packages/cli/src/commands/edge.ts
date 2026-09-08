@@ -8,7 +8,10 @@ import {
   createDefaultEdgeAgent,
   createEdgeLocalControlCredential,
   defaultEdgePaths,
+  clearEdgeLocalControlAddress,
   edgeLocalControlAddress,
+  resolveEdgeLocalControlAddress,
+  writeEdgeLocalControlAddress,
   edgeServiceAdapter,
   nodeEdgePlatform,
   type EdgePersistentStatus,
@@ -279,19 +282,22 @@ export class DefaultEdgeOperatorBackend implements EdgeOperatorBackend {
       statusStore: new ProtectedJsonStore<EdgePersistentStatus>(path.join(this.paths.dataDir, "status.json")),
     });
     const credential = await this.controlCredential();
+    const address = edgeLocalControlAddress(this.paths.dataDir);
     const control = new EdgeLocalControlServer({
-      endpoint: { address: edgeLocalControlAddress(this.paths.dataDir), credential },
+      endpoint: { address, credential },
       agent: persistent,
       ...(agent.installationControl() ? { installation: agent.installationControl()! } : {}),
     });
     await persistent.start();
     try {
       await control.start();
+      await writeEdgeLocalControlAddress(this.paths.dataDir, address);
       await persistent.wait();
     } finally {
       try {
         await control.stop();
       } finally {
+        await clearEdgeLocalControlAddress(this.paths.dataDir);
         await persistent.stop();
       }
     }
@@ -343,7 +349,7 @@ export class DefaultEdgeOperatorBackend implements EdgeOperatorBackend {
     const credential = await this.platform.credentialStore.get("local-control-credential");
     if (credential) {
       try {
-        const endpoint = { address: edgeLocalControlAddress(this.paths.dataDir), credential };
+        const endpoint = { address: await resolveEdgeLocalControlAddress(this.paths.dataDir), credential };
         const response = await callEdgeLocalControl(endpoint, "status");
         if (!response.ok) return failure(response.error?.code ?? "EDGE_UNAVAILABLE", response.error?.message ?? "Local Edge status failed.");
         const installations = await callEdgeLocalControl(endpoint, "installation-status").catch(() => ({ ok: true, data: { readiness: [] } }));
@@ -399,7 +405,7 @@ export class DefaultEdgeOperatorBackend implements EdgeOperatorBackend {
     const credential = await this.platform.credentialStore.get("local-control-credential");
     if (!credential) return failure("EDGE_UNAVAILABLE", "The local Edge service is not running or has no control credential.");
     const response = await callEdgeLocalControl(
-      { address: edgeLocalControlAddress(this.paths.dataDir), credential },
+      { address: await resolveEdgeLocalControlAddress(this.paths.dataDir), credential },
       `installation-${action}`,
       { ...(deploymentId ? { deploymentId } : {}), ...(options.cleanup ? { cleanup: true } : {}), ...(action === "cleanup" ? { approveCleanup: true } : {}) },
     );

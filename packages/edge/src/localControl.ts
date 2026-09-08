@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { chmod, rm } from "node:fs/promises";
+import { chmod, readFile, rm, writeFile } from "node:fs/promises";
 import { createConnection, createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -181,6 +181,43 @@ export function edgeLocalControlAddress(
   const socketName = `fe-${suffix}.sock`;
   const preferred = path.join(temporaryDirectory, socketName);
   return preferred.length < 100 ? preferred : path.join("/tmp", socketName);
+}
+
+function controlAddressFile(dataDirectory: string): string {
+  return path.join(dataDirectory, "local-control-address");
+}
+
+/**
+ * Persists the socket/pipe address a running local control server bound to. Callers on the
+ * same machine may have a different `TMPDIR` than the process that started the server, so
+ * recomputing `edgeLocalControlAddress` at read time can miss the running process; reading
+ * back this persisted value keeps them in sync.
+ */
+export async function writeEdgeLocalControlAddress(dataDirectory: string, address: string): Promise<void> {
+  await writeFile(controlAddressFile(dataDirectory), address, "utf8");
+}
+
+/** Removes the persisted local control address, if any. */
+export async function clearEdgeLocalControlAddress(dataDirectory: string): Promise<void> {
+  await rm(controlAddressFile(dataDirectory), { force: true });
+}
+
+/**
+ * Resolves the address of a running local control server, preferring the address it persisted
+ * at bind time so a caller with a different `TMPDIR` still finds it. Falls back to a freshly
+ * computed address when nothing is persisted yet (e.g. before the server has ever started).
+ */
+export async function resolveEdgeLocalControlAddress(
+  dataDirectory: string,
+  platform: NodeJS.Platform = process.platform,
+): Promise<string> {
+  try {
+    const persisted = (await readFile(controlAddressFile(dataDirectory), "utf8")).trim();
+    if (persisted) return persisted;
+  } catch {
+    // No persisted address yet; fall through to a freshly computed one.
+  }
+  return edgeLocalControlAddress(dataDirectory, platform);
 }
 
 function validCredential(actual: string, expected: string): boolean {
