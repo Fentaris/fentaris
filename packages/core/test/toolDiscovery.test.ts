@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AgentToolDiscoveryService, StdioTransport, credential, credentialEnv, group, mcp, policy, user, type FentarisTransport } from "../src/index.js";
+import { AgentToolDiscoveryService, StdioTransport, credential, credentialEnv, group, mcp, oauth, policy, streamableHttp, user, type FentarisTransport } from "../src/index.js";
 
 class ToolTransport implements FentarisTransport {
   constructor(private readonly tools: Array<Record<string, unknown>>) {}
@@ -180,5 +180,43 @@ describe("agent-native tool discovery", () => {
     expect(refreshed.ok && refreshed.data[0]).toMatchObject({
       discovery: { cacheStatus: "refreshed", refreshed: true },
     });
+  });
+
+  it("derives OAuth auth status from stored authorizations and offers a browser login", () => {
+    const config = {
+      servers: [
+        mcp("linear", {
+          transport: streamableHttp({ url: "https://mcp.linear.app/mcp" }),
+          auth: oauth(),
+        }),
+      ],
+      oauth: { agentTools: false as const },
+      cli: { mcpAccounts: { linear: { default: "user:alice", allowed: ["user:alice", "user:bob"] } } },
+    };
+
+    const withoutTokens = new AgentToolDiscoveryService(config);
+    expect(withoutTokens.authStatusEnvelope("linear", "user:alice")).toMatchObject({ ok: true, data: { status: "requires-login" } });
+
+    const withTokens = new AgentToolDiscoveryService(config, { oauthStatuses: { "linear:user:alice": "authenticated" } });
+    expect(withTokens.authStatusEnvelope("linear", "user:alice")).toMatchObject({ ok: true, data: { status: "authenticated" } });
+    expect(withTokens.authStatusEnvelope("linear", "user:bob")).toMatchObject({ ok: true, data: { status: "requires-login" } });
+    expect(withTokens.authLogin("linear", "user:alice")).toMatchObject({
+      ok: true,
+      data: { loginMode: "browser", status: "authenticated" },
+      nextActions: [{ command: "fentaris auth login linear --as user:alice --json" }],
+    });
+  });
+
+  it("uses the shared authorization for tokens: shared servers", () => {
+    const service = new AgentToolDiscoveryService(
+      {
+        servers: [mcp("billing", { transport: streamableHttp({ url: "https://billing.example.com/mcp" }), auth: oauth({ tokens: "shared" }) })],
+        oauth: { agentTools: false as const },
+        cli: { mcpAccounts: { billing: { default: "user:alice", allowed: ["user:alice"] } } },
+      },
+      { oauthStatuses: { "billing:shared": "authenticated" } },
+    );
+
+    expect(service.authStatusEnvelope("billing", "user:alice")).toMatchObject({ ok: true, data: { status: "authenticated" } });
   });
 });
