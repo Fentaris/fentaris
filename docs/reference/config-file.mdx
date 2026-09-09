@@ -88,7 +88,7 @@ Directory for local encrypted credentials and CLI auth state.
 ```
 
 <Note>
-  Generated projects include `.gitignore` entries for `.fentaris/` because it contains local credentials and build output. The committed `.fentaris/secrets.manifest.json` schema is not ignored.
+  Generated projects include `.gitignore` entries for `.fentaris/` because it contains local credentials, upstream OAuth tokens, and build output. The committed `.fentaris/secrets.manifest.json` schema is not ignored.
 </Note>
 
 ### `secrets`
@@ -197,6 +197,49 @@ Selectors the CLI may use for the MCP. Values use `user:<id>` or `group:<id>`.
 
 <Note>
   `cli.mcpAccounts` bounds CLI discovery choices. It is not a security boundary by itself; effective access still comes from Fentaris policy and credential resolution.
+</Note>
+
+## Application Config: `oauth`
+
+Proxy-level wiring for upstream servers declared with `oauth()`. Set it on the app config, not in `fentaris.json`.
+
+```ts theme={null}
+fentaris({
+  servers: [mcp("linear", { transport: streamableHttp({ url }), auth: oauth() })],
+  oauth: { publicUrl: "https://proxy.example.com", consentTimeoutMs: 90_000 },
+});
+```
+
+### `oauth.publicUrl`
+
+Externally reachable base URL used to build the redirect callback. Required behind a reverse proxy or a non-loopback host. Must be an absolute `http` or `https` URL.
+
+### `oauth.callbackPath`
+
+Path of the hosted redirect route. Defaults to `/_fentaris/oauth/callback`. Must not overlap the MCP path or the Edge control-plane base path.
+
+### `oauth.store`
+
+Token store implementing `get`, `set`, `delete`, and `list`. Defaults to the encrypted local store when a key is available, otherwise an in-memory store.
+
+### `oauth.authDir`
+
+Directory of the encrypted local token store. Defaults to `.fentaris`.
+
+### `oauth.consentTimeoutMs`
+
+How long a tool call waits for consent before returning a pending result. Defaults to `90000`.
+
+### `oauth.pendingTtlMs`
+
+How long an unfinished authorization stays valid. Defaults to `600000`.
+
+### `oauth.agentTools`
+
+Set to `false` to skip the built-in `fentaris__auth_status` and `fentaris__auth_login` tools. Defaults to `true` when an interactive OAuth server is declared.
+
+<Note>
+  See [Upstream OAuth 2.1](/guides/oauth) for the declaration forms and the consent flow.
 </Note>
 
 ## Legacy Filename

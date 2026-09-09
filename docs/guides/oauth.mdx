@@ -1,0 +1,178 @@
+---
+title: "Upstream OAuth 2.1"
+description: "Let Fentaris obtain, store, and refresh OAuth tokens for upstream MCP servers, per user."
+---
+
+Declare `auth: oauth()` on an upstream MCP server and Fentaris performs the OAuth 2.1 client side for you: metadata discovery, dynamic client registration, PKCE, token exchange, refresh, and per-user token storage.
+
+## Quick Start
+
+```ts theme={null}
+import { fentaris, mcp, oauth, streamableHttp } from "@fentaris/core";
+
+const app = fentaris({
+  servers: [
+    mcp("linear", {
+      transport: streamableHttp({ url: "https://mcp.linear.app/mcp" }),
+      auth: oauth(),
+    }),
+  ],
+  oauth: { publicUrl: "https://proxy.example.com" },
+});
+
+await app.start();
+```
+
+```bash theme={null}
+export FENTARIS_AUTH_KEY="$(cat .fentaris/protection.key 2>/dev/null || echo my-local-key)"
+fentaris auth login linear --as user:alice
+fentaris auth status
+```
+
+The first tool call for a user who has no authorization asks that human to sign in; every later call uses their own access token.
+
+## Four Ways to Declare It
+
+### `oauth()`
+
+Zero configuration. Fentaris discovers the protected resource and authorization server, registers a client dynamically (RFC 7591), uses PKCE with `S256`, and stores one authorization per Fentaris user.
+
+### `oauth({ clientId, clientSecret, scopes })`
+
+Pre-registered client. Fentaris skips dynamic registration and authenticates to the token endpoint with the strongest method the authorization server supports. `clientSecret` accepts a literal string or `credential("...")`; a credential reference must be declared under `defaults.credentials`, because the client secret belongs to the application rather than to a caller.
+
+```ts theme={null}
+mcp("github", {
+  transport: streamableHttp({ url: "https://api.githubcopilot.com/mcp/" }),
+  auth: oauth({ clientId: "Iv1.abc", clientSecret: credential("github.oauth.secret"), scopes: ["repo"] }),
+})
+```
+
+### `oauth.clientCredentials({ clientId, clientSecret, scopes })`
+
+Machine-to-machine access. No redirect and no human: Fentaris fetches a token directly and every caller shares it.
+
+### `oauth({ provider })`
+
+Escape hatch. The factory receives `{ server, user, session, store, redirectUrl }` and returns an MCP SDK `OAuthClientProvider` that Fentaris binds to that user's transport.
+
+## Options
+
+### `tokens`
+
+`"per-user"` (default for the authorization-code grant) isolates one authorization per Fentaris user. `"shared"` reuses the first completed authorization for every caller. Unauthenticated callers always collapse to the shared session, so a personal single-user proxy works with no identity configuration.
+
+### `registration`
+
+Inferred from your declaration: `"dynamic"` with no `clientId`, `"preregistered"` with one, `"metadata-url"` when `clientMetadataUrl` is set. Set it explicitly to force one mode.
+
+### `oauth.publicUrl`
+
+Externally reachable base URL of the proxy. Required behind a reverse proxy or any non-loopback deployment, because the authorization server redirects the browser to `<publicUrl><callbackPath>`. When unset, Fentaris derives the callback from the bound listener.
+
+### `oauth.callbackPath`
+
+Path of the hosted redirect route. Defaults to `/_fentaris/oauth/callback`. Validation rejects a path that overlaps the MCP path or the Edge control-plane base path.
+
+### `oauth.store`
+
+Any object implementing `get`, `set`, `delete`, and `list`. Defaults to the encrypted local store when a key is available, otherwise an in-memory store.
+
+### `oauth.consentTimeoutMs`
+
+How long a tool call waits for the human to finish consent. Defaults to `90000`, below the usual MCP client request timeout. On timeout the call returns a "pending, retry" result instead of hanging.
+
+### `oauth.agentTools`
+
+Set to `false` to skip registering the built-in `fentaris__auth_status` and `fentaris__auth_login` tools.
+
+## How Consent Reaches the Human
+
+1. A tool call needs an authorization that does not exist yet.
+2. If the connected MCP client supports URL-mode elicitation, Fentaris sends it the authorization URL and waits.
+3. The human signs in; the authorization server redirects to the Fentaris callback; Fentaris exchanges the code and notifies the client.
+4. Fentaris retries the original tool call once and returns its real result.
+
+Clients that cannot elicit a URL get a structured error result instead:
+
+```json theme={null}
+{
+  "code": "FENTARIS_OAUTH_AUTHORIZATION_REQUIRED",
+  "server": "linear",
+  "authorizationUrl": "https://auth.example.com/authorize?...",
+  "expiresAt": "2026-01-01T00:10:00.000Z"
+}
+```
+
+<Note>
+  `tools/list` never contacts an authorization server. An upstream that still needs a login contributes no tools instead of failing the whole listing, and the built-in `fentaris__auth_*` tools tell the agent why.
+</Note>
+
+## Token Store
+
+Tokens, client registrations, and cached discovery state live in `<authDir>/oauth-tokens.enc.json`, encrypted with the same key as `credentials.enc.json`, written atomically with owner-only permissions. The file is separate from the credentials store, so `fentaris secrets set` and the secrets manifest are never touched.
+
+The proxy and the CLI share the file without IPC: a CLI login is visible to a running proxy on its next read, with no restart.
+
+<Warning>
+  Without a store key (`FENTARIS_AUTH_KEY` or a configured `oauth.store`), authorizations are kept in memory only and are lost on restart. Configuration reports `FENTARIS_CONFIG_OAUTH_STORE_EPHEMERAL`.
+</Warning>
+
+## CLI
+
+### `fentaris auth login <mcp>`
+
+Runs the whole flow in-process against a loopback redirect, opens the browser, waits for the callback, and writes the tokens.
+
+```bash theme={null}
+fentaris auth login linear --as user:alice
+fentaris auth login linear --print-url          # headless: print the URL, open it yourself
+fentaris auth login github --port 8976 --json   # fixed redirect port for pre-registered clients
+```
+
+`--print-url` and `--non-interactive` never spawn a browser. The command waits for the redirect callback for `--timeout` seconds (300 by default) and then exits non-zero, so an unattended run cannot block a pipeline forever.
+
+### `fentaris auth status [mcp]`
+
+Lists stored authorizations with their session and expiry.
+
+### `fentaris auth logout <mcp>`
+
+Deletes the stored authorization for one server and session.
+
+## Network Guardrails
+
+Every authorization-server request — discovery, registration, token, revocation — passes the same guardrails as the upstream MCP URL. A private, loopback, or link-local authorization server is refused unless the transport allows it:
+
+```ts theme={null}
+streamableHttp({ url: "http://127.0.0.1:4001/mcp", network: { allowPrivateNetworkUrls: true } })
+```
+
+## Troubleshooting
+
+### The browser lands on a "not found" page after signing in
+
+The authorization server redirected to a callback the proxy does not host. Set `oauth.publicUrl` to the externally reachable base URL and confirm `oauth.callbackPath`.
+
+### The tool call returns "Authorization is still pending"
+
+Consent did not complete within `consentTimeoutMs`. Sign in, then call the tool again; the stored tokens are used immediately.
+
+### `FENTARIS_CONFIG_OAUTH_TRANSPORT_UNSUPPORTED`
+
+`oauth()` only works on the native `streamableHttp()` and `sse()` upstream transports. A stdio server cannot carry an OAuth authorization.
+
+### `FENTARIS_CONFIG_OAUTH_CLIENT_SECRET_UNRESOLVED`
+
+The `credential(...)` reference used for `clientSecret` is not declared in app defaults, groups, or users. Declare it and store the value with `fentaris secrets set`.
+
+### The upstream keeps asking for a new login
+
+The refresh token was rejected or the authorization server invalidated the registered client. Run `fentaris auth logout <mcp>` and sign in again.
+
+## Related Documentation
+
+* [Transports](/core/transports)
+* [Identity and Auth](/concepts/identity-and-auth)
+* [Governance and Auth](/guides/governance-auth)
+* [CLI Reference](/reference/cli)

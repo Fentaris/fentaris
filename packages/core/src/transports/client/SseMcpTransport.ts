@@ -19,9 +19,11 @@ import type {
   ReadResourceRequest,
   ReadResourceResult,
 } from "@modelcontextprotocol/sdk/types.js";
+import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import { resolveHttpTransportHeaders, type HttpTransportAuthOptions } from "../auth/transportAuth.js";
 import type { UserContext } from "../../types/shared.js";
 import type { FentarisTransport } from "../../types/transport.js";
+import { guardedUpstreamFetch, isDefinitiveUnauthorized } from "./guardedFetch.js";
 import { assertAllowedUpstreamUrl, type UpstreamHttpNetworkOptions } from "./upstreamUrlGuardrails.js";
 
 /**
@@ -37,6 +39,7 @@ export type SseMcpTransportOptions = {
   network?: UpstreamHttpNetworkOptions;
   clientName?: string;
   clientVersion?: string;
+  authProvider?: OAuthClientProvider;
 };
 
 /**
@@ -72,71 +75,81 @@ export class SseMcpTransport implements FentarisTransport {
     return new SseMcpTransport(this.options, user);
   }
 
-  async listTools(params?: ListToolsRequest["params"]): Promise<ListToolsResult> {
-    const client = await this.getClient();
-    if (!client.getServerCapabilities()?.tools) {
-      return { tools: [] };
-    }
+  /**
+   * Absolute upstream MCP URL this transport connects to.
+   * @pk
+   */
+  get upstreamUrl(): string {
+    return String(this.options.url);
+  }
 
-    return client.listTools(params);
+  /**
+   * Fetch implementation applying this transport's network guardrails; used for
+   * out-of-band authorization-server requests.
+   * @internal
+   */
+  createGuardedFetch(): ReturnType<typeof guardedUpstreamFetch> {
+    return guardedUpstreamFetch(this.options.network, this.options.fetch);
+  }
+
+  /**
+   * Return a copy bound to an OAuth client provider for one authorization session.
+   * @pk
+   */
+  withAuthProvider(authProvider: OAuthClientProvider): SseMcpTransport {
+    return new SseMcpTransport({ ...this.options, authProvider }, this.user);
+  }
+
+  async listTools(params?: ListToolsRequest["params"]): Promise<ListToolsResult> {
+    return this.run(async (client) => (client.getServerCapabilities()?.tools ? client.listTools(params) : { tools: [] }));
   }
 
   async callTool(params: CallToolRequest["params"]): Promise<CallToolResult> {
-    return (await this.getClient()).callTool(params, CallToolResultSchema) as Promise<CallToolResult>;
+    return this.run(async (client) => client.callTool(params, CallToolResultSchema) as Promise<CallToolResult>);
   }
 
   async listResources(params?: ListResourcesRequest["params"]): Promise<ListResourcesResult> {
-    const client = await this.getClient();
-    if (!client.getServerCapabilities()?.resources) {
-      return { resources: [] };
-    }
-
-    return client.listResources(params);
+    return this.run(async (client) => (client.getServerCapabilities()?.resources ? client.listResources(params) : { resources: [] }));
   }
 
   async readResource(params: ReadResourceRequest["params"]): Promise<ReadResourceResult> {
-    const client = await this.getClient();
-    if (!client.getServerCapabilities()?.resources) {
-      throw unsupportedCapability("resources");
-    }
+    return this.run(async (client) => {
+      if (!client.getServerCapabilities()?.resources) {
+        throw unsupportedCapability("resources");
+      }
 
-    return client.readResource(params);
+      return client.readResource(params);
+    });
   }
 
   async listResourceTemplates(params?: ListResourceTemplatesRequest["params"]): Promise<ListResourceTemplatesResult> {
-    const client = await this.getClient();
-    if (!client.getServerCapabilities()?.resources) {
-      return { resourceTemplates: [] };
-    }
-
-    return client.listResourceTemplates(params);
+    return this.run(async (client) =>
+      client.getServerCapabilities()?.resources ? client.listResourceTemplates(params) : { resourceTemplates: [] },
+    );
   }
 
   async listPrompts(params?: ListPromptsRequest["params"]): Promise<ListPromptsResult> {
-    const client = await this.getClient();
-    if (!client.getServerCapabilities()?.prompts) {
-      return { prompts: [] };
-    }
-
-    return client.listPrompts(params);
+    return this.run(async (client) => (client.getServerCapabilities()?.prompts ? client.listPrompts(params) : { prompts: [] }));
   }
 
   async getPrompt(params: GetPromptRequest["params"]): Promise<GetPromptResult> {
-    const client = await this.getClient();
-    if (!client.getServerCapabilities()?.prompts) {
-      throw unsupportedCapability("prompts");
-    }
+    return this.run(async (client) => {
+      if (!client.getServerCapabilities()?.prompts) {
+        throw unsupportedCapability("prompts");
+      }
 
-    return client.getPrompt(params);
+      return client.getPrompt(params);
+    });
   }
 
   async complete(params: CompleteRequest["params"]): Promise<CompleteResult> {
-    const client = await this.getClient();
-    if (!client.getServerCapabilities()?.completions) {
-      throw unsupportedCapability("completions");
-    }
+    return this.run(async (client) => {
+      if (!client.getServerCapabilities()?.completions) {
+        throw unsupportedCapability("completions");
+      }
 
-    return client.complete(params);
+      return client.complete(params);
+    });
   }
 
   async close(): Promise<void> {
@@ -145,6 +158,41 @@ export class SseMcpTransport implements FentarisTransport {
     this.client = null;
     this.transport = null;
     this.connectPromise = null;
+  }
+
+  private async run<T>(operation: (client: Client) => Promise<T>): Promise<T> {
+    let client: Client;
+    try {
+      client = await this.getClient();
+    } catch (error: unknown) {
+      if (isDefinitiveUnauthorized(error)) {
+        await this.resetSession();
+      }
+
+      throw error;
+    }
+
+    try {
+      return await operation(client);
+    } catch (error: unknown) {
+      if (isDefinitiveUnauthorized(error)) {
+        // The upstream definitively rejected this session; drop it so the next call
+        // reconnects with fresh authorization state.
+        await this.resetSession();
+      }
+
+      throw error;
+    }
+  }
+
+  private async resetSession(): Promise<void> {
+    const client = this.client;
+    const transport = this.transport;
+    this.client = null;
+    this.transport = null;
+    this.connectPromise = null;
+    await client?.close().catch(() => undefined);
+    await transport?.close().catch(() => undefined);
   }
 
   private async getClient(): Promise<Client> {
@@ -175,11 +223,13 @@ export class SseMcpTransport implements FentarisTransport {
       },
       { capabilities: {} },
     );
+    const guardedFetch = guardedUpstreamFetch(this.options.network, this.options.fetch);
     const transport = new SSEClientTransport(new URL(this.options.url), {
-      fetch: this.options.fetch,
+      fetch: guardedFetch,
+      authProvider: this.options.authProvider,
       eventSourceInit: {
         ...this.options.eventSourceInit,
-        fetch: this.options.eventSourceInit?.fetch,
+        fetch: this.options.eventSourceInit?.fetch ?? (guardedFetch as NonNullable<SSEClientTransportOptions["eventSourceInit"]>["fetch"]),
       },
       requestInit: {
         ...this.options.requestInit,

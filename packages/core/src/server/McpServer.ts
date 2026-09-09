@@ -16,7 +16,12 @@ import type {
   ReadResourceRequest,
   ReadResourceResult,
 } from "@modelcontextprotocol/sdk/types.js";
+import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import { assertValidServerName } from "../nameMapping.js";
+import { isOAuthAuth, oauthSessionKeyFor, type OAuthAuth } from "../auth/oauth/dsl.js";
+import { PendingAuthorizations } from "../auth/oauth/pending.js";
+import { FentarisOAuthClientProvider } from "../auth/oauth/provider.js";
+import { MemoryOAuthTokenStore } from "../auth/oauth/store.js";
 import { isCredentialReference, type CredentialReference } from "../credentials/index.js";
 import type { FentarisTransport } from "../types/transport.js";
 import type { Isolation } from "../types/policy.js";
@@ -39,7 +44,13 @@ export type EnvResolver = Record<string, EnvValue> | ((user: UserContext) => Rec
  * Server credential application configuration.
  * @pk
  */
-export type McpServerAuth = BearerCredentialAuth | HeaderCredentialAuth;
+export type McpServerAuth = BearerCredentialAuth | HeaderCredentialAuth | OAuthAuth;
+
+/**
+ * Resolve the OAuth client provider bound to a caller for this server.
+ * @pk
+ */
+export type OAuthProviderResolver = (user: UserContext) => OAuthClientProvider | undefined;
 
 export type BearerCredentialAuth = {
   type: "bearer";
@@ -79,6 +90,10 @@ type UserAwareTransport = FentarisTransport & {
   withUser(user: UserContext): FentarisTransport;
 };
 
+type OAuthAwareTransport = FentarisTransport & {
+  withAuthProvider(provider: OAuthClientProvider): FentarisTransport;
+};
+
 /**
  * MCP server wrapper with optional per-user env injection.
  * @pk
@@ -94,6 +109,8 @@ export class McpServer {
   private readonly isolation?: Isolation;
   private readonly isolationTimeout?: number;
   private readonly userTransports = new Map<string, FentarisTransport>();
+  private oauthResolver?: OAuthProviderResolver;
+  private standaloneOAuth?: { store: MemoryOAuthTokenStore; pending: PendingAuthorizations; providers: Map<string, FentarisOAuthClientProvider> };
 
   /**
    * Create a new MCP server wrapper.
@@ -273,6 +290,45 @@ export class McpServer {
    * Credential bindings declared with this server.
    * @pk
    */
+  /**
+   * The OAuth upstream auth declared for this server, when any.
+   * @pk
+   */
+  getOAuthAuth(): OAuthAuth | undefined {
+    return isOAuthAuth(this.auth) ? this.auth : undefined;
+  }
+
+  /**
+   * Bind an OAuth provider resolver so per-user transports carry the caller's authorization.
+   * @internal
+   */
+  attachOAuth(resolver: OAuthProviderResolver): void {
+    this.oauthResolver = resolver;
+    void this.closeUserTransports();
+  }
+
+  /**
+   * Drop the cached upstream session for a caller so the next call reconnects.
+   * @internal
+   */
+  async evictTransport(user: UserContext): Promise<void> {
+    const prefix = `${this.sessionCacheKey(user)}:`;
+    const closing: Promise<void>[] = [];
+    for (const [key, transport] of this.userTransports) {
+      if (key.startsWith(prefix)) {
+        this.userTransports.delete(key);
+        closing.push(transport.close().catch(() => undefined));
+      }
+    }
+
+    await Promise.all(closing);
+  }
+
+  /**
+   * Credential bindings declared with this server. OAuth is applied through the
+   * transport auth provider, never as a static credential.
+   * @pk
+   */
   getCredentialBindings(): ServerCredentialBinding[] {
     const bindings: ServerCredentialBinding[] = [];
     if (this.auth?.type === "bearer") {
@@ -292,10 +348,55 @@ export class McpServer {
     return bindings;
   }
 
+  private sessionCacheKey(user: UserContext): string {
+    const oauthAuth = this.getOAuthAuth();
+    return oauthAuth ? oauthSessionKeyFor(oauthAuth, user) : (user.id ?? "default");
+  }
+
+  /**
+   * Provider used when an OAuth server is driven outside a proxy: memory-backed,
+   * so authorizations last only for the process.
+   */
+  private standaloneOAuthProviderFor(user: UserContext): OAuthClientProvider | undefined {
+    const oauthAuth = this.getOAuthAuth();
+    if (!oauthAuth) {
+      return undefined;
+    }
+
+    this.standaloneOAuth ??= { store: new MemoryOAuthTokenStore(), pending: new PendingAuthorizations(), providers: new Map() };
+    const session = oauthSessionKeyFor(oauthAuth, user);
+    const existing = this.standaloneOAuth.providers.get(session);
+    if (existing) {
+      return existing;
+    }
+
+    if (oauthAuth.provider) {
+      const custom = oauthAuth.provider({ server: this.name, user, session, store: this.standaloneOAuth.store });
+      return custom;
+    }
+
+    const provider = new FentarisOAuthClientProvider({
+      server: this.name,
+      session,
+      auth: oauthAuth,
+      store: this.standaloneOAuth.store,
+      pending: this.standaloneOAuth.pending,
+    });
+    this.standaloneOAuth.providers.set(session, provider);
+    return provider;
+  }
+
+  private async closeUserTransports(): Promise<void> {
+    const transports = [...this.userTransports.values()];
+    this.userTransports.clear();
+    await Promise.all(transports.map((transport) => transport.close().catch(() => undefined)));
+  }
+
   private transportFor(user: UserContext): FentarisTransport {
     const upstreamEnv = isStringRecord(user.__fentarisUpstreamEnv) ? user.__fentarisUpstreamEnv : undefined;
     const supportsUserContext = isUserAwareTransport(this.transport);
-    if (!this.env && !upstreamEnv && !supportsUserContext) {
+    const oauthProvider = this.oauthResolver ? this.oauthResolver(user) : this.standaloneOAuthProviderFor(user);
+    if (!this.env && !upstreamEnv && !supportsUserContext && !oauthProvider) {
       return this.transport;
     }
 
@@ -304,7 +405,7 @@ export class McpServer {
       ...stringEnv(configuredEnv ?? {}),
       ...(upstreamEnv ?? {}),
     };
-    const key = `${user.id ?? "default"}:${JSON.stringify(Object.entries(resolvedEnv).sort(([left], [right]) => left.localeCompare(right)))}`;
+    const key = `${this.sessionCacheKey(user)}:${JSON.stringify(Object.entries(resolvedEnv).sort(([left], [right]) => left.localeCompare(right)))}`;
     const existing = this.userTransports.get(key);
     if (existing) {
       return existing;
@@ -321,6 +422,14 @@ export class McpServer {
 
     if (isUserAwareTransport(transport)) {
       transport = transport.withUser(user);
+    }
+
+    if (oauthProvider) {
+      if (!isOAuthAwareTransport(transport)) {
+        throw new Error(`Transport for server "${this.name}" does not support OAuth upstream auth`);
+      }
+
+      transport = transport.withAuthProvider(oauthProvider);
     }
 
     this.userTransports.set(key, transport);
@@ -366,6 +475,14 @@ function isEnvAwareTransport(transport: FentarisTransport): transport is EnvAwar
 
 function isUserAwareTransport(transport: FentarisTransport): transport is UserAwareTransport {
   return "withUser" in transport && typeof transport.withUser === "function";
+}
+
+/**
+ * Type guard for transports that accept an OAuth client provider.
+ * @pk
+ */
+export function isOAuthAwareTransport(transport: FentarisTransport): transport is OAuthAwareTransport {
+  return "withAuthProvider" in transport && typeof transport.withAuthProvider === "function";
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {

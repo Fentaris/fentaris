@@ -83,6 +83,7 @@
               "guides/sdk-only-secrets",
               "guides/error-handling",
               "guides/governance-auth",
+              "guides/oauth",
               "guides/telegram-approval",
               "guides/security",
               "guides/edge-device"

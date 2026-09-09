@@ -142,10 +142,12 @@ export type {
   AgentJsonSuccess,
   AgentJsonWarning,
   AgentPagination,
+  AgentToolDiscoveryDeps,
   AuthStatus,
   CompactToolMetadata,
   DetailedToolMetadata,
   DiscoveryMetadata,
+  OAuthStatusSnapshot,
   SchemaInspection,
   ToolDiscoveryOptions,
 } from "./tools/index.js";
@@ -395,6 +397,34 @@ export type {
  */
 export { FentarisAuth, apiKeyIdentityStrategy } from "./auth/index.js";
 export type { CredentialResolution, LocalAuthOptions, LocalCredentials, UpstreamAuthBinding, UpstreamAuthBindings } from "./auth/index.js";
+export {
+  FentarisOAuthClientProvider,
+  LocalOAuthTokenStore,
+  MemoryOAuthTokenStore,
+  OAuthAuthorizationRequiredError,
+  OAuthManager,
+  isOAuthAuth,
+  oauth,
+  oauthTokens,
+} from "./auth/oauth/index.js";
+export type {
+  OAuthAuth,
+  OAuthAuthOptions,
+  OAuthAuthorizationStatus,
+  OAuthClientCredentialsOptions,
+  OAuthGrant,
+  OAuthLoginStart,
+  OAuthProviderFactory,
+  OAuthProviderFactoryContext,
+  OAuthRegistrationMode,
+  OAuthSessionKey,
+  OAuthStoreEntry,
+  OAuthStoreRecord,
+  OAuthTokenScope,
+  OAuthTokenStore,
+  StoredOAuthTokens,
+} from "./auth/oauth/index.js";
+export type { ProxyOAuthOptions } from "./proxy/oauthRuntime.js";
 /**
  * Secrets backend and manifest APIs.
  * @pk

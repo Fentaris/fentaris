@@ -15,7 +15,7 @@ FENTARIS_API_KEY=... fentaris doctor --runtime
 
 ### `FENTARIS_AUTH_KEY`
 
-Encryption key used to decrypt local credentials in `.fentaris/credentials.enc.json`.
+Encryption key used to decrypt local credentials in `.fentaris/credentials.enc.json` and upstream OAuth state in `.fentaris/oauth-tokens.enc.json`.
 
 ```bash theme={null}
 export FENTARIS_AUTH_KEY="<local-encryption-key>"
@@ -23,7 +23,9 @@ export FENTARIS_AUTH_KEY="<local-encryption-key>"
 
 `fentaris doctor` checks whether this variable is present before verifying encrypted credentials when a local credential store exists.
 
-Local `fentaris secrets` and `fentaris auth api-key` commands resolve the key in this order: `--key`, the exported process environment, then the discovered project `.env`. A shell export overrides the project `.env`.
+Local `fentaris secrets`, `fentaris auth api-key`, and `fentaris auth login|status|logout` commands resolve the key in this order: `--key`, the exported process environment, then the discovered project `.env`. A shell export overrides the project `.env`.
+
+Without this key and without a configured `oauth.store`, upstream OAuth authorizations are kept in memory only and do not survive a restart.
 
 On the first command that writes an encrypted local credential store, the CLI generates a random project key in `.env` when no key is configured. Read-only commands do not create a key, and projects without encrypted credentials do not require one. If `credentials.enc.json` already exists, Fentaris never replaces its missing key automatically; provide the original key so the store remains recoverable.
 

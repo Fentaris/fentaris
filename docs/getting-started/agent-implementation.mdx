@@ -43,9 +43,11 @@ Keep host, port, MCP path, entrypoint, package manager, and auth directory in
 `fentaris.json`. Keep the host on `127.0.0.1` unless the user explicitly chooses
 a protected shared boundary.
 
-OAuth 2.1 and `fentaris deploy` are not currently available. Use Fentaris API
-keys, trusted identity headers behind an authenticated gateway, or an existing
-auth boundary. Do not invent deploy commands.
+`fentaris deploy` is not currently available; do not invent deploy commands.
+Authenticate downstream clients with Fentaris API keys, trusted identity headers
+behind an authenticated gateway, or an existing auth boundary. For an upstream
+MCP server protected by OAuth 2.1, declare `auth: oauth()` and let Fentaris run
+the flow; see [Upstream OAuth 2.1](/guides/oauth).
 
 ### 2. Declare capabilities with stable names
 
