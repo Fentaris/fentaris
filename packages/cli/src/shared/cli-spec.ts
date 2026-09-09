@@ -312,7 +312,12 @@ export const cliSpec: CliCommandSpec = {
       commandGroups: [
         {
           title: "Commands",
-          commands: [{ name: "api-key", summary: "Manage API keys for local user identity." }],
+          commands: [
+            { name: "api-key", summary: "Manage API keys for local user identity." },
+            { name: "login", summary: "Sign in to an OAuth-protected upstream MCP server." },
+            { name: "status", summary: "Show stored upstream OAuth authorizations." },
+            { name: "logout", summary: "Remove a stored upstream OAuth authorization." },
+          ],
         },
       ],
       options: [
@@ -320,6 +325,52 @@ export const cliSpec: CliCommandSpec = {
         { name: "help", short: "h", description: "Print help" },
       ],
       commands: {
+        login: {
+          name: "login",
+          path: ["auth", "login"],
+          description: "Sign in to an OAuth-protected upstream MCP server declared with oauth().",
+          usage: "fentaris auth login [OPTIONS] <mcp>",
+          details: [
+            "Opens the authorization URL in a browser and completes the flow on a loopback redirect owned by this command.",
+            "Use --print-url or --non-interactive in automation and on headless machines; neither spawns a browser.",
+            "Tokens are written to the project's encrypted OAuth store and picked up by a running proxy without a restart.",
+          ],
+          arguments: [{ name: "mcp", required: true, description: "Name of the OAuth-protected MCP server." }],
+          options: [
+            { name: "as", valueName: "SELECTOR", description: "Authorize as a specific subject, for example user:alice. Omit for the shared authorization." },
+            { name: "print-url", description: "Print the authorization URL instead of opening a browser." },
+            { name: "port", valueName: "PORT", description: "Fixed loopback redirect port. Required for pre-registered clients with a fixed redirect URI." },
+            { name: "json", description: "Output the canonical machine-readable login envelope." },
+            localSecretsKeyOption,
+            { name: "help", short: "h", description: "Print help" },
+          ],
+        },
+        status: {
+          name: "status",
+          path: ["auth", "status"],
+          description: "Show stored upstream OAuth authorizations for this project.",
+          usage: "fentaris auth status [OPTIONS] [mcp]",
+          arguments: [{ name: "mcp", description: "Limit output to one MCP server." }],
+          options: [
+            { name: "as", valueName: "SELECTOR", description: "Inspect one subject, for example user:alice." },
+            { name: "json", description: "Output the canonical machine-readable status envelope." },
+            localSecretsKeyOption,
+            { name: "help", short: "h", description: "Print help" },
+          ],
+        },
+        logout: {
+          name: "logout",
+          path: ["auth", "logout"],
+          description: "Remove a stored upstream OAuth authorization.",
+          usage: "fentaris auth logout [OPTIONS] <mcp>",
+          arguments: [{ name: "mcp", required: true, description: "Name of the OAuth-protected MCP server." }],
+          options: [
+            { name: "as", valueName: "SELECTOR", description: "Remove one subject's authorization, for example user:alice." },
+            { name: "json", description: "Output the canonical machine-readable logout envelope." },
+            localSecretsKeyOption,
+            { name: "help", short: "h", description: "Print help" },
+          ],
+        },
         "api-key": {
           name: "api-key",
           path: ["auth", "api-key"],

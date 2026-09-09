@@ -124,12 +124,29 @@ export class ToolDiscoveryError extends Error {
   }
 }
 
+/**
+ * Pre-resolved upstream OAuth authorization statuses, keyed by `<mcp>:<session>`.
+ * Discovery is synchronous, so the caller reads the token store once and passes a snapshot.
+ * @pk
+ */
+export type OAuthStatusSnapshot = Record<string, "authenticated" | "requires-login">;
+
+/**
+ * Optional dependencies for agent-facing tool discovery.
+ * @pk
+ */
+export type AgentToolDiscoveryDeps = {
+  oauthStatuses?: OAuthStatusSnapshot;
+};
+
 export class AgentToolDiscoveryService {
   private readonly config: McpProxyOptions;
+  private readonly oauthStatuses: OAuthStatusSnapshot;
 
-  constructor(config: McpProxyOptions) {
+  constructor(config: McpProxyOptions, deps: AgentToolDiscoveryDeps = {}) {
     assertValidFentarisConfig(config);
     this.config = config;
+    this.oauthStatuses = deps.oauthStatuses ?? {};
   }
 
   async list(options: ToolDiscoveryOptions = {}): Promise<AgentJsonEnvelope<CompactToolMetadata[] | DetailedToolMetadata[]>> {
@@ -199,6 +216,12 @@ export class AgentToolDiscoveryService {
     if (!server) {
       return "unsupported";
     }
+    const oauthAuth = server.getOAuthAuth();
+    if (oauthAuth) {
+      const session = oauthAuth.tokens === "shared" ? "shared" : selector.startsWith("user:") ? selector : "shared";
+      return this.oauthStatuses[`${mcp}:${session}`] ?? "requires-login";
+    }
+
     const needsAuth = server.getCredentialBindings().length > 0 || Boolean(this.config.auth?.getBinding(mcp));
     return needsAuth ? "requires-login" : "authenticated";
   }
@@ -213,16 +236,28 @@ export class AgentToolDiscoveryService {
     return success({ mcp, selector, status: this.authStatus(mcp, selector), allowed: [...account.allowed] }, [], []);
   }
 
-  authLogin(mcp: string, selector: string): AgentJsonEnvelope<{ mcp: string; selector: string; status: AuthStatus; loginMode: "delegated"; instructions: string }> {
+  authLogin(mcp: string, selector: string): AgentJsonEnvelope<{ mcp: string; selector: string; status: AuthStatus; loginMode: "delegated" | "browser"; instructions: string }> {
     const status = this.authStatusEnvelope(mcp, selector);
     if (!status.ok) {
       return status;
     }
+
+    const server = resolveFentarisConfig(this.config).serverBindings.find((binding) => binding.server.name === mcp)?.server;
+    if (server?.getOAuthAuth()) {
+      return success({
+        mcp,
+        selector,
+        status: status.data.status,
+        loginMode: "browser" as const,
+        instructions: `Run \`fentaris auth login ${mcp} --as ${selector}\` to complete the OAuth flow in a browser.`,
+      }, [], [{ label: "Sign in to this MCP", command: `fentaris auth login ${mcp} --as ${selector} --json` }]);
+    }
+
     return success({
       mcp,
       selector,
       status: status.data.status,
-      loginMode: "delegated",
+      loginMode: "delegated" as const,
       instructions: "Complete provider-specific login or store the required credential with `fentaris secrets set`.",
     }, [], [{ label: "Store a credential", command: "fentaris secrets set <reference>" }]);
   }

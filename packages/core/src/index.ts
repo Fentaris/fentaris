@@ -142,10 +142,12 @@ export type {
   AgentJsonSuccess,
   AgentJsonWarning,
   AgentPagination,
+  AgentToolDiscoveryDeps,
   AuthStatus,
   CompactToolMetadata,
   DetailedToolMetadata,
   DiscoveryMetadata,
+  OAuthStatusSnapshot,
   SchemaInspection,
   ToolDiscoveryOptions,
 } from "./tools/index.js";
