@@ -302,7 +302,7 @@ fentaris auth login linear --print-url
 fentaris auth login github --port 8976 --json
 ```
 
-`--as` takes `user:<id>` or `shared`; omit it for the shared authorization. `--print-url` and `--non-interactive` never spawn a browser. `--port` fixes the loopback redirect port, which pre-registered clients need. A running proxy picks up the new tokens without a restart.
+`--as` takes `user:<id>` or `shared`; omit it for the shared authorization. `--print-url` and `--non-interactive` never spawn a browser. `--port` fixes the loopback redirect port, which pre-registered clients need. `--timeout` caps the wait for the redirect callback and defaults to 300 seconds, after which the command exits non-zero instead of waiting forever. A running proxy picks up the new tokens without a restart.
 
 ### `fentaris auth status [mcp]`
 

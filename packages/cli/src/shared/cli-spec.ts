@@ -333,6 +333,7 @@ export const cliSpec: CliCommandSpec = {
           details: [
             "Opens the authorization URL in a browser and completes the flow on a loopback redirect owned by this command.",
             "Use --print-url or --non-interactive in automation and on headless machines; neither spawns a browser.",
+            "The command waits for the redirect callback and gives up after --timeout seconds (300 by default).",
             "Tokens are written to the project's encrypted OAuth store and picked up by a running proxy without a restart.",
           ],
           arguments: [{ name: "mcp", required: true, description: "Name of the OAuth-protected MCP server." }],
@@ -340,6 +341,7 @@ export const cliSpec: CliCommandSpec = {
             { name: "as", valueName: "SELECTOR", description: "Authorize as a specific subject, for example user:alice. Omit for the shared authorization." },
             { name: "print-url", description: "Print the authorization URL instead of opening a browser." },
             { name: "port", valueName: "PORT", description: "Fixed loopback redirect port. Required for pre-registered clients with a fixed redirect URI." },
+            { name: "timeout", valueName: "SECONDS", description: "Stop waiting for the authorization callback after this many seconds. [default: 300]" },
             { name: "json", description: "Output the canonical machine-readable login envelope." },
             localSecretsKeyOption,
             { name: "help", short: "h", description: "Print help" },

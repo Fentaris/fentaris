@@ -64,13 +64,14 @@ export async function runAuthLogin(command: CliCommand, runtime: Runtime): Promi
   const selector = stringOption(command.options, "as");
   const port = portOption(command.options);
   const printUrl = command.options["print-url"] === true || runtime.nonInteractive === true;
+  const timeoutMs = timeoutOption(command.options);
 
   const context = await openOAuthCliContext(runtime, command.options, port === undefined ? {} : { port });
   try {
     assertOAuthServer(context, mcp);
     const outcome = await runOAuthLogin(
       context,
-      { server: mcp, ...(selector ? { selector } : {}), printUrl, openBrowser: !printUrl },
+      { server: mcp, ...(selector ? { selector } : {}), printUrl, openBrowser: !printUrl, ...(timeoutMs === undefined ? {} : { timeoutMs }) },
       runtime,
     );
 
@@ -188,6 +189,20 @@ function stringOption(options: CliOptions, key: string): string | undefined {
   }
 
   return value.trim();
+}
+
+function timeoutOption(options: CliOptions): number | undefined {
+  const value = options.timeout;
+  if (typeof value !== "string" || !value.trim()) {
+    return undefined;
+  }
+
+  const seconds = Number.parseInt(value, 10);
+  if (!Number.isInteger(seconds) || seconds <= 0) {
+    throw new Error(`Invalid --timeout value "${value}". Pass a positive number of seconds.`);
+  }
+
+  return seconds * 1000;
 }
 
 function portOption(options: CliOptions): number | undefined {

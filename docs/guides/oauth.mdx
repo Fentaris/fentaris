@@ -130,7 +130,7 @@ fentaris auth login linear --print-url          # headless: print the URL, open 
 fentaris auth login github --port 8976 --json   # fixed redirect port for pre-registered clients
 ```
 
-`--print-url` and `--non-interactive` never spawn a browser.
+`--print-url` and `--non-interactive` never spawn a browser. The command waits for the redirect callback for `--timeout` seconds (300 by default) and then exits non-zero, so an unattended run cannot block a pipeline forever.
 
 ### `fentaris auth status [mcp]`
 

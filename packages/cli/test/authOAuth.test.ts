@@ -170,4 +170,25 @@ describe("fentaris auth login", () => {
 
     expect(await main(["auth", "status", "--json"], rt)).toBe(1);
   }, 20_000);
+
+  it("stops waiting for the callback after --timeout instead of blocking", async () => {
+    const target = await upstream();
+    const root = await project({ upstreamUrl: target.url });
+    const rt = runtime(root, true);
+
+    const started = Date.now();
+    // Nobody opens the printed URL: the command must give up on its own.
+    expect(await main(["auth", "login", "protected", "--timeout", "1", "--json"], rt)).toBe(1);
+    expect(Date.now() - started).toBeLessThan(15_000);
+    expect(rt.errors.join("\n")).toMatch(/Timed out waiting/i);
+  }, 30_000);
+
+  it("rejects an invalid --timeout value", async () => {
+    const target = await upstream();
+    const root = await project({ upstreamUrl: target.url });
+    const rt = runtime(root, true);
+
+    expect(await main(["auth", "login", "protected", "--timeout", "0", "--json"], rt)).toBe(1);
+    expect(rt.errors.join("\n")).toContain("Invalid --timeout value");
+  }, 20_000);
 });

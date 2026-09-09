@@ -19,6 +19,8 @@ import type { CliOptions, ProjectDiscovery, Runtime } from "../../shared/types.j
 import { discoverSecretsProject } from "../project/project.js";
 
 const defaultLoopbackPath = "/callback";
+/** How long `fentaris auth login` waits for the redirect callback before giving up. */
+const defaultLoginTimeoutMs = 300_000;
 
 /**
  * Everything the CLI needs to drive OAuth against a project's upstream servers.
@@ -120,7 +122,7 @@ export async function runOAuthLogin(
     openInBrowser(started.authorizationUrl, runtime);
   }
 
-  const outcome = await context.manager.waitForCompletion(started.state, params.timeoutMs ?? 300_000);
+  const outcome = await context.manager.waitForCompletion(started.state, params.timeoutMs ?? defaultLoginTimeoutMs);
   if (outcome.status === "completed") {
     return { server: params.server, session, status: "authenticated", redirectUri: context.manager.getCallbackUrl() };
   }
