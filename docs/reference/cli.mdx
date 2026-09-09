@@ -290,7 +290,35 @@ fentaris tools auth status --mcp github --as user:alice --json
 fentaris tools auth login --mcp github --as user:alice --json
 ```
 
-`auth list` returns each configured MCP key, its default selector, allowed selectors, and non-sensitive status. `auth login` starts a supported login flow when available or returns machine-readable delegated login instructions.
+`auth list` returns each configured MCP key, its default selector, allowed selectors, and non-sensitive status. For a server declared with `oauth()`, `auth status` reports the stored authorization state and `auth login` runs the same browser login as `fentaris auth login`. Otherwise `auth login` returns machine-readable delegated login instructions.
+
+### `fentaris auth login <mcp>`
+
+Sign in to an upstream MCP server declared with `oauth()`. The command opens the authorization URL, receives the redirect on a loopback listener it owns, and writes the tokens to the project's encrypted OAuth store.
+
+```bash theme={null}
+fentaris auth login linear --as user:alice
+fentaris auth login linear --print-url
+fentaris auth login github --port 8976 --json
+```
+
+`--as` takes `user:<id>` or `shared`; omit it for the shared authorization. `--print-url` and `--non-interactive` never spawn a browser. `--port` fixes the loopback redirect port, which pre-registered clients need. A running proxy picks up the new tokens without a restart.
+
+### `fentaris auth status [mcp]`
+
+List stored upstream OAuth authorizations with their session and expiry. Token values are never printed.
+
+```bash theme={null}
+fentaris auth status --json
+```
+
+### `fentaris auth logout <mcp>`
+
+Delete the stored authorization for one server and session. The next call requires a new login.
+
+```bash theme={null}
+fentaris auth logout linear --as user:alice
+```
 
 ### `fentaris auth`
 

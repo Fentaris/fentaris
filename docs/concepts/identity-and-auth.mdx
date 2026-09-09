@@ -25,6 +25,16 @@ printf '%s' "$ADMIN_API_KEY" | fentaris auth api-key add alice --value-stdin
 
 Fentaris stores only a hash of the API key. `fentaris auth api-key list` shows user key counts, and `fentaris auth api-key remove` revokes a key when you provide the raw value to match.
 
+## Upstream OAuth
+
+API keys identify the caller to Fentaris. Upstream OAuth is the other direction: how Fentaris authenticates to a protected MCP server on that caller's behalf.
+
+```ts theme={null}
+mcp("linear", { transport: streamableHttp({ url: "https://mcp.linear.app/mcp" }), auth: oauth() })
+```
+
+Each Fentaris user gets their own upstream authorization, stored encrypted in `.fentaris/oauth-tokens.enc.json` and refreshed automatically. Sign a user in with `fentaris auth login linear --as user:alice`, or let the first tool call prompt them. See [Upstream OAuth 2.1](/guides/oauth).
+
 ## Local Credentials
 
 When enabled, local credentials are stored in `.fentaris/credentials.enc.json` and decrypted with `FENTARIS_AUTH_KEY`. New stores use a versioned AES-256-GCM envelope with PBKDF2 key derivation metadata. Existing legacy stores remain readable and are rewritten in the newer format after a successful update.
