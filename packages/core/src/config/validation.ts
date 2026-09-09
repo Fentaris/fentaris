@@ -8,6 +8,8 @@ import type { FentarisTransport } from "../types/index.js";
 import type { CapabilityPermission, Policy, ToolPermission } from "../types/index.js";
 import type { McpProxyOptions } from "../proxy/McpProxy.js";
 import { validateEdgeControlPlaneConfig } from "../edge/integratedConfig.js";
+import { isOAuthCapableTransport, oauthCallbackPath } from "../proxy/oauthRuntime.js";
+import { exposurePathsConflict } from "../transports/exposure/routeRegistry.js";
 
 type PolicyWithDeclarations = {
   getDeclaredServerNames?: () => string[];
@@ -69,6 +71,7 @@ export function validateFentarisConfig(config: McpProxyOptions, options: Fentari
     validateTransportContracts(group.servers, ["groups", groupIndex, "servers"], diagnostics);
   }
   validateIntegratedEdgeControlPlane(config, diagnostics);
+  validateOAuth(config, servers, groups, diagnostics);
 
   if (resolved) {
     void resolved;
@@ -401,6 +404,142 @@ function groupsOverlap(left: Group, right: Group): boolean {
 
 function hasDeclaredApiKeys(groups: Group[]): boolean {
   return groups.some((group) => group.users.some((user) => user.apiKeys.length > 0));
+}
+
+/** Local namespace reserved for the built-in Fentaris agent tools. @pk */
+export const RESERVED_LOCAL_NAMESPACE = "fentaris";
+
+function validateOAuth(
+  config: McpProxyOptions,
+  servers: McpServer[],
+  groups: Group[],
+  diagnostics: FentarisDiagnostic[],
+): void {
+  const allServers = [...servers, ...groups.flatMap((group) => group.servers)];
+  const declared = allServers
+    .map((server, index) => ({ server, index }))
+    .filter((entry) => Boolean(entry.server.getOAuthAuth?.()));
+
+  for (const { server } of declared) {
+    const auth = server.getOAuthAuth?.();
+    if (!auth) {
+      continue;
+    }
+
+    const path = ["servers", server.name, "auth"];
+
+    if (!isOAuthCapableTransport(server.transport)) {
+      diagnostics.push(diagnostic(
+        "error",
+        "FENTARIS_CONFIG_OAUTH_TRANSPORT_UNSUPPORTED",
+        "OAuth is declared on an unsupported transport",
+        `Server "${server.name}" declares oauth() but its transport cannot carry an OAuth authorization. Use streamableHttp() or sse().`,
+        { path },
+      ));
+    }
+
+    if ((auth.registration === "preregistered" || auth.grant === "client_credentials") && !auth.clientId) {
+      diagnostics.push(diagnostic(
+        "error",
+        "FENTARIS_CONFIG_OAUTH_CLIENT_ID_MISSING",
+        "OAuth client identifier is missing",
+        `Server "${server.name}" declares a pre-registered OAuth client without clientId.`,
+        { path: [...path, "clientId"] },
+      ));
+    }
+
+    if (auth.registration === "metadata-url" && !auth.clientMetadataUrl) {
+      diagnostics.push(diagnostic(
+        "error",
+        "FENTARIS_CONFIG_OAUTH_CLIENT_ID_MISSING",
+        "OAuth client metadata URL is missing",
+        `Server "${server.name}" declares metadata-url registration without clientMetadataUrl.`,
+        { path: [...path, "clientMetadataUrl"] },
+      ));
+    }
+
+    if (isCredentialReference(auth.clientSecret) && !credentialVisible(auth.clientSecret, config, groups)) {
+      diagnostics.push(diagnostic(
+        "error",
+        "FENTARIS_CONFIG_OAUTH_CLIENT_SECRET_UNRESOLVED",
+        "OAuth client secret cannot be resolved",
+        `Server "${server.name}" references credential "${auth.clientSecret.reference}", but no source is visible in this scope.`,
+        { path: [...path, "clientSecret"] },
+      ));
+    }
+  }
+
+  if (declared.length === 0 && !config.oauth) {
+    return;
+  }
+
+  const callbackPath = oauthCallbackPath(config.oauth);
+  const mcpPath = config.path ?? "/mcp";
+  const controlPlane = config.edge?.controlPlane;
+  const edgeBasePath = controlPlane && "basePath" in controlPlane ? controlPlane.basePath : undefined;
+  const conflictsWith = [mcpPath, ...(edgeBasePath ? [edgeBasePath] : [])].find((other) => exposurePathsConflict(callbackPath, other));
+  if (conflictsWith) {
+    diagnostics.push(diagnostic(
+      "error",
+      "FENTARIS_CONFIG_OAUTH_CALLBACK_PATH_CONFLICT",
+      "OAuth callback path conflicts with another route",
+      `The OAuth callback path "${callbackPath}" overlaps "${conflictsWith}".`,
+      { path: ["oauth", "callbackPath"] },
+    ));
+  }
+
+  const publicUrl = config.oauth?.publicUrl?.trim();
+  if (publicUrl && !isAbsoluteHttpUrl(publicUrl)) {
+    diagnostics.push(diagnostic(
+      "error",
+      "FENTARIS_CONFIG_OAUTH_PUBLIC_URL_INVALID",
+      "OAuth public URL is invalid",
+      "oauth.publicUrl must be an absolute http:// or https:// URL.",
+      { path: ["oauth", "publicUrl"] },
+    ));
+  }
+
+  if (declared.length > 0 && !config.oauth?.store && !process.env.FENTARIS_AUTH_KEY) {
+    diagnostics.push(diagnostic(
+      "warning",
+      "FENTARIS_CONFIG_OAUTH_STORE_EPHEMERAL",
+      "OAuth authorizations will not survive a restart",
+      "No OAuth token store is configured and no store key is available, so tokens are kept in memory only.",
+      { path: ["oauth", "store"], hint: "Export FENTARIS_AUTH_KEY or configure oauth.store." },
+    ));
+  }
+
+  const perUserServers = declared.filter(({ server }) => server.getOAuthAuth?.()?.tokens === "per-user");
+  if (perUserServers.length > 0 && config.identity && typeof config.identity === "object" && "required" in config.identity && config.identity.required === false) {
+    diagnostics.push(diagnostic(
+      "warning",
+      "FENTARIS_CONFIG_OAUTH_PER_USER_WITHOUT_IDENTITY",
+      "Unauthenticated callers share one OAuth authorization",
+      `Servers ${perUserServers.map(({ server }) => `"${server.name}"`).join(", ")} use per-user OAuth, but unauthenticated callers are accepted and collapse to a single shared authorization.`,
+      { path: ["identity", "required"], hint: "Require identity, or declare tokens: \"shared\" when one authorization is intended." },
+    ));
+  }
+}
+
+function credentialVisible(reference: CredentialReference, config: McpProxyOptions, groups: Group[]): boolean {
+  if (config.defaults?.credentials?.[reference.reference]) {
+    return true;
+  }
+
+  return groups.some(
+    (group) =>
+      Boolean(group.credentials?.[reference.reference]) ||
+      group.users.some((user) => Boolean(user.credentials?.[reference.reference])),
+  );
+}
+
+function isAbsoluteHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function validateIntegratedEdgeControlPlane(config: McpProxyOptions, diagnostics: FentarisDiagnostic[]): void {

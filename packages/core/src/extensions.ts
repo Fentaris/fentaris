@@ -67,3 +67,12 @@ export type {
   ToolPermission,
   UserContext,
 } from "./types/index.js";
+export type {
+  OAuthProviderFactory,
+  OAuthProviderFactoryContext,
+  OAuthSessionKey,
+  OAuthStoreEntry,
+  OAuthStoreRecord,
+  OAuthTokenStore,
+  StoredOAuthTokens,
+} from "./auth/oauth/index.js";

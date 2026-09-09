@@ -133,6 +133,16 @@ import type { LaunchRecipe } from "../edge/recipe.js";
 import { compileEdgeDeploymentCatalog } from "../edge/integratedReconciliation.js";
 import type { InstallationRecipe } from "../edge/installation.js";
 import { StdioTransport } from "../transports/client/StdioTransport.js";
+import type { OAuthManager } from "../auth/oauth/manager.js";
+import { isCredentialReference } from "../credentials/index.js";
+import {
+  createOAuthManager,
+  deriveOAuthCallbackUrl,
+  oauthCallbackPath,
+  oauthServers,
+  resolveOAuthStore,
+  type ProxyOAuthOptions,
+} from "./oauthRuntime.js";
 import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
 import type { CredentialSourceMetadata, IdentityMetadata, ResolvedSubject, UserContext } from "../types/shared.js";
 import type {
@@ -294,6 +304,8 @@ export type McpProxyOptions = {
   placements?: PlacementBindingConfig[];
   /** Agent-facing CLI configuration. @pk */
   cli?: FentarisCliOptions;
+  /** Upstream OAuth 2.1 wiring: hosted callback, token store, and consent behavior. @pk */
+  oauth?: ProxyOAuthOptions;
   /**
    * Edge execution wiring: control-plane device resolver, replaceable
    * session-binding store, expiry, and removal listener. When omitted, edge
@@ -450,6 +462,10 @@ export class McpProxy {
   private readonly edgeChildExecution = new AsyncLocalStorage<EdgeTrustedChildRoute>();
   private readonly edgeChildParentSessions = new Set<string>();
   private httpServer: HttpServer | null = null;
+  private readonly oauthOptions?: ProxyOAuthOptions;
+  private oauthManagerCache?: OAuthManager;
+  private oauthStoreEphemeral = false;
+  private oauthInitialized = false;
   private readonly exposureHandles = new Set<ProxyExposureHandle>();
   private edgeControlPlaneRuntime?: IntegratedEdgeControlPlaneRuntime;
 
@@ -478,6 +494,7 @@ export class McpProxy {
     this.subjectIndex = resolved.subjectIndex;
     this.serverCatalog = new ServerCatalog({ servers: this.servers, groups: this.groups, subjectIndex: this.subjectIndex });
     this.registry = options.registry;
+    this.oauthOptions = options.oauth;
     this.autoLog = normalizeAutoLog(options.autoLog);
     this.profiler = new RuntimeProfiler(options.profiler === undefined ? null : normalizeRuntimeProfiler(options.profiler, this.logger));
     this.lifecycleDefaults = normalizeRuntimeLifecycleOptions(options.lifecycle);
@@ -1272,6 +1289,10 @@ export class McpProxy {
       const path = options.path ?? this.defaultPath;
       let httpRoutes: IntegratedEdgeControlPlaneRuntime["httpRoutes"] | undefined;
       let upgradeRoutes: IntegratedEdgeControlPlaneRuntime["upgradeRoutes"] | undefined;
+      const oauthManager = this.oauth();
+      if (oauthManager) {
+        oauthManager.setCallbackUrl(deriveOAuthCallbackUrl(this.oauthOptions, { host, port }));
+      }
 
       try {
         if (this.edgeOptions?.controlPlane?.enabled === true) {
@@ -1404,6 +1425,26 @@ export class McpProxy {
     };
 
     for (const [reference, source] of Object.entries(this.defaultCredentials)) add(source, `default credential ${reference}`);
+    for (const server of oauthServers(this.serverCatalog.allServers())) {
+      const clientSecret = server.getOAuthAuth()?.clientSecret;
+      if (!isCredentialReference(clientSecret)) {
+        continue;
+      }
+
+      const source = this.defaultCredentials[clientSecret.reference];
+      if (source) {
+        add(source, `oauth client secret ${clientSecret.reference} for server ${server.name}`);
+      } else {
+        throw new FentarisRuntimeError(
+          `Declared credentials are unavailable:\n- oauth client secret ${clientSecret.reference} for server ${server.name} (undeclared)`,
+          {
+            code: "FENTARIS_CREDENTIALS_UNAVAILABLE",
+            hints: [`Declare the credential "${clientSecret.reference}" in app defaults before starting the proxy.`],
+            context: { requirements: [{ source: "declaration", locator: clientSecret.reference, usages: [`server ${server.name}`] }] },
+          },
+        );
+      }
+    }
     for (const group of this.groups) {
       for (const [reference, source] of Object.entries(group.credentials)) add(source, `group ${group.id} credential ${reference}`);
       for (const user of group.users) {
@@ -3569,11 +3610,76 @@ export class McpProxy {
     return resolved;
   }
 
+  /**
+   * OAuth manager for upstream servers declared with `oauth()`, or undefined when none is.
+   * @pk
+   */
+  oauth(): OAuthManager | undefined {
+    if (!this.oauthInitialized) {
+      this.oauthInitialized = true;
+      const { store, ephemeral } = resolveOAuthStore(this.oauthOptions);
+      this.oauthStoreEphemeral = ephemeral;
+      this.oauthManagerCache = createOAuthManager({
+        servers: this.serverCatalog.allServers(),
+        options: this.oauthOptions,
+        store,
+        clientName: this.name,
+        resolveClientSecret: (server) => this.oauthClientSecretResolver(server),
+      });
+    }
+
+    return this.oauthManagerCache;
+  }
+
+  /**
+   * Whether OAuth state is kept only in memory for this process.
+   * @internal
+   */
+  oauthStoreIsEphemeral(): boolean {
+    this.oauth();
+    return this.oauthStoreEphemeral;
+  }
+
+  /**
+   * Path of the hosted OAuth redirect callback.
+   * @internal
+   */
+  oauthCallbackPath(): string {
+    return oauthCallbackPath(this.oauthOptions);
+  }
+
+  private oauthClientSecretResolver(server: McpServer): (() => Promise<string | undefined>) | undefined {
+    const clientSecret = server.getOAuthAuth()?.clientSecret;
+    if (!clientSecret) {
+      return undefined;
+    }
+
+    if (typeof clientSecret === "string") {
+      return async () => clientSecret;
+    }
+
+    return async () => {
+      const source = this.defaultCredentials[clientSecret.reference];
+      if (!source) {
+        throw new Error(`Missing OAuth client secret credential "${clientSecret.reference}" for server "${server.name}"`);
+      }
+
+      return resolveCredentialSource(source);
+    };
+  }
+
   private async applyUpstreamAuth(
     server: McpServer,
     user: UserContext,
     subject: ResolvedSubject | undefined,
   ): Promise<{ user: UserContext; credentialSource?: CredentialSourceMetadata }> {
+    if (server.getOAuthAuth()) {
+      // OAuth is applied through the transport auth provider; a missing token must
+      // never fail the request here.
+      this.oauth();
+      return { user, credentialSource: { reference: "oauth", source: "oauth" } };
+    }
+
     const bindings = server.getCredentialBindings();
     const legacyBinding = bindings.length === 0 ? this.auth?.getBinding(server.name) : undefined;
     const effectiveBindings: ServerCredentialBinding[] = legacyBinding

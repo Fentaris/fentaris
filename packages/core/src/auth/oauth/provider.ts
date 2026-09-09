@@ -133,8 +133,9 @@ export class FentarisOAuthClientProvider implements OAuthClientProvider {
       return undefined;
     }
 
-    const { obtainedAt: _obtainedAt, ...tokens } = stored;
-    return tokens;
+    const tokens: Record<string, unknown> = { ...stored };
+    delete tokens.obtainedAt;
+    return tokens as OAuthTokens;
   }
 
   async saveTokens(tokens: OAuthTokens): Promise<void> {
