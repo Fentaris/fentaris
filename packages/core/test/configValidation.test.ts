@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   FentarisConfigError,
   assertValidFentarisConfig,
@@ -9,7 +9,9 @@ import {
   formatFentarisDiagnostics,
   group,
   mcp,
+  oauth,
   policy,
+  streamableHttp,
   user,
   validateFentarisConfig,
 } from "../src/index.js";
@@ -299,5 +301,93 @@ describe("config diagnostics rendering", () => {
     expect(error.diagnostics).toHaveLength(1);
     expect(error.toJSON()).toMatchObject({ name: "FentarisConfigError" });
     expect(error.format({ format: "compact" })).toContain("FENTARIS_CONFIG_DUPLICATE_SERVER");
+  });
+});
+
+describe("OAuth configuration validation", () => {
+  const httpUrl = "https://mcp.example.com/mcp";
+  const previousKey = process.env.FENTARIS_AUTH_KEY;
+
+  afterEach(() => {
+    if (previousKey === undefined) {
+      delete process.env.FENTARIS_AUTH_KEY;
+    } else {
+      process.env.FENTARIS_AUTH_KEY = previousKey;
+    }
+  });
+
+  it("rejects oauth() on a transport that cannot carry an authorization", () => {
+    process.env.FENTARIS_AUTH_KEY = "key";
+    const result = validateFentarisConfig({ servers: [mcp("github", { transport: new TestTransport(), auth: oauth() })] });
+
+    expect(result.errors.map((entry) => entry.code)).toContain("FENTARIS_CONFIG_OAUTH_TRANSPORT_UNSUPPORTED");
+  });
+
+  it("rejects a pre-registered client without a client id", () => {
+    process.env.FENTARIS_AUTH_KEY = "key";
+    const auth = oauth({ clientId: "abc" });
+    const result = validateFentarisConfig({
+      servers: [mcp("github", { transport: streamableHttp({ url: httpUrl }), auth: { ...auth, clientId: undefined } })],
+    });
+
+    expect(result.errors.map((entry) => entry.code)).toContain("FENTARIS_CONFIG_OAUTH_CLIENT_ID_MISSING");
+  });
+
+  it("rejects an unresolved client secret reference", () => {
+    process.env.FENTARIS_AUTH_KEY = "key";
+    const result = validateFentarisConfig({
+      servers: [
+        mcp("github", {
+          transport: streamableHttp({ url: httpUrl }),
+          auth: oauth({ clientId: "abc", clientSecret: credential("github.oauth.secret") }),
+        }),
+      ],
+    });
+
+    expect(result.errors.map((entry) => entry.code)).toContain("FENTARIS_CONFIG_OAUTH_CLIENT_SECRET_UNRESOLVED");
+  });
+
+  it("accepts a client secret declared in defaults", () => {
+    process.env.FENTARIS_AUTH_KEY = "key";
+    const result = validateFentarisConfig({
+      defaults: { credentials: { "github.oauth.secret": credentialEnv("GITHUB_OAUTH_SECRET") } },
+      servers: [
+        mcp("github", {
+          transport: streamableHttp({ url: httpUrl }),
+          auth: oauth({ clientId: "abc", clientSecret: credential("github.oauth.secret") }),
+        }),
+      ],
+    });
+
+    expect(result.errors.map((entry) => entry.code)).not.toContain("FENTARIS_CONFIG_OAUTH_CLIENT_SECRET_UNRESOLVED");
+  });
+
+  it("rejects a callback path that overlaps the MCP path", () => {
+    process.env.FENTARIS_AUTH_KEY = "key";
+    const result = validateFentarisConfig({
+      path: "/mcp",
+      oauth: { callbackPath: "/mcp/callback" },
+      servers: [mcp("github", { transport: streamableHttp({ url: httpUrl }), auth: oauth() })],
+    });
+
+    expect(result.errors.map((entry) => entry.code)).toContain("FENTARIS_CONFIG_OAUTH_CALLBACK_PATH_CONFLICT");
+  });
+
+  it("rejects a non-absolute public URL", () => {
+    process.env.FENTARIS_AUTH_KEY = "key";
+    const result = validateFentarisConfig({
+      oauth: { publicUrl: "example.com" },
+      servers: [mcp("github", { transport: streamableHttp({ url: httpUrl }), auth: oauth() })],
+    });
+
+    expect(result.errors.map((entry) => entry.code)).toContain("FENTARIS_CONFIG_OAUTH_PUBLIC_URL_INVALID");
+  });
+
+  it("warns when OAuth state can only be kept in memory", () => {
+    delete process.env.FENTARIS_AUTH_KEY;
+    const result = validateFentarisConfig({ servers: [mcp("github", { transport: streamableHttp({ url: httpUrl }), auth: oauth() })] });
+
+    expect(result.warnings.map((entry) => entry.code)).toContain("FENTARIS_CONFIG_OAUTH_STORE_EPHEMERAL");
+    expect(result.valid).toBe(true);
   });
 });

@@ -105,7 +105,8 @@ export class FentarisOAuthClientProvider implements OAuthClientProvider {
 
   async clientInformation(): Promise<OAuthClientInformationMixed | undefined> {
     if (this.auth.registration === "preregistered" && this.auth.clientId) {
-      const clientSecret = await this.resolveClientSecret?.();
+      const clientSecret =
+        (await this.resolveClientSecret?.()) ?? (typeof this.auth.clientSecret === "string" ? this.auth.clientSecret : undefined);
       return { client_id: this.auth.clientId, ...(clientSecret ? { client_secret: clientSecret } : {}) };
     }
 
