@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { fentaris } from "../../src/proxy/McpProxy.js";
@@ -6,6 +9,9 @@ import { mcp } from "../../src/server/index.js";
 import { oauth } from "../../src/auth/oauth/dsl.js";
 import { oauthTokens } from "../../src/auth/oauth/store.js";
 import { streamableHttp } from "../../src/transports/client/StreamableHttpMcpTransport.js";
+import { group, user } from "../../src/governance.js";
+import { credentialEnv } from "../../src/credentials/index.js";
+import { oauthTokens as tokenStores } from "../../src/auth/oauth/store.js";
 import { startAuthorizationServer } from "../fixtures/oauth/authorizationServer.js";
 import { startProtectedMcpServer } from "../fixtures/oauth/protectedMcpServer.js";
 import { connectElicitingClient } from "../fixtures/oauth/elicitingClient.js";
@@ -107,4 +113,90 @@ describe("OAuth end to end through a real MCP client", () => {
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toMatchObject({ code: "FENTARIS_OAUTH_AUTHORIZATION_REQUIRED", server: "protected" });
   }, 30_000);
+
+  it("keeps two API-key identities on two upstream subjects and persists tokens across a restart", async () => {
+    let issued = 0;
+    const authServer = await startAuthorizationServer({ subjectFor: () => `person-${++issued}@example.com` });
+    cleanups.push(() => authServer.close());
+    const upstream = await startProtectedMcpServer({ authorizationServer: authServer });
+    cleanups.push(() => upstream.close());
+
+    const storeDir = await mkdtemp(join(tmpdir(), "fentaris-oauth-e2e-"));
+    cleanups.push(() => rm(storeDir, { recursive: true, force: true }));
+    process.env.OAUTH_E2E_ALICE_KEY = "alice-key";
+    process.env.OAUTH_E2E_BOB_KEY = "bob-key";
+    cleanups.push(async () => {
+      delete process.env.OAUTH_E2E_ALICE_KEY;
+      delete process.env.OAUTH_E2E_BOB_KEY;
+    });
+
+    const port = await freePort();
+    const config = () => ({
+      policy: Policy.allowAll(),
+      port,
+      host: "127.0.0.1" as const,
+      oauth: { store: tokenStores.local({ dir: storeDir, key: "e2e-key" }) },
+      groups: [
+        group({
+          id: "team",
+          policy: Policy.allowAll(),
+          users: [
+            user("alice", { apiKeys: [credentialEnv("OAUTH_E2E_ALICE_KEY")] }),
+            user("bob", { apiKeys: [credentialEnv("OAUTH_E2E_BOB_KEY")] }),
+          ],
+          servers: [
+            mcp("protected", {
+              transport: streamableHttp({ url: upstream.url, network: { allowPrivateNetworkUrls: true } }),
+              auth: oauth(),
+            }),
+          ],
+        }),
+      ],
+    });
+
+    const app = fentaris(config());
+    await app.start();
+    let stopped = false;
+    cleanups.push(async () => {
+      if (!stopped) {
+        await app.close();
+      }
+    });
+
+    const callAs = async (apiKey: string, message: string): Promise<CallToolResult> => {
+      const connected = await connectElicitingClient({
+        url: `http://127.0.0.1:${port}/mcp`,
+        headers: { "x-fentaris-api-key": apiKey },
+      });
+      try {
+        return (await connected.client.callTool(
+          { name: "protected__echo", arguments: { message } },
+          CallToolResultSchema,
+          { timeout: 20_000 },
+        )) as CallToolResult;
+      } finally {
+        await connected.close();
+      }
+    };
+
+    const aliceResult = await callAs("alice-key", "a");
+    const bobResult = await callAs("bob-key", "b");
+
+    expect(aliceResult.content).toEqual([{ type: "text", text: "person-1@example.com:a" }]);
+    expect(bobResult.content).toEqual([{ type: "text", text: "person-2@example.com:b" }]);
+    expect(upstream.callers).toEqual(["person-1@example.com", "person-2@example.com"]);
+
+    await app.close();
+    stopped = true;
+
+    // A fresh proxy over the same encrypted store must reuse the stored authorizations.
+    const restarted = fentaris(config());
+    await restarted.start();
+    cleanups.push(() => restarted.close());
+
+    const afterRestart = await callAs("alice-key", "again");
+    expect(afterRestart.isError).toBeFalsy();
+    expect(afterRestart.content).toEqual([{ type: "text", text: "person-1@example.com:again" }]);
+    expect(issued).toBe(2);
+  }, 40_000);
 });
