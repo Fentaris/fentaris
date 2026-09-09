@@ -61,7 +61,21 @@ const levelWeight: Record<LogLevel, number> = {
   fatal: 50,
 };
 
-const defaultSensitiveKeys = [/token/i, /secret/i, /password/i, /authorization/i, /api[-_]?key/i, /credential/i];
+const defaultSensitiveKeys = [
+  /token/i,
+  /secret/i,
+  /password/i,
+  /authorization/i,
+  /api[-_]?key/i,
+  /credential/i,
+  // OAuth authorization codes and PKCE verifiers. `code` and `state` alone are not
+  // listed: they collide with error codes and lifecycle state, so OAuth call sites
+  // redact those explicitly through redactOAuthUrl/redactOAuthValue. @pk
+  /^code_verifier$/i,
+  /^codeVerifier$/i,
+  /^authorization_?code$/i,
+  /^oauth_?state$/i,
+];
 const defaultSensitiveValuePatterns = [
   /(?:^|[^A-Za-z0-9._~+/=-])Bearer\s+[A-Za-z0-9._~+/=-]{16,}(?=$|[^A-Za-z0-9._~+/=-])/,
   /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
@@ -399,4 +413,12 @@ function shouldRedactPath(path: string[], paths: string[] | undefined): boolean 
 
 function shouldRedactValue(value: string): boolean {
   return defaultSensitiveValuePatterns.some((pattern) => pattern.test(value));
+}
+
+/**
+ * Whether a URL carries OAuth parameters that must never be logged verbatim.
+ * @pk
+ */
+export function hasOAuthSecretsInUrl(value: string): boolean {
+  return /[?&](code|state|access_token|refresh_token|id_token|client_secret|code_verifier)=/i.test(value);
 }

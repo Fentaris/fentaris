@@ -469,6 +469,20 @@ function validateOAuth(
     }
   }
 
+  const interactive = declared.some(({ server }) => server.getOAuthAuth?.()?.grant === "authorization_code");
+  if (interactive && config.oauth?.agentTools !== false) {
+    const reserved = allServers.find((server) => server.name === RESERVED_LOCAL_NAMESPACE);
+    if (reserved) {
+      diagnostics.push(diagnostic(
+        "error",
+        "FENTARIS_CONFIG_OAUTH_RESERVED_NAMESPACE",
+        "MCP server name collides with the reserved Fentaris namespace",
+        `"${RESERVED_LOCAL_NAMESPACE}" is reserved for the built-in agent tools registered for interactive OAuth servers.`,
+        { path: ["servers", RESERVED_LOCAL_NAMESPACE], hint: "Rename the server, or set oauth.agentTools to false." },
+      ));
+    }
+  }
+
   if (declared.length === 0 && !config.oauth) {
     return;
   }

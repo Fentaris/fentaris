@@ -44,6 +44,9 @@ export type PendingAuthorizationsOptions = {
  */
 export class PendingAuthorizations {
   private readonly entries = new Map<string, PendingEntry>();
+  /** Outcomes of recently settled authorizations, so a waiter that arrives after the
+   * callback still observes the result. */
+  private readonly settled = new Map<string, { outcome: PendingAuthorizationOutcome; at: number }>();
   private readonly ttlMs: number;
   private readonly now: () => number;
 
@@ -139,6 +142,11 @@ export class PendingAuthorizations {
    * @pk
    */
   async wait(state: string, timeoutMs: number): Promise<PendingAuthorizationOutcome | { status: "timeout" }> {
+    const recent = this.settled.get(state);
+    if (recent) {
+      return recent.outcome;
+    }
+
     const entry = this.entries.get(state);
     if (!entry) {
       return { status: "failed", reason: "unknown or expired authorization state" };
@@ -172,6 +180,7 @@ export class PendingAuthorizations {
     for (const [state, entry] of this.entries) {
       if (entry.server === server && entry.session === session) {
         this.entries.delete(state);
+        this.settled.delete(state);
       }
     }
   }
@@ -188,6 +197,7 @@ export class PendingAuthorizations {
     }
 
     this.entries.delete(state);
+    this.settled.set(state, { outcome, at: this.now() });
 
     if (outcome.status === "completed" && entry.notifyComplete) {
       await entry.notifyComplete();
@@ -196,6 +206,12 @@ export class PendingAuthorizations {
 
   private sweep(): void {
     const now = this.now();
+    for (const [state, recent] of this.settled) {
+      if (now - recent.at > this.ttlMs) {
+        this.settled.delete(state);
+      }
+    }
+
     for (const [state, entry] of this.entries) {
       if (entry.expiresAt <= now) {
         this.entries.delete(state);

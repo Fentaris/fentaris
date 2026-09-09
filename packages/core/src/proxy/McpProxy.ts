@@ -143,6 +143,10 @@ import {
   resolveOAuthStore,
   type ProxyOAuthOptions,
 } from "./oauthRuntime.js";
+import { withOAuthConsent } from "./oauthInteraction.js";
+import { FENTARIS_LOCAL_NAMESPACE, registerOAuthAgentTools } from "../auth/oauth/agentTools.js";
+import { redactOAuthMessage } from "../auth/oauth/redaction.js";
+import { createOAuthCallbackRoutes } from "../transports/exposure/oauthCallbackRoutes.js";
 import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
 import type { CredentialSourceMetadata, IdentityMetadata, ResolvedSubject, UserContext } from "../types/shared.js";
 import type {
@@ -168,6 +172,7 @@ import type {
   ProxyExposureHandle,
   ProxyExposureTransport,
   ProxyRuntime,
+  ProxySessionInteraction,
   ProxyGroupHandle,
   ProxyMcpDeclarationConfig,
   ProxyMcpDeclarationOptions,
@@ -1289,9 +1294,21 @@ export class McpProxy {
       const path = options.path ?? this.defaultPath;
       let httpRoutes: IntegratedEdgeControlPlaneRuntime["httpRoutes"] | undefined;
       let upgradeRoutes: IntegratedEdgeControlPlaneRuntime["upgradeRoutes"] | undefined;
+      let oauthRoutes: IntegratedEdgeControlPlaneRuntime["httpRoutes"] | undefined;
       const oauthManager = this.oauth();
       if (oauthManager) {
         oauthManager.setCallbackUrl(deriveOAuthCallbackUrl(this.oauthOptions, { host, port }));
+        const callbackRoutes = createOAuthCallbackRoutes({
+          manager: oauthManager,
+          path: this.oauthCallbackPath(),
+          onError: (message) => this.logger.warn("OAuth callback failed", { message: redactOAuthMessage(message) }),
+        });
+        oauthRoutes = callbackRoutes.httpRoutes;
+        if (!this.oauthOptions?.publicUrl && host && host !== "127.0.0.1" && host !== "localhost" && host !== "::1") {
+          this.logger.info("Set oauth.publicUrl so upstream authorization servers can reach the Fentaris callback", {
+            callbackUrl: oauthManager.getCallbackUrl(),
+          });
+        }
       }
 
       try {
@@ -1323,7 +1340,7 @@ export class McpProxy {
             port,
             host,
             path,
-            ...(httpRoutes ? { httpRoutes } : {}),
+            ...(httpRoutes || oauthRoutes ? { httpRoutes: [...(httpRoutes ?? []), ...(oauthRoutes ?? [])] } : {}),
             ...(upgradeRoutes ? { upgradeRoutes } : {}),
             onStarted: () => {
               this.printStartupBanner(port, path, host);
@@ -1865,6 +1882,11 @@ export class McpProxy {
         if (!this.shouldDiscoverToolsForServer(server.name, userGroups)) {
           return [];
         }
+        if (await this.oauthServerRequiresLogin(server, resolvedUser)) {
+          // Never contact the authorization server while listing; contribute nothing
+          // for this upstream instead of failing the whole listing. @pk
+          return [];
+        }
         const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
           operation: "tools:list",
           serverName: server.name,
@@ -1875,12 +1897,24 @@ export class McpProxy {
           identity,
         });
         const { user: userForServer } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
-        const result = await this.dispatchTargetOperation(
-          server,
-          context,
-          () => server.listTools(params, userForServer),
-          (transport) => transport.listTools(params),
-        );
+        let result: ListToolsResult;
+        try {
+          result = await this.dispatchTargetOperation(
+            server,
+            context,
+            () => server.listTools(params, userForServer),
+            (transport) => transport.listTools(params),
+          );
+        } catch (error: unknown) {
+          if (!server.getOAuthAuth()) {
+            throw error;
+          }
+
+          // An OAuth upstream that rejects the stored authorization must not fail the
+          // whole listing for every other server. @pk
+          log_listToolsOAuthFailure(this.logger, server.name, error);
+          return [];
+        }
         const tools = this.groups.length > 0
           ? filterToolsByGroupPolicies(result.tools, server.name, userGroups)
           : this.globalPolicy ? filterToolsByPolicy(result.tools, server.name, this.globalPolicy) : result.tools;
@@ -1942,6 +1976,23 @@ export class McpProxy {
     return { tools: this.filterVisibleProxyTools(tools, userGroups) };
   }
 
+  /**
+   * Whether an OAuth-declared server has no usable authorization for this caller,
+   * derived from the token store only.
+   */
+  private async oauthServerRequiresLogin(server: McpServer, user: UserContext): Promise<boolean> {
+    if (!server.getOAuthAuth()) {
+      return false;
+    }
+
+    const manager = this.oauth();
+    if (!manager) {
+      return false;
+    }
+
+    return (await manager.status(server.name, manager.sessionKeyFor(server.name, user))) === "requires-login";
+  }
+
   private shouldDiscoverToolsForServer(serverName: string, userGroups: Group[]): boolean {
     // Exact allow rules win over `*` deny when filtering tools, so any allow means
     // the server still has at least one potentially visible tool. @pk
@@ -1964,6 +2015,7 @@ export class McpProxy {
     user: UserContext = {},
     identity?: IdentityMetadata,
     subject?: ResolvedSubject,
+    interaction?: ProxySessionInteraction,
   ): Promise<CallToolResult> {
     this.assertDeferredPolicyServerVisibilityValid();
     const resolvedUser = await this.resolveRegistryUser(user);
@@ -2075,15 +2127,23 @@ export class McpProxy {
             return Promise.resolve(new ResponseController().deny(`Unknown MCP server "${serverName}"`));
           }
 
-          return this.dispatchTargetOperation(
+          return withOAuthConsent({
+            manager: this.oauth(),
             server,
-            context,
-            () => this.forwardToolCall(params, upstreamUser, server),
-            (transport) => server.runIsolated(upstreamUser, () => transport.callTool({
-              ...params,
-              name: toolName,
-            })),
-          );
+            user: upstreamUser,
+            interaction,
+            log,
+            run: () =>
+              this.dispatchTargetOperation(
+                server,
+                context,
+                () => this.forwardToolCall(params, upstreamUser, server),
+                (transport) => server.runIsolated(upstreamUser, () => transport.callTool({
+                  ...params,
+                  name: toolName,
+                })),
+              ),
+          });
         }));
       const response = context.res.applyInjections(result);
       this.writeAutoLog("success", log, request, context, startedAt, response);
@@ -3626,9 +3686,31 @@ export class McpProxy {
         clientName: this.name,
         resolveClientSecret: (server) => this.oauthClientSecretResolver(server),
       });
+      this.registerOAuthAgentTools();
     }
 
     return this.oauthManagerCache;
+  }
+
+  /**
+   * Register the built-in `fentaris__auth_*` tools when at least one server needs an
+   * interactive login and the operator did not opt out.
+   */
+  private registerOAuthAgentTools(): void {
+    const manager = this.oauthManagerCache;
+    if (!manager || this.oauthOptions?.agentTools === false) {
+      return;
+    }
+
+    const interactive = oauthServers(this.serverCatalog.allServers()).some(
+      (server) => server.getOAuthAuth()?.grant === "authorization_code",
+    );
+    if (!interactive || this.localRegistry.hasNamespace(FENTARIS_LOCAL_NAMESPACE) || this.serverByName.has(FENTARIS_LOCAL_NAMESPACE)) {
+      return;
+    }
+
+    registerOAuthAgentTools(this.localRegistry.namespace(FENTARIS_LOCAL_NAMESPACE), { manager: () => this.oauthManagerCache });
+    this.materializeLocalNamespaces();
   }
 
   /**
@@ -4211,4 +4293,11 @@ function isTimeoutError(error: Error): boolean {
 function parseTimeoutMs(message: string): number | undefined {
   const match = message.match(/after\s+(\d+)ms/i);
   return match ? Number(match[1]) : undefined;
+}
+
+function log_listToolsOAuthFailure(logger: Logger, serverName: string, error: unknown): void {
+  logger.warn("Omitting OAuth-protected server from tools/list", {
+    server: serverName,
+    reason: redactOAuthMessage(error instanceof Error ? error.message : String(error)),
+  });
 }
