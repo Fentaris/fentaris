@@ -8,7 +8,8 @@ import type {
 import type { OAuthAuth } from "./dsl.js";
 import { OAuthAuthorizationRequiredError } from "./errors.js";
 import type { PendingAuthorizations } from "./pending.js";
-import type { OAuthSessionKey, OAuthStoreRecord, OAuthTokenStore, StoredOAuthTokens } from "./store.js";
+import { createHash } from "node:crypto";
+import { updateOAuthRecord, type OAuthSessionKey, type OAuthStoreRecord, type OAuthTokenStore, type StoredOAuthTokens } from "./store.js";
 
 /**
  * Options for {@link FentarisOAuthClientProvider}.
@@ -43,6 +44,10 @@ export class FentarisOAuthClientProvider implements OAuthClientProvider {
   private readonly resolveClientSecret?: () => Promise<string | undefined>;
   private issuedStates: string[] = [];
   private exchangeState?: string;
+  /** PKCE verifiers saved by the SDK but not yet matched to an authorization URL. */
+  private unboundVerifiers: string[] = [];
+  /** Client id used by the most recent clientInformation() answer, for token attribution. */
+  private lastClientId?: string;
 
   constructor(options: FentarisOAuthClientProviderOptions) {
     this.server = options.server;
@@ -110,22 +115,50 @@ export class FentarisOAuthClientProvider implements OAuthClientProvider {
       return { client_id: this.auth.clientId, ...(clientSecret ? { client_secret: clientSecret } : {}) };
     }
 
-    const stored = (await this.record())?.clientInformation;
-    if (!stored) {
+    const record = await this.record();
+    const registrations = allRegistrations(record);
+    if (registrations.length === 0) {
+      this.lastClientId = undefined;
       return undefined;
     }
 
-    if (this.auth.registration === "dynamic" && this.redirect && !(stored.redirect_uris ?? []).includes(this.redirect)) {
-      // The stored dynamic registration cannot serve the current callback; force a re-registration.
-      await this.invalidateCredentials("client");
+    // A refresh must use the exact client the tokens were issued to, even when another
+    // process (the CLI with its loopback redirect) registered a different one.
+    const tokens = record?.tokens;
+    if (tokens?.refresh_token && tokens.clientId) {
+      const issuer = registrations.find((client) => client.client_id === tokens.clientId);
+      if (issuer) {
+        this.lastClientId = issuer.client_id;
+        return issuer;
+      }
+    }
+
+    const usable = this.redirect
+      ? registrations.find((client) => (client.redirect_uris ?? []).includes(this.redirect as string))
+      : registrations[0];
+
+    if (!usable) {
+      // No registration covers the current callback; register a new one and keep the
+      // existing ones so their tokens stay refreshable.
+      this.lastClientId = undefined;
       return undefined;
     }
 
-    return stored;
+    this.lastClientId = usable.client_id;
+    return usable;
   }
 
   async saveClientInformation(clientInformation: OAuthClientInformationMixed): Promise<void> {
-    await this.update((record) => ({ ...record, clientInformation: clientInformation as OAuthClientInformationFull }));
+    const full = clientInformation as OAuthClientInformationFull;
+    this.lastClientId = full.client_id;
+    await this.update((record) => ({
+      ...record,
+      clientInformation: full,
+      clientRegistrations: {
+        ...(record.clientRegistrations ?? {}),
+        ...Object.fromEntries((full.redirect_uris ?? [this.redirect ?? "none"]).map((uri) => [uri, full])),
+      },
+    }));
   }
 
   async tokens(): Promise<OAuthTokens | undefined> {
@@ -140,8 +173,14 @@ export class FentarisOAuthClientProvider implements OAuthClientProvider {
   }
 
   async saveTokens(tokens: OAuthTokens): Promise<void> {
-    const stored: StoredOAuthTokens = { ...tokens, obtainedAt: Date.now() };
-    await this.update((record) => ({ ...record, tokens: stored }));
+    await this.update((record) => ({
+      ...record,
+      tokens: {
+        ...tokens,
+        obtainedAt: Date.now(),
+        ...(this.lastClientId ?? record.tokens?.clientId ? { clientId: this.lastClientId ?? record.tokens?.clientId } : {}),
+      } satisfies StoredOAuthTokens,
+    }));
   }
 
   redirectToAuthorization(authorizationUrl: URL): never {
@@ -150,6 +189,7 @@ export class FentarisOAuthClientProvider implements OAuthClientProvider {
       throw new Error(`OAuth authorization URL for server "${this.server}" is missing a state parameter`);
     }
 
+    this.bindVerifierFor(state, authorizationUrl.searchParams.get("code_challenge"));
     this.pending.attachAuthorizationUrl(state, authorizationUrl.toString());
     const entry = this.pending.get(state);
     throw new OAuthAuthorizationRequiredError({
@@ -162,13 +202,29 @@ export class FentarisOAuthClientProvider implements OAuthClientProvider {
   }
 
   saveCodeVerifier(codeVerifier: string): void {
-    const target = this.issuedStates.find((state) => !this.pending.codeVerifier(state)) ?? this.issuedStates.at(-1);
-    if (!target) {
+    if (this.issuedStates.length === 0) {
       throw new Error(`No pending OAuth authorization to attach a code verifier for server "${this.server}"`);
     }
 
-    this.pending.attachVerifier(target, codeVerifier);
+    // The SDK gives no correlation between state() and saveCodeVerifier(), so hold the
+    // verifier until redirectToAuthorization() can match it to a code_challenge. Two
+    // concurrent logins on the same session would otherwise swap verifiers.
+    this.unboundVerifiers.push(codeVerifier);
     this.issuedStates = this.issuedStates.filter((state) => Boolean(this.pending.get(state)));
+  }
+
+  private bindVerifierFor(state: string, codeChallenge: string | null): void {
+    if (this.unboundVerifiers.length === 0) {
+      return;
+    }
+
+    const index = codeChallenge
+      ? this.unboundVerifiers.findIndex((verifier) => pkceChallenge(verifier) === codeChallenge)
+      : this.unboundVerifiers.length - 1;
+    const [verifier] = this.unboundVerifiers.splice(index >= 0 ? index : this.unboundVerifiers.length - 1, 1);
+    if (verifier) {
+      this.pending.attachVerifier(state, verifier);
+    }
   }
 
   codeVerifier(): string {
@@ -213,6 +269,7 @@ export class FentarisOAuthClientProvider implements OAuthClientProvider {
       const next = { ...record };
       if (scope === "client") {
         delete next.clientInformation;
+        delete next.clientRegistrations;
       } else if (scope === "tokens") {
         delete next.tokens;
       } else {
@@ -236,7 +293,22 @@ export class FentarisOAuthClientProvider implements OAuthClientProvider {
   }
 
   private async update(apply: (record: OAuthStoreRecord) => OAuthStoreRecord): Promise<void> {
-    const current = (await this.record()) ?? { updatedAt: 0 };
-    await this.store.set(this.server, this.session, { ...apply(current), updatedAt: Date.now() });
+    // Read-modify-write through the store so concurrent writers cannot drop each
+    // other's fields.
+    await updateOAuthRecord(this.store, this.server, this.session, apply);
   }
+}
+
+function allRegistrations(record: OAuthStoreRecord | undefined): OAuthClientInformationFull[] {
+  const byRedirect = Object.values(record?.clientRegistrations ?? {});
+  const legacy = record?.clientInformation;
+  if (legacy && !byRedirect.some((client) => client.client_id === legacy.client_id)) {
+    return [legacy, ...byRedirect];
+  }
+
+  return byRedirect;
+}
+
+function pkceChallenge(verifier: string): string {
+  return createHash("sha256").update(verifier).digest("base64url");
 }

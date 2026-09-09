@@ -139,4 +139,26 @@ describe("LocalOAuthTokenStore", () => {
     expect(await readFile(credentialsPath, "utf8")).toBe(before);
     expect(existsSync(join(dir, "oauth-tokens.enc.json"))).toBe(true);
   });
+
+  it("merges concurrent field updates instead of dropping them", async () => {
+    const dir = await tempDir();
+    const proxySide = oauthTokens.local({ dir, key });
+    const cliSide = oauthTokens.local({ dir, key });
+
+    await Promise.all([
+      proxySide.update("github", "shared", (current) => ({
+        ...current,
+        tokens: { access_token: "at-x", token_type: "Bearer", obtainedAt: 5 },
+      })),
+      cliSide.update("github", "shared", (current) => ({
+        ...current,
+        clientInformation: { client_id: "dcr-x", redirect_uris: ["http://127.0.0.1:1/callback"] },
+      })),
+    ]);
+
+    const fresh = oauthTokens.local({ dir, key });
+    const record = await fresh.get("github", "shared");
+    expect(record?.tokens?.access_token).toBe("at-x");
+    expect(record?.clientInformation?.client_id).toBe("dcr-x");
+  });
 });

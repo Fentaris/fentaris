@@ -458,13 +458,20 @@ function validateOAuth(
       ));
     }
 
-    if (isCredentialReference(auth.clientSecret) && !credentialVisible(auth.clientSecret, config, groups)) {
+    if (isCredentialReference(auth.clientSecret) && !config.defaults?.credentials?.[auth.clientSecret.reference]) {
+      // An OAuth client secret belongs to the application, not to a caller: it is
+      // resolved once per token request with no subject, so only app defaults can
+      // supply it. Accepting a group- or user-scoped source here would pass
+      // validation and then fail at startup.
       diagnostics.push(diagnostic(
         "error",
         "FENTARIS_CONFIG_OAUTH_CLIENT_SECRET_UNRESOLVED",
         "OAuth client secret cannot be resolved",
-        `Server "${server.name}" references credential "${auth.clientSecret.reference}", but no source is visible in this scope.`,
-        { path: [...path, "clientSecret"] },
+        `Server "${server.name}" references credential "${auth.clientSecret.reference}", but no application default credential declares it.`,
+        {
+          path: [...path, "clientSecret"],
+          hint: "Declare the credential under defaults.credentials; group- and user-scoped sources cannot supply an OAuth client secret.",
+        },
       ));
     }
   }
@@ -533,18 +540,6 @@ function validateOAuth(
       { path: ["identity", "required"], hint: "Require identity, or declare tokens: \"shared\" when one authorization is intended." },
     ));
   }
-}
-
-function credentialVisible(reference: CredentialReference, config: McpProxyOptions, groups: Group[]): boolean {
-  if (config.defaults?.credentials?.[reference.reference]) {
-    return true;
-  }
-
-  return groups.some(
-    (group) =>
-      Boolean(group.credentials?.[reference.reference]) ||
-      group.users.some((user) => Boolean(user.credentials?.[reference.reference])),
-  );
 }
 
 function isAbsoluteHttpUrl(value: string): boolean {

@@ -347,6 +347,30 @@ describe("OAuth configuration validation", () => {
     expect(result.errors.map((entry) => entry.code)).toContain("FENTARIS_CONFIG_OAUTH_CLIENT_SECRET_UNRESOLVED");
   });
 
+  it("rejects a client secret that only a group or user declares", () => {
+    process.env.FENTARIS_AUTH_KEY = "key";
+    const result = validateFentarisConfig({
+      groups: [
+        group({
+          id: "team",
+          credentials: { "github.oauth.secret": credentialEnv("GITHUB_OAUTH_SECRET") },
+          users: [user("alice")],
+          policy: policy("team").mcp("github").allow("*"),
+        }),
+      ],
+      servers: [
+        mcp("github", {
+          transport: streamableHttp({ url: httpUrl }),
+          auth: oauth({ clientId: "abc", clientSecret: credential("github.oauth.secret") }),
+        }),
+      ],
+    });
+
+    // The secret is resolved once per token request with no subject, so a scoped
+    // source would pass validation and then fail at startup.
+    expect(result.errors.map((entry) => entry.code)).toContain("FENTARIS_CONFIG_OAUTH_CLIENT_SECRET_UNRESOLVED");
+  });
+
   it("accepts a client secret declared in defaults", () => {
     process.env.FENTARIS_AUTH_KEY = "key";
     const result = validateFentarisConfig({

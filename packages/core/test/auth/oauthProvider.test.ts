@@ -4,6 +4,7 @@ import { OAuthAuthorizationRequiredError } from "../../src/auth/oauth/errors.js"
 import { PendingAuthorizations } from "../../src/auth/oauth/pending.js";
 import { FentarisOAuthClientProvider } from "../../src/auth/oauth/provider.js";
 import { MemoryOAuthTokenStore } from "../../src/auth/oauth/store.js";
+import { createHash } from "node:crypto";
 import type { OAuthAuth } from "../../src/auth/oauth/dsl.js";
 
 const redirectUrl = "http://127.0.0.1:4000/_fentaris/oauth/callback";
@@ -22,6 +23,14 @@ function build(auth: OAuthAuth, overrides: { redirectUrl?: string; resolveClient
   });
 
   return { provider, store, pending };
+}
+
+/** Drive redirectToAuthorization() for one state with the challenge of a known verifier. */
+function expectRedirect(provider: FentarisOAuthClientProvider, state: string, verifier: string): void {
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  expect(() =>
+    provider.redirectToAuthorization(new URL(`https://auth.example.com/authorize?state=${state}&code_challenge=${challenge}`)),
+  ).toThrow(OAuthAuthorizationRequiredError);
 }
 
 describe("FentarisOAuthClientProvider client information", () => {
@@ -57,12 +66,48 @@ describe("FentarisOAuthClientProvider client information", () => {
     expect(await provider.clientInformation()).toBeUndefined();
   });
 
-  it("re-registers when the stored dynamic client cannot serve the current callback", async () => {
+  it("registers a second client for a new callback without discarding the first", async () => {
     const { provider, store } = build(oauth());
-    await provider.saveClientInformation({ client_id: "stale", redirect_uris: ["http://127.0.0.1:9999/callback"] });
+    const cliRedirect = "http://127.0.0.1:9999/callback";
+    await provider.saveClientInformation({ client_id: "cli-client", redirect_uris: [cliRedirect] });
 
+    // The proxy uses its hosted callback, so the CLI registration cannot serve it.
     expect(await provider.clientInformation()).toBeUndefined();
-    expect((await store.get("linear", "user:alice"))?.clientInformation).toBeUndefined();
+    // ...but it must stay stored, otherwise tokens it issued can never be refreshed.
+    expect((await store.get("linear", "user:alice"))?.clientRegistrations?.[cliRedirect]?.client_id).toBe("cli-client");
+  });
+
+  it("refreshes with the client the tokens were issued to", async () => {
+    const cliRedirect = "http://127.0.0.1:9999/callback";
+    const store = new MemoryOAuthTokenStore();
+    const pending = new PendingAuthorizations();
+    const cli = new FentarisOAuthClientProvider({
+      server: "linear",
+      session: "user:alice",
+      auth: oauth(),
+      store,
+      pending,
+      redirectUrl: cliRedirect,
+    });
+
+    await cli.saveClientInformation({ client_id: "cli-client", redirect_uris: [cliRedirect] });
+    await cli.saveTokens({ access_token: "at", token_type: "Bearer", refresh_token: "rt" });
+
+    const proxy = new FentarisOAuthClientProvider({
+      server: "linear",
+      session: "user:alice",
+      auth: oauth(),
+      store,
+      pending,
+      redirectUrl,
+    });
+
+    // A refresh must reuse cli-client; the authorization server would reject the
+    // refresh token if it were presented by a freshly registered client.
+    expect(await proxy.clientInformation()).toMatchObject({ client_id: "cli-client" });
+
+    await proxy.invalidateCredentials("tokens");
+    expect(await proxy.clientInformation()).toBeUndefined();
   });
 });
 
@@ -92,10 +137,15 @@ describe("FentarisOAuthClientProvider authorization flow", () => {
   it("keeps verifiers isolated across concurrent logins", () => {
     const { provider, pending } = build(oauth());
 
+    // Two overlapping flows: the SDK interleaves state() and saveCodeVerifier(), so the
+    // verifier is matched to its authorization URL by code_challenge, not by order.
     const first = provider.state();
-    provider.saveCodeVerifier("verifier-1");
     const second = provider.state();
+    provider.saveCodeVerifier("verifier-1");
     provider.saveCodeVerifier("verifier-2");
+
+    expectRedirect(provider, second, "verifier-2");
+    expectRedirect(provider, first, "verifier-1");
 
     expect(pending.codeVerifier(first)).toBe("verifier-1");
     expect(pending.codeVerifier(second)).toBe("verifier-2");

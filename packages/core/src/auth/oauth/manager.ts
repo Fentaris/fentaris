@@ -136,27 +136,38 @@ export class OAuthManager {
       return undefined;
     }
 
-    const session = oauthSessionKeyFor(registration.auth, user);
-    const key = `${server}\u0000${session}`;
+    return this.providerForSession(server, oauthSessionKeyFor(registration.auth, user), registration, user);
+  }
 
-    if (registration.auth.provider) {
-      const existing = this.customProviders.get(key);
-      if (existing) {
-        return existing;
-      }
-
-      const custom = registration.auth.provider({
-        server,
-        user,
-        session,
-        store: this.store,
-        redirectUrl: this.callbackUrl,
-      });
-      this.customProviders.set(key, custom);
-      return custom;
+  /**
+   * Provider bound to one server and session, honoring a custom `oauth({ provider })`
+   * factory so the hosted callback completes with the same provider that started the flow.
+   */
+  private providerForSession(
+    server: string,
+    session: OAuthSessionKey,
+    registration: OAuthServerRegistration,
+    user: UserContext = session.startsWith("user:") ? { id: session.slice("user:".length) } : {},
+  ): OAuthClientProvider {
+    if (!registration.auth.provider) {
+      return this.fentarisProviderFor(server, session, registration);
     }
 
-    return this.fentarisProviderFor(server, session, registration);
+    const key = `${server}\u0000${session}`;
+    const existing = this.customProviders.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const custom = registration.auth.provider({
+      server,
+      user,
+      session,
+      store: this.store,
+      redirectUrl: this.callbackUrl,
+    });
+    this.customProviders.set(key, custom);
+    return custom;
   }
 
   /**
@@ -254,8 +265,10 @@ export class OAuthManager {
       throw new Error(`MCP server "${entry.server}" is not declared with oauth()`);
     }
 
-    const provider = this.fentarisProviderFor(entry.server, entry.session, registration);
-    provider.bindExchange(params.state);
+    const provider = this.providerForSession(entry.server, entry.session, registration);
+    if (provider instanceof FentarisOAuthClientProvider) {
+      provider.bindExchange(params.state);
+    }
 
     try {
       await sdkAuth(provider, {

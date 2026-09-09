@@ -21,14 +21,26 @@ export type OAuthSessionKey = `user:${string}` | "shared";
  * Stored OAuth tokens with the time they were obtained.
  * @pk
  */
-export type StoredOAuthTokens = OAuthTokens & { obtainedAt: number };
+export type StoredOAuthTokens = OAuthTokens & {
+  obtainedAt: number;
+  /** Client the tokens were issued to, so a refresh reuses that exact registration. @pk */
+  clientId?: string;
+};
 
 /**
  * Persisted OAuth state for one upstream server and authorization session.
  * @pk
  */
 export type OAuthStoreRecord = {
+  /** Most recently used client registration. @pk */
   clientInformation?: OAuthClientInformationFull;
+  /**
+   * Every dynamic registration made for this session, keyed by redirect URI, so a
+   * registration made by one process (for example the CLI loopback redirect) is not
+   * discarded by another that uses a different callback.
+   * @pk
+   */
+  clientRegistrations?: Record<string, OAuthClientInformationFull>;
   tokens?: StoredOAuthTokens;
   discovery?: OAuthDiscoveryState;
   updatedAt: number;
@@ -56,7 +68,37 @@ export type OAuthTokenStore = {
   set(server: string, session: OAuthSessionKey, record: OAuthStoreRecord): Promise<void>;
   delete(server: string, session: OAuthSessionKey): Promise<void>;
   list(): Promise<OAuthStoreEntry[]>;
+  /**
+   * Read-modify-write one record atomically. Implement it whenever concurrent writers
+   * are possible; {@link updateOAuthRecord} falls back to get-then-set otherwise.
+   * @pk
+   */
+  update?(
+    server: string,
+    session: OAuthSessionKey,
+    mutate: (record: OAuthStoreRecord) => OAuthStoreRecord,
+  ): Promise<OAuthStoreRecord>;
 };
+
+/**
+ * Apply a read-modify-write to one record, atomically when the store supports it.
+ * @pk
+ */
+export async function updateOAuthRecord(
+  store: OAuthTokenStore,
+  server: string,
+  session: OAuthSessionKey,
+  mutate: (record: OAuthStoreRecord) => OAuthStoreRecord,
+): Promise<OAuthStoreRecord> {
+  if (store.update) {
+    return store.update(server, session, mutate);
+  }
+
+  const current = (await store.get(server, session)) ?? { updatedAt: 0 };
+  const next = { ...mutate(current), updatedAt: Date.now() };
+  await store.set(server, session, next);
+  return next;
+}
 
 type StoreState = Record<string, Record<string, OAuthStoreRecord>>;
 
@@ -85,6 +127,16 @@ export class MemoryOAuthTokenStore implements OAuthTokenStore {
 
   async set(server: string, session: OAuthSessionKey, record: OAuthStoreRecord): Promise<void> {
     this.state[server] = { ...(this.state[server] ?? {}), [session]: { ...record, updatedAt: record.updatedAt || Date.now() } };
+  }
+
+  async update(
+    server: string,
+    session: OAuthSessionKey,
+    mutate: (record: OAuthStoreRecord) => OAuthStoreRecord,
+  ): Promise<OAuthStoreRecord> {
+    const next = { ...mutate(this.state[server]?.[session] ?? { updatedAt: 0 }), updatedAt: Date.now() };
+    this.state[server] = { ...(this.state[server] ?? {}), [session]: next };
+    return next;
   }
 
   async delete(server: string, session: OAuthSessionKey): Promise<void> {
@@ -145,6 +197,21 @@ export class LocalOAuthTokenStore implements OAuthTokenStore {
     await this.mutate((state) => {
       state[server] = { ...(state[server] ?? {}), [session]: { ...record, updatedAt: record.updatedAt || Date.now() } };
     });
+  }
+
+  async update(
+    server: string,
+    session: OAuthSessionKey,
+    mutate: (record: OAuthStoreRecord) => OAuthStoreRecord,
+  ): Promise<OAuthStoreRecord> {
+    let written: OAuthStoreRecord = { updatedAt: 0 };
+    // The whole read-modify-write runs inside the cross-process lock, so a concurrent
+    // writer cannot clobber fields it never read.
+    await this.mutate((state) => {
+      written = { ...mutate(state[server]?.[session] ?? { updatedAt: 0 }), updatedAt: Date.now() };
+      state[server] = { ...(state[server] ?? {}), [session]: written };
+    });
+    return written;
   }
 
   async delete(server: string, session: OAuthSessionKey): Promise<void> {

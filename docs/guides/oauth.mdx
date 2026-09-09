@@ -39,7 +39,7 @@ Zero configuration. Fentaris discovers the protected resource and authorization 
 
 ### `oauth({ clientId, clientSecret, scopes })`
 
-Pre-registered client. Fentaris skips dynamic registration and authenticates to the token endpoint with the strongest method the authorization server supports. `clientSecret` accepts a literal string or `credential("...")`.
+Pre-registered client. Fentaris skips dynamic registration and authenticates to the token endpoint with the strongest method the authorization server supports. `clientSecret` accepts a literal string or `credential("...")`; a credential reference must be declared under `defaults.credentials`, because the client secret belongs to the application rather than to a caller.
 
 ```ts theme={null}
 mcp("github", {

@@ -3743,7 +3743,9 @@ export class McpProxy {
     return async () => {
       const source = this.defaultCredentials[clientSecret.reference];
       if (!source) {
-        throw new Error(`Missing OAuth client secret credential "${clientSecret.reference}" for server "${server.name}"`);
+        throw new Error(
+          `Missing OAuth client secret credential "${clientSecret.reference}" for server "${server.name}". Declare it under defaults.credentials.`,
+        );
       }
 
       return resolveCredentialSource(source);

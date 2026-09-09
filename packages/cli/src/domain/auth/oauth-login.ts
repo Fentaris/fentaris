@@ -221,11 +221,26 @@ async function loadProjectConfig(project: ProjectDiscovery): Promise<McpProxyOpt
 }
 
 function openInBrowser(url: string, runtime: Runtime): void {
-  const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+  // Never go through a shell: an authorization URL contains `&`, which cmd.exe would
+  // treat as a command separator and truncate. `cmd /c start "" <url>` passes it intact.
+  const [command, args] =
+    process.platform === "darwin"
+      ? (["open", [url]] as const)
+      : process.platform === "win32"
+        ? (["cmd", ["/c", "start", "", url]] as const)
+        : (["xdg-open", [url]] as const);
+
+  const fallback = (): void => {
+    runtime.out.log(url);
+  };
+
   try {
-    const child = spawn(command, [url], { stdio: "ignore", detached: true, shell: process.platform === "win32" });
+    const child = spawn(command, [...args], { stdio: "ignore", detached: true, shell: false });
+    // A missing opener surfaces asynchronously; without this listener the unhandled
+    // 'error' event would kill the CLI on a headless machine.
+    child.once("error", fallback);
     child.unref();
   } catch {
-    runtime.out.log(url);
+    fallback();
   }
 }

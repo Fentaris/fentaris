@@ -108,7 +108,14 @@ export function deriveOAuthCallbackUrl(
   const callbackPath = oauthCallbackPath(options);
   const publicUrl = options?.publicUrl?.trim();
   if (publicUrl) {
-    return new URL(callbackPath, publicUrl.endsWith("/") ? publicUrl : `${publicUrl}/`).toString();
+    // Keep any path prefix on publicUrl: behind a reverse proxy that mounts Fentaris
+    // under a subpath, dropping it would advertise a callback nobody serves.
+    const base = new URL(publicUrl);
+    const prefix = base.pathname.replace(/\/+$/, "");
+    base.pathname = `${prefix}${callbackPath}`;
+    base.search = "";
+    base.hash = "";
+    return base.toString();
   }
 
   const host = !listener.host || listener.host === "0.0.0.0" || listener.host === "::" ? "localhost" : listener.host;
