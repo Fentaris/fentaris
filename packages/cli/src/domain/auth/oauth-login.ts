@@ -11,6 +11,7 @@ import {
   type OAuthManager,
   type OAuthSessionKey,
   type OAuthStoreEntry,
+  type OAuthTokenStore,
 } from "@fentaris/core";
 import { loadProjectEnv } from "../project/env.js";
 import { authDirectory } from "../secrets/backend.js";
@@ -29,7 +30,7 @@ export type OAuthCliContext = {
   project: ProjectDiscovery;
   app: McpProxy;
   manager: OAuthManager;
-  store: LocalOAuthTokenStore;
+  store: OAuthTokenStore;
   oauthServers: string[];
   sessionKeyFor(server: string, selector?: string): OAuthSessionKey;
   close(): Promise<void>;
@@ -54,11 +55,14 @@ export async function openOAuthCliContext(
   behavior: { port?: number; withCallback?: boolean } = {},
 ): Promise<OAuthCliContext> {
   const project = await discoverSecretsProject(runtime.cwd, { requireEntrypoint: true });
-  const env = await loadProjectEnv(project.root, runtime.env);
-  const key = await authKeyFromRuntime({ ...runtime, env }, options);
   const config = await loadProjectConfig(project);
+  let store = config.oauth?.store;
+  if (!store) {
+    const env = await loadProjectEnv(project.root, runtime.env);
+    const key = await authKeyFromRuntime({ ...runtime, env }, options);
+    store = new LocalOAuthTokenStore({ dir: authDirectory(project), key });
+  }
 
-  const store = new LocalOAuthTokenStore({ dir: authDirectory(project), key });
   // Reuse the proxy wiring so the CLI registers upstream servers exactly like the runtime.
   const app = fentaris({ ...config, oauth: { ...config.oauth, store } });
   const manager = app.oauth();

@@ -37,7 +37,7 @@ function runtime(cwd: string, nonInteractive = false): Runtime & { output: strin
   } as Runtime & { output: string[]; errors: string[] };
 }
 
-async function project(options: { upstreamUrl: string; oauthDeclaration?: string }): Promise<string> {
+async function project(options: { upstreamUrl: string; oauthDeclaration?: string; customStore?: boolean }): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "fentaris-cli-oauth-"));
   cleanups.push(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, "src"), { recursive: true });
@@ -58,9 +58,10 @@ async function project(options: { upstreamUrl: string; oauthDeclaration?: string
   );
   await writeFile(
     join(root, "src", "index.ts"),
-    `import { Policy, mcp, oauth, streamableHttp } from ${JSON.stringify(coreEntry)};
+    `import { Policy, mcp, oauth, oauthTokens, streamableHttp } from ${JSON.stringify(coreEntry)};
 export default {
   policy: Policy.allowAll(),
+  ${options.customStore ? "oauth: { store: oauthTokens.memory() }," : ""}
   servers: [
     mcp("protected", {
       transport: streamableHttp({ url: ${JSON.stringify(options.upstreamUrl)}, network: { allowPrivateNetworkUrls: true } }),
@@ -170,6 +171,18 @@ describe("fentaris auth login", () => {
     await rm(join(root, ".env"));
 
     expect(await main(["auth", "status", "--json"], rt)).toBe(1);
+  }, 20_000);
+
+  it("uses a configured OAuth store without requiring a local encryption key", async () => {
+    const target = await upstream();
+    const root = await project({ upstreamUrl: target.url, customStore: true });
+    const rt = runtime(root, true);
+    rt.env = {};
+    await rm(join(root, ".env"));
+
+    const context = await openOAuthCliContext(rt, {}, { withCallback: false });
+    expect(context.store).toBe(context.manager.store);
+    await context.close();
   }, 20_000);
 
   it("stops waiting for the callback after --timeout instead of blocking", async () => {
