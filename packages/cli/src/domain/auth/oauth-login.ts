@@ -11,6 +11,7 @@ import {
   type OAuthManager,
   type OAuthSessionKey,
   type OAuthStoreEntry,
+  type OAuthTokenStore,
 } from "@fentaris/core";
 import { loadProjectEnv } from "../project/env.js";
 import { authDirectory } from "../secrets/backend.js";
@@ -29,7 +30,7 @@ export type OAuthCliContext = {
   project: ProjectDiscovery;
   app: McpProxy;
   manager: OAuthManager;
-  store: LocalOAuthTokenStore;
+  store: OAuthTokenStore;
   oauthServers: string[];
   sessionKeyFor(server: string, selector?: string): OAuthSessionKey;
   close(): Promise<void>;
@@ -54,11 +55,14 @@ export async function openOAuthCliContext(
   behavior: { port?: number; withCallback?: boolean } = {},
 ): Promise<OAuthCliContext> {
   const project = await discoverSecretsProject(runtime.cwd, { requireEntrypoint: true });
-  const env = await loadProjectEnv(project.root, runtime.env);
-  const key = await authKeyFromRuntime({ ...runtime, env }, options);
   const config = await loadProjectConfig(project);
+  let store = config.oauth?.store;
+  if (!store) {
+    const env = await loadProjectEnv(project.root, runtime.env);
+    const key = await authKeyFromRuntime({ ...runtime, env }, options);
+    store = new LocalOAuthTokenStore({ dir: authDirectory(project), key });
+  }
 
-  const store = new LocalOAuthTokenStore({ dir: authDirectory(project), key });
   // Reuse the proxy wiring so the CLI registers upstream servers exactly like the runtime.
   const app = fentaris({ ...config, oauth: { ...config.oauth, store } });
   const manager = app.oauth();
@@ -220,15 +224,19 @@ async function loadProjectConfig(project: ProjectDiscovery): Promise<McpProxyOpt
   return config as McpProxyOptions;
 }
 
+export function browserLaunchCommand(platform: NodeJS.Platform, url: string): readonly [string, readonly string[]] {
+  if (platform === "darwin") {
+    return ["open", [url]] as const;
+  }
+  if (platform === "win32") {
+    // Invoke the URL handler directly. `cmd /c start` would parse `&` inside OAuth URLs.
+    return ["rundll32.exe", ["url.dll,FileProtocolHandler", url]] as const;
+  }
+  return ["xdg-open", [url]] as const;
+}
+
 function openInBrowser(url: string, runtime: Runtime): void {
-  // Never go through a shell: an authorization URL contains `&`, which cmd.exe would
-  // treat as a command separator and truncate. `cmd /c start "" <url>` passes it intact.
-  const [command, args] =
-    process.platform === "darwin"
-      ? (["open", [url]] as const)
-      : process.platform === "win32"
-        ? (["cmd", ["/c", "start", "", url]] as const)
-        : (["xdg-open", [url]] as const);
+  const [command, args] = browserLaunchCommand(process.platform, url);
 
   const fallback = (): void => {
     runtime.out.log(url);
