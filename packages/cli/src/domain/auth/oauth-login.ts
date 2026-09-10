@@ -220,15 +220,19 @@ async function loadProjectConfig(project: ProjectDiscovery): Promise<McpProxyOpt
   return config as McpProxyOptions;
 }
 
+export function browserLaunchCommand(platform: NodeJS.Platform, url: string): readonly [string, readonly string[]] {
+  if (platform === "darwin") {
+    return ["open", [url]] as const;
+  }
+  if (platform === "win32") {
+    // Invoke the URL handler directly. `cmd /c start` would parse `&` inside OAuth URLs.
+    return ["rundll32.exe", ["url.dll,FileProtocolHandler", url]] as const;
+  }
+  return ["xdg-open", [url]] as const;
+}
+
 function openInBrowser(url: string, runtime: Runtime): void {
-  // Never go through a shell: an authorization URL contains `&`, which cmd.exe would
-  // treat as a command separator and truncate. `cmd /c start "" <url>` passes it intact.
-  const [command, args] =
-    process.platform === "darwin"
-      ? (["open", [url]] as const)
-      : process.platform === "win32"
-        ? (["cmd", ["/c", "start", "", url]] as const)
-        : (["xdg-open", [url]] as const);
+  const [command, args] = browserLaunchCommand(process.platform, url);
 
   const fallback = (): void => {
     runtime.out.log(url);

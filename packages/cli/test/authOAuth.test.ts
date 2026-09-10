@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FentarisAuth, LocalOAuthTokenStore } from "@fentaris/core";
 import { main } from "../src/index.js";
 import type { Runtime } from "../src/index.js";
+import { browserLaunchCommand, openOAuthCliContext } from "../src/domain/auth/oauth-login.js";
 import { startAuthorizationServer } from "../../core/test/fixtures/oauth/authorizationServer.js";
 import { startProtectedMcpServer } from "../../core/test/fixtures/oauth/protectedMcpServer.js";
 
@@ -191,4 +192,12 @@ describe("fentaris auth login", () => {
     expect(await main(["auth", "login", "protected", "--timeout", "0", "--json"], rt)).toBe(1);
     expect(rt.errors.join("\n")).toContain("Invalid --timeout value");
   }, 20_000);
+
+  it("launches Windows OAuth URLs without cmd.exe parsing", () => {
+    const url = "https://login.example/authorize?client_id=fentaris&code_challenge=abc";
+    expect(browserLaunchCommand("win32", url)).toEqual([
+      "rundll32.exe",
+      ["url.dll,FileProtocolHandler", url],
+    ]);
+  });
 });
