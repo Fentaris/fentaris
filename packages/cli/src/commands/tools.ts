@@ -1,12 +1,14 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { AgentToolDiscoveryService, type AgentJsonEnvelope, type McpProxyOptions } from "@fentaris/core";
+import { AgentToolDiscoveryService, type AgentJsonEnvelope, type McpProxyOptions, type OAuthStatusSnapshot } from "@fentaris/core";
 import { discoverSecretsProject } from "../domain/project/project.js";
+import { runAuthLogin } from "./auth.js";
+import { oauthStatusEntries, openOAuthCliContext } from "../domain/auth/oauth-login.js";
 import type { CliCommand, CliOptions, Runtime } from "../shared/types.js";
 
 export async function runTools(command: CliCommand, runtime: Runtime): Promise<void> {
   const subcommand = command.args[0];
-  const service = await loadService(runtime);
+  const service = await loadService(runtime, command.options);
 
   if (subcommand === "list") {
     print(runtime, await service.list(options(command.options)), command.options);
@@ -61,7 +63,14 @@ async function runToolsAuth(command: CliCommand, runtime: Runtime, service: Agen
     return;
   }
   if (action === "login") {
-    print(runtime, service.authLogin(mcp, selector), command.options);
+    const envelope = service.authLogin(mcp, selector);
+    if (envelope.ok && envelope.data.loginMode === "browser") {
+      // Same code path as `fentaris auth login`, so the agent gets a real browser login.
+      await runAuthLogin({ ...command, args: ["login", mcp], options: { ...command.options, as: selector } }, runtime);
+      return;
+    }
+
+    print(runtime, envelope, command.options);
     return;
   }
 
@@ -83,7 +92,7 @@ function options(input: CliOptions) {
   };
 }
 
-async function loadService(runtime: Runtime): Promise<AgentToolDiscoveryService> {
+async function loadService(runtime: Runtime, options: CliOptions = {}): Promise<AgentToolDiscoveryService> {
   const project = await discoverSecretsProject(runtime.cwd, { requireEntrypoint: true });
   const entrypoint = pathToFileURL(join(project.root, project.config.entrypoint)).href;
   const module = await import(`${entrypoint}?fentarisToolsDiscovery=${Date.now()}`) as Record<string, unknown>;
@@ -91,7 +100,7 @@ async function loadService(runtime: Runtime): Promise<AgentToolDiscoveryService>
   if (!config || typeof config !== "object") {
     throw new Error("Project entrypoint must export a Fentaris config as default, config, or fentarisConfig for tools discovery.");
   }
-  return new AgentToolDiscoveryService(config as McpProxyOptions);
+  return new AgentToolDiscoveryService(config as McpProxyOptions, { oauthStatuses: await loadOAuthStatuses(runtime, options) });
 }
 
 function print(runtime: Runtime, envelope: AgentJsonEnvelope<unknown>, opts: CliOptions): void {
@@ -136,4 +145,26 @@ function numberOption(options: CliOptions, key: string): number | undefined {
 function repeatableOption(options: CliOptions, key: string): string[] | undefined {
   const value = stringOption(options, key);
   return value ? value.split(",").map((entry) => entry.trim()).filter(Boolean) : undefined;
+}
+
+/**
+ * Read stored upstream OAuth authorizations once so synchronous discovery can report
+ * accurate auth status. Failures degrade to "requires-login" instead of failing discovery.
+ */
+async function loadOAuthStatuses(runtime: Runtime, options: CliOptions): Promise<OAuthStatusSnapshot> {
+  try {
+    const context = await openOAuthCliContext(runtime, options, { withCallback: false });
+    try {
+      const entries = await oauthStatusEntries(context);
+      return Object.fromEntries(
+        entries
+          .filter((entry) => entry.status === "authenticated" || entry.status === "requires-login")
+          .map((entry) => [`${entry.server}:${entry.session}`, entry.status as "authenticated" | "requires-login"]),
+      );
+    } finally {
+      await context.close();
+    }
+  } catch {
+    return {};
+  }
 }

@@ -353,6 +353,20 @@ export type ProxyExposureHandle = {
 };
 
 /**
+ * Interaction channel with the connected MCP client for one downstream session.
+ * Used to hand an OAuth authorization URL to the human and to signal completion.
+ * @pk
+ */
+export type ProxySessionInteraction = {
+  /** Whether the connected client advertised URL-mode elicitation. @pk */
+  supportsUrlElicitation(): boolean;
+  /** Ask the human to visit an authorization URL. @pk */
+  elicitUrl(params: { message: string; url: string; elicitationId: string }): Promise<{ action: "accept" | "decline" | "cancel" }>;
+  /** Tell the client an elicitation is no longer pending. @pk */
+  notifyElicitationComplete(elicitationId: string): Promise<void>;
+};
+
+/**
  * Runtime operations shared by downstream proxy exposure transports.
  * @pk
  */

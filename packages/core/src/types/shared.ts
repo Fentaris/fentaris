@@ -46,7 +46,8 @@ export type GroupMembership = {
  */
 export type CredentialSourceMetadata = {
   reference: string;
-  source: "user" | "group" | "default";
+  /** `oauth` marks a credential applied through an upstream OAuth authorization. @pk */
+  source: "user" | "group" | "default" | "oauth";
   userId?: string;
   groupId?: string;
 };

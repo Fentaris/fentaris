@@ -91,8 +91,19 @@ streamableHttp({
 })
 ```
 
+### OAuth 2.1 Upstreams
+
+Declare `auth: oauth()` on the server when the upstream runs an OAuth 2.1 flow. Fentaris then discovers the authorization server, registers a client, runs PKCE, refreshes tokens, and keeps one authorization per user.
+
+```ts theme={null}
+mcp("linear", {
+  transport: streamableHttp({ url: "https://mcp.linear.app/mcp" }),
+  auth: oauth(),
+})
+```
+
 <Note>
-  Fentaris does not acquire or refresh OAuth tokens. Pass an already-valid access token through a resolver when the upstream needs one.
+  A caller-supplied access token still works: pass it through a resolver and Fentaris forwards it unchanged. Use `oauth()` when nobody holds a token yet. See [Upstream OAuth 2.1](/guides/oauth).
 </Note>
 
 ## Close Cleanly

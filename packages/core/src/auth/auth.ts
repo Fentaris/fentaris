@@ -1,37 +1,12 @@
-import { createCipheriv, createDecipheriv, createHash, pbkdf2Sync, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import type { IdentityStrategy } from "../types/policy.js";
 import type { CredentialSourceMetadata, ResolvedSubject } from "../types/shared.js";
+import { decryptEnvelope, encryptedEnvelopeSchema, encryptEnvelope, parseWithError } from "./envelope.js";
 
-const legacyEncryptedCredentialsSchema = z.object({
-  version: z.literal(1),
-  algorithm: z.literal("aes-256-gcm"),
-  salt: z.string(),
-  iv: z.string(),
-  tag: z.string(),
-  ciphertext: z.string(),
-});
-
-const encryptedCredentialsSchema = z.discriminatedUnion("version", [
-  legacyEncryptedCredentialsSchema,
-  z.object({
-    version: z.literal(2),
-    algorithm: z.literal("aes-256-gcm"),
-    kdf: z.object({
-      name: z.literal("pbkdf2-sha256"),
-      iterations: z.number().int().positive(),
-      salt: z.string(),
-      keyLength: z.literal(32),
-    }),
-    iv: z.string(),
-    tag: z.string(),
-    ciphertext: z.string(),
-  }),
-]);
-
-const defaultKdfIterations = 210_000;
+const encryptedCredentialsSchema = encryptedEnvelopeSchema;
 
 const credentialValueSchema = z.string().min(1);
 
@@ -122,26 +97,7 @@ export class FentarisAuth {
    * @pk
    */
   static encryptCredentials(credentials: LocalCredentials, key: string | Buffer): z.infer<typeof encryptedCredentialsSchema> {
-    const validated = localCredentialsSchema.parse(credentials);
-    const salt = randomBytes(16);
-    const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", deriveStretchedKey(key, salt, defaultKdfIterations), iv);
-    const ciphertext = Buffer.concat([cipher.update(JSON.stringify(validated), "utf8"), cipher.final()]);
-    const tag = cipher.getAuthTag();
-
-    return {
-      version: 2,
-      algorithm: "aes-256-gcm",
-      kdf: {
-        name: "pbkdf2-sha256",
-        iterations: defaultKdfIterations,
-        salt: salt.toString("base64"),
-        keyLength: 32,
-      },
-      iv: iv.toString("base64"),
-      tag: tag.toString("base64"),
-      ciphertext: ciphertext.toString("base64"),
-    };
+    return encryptEnvelope(localCredentialsSchema.parse(credentials), key);
   }
 
   /**
@@ -242,34 +198,7 @@ export function apiKeyIdentityStrategy(options: {
 }
 
 function decryptLocalCredentials(envelope: z.infer<typeof encryptedCredentialsSchema>, key: string | Buffer): unknown {
-  try {
-    const decipher = createDecipheriv("aes-256-gcm", deriveEnvelopeKey(envelope, key), Buffer.from(envelope.iv, "base64"));
-    decipher.setAuthTag(Buffer.from(envelope.tag, "base64"));
-    const plaintext = Buffer.concat([
-      decipher.update(Buffer.from(envelope.ciphertext, "base64")),
-      decipher.final(),
-    ]).toString("utf8");
-
-    return JSON.parse(plaintext) as unknown;
-  } catch {
-    throw new Error("Unable to decrypt local credentials with the provided key");
-  }
-}
-
-function deriveEnvelopeKey(envelope: z.infer<typeof encryptedCredentialsSchema>, key: string | Buffer): Buffer {
-  if (envelope.version === 1) {
-    return deriveLegacyKey(key, Buffer.from(envelope.salt, "base64"));
-  }
-
-  return deriveStretchedKey(key, Buffer.from(envelope.kdf.salt, "base64"), envelope.kdf.iterations);
-}
-
-function deriveLegacyKey(key: string | Buffer, salt: Buffer): Buffer {
-  return createHash("sha256").update(key).update(salt).digest();
-}
-
-function deriveStretchedKey(key: string | Buffer, salt: Buffer, iterations: number): Buffer {
-  return pbkdf2Sync(key, salt, iterations, 32, "sha256");
+  return decryptEnvelope(envelope, key, "Unable to decrypt local credentials with the provided key");
 }
 
 function compareApiKey(candidate: string, provided: string): boolean {
@@ -306,13 +235,4 @@ async function readOptionalJson(filePath: string, fallback: unknown): Promise<un
 
     throw new Error(`Unable to read upstream auth bindings file at ${filePath}`, { cause: error });
   }
-}
-
-function parseWithError<T>(schema: z.ZodType<T>, value: unknown, message: string): T {
-  const result = schema.safeParse(value);
-  if (!result.success) {
-    throw new Error(`${message}: ${result.error.issues.map((issue) => issue.path.join(".") || issue.message).join(", ")}`);
-  }
-
-  return result.data;
 }
