@@ -48,7 +48,7 @@
 - **Unify** stdio, Streamable HTTP, SSE, and HTTP upstream MCP servers behind one proxy.
 - **Protect** tool calls, resources, prompts, and completions with policy, identity, middleware, hooks, and rate limits.
 - **Observe** every proxied operation with structured logging, lifecycle events, and per-request context.
-- **Ship** generated proxy projects with the Fentaris CLI, local runtime files, and project checks.
+- **Authenticate** clients and upstream MCP servers with API keys, bearer tokens, custom headers, and OAuth 2.1.
 
 Fentaris is designed for teams that want MCP servers to behave like production infrastructure: stable names, centralized governance, auditable calls, and predictable client-facing endpoints.
 
@@ -60,7 +60,7 @@ Visit our [docs](https://fentaris.mintlify.app) or jump to a [quickstart](https:
 
  > Using Claude Code, Codex, Cursor or other AI coding agents?
  > 
- > [Install mcp-use skill for MCP Apps](https://www.skills.sh/fentaris/fentaris-skills/fentaris-project-setup)
+ > [Install the Fentaris skill for coding agents](https://www.skills.sh/fentaris/fentaris-skills/fentaris-project-setup)
 
 For a complete runnable project with API-key users, groups, allow-list policy,
 a remote MCP upstream, and app-owned local tools, see
