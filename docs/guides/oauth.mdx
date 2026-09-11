@@ -84,7 +84,14 @@ How long a tool call waits for the human to finish consent. Defaults to `90000`,
 
 ### `oauth.agentTools`
 
-Set to `false` to skip registering the built-in `fentaris__auth_status` and `fentaris__auth_login` tools.
+Set to `false` to skip registering the built-in `fentaris__auth_status` and `fentaris__auth_login` tools. When group policies are enabled, grant access to these tools through the reserved `fentaris` namespace:
+
+```ts theme={null}
+const supportPolicy = policy("support")
+  .allow("linear", "*")
+  .allow("fentaris", "auth_status")
+  .allow("fentaris", "auth_login");
+```
 
 ## How Consent Reaches the Human
 
