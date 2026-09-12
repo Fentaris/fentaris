@@ -238,17 +238,25 @@ export class FentarisOAuthClientProvider implements OAuthClientProvider {
   }
 
   async prepareTokenRequest(scope?: string): Promise<URLSearchParams | undefined> {
-    if (this.auth.grant !== "client_credentials") {
+    if (this.auth.grant === "client_credentials") {
+      const params = new URLSearchParams({ grant_type: "client_credentials" });
+      const requestedScope = scope ?? this.auth.scopes?.join(" ");
+      if (requestedScope) {
+        params.set("scope", requestedScope);
+      }
+
+      return params;
+    }
+
+    // The MCP SDK classifies providers without a redirect URL as non-interactive
+    // before it checks their stored tokens. Refresh the existing authorization-code
+    // grant through that hook so headless exposures can reuse CLI-issued tokens.
+    if (this.redirect) {
       return undefined;
     }
 
-    const params = new URLSearchParams({ grant_type: "client_credentials" });
-    const requestedScope = scope ?? this.auth.scopes?.join(" ");
-    if (requestedScope) {
-      params.set("scope", requestedScope);
-    }
-
-    return params;
+    const refreshToken = (await this.record())?.tokens?.refresh_token;
+    return refreshToken ? new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }) : undefined;
   }
 
   async invalidateCredentials(scope: "all" | "client" | "tokens" | "verifier" | "discovery"): Promise<void> {

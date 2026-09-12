@@ -16,6 +16,7 @@ type Harness = {
   upstream: FixtureProtectedMcpServer;
   server: McpServer;
   manager: OAuthManager;
+  transport: StreamableHttpMcpTransport;
 };
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -41,7 +42,7 @@ async function harness(options: { auth?: OAuthAuth; toggles?: Parameters<typeof 
   manager.register("protected", { auth, serverUrl: upstream.url, fetchFn: transport.createGuardedFetch() });
   server.attachOAuth((user) => manager.providerFor("protected", user));
 
-  return { authServer, upstream, server, manager };
+  return { authServer, upstream, server, manager, transport };
 }
 
 async function completeLogin(manager: OAuthManager, error: OAuthAuthorizationRequiredError): Promise<void> {
@@ -98,6 +99,34 @@ describe("OAuth-protected upstream over Streamable HTTP", () => {
     const tokensAfter = await manager.store.get("protected", "user:alice");
     expect(tokensAfter?.tokens?.access_token).not.toBe(tokensBefore?.tokens?.access_token);
     expect(await manager.status("protected", "user:alice")).toBe("authenticated");
+  });
+
+  it("refreshes CLI-issued tokens without a redirect URL in a headless exposure", async () => {
+    const auth = oauth({ tokens: "shared" });
+    const { server, manager, authServer, upstream, transport } = await harness({
+      auth,
+      toggles: { accessTokenTtlSeconds: 1 },
+    });
+
+    await completeLogin(manager, await callExpectingAuthorization(server, { id: "cli" }));
+    const tokensBefore = await manager.store.get("protected", "shared");
+    authServer.expireAccessTokens();
+
+    const headlessManager = new OAuthManager({ store: manager.store });
+    headlessManager.register("protected", {
+      auth,
+      serverUrl: upstream.url,
+      fetchFn: transport.createGuardedFetch(),
+    });
+    server.attachOAuth((user) => headlessManager.providerFor("protected", user));
+    await server.evictTransport({ id: "agent" });
+
+    const result = await server.callTool({ name: "echo", arguments: { message: "headless" } }, { id: "agent" });
+    expect(result.content).toEqual([{ type: "text", text: "demo-user:headless" }]);
+
+    const tokensAfter = await headlessManager.store.get("protected", "shared");
+    expect(tokensAfter?.tokens?.access_token).not.toBe(tokensBefore?.tokens?.access_token);
+    expect(headlessManager.getCallbackUrl()).toBeUndefined();
   });
 
   it("returns to requires-login when the refresh is rejected", async () => {
