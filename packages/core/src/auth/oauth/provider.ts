@@ -251,6 +251,10 @@ export class FentarisOAuthClientProvider implements OAuthClientProvider {
     // The MCP SDK classifies providers without a redirect URL as non-interactive
     // before it checks their stored tokens. Refresh the existing authorization-code
     // grant through that hook so headless exposures can reuse CLI-issued tokens.
+    if (this.redirect) {
+      return undefined;
+    }
+
     const refreshToken = (await this.record())?.tokens?.refresh_token;
     return refreshToken ? new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }) : undefined;
   }
