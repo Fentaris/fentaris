@@ -471,6 +471,7 @@ export class McpProxy {
   private oauthManagerCache?: OAuthManager;
   private oauthStoreEphemeral = false;
   private oauthInitialized = false;
+  private oauthAgentToolsRegistered = false;
   private readonly exposureHandles = new Set<ProxyExposureHandle>();
   private edgeControlPlaneRuntime?: IntegratedEdgeControlPlaneRuntime;
 
@@ -1423,9 +1424,16 @@ export class McpProxy {
   }
 
   private assertRuntimeConfigValid(): void {
+    this.oauth();
     this.materializeLocalNamespaces();
     this.refreshDerivedGovernanceState({ validate: true });
-    assertValidFentarisConfig(this.runtimeValidationConfig);
+    const validation = validateFentarisConfig(this.runtimeValidationConfig);
+    const errors = validation.errors.filter((error) => !(
+      this.oauthAgentToolsRegistered && error.code === "FENTARIS_CONFIG_OAUTH_RESERVED_NAMESPACE"
+    ));
+    if (errors.length > 0) {
+      throw new FentarisConfigError(errors);
+    }
     const edgeDiagnostics = this.validateEdgeConfiguration();
     if (edgeDiagnostics.length > 0) {
       throw new FentarisConfigError(edgeDiagnostics);
@@ -1725,6 +1733,7 @@ export class McpProxy {
   }
 
   private assertDeferredPolicyServerVisibilityValid(): void {
+    this.oauth();
     this.materializeLocalNamespaces();
     this.refreshDerivedGovernanceState({ validate: true });
     const result = validateFentarisConfig(this.runtimeValidationConfig);
@@ -3710,6 +3719,7 @@ export class McpProxy {
     }
 
     registerOAuthAgentTools(this.localRegistry.namespace(FENTARIS_LOCAL_NAMESPACE), { manager: () => this.oauthManagerCache });
+    this.oauthAgentToolsRegistered = true;
     this.materializeLocalNamespaces();
   }
 

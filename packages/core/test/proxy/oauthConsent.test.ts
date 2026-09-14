@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fentaris } from "../../src/proxy/McpProxy.js";
-import { Policy } from "../../src/governance.js";
+import { Policy, group, policy, user } from "../../src/governance.js";
 import { mcp } from "../../src/server/index.js";
 import { oauth } from "../../src/auth/oauth/dsl.js";
 import { oauthTokens } from "../../src/auth/oauth/store.js";
@@ -140,6 +140,43 @@ describe("OAuth consent through URL elicitation", () => {
 });
 
 describe("OAuth tool listing degradation and agent tools", () => {
+  it.each([false, true])(
+    "allows group policies to reference the built-in OAuth agent tools (initialized before startup: %s)",
+    async (initializeBeforeStart) => {
+      const app = fentaris({
+        groups: [
+          group({
+            id: "support",
+            users: [user("alice")],
+            policy: policy("support")
+              .allow("protected", "*")
+              .allow("fentaris", "auth_status")
+              .allow("fentaris", "auth_login"),
+          }),
+        ],
+        oauth: { store: oauthTokens.memory() },
+        servers: [
+          mcp("protected", {
+            transport: streamableHttp({ url: "https://mcp.example.com/mcp" }),
+            auth: oauth(),
+          }),
+        ],
+      });
+      cleanups.push(() => app.close());
+
+      if (initializeBeforeStart) {
+        expect(app.oauth()).toBeDefined();
+      }
+      await expect(app.start({ port: 0 })).resolves.toBeTruthy();
+
+      const tools = await app.listTools(undefined, { id: "alice" });
+      expect(tools.tools.map((tool) => tool.name)).toEqual(expect.arrayContaining([
+        "fentaris__auth_status",
+        "fentaris__auth_login",
+      ]));
+    },
+  );
+
   it("omits an unauthorized server, keeps listing, and never contacts the authorization server", async () => {
     const authServer = await startAuthorizationServer();
     cleanups.push(() => authServer.close());

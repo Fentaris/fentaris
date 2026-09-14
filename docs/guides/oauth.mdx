@@ -84,7 +84,14 @@ How long a tool call waits for the human to finish consent. Defaults to `90000`,
 
 ### `oauth.agentTools`
 
-Set to `false` to skip registering the built-in `fentaris__auth_status` and `fentaris__auth_login` tools.
+Set to `false` to skip registering the built-in `fentaris__auth_status` and `fentaris__auth_login` tools. When group policies are enabled, grant access to these tools through the reserved `fentaris` namespace:
+
+```ts theme={null}
+const supportPolicy = policy("support")
+  .allow("linear", "*")
+  .allow("fentaris", "auth_status")
+  .allow("fentaris", "auth_login");
+```
 
 ## How Consent Reaches the Human
 
@@ -112,7 +119,7 @@ Clients that cannot elicit a URL get a structured error result instead:
 
 Tokens, client registrations, and cached discovery state live in `<authDir>/oauth-tokens.enc.json`, encrypted with the same key as `credentials.enc.json`, written atomically with owner-only permissions. The file is separate from the credentials store, so `fentaris secrets set` and the secrets manifest are never touched.
 
-The proxy and the CLI share the file without IPC: a CLI login is visible to a running proxy on its next read, with no restart.
+The proxy and the CLI share the file without IPC: a CLI login is visible to a running proxy on its next read, with no restart. A headless or stdio exposure can refresh that stored authorization without declaring `redirectUrl`; a callback URL is only required to start or complete a new authorization-code flow.
 
 <Warning>
   Without a store key (`FENTARIS_AUTH_KEY` or a configured `oauth.store`), authorizations are kept in memory only and are lost on restart. Configuration reports `FENTARIS_CONFIG_OAUTH_STORE_EPHEMERAL`.

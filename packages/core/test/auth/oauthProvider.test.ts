@@ -179,6 +179,14 @@ describe("FentarisOAuthClientProvider grants and invalidation", () => {
     expect(await provider.prepareTokenRequest()).toBeUndefined();
   });
 
+  it("does not replace a new authorization code exchange with a stored refresh grant", async () => {
+    const { provider } = build(oauth());
+    await provider.saveTokens({ access_token: "old-at", token_type: "Bearer", refresh_token: "old-rt" });
+
+    expect(provider.redirectUrl).toBe(redirectUrl);
+    expect(await provider.prepareTokenRequest()).toBeUndefined();
+  });
+
   it("stores tokens with an acquisition timestamp and strips it when read back", async () => {
     const { provider, store } = build(oauth());
     await provider.saveTokens({ access_token: "at", token_type: "Bearer", expires_in: 60 });
