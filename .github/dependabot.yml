@@ -9,6 +9,10 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: "development"
+    ignore:
+      # typescript-eslint does not support TypeScript 7.x yet; unblock once it does.
+      - dependency-name: "typescript"
+        versions: [">=7.0.0"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
