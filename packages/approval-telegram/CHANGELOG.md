@@ -1,5 +1,32 @@
 # @fentaris/approval-telegram
 
+## 0.1.15
+
+### Patch Changes
+
+- Updated dependencies [3dae736]
+- Updated dependencies [f8655c5]
+  - @fentaris/core@3.1.1
+
+## 0.1.14
+
+### Patch Changes
+
+- Updated dependencies [4e49a38]
+- Updated dependencies [535b74e]
+  - @fentaris/core@3.1.0
+
+## 0.1.13
+
+### Patch Changes
+
+- 6599d72: Redact Telegram bot tokens from transport error logs and include operational Edge documentation in the published package.
+- Updated dependencies [da1a47a]
+- Updated dependencies [4836bf7]
+- Updated dependencies [64813bd]
+- Updated dependencies [eb7e639]
+  - @fentaris/core@3.0.1
+
 ## 0.1.12
 
 ### Patch Changes
