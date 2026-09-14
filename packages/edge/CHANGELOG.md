@@ -1,5 +1,43 @@
 # @fentaris/edge
 
+## 0.3.4
+
+### Patch Changes
+
+- Updated dependencies [3dae736]
+- Updated dependencies [f8655c5]
+  - @fentaris/core@3.1.1
+
+## 0.3.3
+
+### Patch Changes
+
+- Updated dependencies [4e49a38]
+- Updated dependencies [535b74e]
+  - @fentaris/core@3.1.0
+
+## 0.3.2
+
+### Patch Changes
+
+- 995f0f9: Keep the local Edge control socket within macOS path limits when the process temporary directory is deeply nested, and persist the bound address so CLI commands find the running control socket even when invoked with a different `TMPDIR`.
+
+## 0.3.1
+
+### Patch Changes
+
+- da1a47a: Recover stale local authority locks and support an explicit cross-platform Edge state directory.
+- 74a7f69: Preserve an explicitly configured Edge state directory in persistent launchd and systemd services.
+- 147f945: Keep local Edge control sockets within platform path limits and clean up the persistent agent when control startup fails.
+- 64813bd: Treat rejected and revoked Edge credentials as terminal, stop reconnect loops, and direct operators to join the device again.
+- 6599d72: Redact Telegram bot tokens from transport error logs and include operational Edge documentation in the published package.
+- 0997001: Publish workload capability manifests during desired-state reconciliation so Edge tools can be discovered and authorized before their first downstream call.
+- Updated dependencies [da1a47a]
+- Updated dependencies [4836bf7]
+- Updated dependencies [64813bd]
+- Updated dependencies [eb7e639]
+  - @fentaris/core@3.0.1
+
 ## 0.3.0
 
 ### Minor Changes

@@ -1,5 +1,71 @@
 # @fentaris/cli
 
+## 1.6.1
+
+### Patch Changes
+
+- Updated dependencies [3dae736]
+- Updated dependencies [f8655c5]
+  - @fentaris/core@3.1.1
+  - @fentaris/edge@0.3.4
+
+## 1.6.0
+
+### Minor Changes
+
+- 535b74e: Add `fentaris auth login|status|logout` for upstream OAuth 2.1 servers.
+
+  `fentaris auth login <mcp> [--as user:<id>] [--print-url] [--port] [--json]` runs the whole flow in-process against a loopback redirect and writes tokens to the project's encrypted OAuth store, which a running proxy picks up without a restart. `--print-url` and `--non-interactive` never open a browser. `fentaris auth status` lists stored authorizations without printing token values, `fentaris auth logout` removes one, and `fentaris tools auth login` now performs the same real browser login instead of returning a delegated stub.
+
+### Patch Changes
+
+- 4e49a38: Harden the upstream OAuth 2.1 client against redirect-based SSRF and multi-writer token state.
+
+  Guarded upstream fetch now follows redirects manually so every hop, not just the first URL, passes the network guardrails; credentials are dropped across origins and a redirect loop is refused. Dynamic client registrations are kept per redirect URI so a CLI login and the proxy no longer invalidate each other, and a refresh reuses the exact client the tokens were issued to. PKCE verifiers are matched to their authorization URL by `code_challenge`, so two concurrent logins on one session cannot swap them. Token records are updated read-modify-write inside the store lock. The hosted callback completes with a caller-supplied `oauth({ provider })` instead of a rebuilt default provider, `oauth.publicUrl` keeps its path prefix behind a reverse proxy, and an OAuth `clientSecret` credential reference is now rejected at validation time unless application defaults declare it. `fentaris auth login` opens the browser without a shell, so Windows no longer truncates the authorization URL at the first `&`, and a missing opener falls back to printing the URL instead of terminating the CLI.
+
+- Updated dependencies [4e49a38]
+- Updated dependencies [535b74e]
+  - @fentaris/core@3.1.0
+  - @fentaris/edge@0.3.3
+
+## 1.5.3
+
+### Patch Changes
+
+- Updated dependencies [995f0f9]
+  - @fentaris/edge@0.3.2
+
+## 1.5.2
+
+### Patch Changes
+
+- d17a1dd: Avoid creating a project auth key or empty encrypted credential store when an interactive `secrets set` operation is declined.
+
+## 1.5.1
+
+### Patch Changes
+
+- da1a47a: Recover stale local authority locks and support an explicit cross-platform Edge state directory.
+- ec2deb6: Improve first-user diagnostics with accurate loopback permission errors, discoverable automation help, Edge alpha/preview guidance, and concrete Edge recovery actions.
+- 64813bd: Route local Edge device management commands through the protected operator channel, including durable revocation and active connection termination.
+- eb7e639: Roll back failed local Edge enrollments, preserve stable management error codes, and normalize local discovery envelopes.
+- 74a7f69: Preserve an explicitly configured Edge state directory in persistent launchd and systemd services.
+- 147f945: Keep local Edge control sockets within platform path limits and clean up the persistent agent when control startup fails.
+- 64813bd: Treat rejected and revoked Edge credentials as terminal, stop reconnect loops, and direct operators to join the device again.
+- 18cd853: Align generated projects with `@fentaris/core` 3, add a typecheck script, and render valid npm script commands in the generated README.
+- 2bf990c: Show Edge device verification details immediately while `fentaris edge join` waits for approval.
+- Updated dependencies [da1a47a]
+- Updated dependencies [4836bf7]
+- Updated dependencies [64813bd]
+- Updated dependencies [eb7e639]
+- Updated dependencies [74a7f69]
+- Updated dependencies [147f945]
+- Updated dependencies [64813bd]
+- Updated dependencies [6599d72]
+- Updated dependencies [0997001]
+  - @fentaris/core@3.0.1
+  - @fentaris/edge@0.3.1
+
 ## 1.5.0
 
 ### Minor Changes
