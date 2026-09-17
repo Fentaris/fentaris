@@ -1,0 +1,15 @@
+{
+  "name": "changelog-to-x",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Posts a short thread from the Fentaris X account after a Changesets release wave. Not a workspace package.",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.126.0",
+    "oauth-1.0a": "^2.2.6",
+    "zod": "^4.6.5"
+  }
+}

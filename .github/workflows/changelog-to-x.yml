@@ -1,0 +1,99 @@
+name: Changelog to X
+
+# Posts a short thread from the Fentaris X account after a Changesets release
+# wave. Runs once per Release workflow run; the script decides whether that run
+# was a real wave (package versions bumped + GitHub Releases exist) or a
+# promote/chore push, and whether the wave was already posted.
+#
+# Kill switch: the repository variable CHANGELOG_X_MODE.
+#   unset / off -> the job does not run
+#   dry-run     -> the proposed thread is written as a comment on the
+#                  "Version Packages" PR and to the job summary; nothing is posted
+#   live        -> posts
+# Details: .github/scripts/changelog-to-x/README.md
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Comma-separated release tags, e.g. @fentaris/core@3.1.1,@fentaris/cli@1.6.1. Empty: detect from ref."
+        required: false
+        default: ""
+      ref:
+        description: "Commit to inspect when tags is empty (default: main head)."
+        required: false
+        default: ""
+      mode:
+        description: "dry-run or live. Can only lower what CHANGELOG_X_MODE allows, never raise it."
+        type: choice
+        options: [dry-run, live]
+        default: dry-run
+      force:
+        description: "Ignore an existing posted marker (re-posts a wave). Use with care."
+        type: boolean
+        default: false
+
+concurrency:
+  group: changelog-to-x
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  post:
+    name: Post release thread
+    if: >-
+      vars.CHANGELOG_X_MODE != '' && vars.CHANGELOG_X_MODE != 'off' &&
+      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CHANGELOG_X_MODE: ${{ vars.CHANGELOG_X_MODE }}
+      CHANGELOG_X_MODEL: ${{ vars.CHANGELOG_X_MODEL }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      X_API_KEY: ${{ secrets.X_API_KEY }}
+      X_API_SECRET: ${{ secrets.X_API_SECRET }}
+      X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+      X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # On workflow_run, github.sha is the default-branch head, not the
+          # commit the Release run built. fetch-depth 0 brings the tags too.
+          ref: ${{ github.event.workflow_run.head_sha || inputs.ref || github.sha }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install script dependencies
+        working-directory: .github/scripts/changelog-to-x
+        run: pnpm install --frozen-lockfile --ignore-workspace
+
+      - name: Compose and post
+        working-directory: .github/scripts/changelog-to-x
+        env:
+          WAVE_SHA: ${{ github.event.workflow_run.head_sha || inputs.ref || github.sha }}
+          INPUT_TAGS: ${{ inputs.tags }}
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_FORCE: ${{ inputs.force }}
+        run: |
+          args=(--ref "$WAVE_SHA" --mode "$INPUT_MODE")
+          if [ -n "$INPUT_TAGS" ]; then args+=(--tags "$INPUT_TAGS"); fi
+          if [ "$INPUT_FORCE" = "true" ]; then args+=(--force); fi
+          node index.mjs "${args[@]}"
