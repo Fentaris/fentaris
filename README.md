@@ -32,9 +32,7 @@
 - [Documentation](#documentation)
     - [Skills for Coding Agents](#skills-for-coding-agents)
 - [Getting Started](#getting-started)
-- [Use the SDK in an Existing Project](#use-the-sdk-in-an-existing-project)
-- [Governance](#governance)
-- [Local Auth](#local-auth)
+- [Examples](#examples)
 - [Packages](#packages)
 - [Development](#development)
 - [License](#license)
@@ -43,14 +41,15 @@
 
 ## About
 
-<b>Fentaris</b> is a centralized MCP proxy for routing multiple MCP servers through one controlled endpoint.
+<b>Fentaris</b> is a control plane for your MCP servers — one place to run, route, and manage every MCP server behind a single, stable endpoint.
 
 - **Unify** stdio, Streamable HTTP, SSE, and HTTP upstream MCP servers behind one proxy.
-- **Protect** tool calls, resources, prompts, and completions with policy, identity, middleware, hooks, and rate limits.
+- **Manage** which servers and tools are exposed, to whom, and how they behave — without touching client configs.
 - **Observe** every proxied operation with structured logging, lifecycle events, and per-request context.
+- **Protect** tool calls, resources, prompts, and completions with policy, identity, middleware, hooks, and rate limits.
 - **Authenticate** clients and upstream MCP servers with API keys, bearer tokens, custom headers, and OAuth 2.1.
 
-Fentaris is designed for teams that want MCP servers to behave like production infrastructure: stable names, centralized governance, auditable calls, and predictable client-facing endpoints.
+Fentaris is designed for teams that want MCP servers to behave like production infrastructure: stable names, centralized management, auditable calls, and predictable client-facing endpoints.
 
 ## Documentation
 
@@ -69,7 +68,7 @@ a remote MCP upstream, and app-owned local tools, see
 
 ## Getting Started
 
-Use the CLI when you want to start a new Fentaris proxy project:
+Use the CLI to start a new Fentaris proxy project:
 
 ```bash
 npm install -g @fentaris/cli
@@ -80,19 +79,18 @@ fentaris dev
 
 The generated proxy listens on `http://localhost:4000/mcp` by default. Point your MCP client to that endpoint.
 
-
-## Use the SDK in an Existing Project
-
-Install the core package in an existing project:
-
-```bash
-npm add @fentaris/core
-```
-
-Build a proxy in a few lines:
+Under the hood, a Fentaris proxy is just a few lines of code:
 
 ```ts
-import { fentaris, stdio } from "@fentaris/core";
+import {
+  approval,
+  fentaris,
+  oauth,
+  policy,
+  stdio,
+  streamableHttp,
+  user,
+} from "@fentaris/core";
 
 const app = fentaris();
 
@@ -105,23 +103,28 @@ app.mcp("filesystem", {
 
 await app.start();
 ```
-[→ Full documentation](https://fentaris.mintlify.app)
 
-Upstream tool names are still stable and namespaced by server. A filesystem tool is exposed to clients with a proxy name such as:
+Upstream tool names stay stable and namespaced by server, no matter how many servers you add. A filesystem tool is exposed to clients with a proxy name such as:
 
 ```txt
 filesystem__list_directory
 ```
 
-## Governance
+[→ Full documentation](https://fentaris.mintlify.app)
 
-Add users, groups, and policy:
+## Examples
+
+Add another server behind the same endpoint:
 
 ```ts
-import { fentaris, stdio, user } from "@fentaris/core";
+app.mcp("github", {
+  transport: stdio({ command: "npx", args: ["-y", "@modelcontextprotocol/server-github"] }),
+});
+```
 
-const app = fentaris();
+Restrict who can call what:
 
+```ts
 app.policy("read-only")
   .mcp("filesystem")
   .allow("list_directory");
@@ -129,49 +132,16 @@ app.policy("read-only")
 app.group("operators")
   .users(user("alice", { email: "alice@example.com" }))
   .policy("read-only");
-
-app.mcp("filesystem", {
-  transport: stdio({
-    command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-  }),
-});
-
-await app.start();
 ```
 
-Block a sensitive tool:
+Require approval before a risky action runs:
 
 ```ts
-app.mcp("filesystem").tool("write_file", (ctx, next) => {
-  return ctx.subject?.hasGroup("admins")
-    ? next()
-    : ctx.deny("Admin required.");
-});
-```
-
-Ask for approval before dangerous tools:
-
-```ts
-import { approval, policy } from "@fentaris/core";
-
 const deploy = policy("deploy")
   .mcp("github")
   .allow("deploy_production", approval.manual({
     reason: "Production deploy requires approval",
   }));
-```
-
-Modify a tool result:
-
-```ts
-app.mcp("github").tool("search_issues", async (_ctx, next) => {
-  const result = await next();
-  if ("content" in result) {
-    result.content.push({ type: "text", text: "Filtered by Fentaris" });
-  }
-  return result;
-});
 ```
 
 Observe every tool call:
@@ -182,21 +152,22 @@ app.on("tool:success", ({ ctx, durationMs }) => {
 });
 ```
 
-Policies can govern tool calls and MCP capabilities such as resources, prompts, and completion. Runtime routes can deny, approve, hide, log, or transform calls.
+Runtime routes can deny, approve, hide, log, or transform calls to any tool, resource, prompt, or completion.
 
-## Local Auth
-
-Fentaris can resolve caller identity and upstream credentials from local encrypted files. Generated projects are discovered from `fentaris.json`; SDK-only projects are discovered from `package.json` when they depend on `@fentaris/core`.
+Authenticate clients with an API key, and let Fentaris handle OAuth 2.1 for upstream servers automatically:
 
 ```bash
-export FENTARIS_AUTH_KEY="your-local-encryption-key"
-
-fentaris secrets manifest --entrypoint src/index.ts
-fentaris secrets set
-fentaris secrets list
+fentaris auth api-key add alice --generate
 ```
 
-Credential values are not exposed to middleware, hooks, logs, or policy callbacks.
+```ts
+app.mcp("linear", {
+  transport: streamableHttp({ url: "https://mcp.linear.app/mcp" }),
+  auth: oauth(),
+});
+```
+
+Credential values are never exposed to middleware, hooks, logs, or policy callbacks.
 
 ## Packages
 

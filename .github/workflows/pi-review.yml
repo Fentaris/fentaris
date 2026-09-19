@@ -37,7 +37,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 
@@ -47,7 +47,7 @@ jobs:
         env:
           # Env var standard usata dal provider OpenAI del Pi SDK.
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        uses: shaftoe/pi-coding-agent-action@v2.27.0
+        uses: shaftoe/pi-coding-agent-action@v2.28.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           provider: ${{ vars.PI_PROVIDER || 'openai' }}

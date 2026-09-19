@@ -24,7 +24,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -32,7 +32,7 @@ jobs:
         uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
@@ -60,12 +60,12 @@ jobs:
 
       - name: Create version PR or publish to npm
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
-          version: pnpm version-packages
-          publish: pnpm release
-          title: Version Packages
-          commit: Version Packages
-          createGithubReleases: true
+          version-script: pnpm version-packages
+          publish-script: pnpm release
+          pr-title: Version Packages
+          commit-message: Version Packages
+          create-github-releases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
