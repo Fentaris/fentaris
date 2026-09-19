@@ -12,7 +12,7 @@ allowBuilds:
 # Force patched transitive versions for known advisories.
 overrides:
   "@hono/node-server": ">=2.0.5"
-  "@vitest/mocker": ">=4.1.11 <5.0.0"
+  "@vitest/mocker": ">=5.0.0"
   "body-parser": ">=2.3.0"
   "brace-expansion": ">=5.0.9"
   "fast-uri": ">=4.1.4"
@@ -25,4 +25,4 @@ overrides:
   "postcss": ">=8.5.18"
   "qs": ">=6.16.0"
   "vite": ">=8.0.16"
-  "vitest": ">=4.1.11 <5.0.0"
+  "vitest": ">=5.0.0"

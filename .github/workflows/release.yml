@@ -62,10 +62,10 @@ jobs:
         id: changesets
         uses: changesets/action@v2
         with:
-          version: pnpm version-packages
-          publish: pnpm release
-          title: Version Packages
-          commit: Version Packages
-          createGithubReleases: true
+          version-script: pnpm version-packages
+          publish-script: pnpm release
+          pr-title: Version Packages
+          commit-message: Version Packages
+          create-github-releases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
