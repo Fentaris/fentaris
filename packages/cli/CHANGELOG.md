@@ -1,5 +1,13 @@
 # @fentaris/cli
 
+## 1.6.2
+
+### Patch Changes
+
+- Updated dependencies [6db64e0]
+  - @fentaris/core@3.1.2
+  - @fentaris/edge@0.3.5
+
 ## 1.6.1
 
 ### Patch Changes

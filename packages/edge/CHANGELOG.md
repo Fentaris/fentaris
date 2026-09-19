@@ -1,5 +1,12 @@
 # @fentaris/edge
 
+## 0.3.5
+
+### Patch Changes
+
+- Updated dependencies [6db64e0]
+  - @fentaris/core@3.1.2
+
 ## 0.3.4
 
 ### Patch Changes
