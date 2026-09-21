@@ -42,7 +42,7 @@
     "@eslint/js": "^10.0.1",
     "eslint": "^10.10.0",
     "typedoc": "^0.28.20",
-    "typedoc-plugin-markdown": "^4.13.0",
+    "typedoc-plugin-markdown": "^4.13.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.0"
   }
