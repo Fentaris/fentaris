@@ -57,6 +57,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "@mcpjam/sdk": "8.20.0"
   }
 }
