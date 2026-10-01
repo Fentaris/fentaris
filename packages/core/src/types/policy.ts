@@ -117,6 +117,12 @@ export interface RateLimiter {
  */
 export type IdentityStrategy = {
   name: string;
+  /** Optional HTTP bearer challenge. @pk */
+  challenge?(reason?: import("../identity/oauthIdentityStrategy.js").OAuthChallengeReason): string;
+  /** Request-scoped authentication failure reason. @pk */
+  challengeReason?(request: object): import("../identity/oauthIdentityStrategy.js").OAuthChallengeReason;
+  /** Optional protected resource metadata. @pk */
+  metadata?(): import("../identity/oauthIdentityStrategy.js").ProtectedResourceMetadata;
   resolve(request: { headers?: Record<string, string>; [key: string]: unknown }): MaybePromise<UserContext | null>;
 };
 

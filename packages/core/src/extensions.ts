@@ -76,3 +76,7 @@ export type {
   OAuthTokenStore,
   StoredOAuthTokens,
 } from "./auth/oauth/index.js";
+
+export { oauthIdentityStrategy } from "./identity/oauthIdentityStrategy.js";
+export type { OAuthIdentityStrategyOptions, OAuthIdentityStrategy, ProtectedResourceMetadata, OAuthChallengeReason } from "./identity/oauthIdentityStrategy.js";
+export type { OAuthClaims } from "./identity/jwks.js";

@@ -1,3 +1,5 @@
+import { oauthResourceMetadataRoutes } from "./oauthResourceMetadataRoutes.js";
+import { setUnauthorizedChallenge } from "./unauthorizedChallenge.js";
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
 import type { Duplex } from "node:stream";
@@ -78,11 +80,13 @@ export class HttpProxyExposureTransport implements ProxyExposureTransport<HttpPr
   }
 
   async listen(runtime: ProxyRuntime): Promise<HttpProxyExposureHandle> {
+    runtime.configureIdentityExposure?.({ host: this.options.host, port: this.options.port, path: this.options.path });
     const sessions = new Map<string, HttpSessionState>();
+    const metadataRoutes = oauthResourceMetadataRoutes(runtime, this.options.path);
     const server = createServer(async (req, res) => {
       const pathname = normalizeExposurePath((req.url ?? "/").split("?")[0] ?? "/");
       const method = (req.method ?? "GET").toUpperCase();
-      const extra = this.options.httpRoutes?.find(
+      const extra = [...metadataRoutes, ...(this.options.httpRoutes ?? [])].find(
         (route) => route.method === method && normalizeExposurePath(route.path) === pathname,
       );
       if (extra) {
@@ -111,6 +115,7 @@ export class HttpProxyExposureTransport implements ProxyExposureTransport<HttpPr
       try {
         const { user, identity, subject } = await runtime.resolveHttpUser(req);
         if (runtime.identityRequired && !identity?.authenticated) {
+          setUnauthorizedChallenge(runtime, req, res);
           sendJsonRpcError(res, 401, FentarisErrorCode.Unauthorized, "Unauthorized");
           return;
         }
@@ -160,6 +165,8 @@ export class HttpProxyExposureTransport implements ProxyExposureTransport<HttpPr
 
     await new Promise<void>((resolve) => {
       server.listen(this.options.port, this.options.host, () => {
+        const address = server.address();
+        runtime.configureIdentityExposure?.({ host: this.options.host, port: typeof address === "object" && address ? address.port : this.options.port, path: this.options.path });
         this.options.onStarted?.();
         resolve();
       });
@@ -219,7 +226,8 @@ async function handleMcpRequest(
     }
 
     if (!isBoundSessionRequest(session, user, identity, subject)) {
-      sendJsonRpcError(res, 401, FentarisErrorCode.Unauthorized, "Unauthorized");
+      setUnauthorizedChallenge(runtime, req, res, "invalid_token");
+          sendJsonRpcError(res, 401, FentarisErrorCode.Unauthorized, "Unauthorized");
       return;
     }
 
