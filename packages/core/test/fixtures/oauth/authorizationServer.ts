@@ -60,6 +60,8 @@ export type FixtureAuthorizationServer = {
   issuedTokens: IssuedToken[];
   /** Number of times the token endpoint was called. */
   tokenRequests: number;
+  /** Values that evidence collectors must never retain. */
+  sensitiveValues: string[];
   /** Expire every issued access token immediately. */
   expireAccessTokens(): void;
   /** Register a client up front (pre-registered client tests). */
@@ -79,10 +81,12 @@ export async function startAuthorizationServer(
   toggles: AuthorizationServerToggles = {},
 ): Promise<FixtureAuthorizationServer> {
   const clients = new Map<string, RegisteredClient>();
+  const registrations: RegisteredClient[] = [];
   const codes = new Map<string, PendingCode>();
   const refreshTokens = new Map<string, { clientId: string; subject: string; scope: string; resource?: string }>();
   const issuedTokens: IssuedToken[] = [];
   const state = { tokenRequests: 0 };
+  const sensitiveValues: string[] = [];
   let baseUrl = "";
 
   const server = createServer((req, res) => {
@@ -139,6 +143,7 @@ export async function startAuthorizationServer(
         ...(typeof body.scope === "string" ? { scope: body.scope } : {}),
       };
       clients.set(client.client_id, client);
+      registrations.push(client);
       sendJson(res, 201, { ...client, client_id_issued_at: Math.floor(Date.now() / 1000) });
       return;
     }
@@ -167,6 +172,7 @@ export async function startAuthorizationServer(
       }
 
       const code = randomUUID();
+      sensitiveValues.push(code);
       codes.set(code, {
         clientId,
         redirectUri,
@@ -199,6 +205,10 @@ export async function startAuthorizationServer(
       const grantType = params.get("grant_type");
 
       if (grantType === "authorization_code") {
+        if (!client.redirect_uris.includes(params.get("redirect_uri") ?? "")) {
+          sendJson(res, 400, { error: "invalid_grant", error_description: "Invalid redirect_uri" });
+          return;
+        }
         const code = params.get("code") ?? "";
         const pending = codes.get(code);
         codes.delete(code);
@@ -213,7 +223,7 @@ export async function startAuthorizationServer(
           return;
         }
 
-        sendJson(res, 200, issue(client.client_id, pending.subject, pending.scope, pending.resource));
+        sendJson(res, 200, issue(client.client_id, pending.subject, pending.scope, pending.resource ?? params.get("resource") ?? undefined));
         return;
       }
 
@@ -281,9 +291,11 @@ export async function startAuthorizationServer(
     const expiresAt = Date.now() + ttl * 1000;
     const token = toggles.jwtAccessTokens ? jwtAccessToken(baseUrl, resource ?? clientId, subject, scope, ttl) : `at-${randomUUID()}`;
     issuedTokens.push({ token, clientId, subject, scope, expiresAt, resource });
+    sensitiveValues.push(token);
 
     const refreshToken = toggles.withoutRefreshToken ? undefined : `rt-${randomUUID()}`;
     if (refreshToken) {
+      sensitiveValues.push(refreshToken);
       refreshTokens.set(refreshToken, { clientId, subject, scope, resource });
     }
 
@@ -304,8 +316,9 @@ export async function startAuthorizationServer(
   return {
     url: baseUrl,
     toggles,
-    registrations: [] as RegisteredClient[],
+    registrations,
     issuedTokens,
+    sensitiveValues,
     get tokenRequests() {
       return state.tokenRequests;
     },

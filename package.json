@@ -25,7 +25,9 @@
     "test:edge-verification": "node --test scripts/edge-verification/*.test.mjs",
     "verify:packages": "node scripts/verify-publishable-packages.mjs",
     "verify:release": "pnpm build && pnpm verify:packages",
-    "clean": "pnpm -r clean"
+    "clean": "pnpm -r clean",
+    "verify:oauth:practical": "node scripts/oauth-verification/run.mjs",
+    "test:oauth-verification": "node --test scripts/oauth-verification/*.test.mjs"
   },
   "author": "Gabriele Cipriani",
   "repository": {
