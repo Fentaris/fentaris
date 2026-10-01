@@ -139,6 +139,16 @@ Every declared credential source is required when the proxy starts. Before openi
   Do not commit `.env` or `.fentaris/credentials.enc.json`. Generated projects ignore both by default.
 </Warning>
 
+## OAuth Verification
+
+### `FENTARIS_MCPJAM`
+
+Set to `1` to enable the repository's mcpjam SDK conformance tests. The default test run skips them. This variable does not enable runtime OAuth authentication; configure `oauthIdentityStrategy` in application code.
+
+```bash theme={null}
+FENTARIS_MCPJAM=1 pnpm --filter @fentaris/core test test/conformance
+```
+
 ## Related Documentation
 
 * [Quickstart](/getting-started/quickstart)
