@@ -63,7 +63,8 @@ Visit our [docs](https://fentaris.mintlify.app) or jump to a [quickstart](https:
 
 For a complete runnable project with API-key users, groups, allow-list policy,
 a remote MCP upstream, and app-owned local tools, see
-[`examples/team-governed-proxy`](./examples/team-governed-proxy).
+[Fentaris/team-governed-proxy](https://github.com/Fentaris/team-governed-proxy),
+maintained in its own repository.
 
 
 ## Getting Started
