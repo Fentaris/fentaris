@@ -29,9 +29,9 @@ const sections = [
     entryPoints: ["packages/core/src/transports/client/StdioTransport.ts"],
   },
   {
-    title: "Upstream OAuth",
+    title: "OAuth",
     slug: "oauth",
-    entryPoints: ["packages/core/src/auth/oauth/index.ts"],
+    entryPoints: ["packages/core/src/auth/oauth/index.ts", "packages/core/src/identity/oauthIdentityStrategy.ts"],
   },
   {
     title: "Logger",
