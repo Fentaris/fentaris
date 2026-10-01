@@ -9,7 +9,7 @@ import test from "node:test";
 import { parseArgs } from "./run.mjs";
 import { MCPJAM_CLI_VERSION, SCENARIOS } from "./catalog.mjs";
 import { REQUIREMENTS } from "./requirements.mjs";
-import { initializeAttempt, scanArtifacts, requirementMatrix, verdict, renderReport } from "./lib.mjs";
+import { initializeAttempt, runLogged, scanArtifacts, requirementMatrix, verdict, renderReport } from "./lib.mjs";
 import { materializeFixtures } from "./fixtures.mjs";
 const exec = promisify(execFile);
 
@@ -58,4 +58,21 @@ test("materializes parseable fixtures with stable identity and no product source
       if (["authorizationServer", "tlsProxy"].includes(fixture.fixture)) await import(pathToFileURL(file).href);
     }
   } finally { await rm(project, { recursive: true, force: true }); }
+});
+test("redacts credential output, command records and failures before saving evidence", async () => {
+  const attempt = await mkdtemp(path.join(tmpdir(), "oauth-capture-selftest-"));
+  try {
+    const layout = await initializeAttempt(attempt, ".oauth-verification.json");
+    const secret = "credential-created-during-login";
+    let inventoryRead = false;
+    const input = { command: process.execPath, args: ["-e", 'process.stdout.write(process.argv[1].slice(0, 10)); process.stdout.write(process.argv[1].slice(10)); process.stderr.write(process.argv[1]); process.exit(1)', secret], cwd: attempt, logs: layout.logs, id: "login", redactValues: () => { inventoryRead = true; return [secret]; } };
+    let failure;
+    await assert.rejects(runLogged(input), (error) => { failure = error; return true; });
+    assert.equal(inventoryRead, true);
+    assert.doesNotMatch(failure.message, new RegExp(secret));
+    assert.equal(failure.record.command.at(-1), "[REDACTED]");
+    assert.equal(await readFile(failure.record.stdoutPath, "utf8"), "[REDACTED]");
+    assert.equal(await readFile(failure.record.stderrPath, "utf8"), "[REDACTED]");
+    assert.deepEqual(await scanArtifacts(attempt, [secret]), []);
+  } finally { await rm(attempt, { recursive: true, force: true }); }
 });

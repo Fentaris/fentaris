@@ -31,7 +31,7 @@ async function connect(url, headers) {
 }
 async function jam(args, suffix) {
   try {
-    const record = await runLogged({ command: process.execPath, args: [path.join(project, "node_modules/@mcpjam/cli/dist/index.js"), ...args], cwd: project, logs, id: `${id}-${suffix}`, env: { MCPJAM_TELEMETRY_DISABLED: "1", ...(edge ? { NODE_EXTRA_CA_CERTS: edge.caFile } : {}) }, timeoutMs: 90_000 });
+    const record = await runLogged({ command: process.execPath, args: [path.join(project, "node_modules/@mcpjam/cli/dist/index.js"), ...args], cwd: project, logs, id: `${id}-${suffix}`, env: { MCPJAM_TELEMETRY_DISABLED: "1", ...(edge ? { NODE_EXTRA_CA_CERTS: edge.caFile } : {}) }, timeoutMs: 90_000, redactValues: () => [...secrets, ...as.sensitiveValues] });
     commands.push(record); return record;
   } catch (error) { if (error.record) commands.push(error.record); throw error; }
 }

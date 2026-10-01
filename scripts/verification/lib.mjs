@@ -52,7 +52,7 @@ export async function initializeAttempt(attempt, markerName = ".edge-verificatio
 
 
 export async function runLogged(input) {
-  const { command, args = [], cwd, env = {}, logs, id, expectedExitCodes = [0], timeoutMs = 600_000, killAfterMs = 2_000 } = input;
+  const { command, args = [], cwd, env = {}, logs, id, expectedExitCodes = [0], timeoutMs = 600_000, killAfterMs = 2_000, redactValues = [] } = input;
   const stdoutPath = path.join(logs, `${id}.stdout.log`);
   const stderrPath = path.join(logs, `${id}.stderr.log`);
   const result = await new Promise((resolve) => {
@@ -89,11 +89,15 @@ export async function runLogged(input) {
     child.on("error", (error) => finish({ code: 1, spawnError: error }));
     child.on("close", (code, signal) => finish({ code: code ?? 1, signal }));
   });
-  await writeFile(stdoutPath, result.stdout, { mode: 0o600 });
-  await writeFile(stderrPath, result.stderr, { mode: 0o600 });
+  // OAuth fixtures can learn codes/tokens while the child is running. Resolve
+  // their inventory at capture time, before persisting credential-bearing output.
+  const secrets = [...new Set((typeof redactValues === "function" ? redactValues() : redactValues).filter(Boolean))];
+  const redact = (text) => secrets.reduce((safe, secret) => safe.replaceAll(secret, "[REDACTED]"), text);
+  await writeFile(stdoutPath, redact(result.stdout), { mode: 0o600 });
+  await writeFile(stderrPath, redact(result.stderr), { mode: 0o600 });
   const record = {
     id,
-    command: [command, ...args],
+    command: [command, ...args].map(redact),
     cwd,
     exitCode: result.code,
     expectedExitCodes,
@@ -108,7 +112,7 @@ export async function runLogged(input) {
       : result.spawnError
         ? `${command} could not start: ${result.spawnError.message}`
         : `${command} ${args.join(" ")} exited ${result.code}`;
-    const error = new Error(message);
+    const error = new Error(redact(message));
     error.record = record;
     throw error;
   }
