@@ -32,6 +32,7 @@ export type IssuedToken = {
   subject: string;
   scope: string;
   expiresAt: number;
+  resource?: string;
 };
 
 type RegisteredClient = {
@@ -79,7 +80,7 @@ export async function startAuthorizationServer(
 ): Promise<FixtureAuthorizationServer> {
   const clients = new Map<string, RegisteredClient>();
   const codes = new Map<string, PendingCode>();
-  const refreshTokens = new Map<string, { clientId: string; subject: string; scope: string }>();
+  const refreshTokens = new Map<string, { clientId: string; subject: string; scope: string; resource?: string }>();
   const issuedTokens: IssuedToken[] = [];
   const state = { tokenRequests: 0 };
   let baseUrl = "";
@@ -212,7 +213,7 @@ export async function startAuthorizationServer(
           return;
         }
 
-        sendJson(res, 200, issue(client.client_id, pending.subject, pending.scope));
+        sendJson(res, 200, issue(client.client_id, pending.subject, pending.scope, pending.resource));
         return;
       }
 
@@ -225,12 +226,12 @@ export async function startAuthorizationServer(
         }
 
         refreshTokens.delete(refresh);
-        sendJson(res, 200, issue(client.client_id, stored.subject, stored.scope));
+        sendJson(res, 200, issue(client.client_id, stored.subject, stored.scope, stored.resource));
         return;
       }
 
       if (grantType === "client_credentials") {
-        sendJson(res, 200, issue(client.client_id, `service:${client.client_id}`, params.get("scope") ?? client.scope ?? "mcp:tools"));
+        sendJson(res, 200, issue(client.client_id, `service:${client.client_id}`, params.get("scope") ?? client.scope ?? "mcp:tools", params.get("resource") ?? undefined));
         return;
       }
 
@@ -249,6 +250,8 @@ export async function startAuthorizationServer(
 
       sendJson(res, 200, {
         active: true,
+        iss: baseUrl,
+        aud: found.resource ?? found.clientId,
         client_id: found.clientId,
         sub: found.subject,
         scope: found.scope,
@@ -273,15 +276,15 @@ export async function startAuthorizationServer(
     sendJson(res, 404, { error: "not_found" });
   }
 
-  function issue(clientId: string, subject: string, scope: string): Record<string, unknown> {
+  function issue(clientId: string, subject: string, scope: string, resource?: string): Record<string, unknown> {
     const ttl = toggles.accessTokenTtlSeconds ?? 3600;
     const expiresAt = Date.now() + ttl * 1000;
-    const token = toggles.jwtAccessTokens ? jwtAccessToken(baseUrl, clientId, subject, scope, ttl) : `at-${randomUUID()}`;
-    issuedTokens.push({ token, clientId, subject, scope, expiresAt });
+    const token = toggles.jwtAccessTokens ? jwtAccessToken(baseUrl, resource ?? clientId, subject, scope, ttl) : `at-${randomUUID()}`;
+    issuedTokens.push({ token, clientId, subject, scope, expiresAt, resource });
 
     const refreshToken = toggles.withoutRefreshToken ? undefined : `rt-${randomUUID()}`;
     if (refreshToken) {
-      refreshTokens.set(refreshToken, { clientId, subject, scope });
+      refreshTokens.set(refreshToken, { clientId, subject, scope, resource });
     }
 
     return {
