@@ -8,8 +8,11 @@ endpoint on localhost, authenticates two users with Fentaris-managed API keys,
 filters tools by group policy, connects a public remote MCP server, and exposes
 app-owned tools through a local namespace.
 
-The complete source lives in
-[`examples/team-governed-proxy`](https://github.com/Fentaris/fentaris/tree/main/examples/team-governed-proxy).
+The runnable project now lives in its own repository:
+[Fentaris/team-governed-proxy](https://github.com/Fentaris/team-governed-proxy).
+Clone that repository to follow this walkthrough; it uses published Fentaris
+packages and its own lockfile. The repository README is the source for setup
+and verification instructions.
 
 ## Architecture
 
@@ -142,9 +145,9 @@ namespace and client-visible `<namespace>__<tool>` naming.
 ```json theme={null}
 {
   "scripts": {
-    "dev": "tsx src/index.ts",
+    "dev": "tsx --env-file-if-exists=.env src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
+    "start": "node --env-file-if-exists=.env dist/index.js",
     "check": "fentaris check --offline --non-interactive",
     "doctor": "fentaris doctor --non-interactive"
   }
@@ -175,11 +178,12 @@ unrelated to this example's empty upstream-secret manifest.
 ## Install and validate
 
 ```bash theme={null}
-cd examples/team-governed-proxy
-pnpm install
+git clone https://github.com/Fentaris/team-governed-proxy.git
+cd team-governed-proxy
+pnpm install --frozen-lockfile
 pnpm build
 pnpm check
-pnpm doctor
+pnpm run doctor
 ```
 
 Expected successful checks:
@@ -220,7 +224,7 @@ Listening on: http://127.0.0.1:4100/mcp
 ```
 
 Run the authenticated curl sequence from the example
-[README](https://github.com/Fentaris/fentaris/tree/main/examples/team-governed-proxy#test-an-authenticated-mcp-session),
+[README](https://github.com/Fentaris/team-governed-proxy#test-an-authenticated-mcp-session),
 or connect MCP Inspector and set the `x-fentaris-api-key` header.
 
 Expected behavior:
