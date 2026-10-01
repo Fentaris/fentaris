@@ -1,6 +1,6 @@
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, randomUUID, sign as cryptoSign } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { AddressInfo } from "node:net";
+import type { AddressInfo } from "node:net";
 
 /**
  * Behavior toggles for negative-path testing.
@@ -133,6 +133,16 @@ export async function startAuthorizationServer(
       const grantTypes = Array.isArray(body.grant_types) ? (body.grant_types as string[]) : ["authorization_code"];
       if (grantTypes.includes("authorization_code") && redirectUris.length === 0) {
         sendJson(res, 400, { error: "invalid_redirect_uri", error_description: "redirect_uris is required" });
+        return;
+      }
+      if (redirectUris.some((uri) => {
+        try {
+          const redirect = new URL(uri);
+          return Boolean(redirect.hash || redirect.username || redirect.password) ||
+            !(redirect.protocol === "https:" || (redirect.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(redirect.hostname)));
+        } catch { return true; }
+      })) {
+        sendJson(res, 400, { error: "invalid_redirect_uri", error_description: "redirect_uris must use HTTPS or loopback HTTP" });
         return;
       }
 

@@ -8,13 +8,14 @@ import { fentaris, Policy, mcp, oauth, oauthTokens, streamableHttp, oauthIdentit
 import { startAuthorizationServer } from "./authorizationServer.mjs";
 import { startProtectedMcpServer } from "./protectedMcpServer.mjs";
 import { connectElicitingClient } from "./elicitingClient.mjs";
+import { startTlsProxy } from "./tlsProxy.mjs";
 import { runLogged } from "./verification-lib.mjs";
 
 const [id, project, logs] = process.argv.slice(2);
 const commands = [], clients = [], apps = [], secrets = [process.env.FENTARIS_AUTH_KEY, process.env.OAUTH_API_KEY, process.env.OAUTH_CLIENT_SECRET];
 const credentialFiles = [];
 const as = await startAuthorizationServer({ jwtAccessTokens: id.startsWith("04-") || id.startsWith("05-") || id.startsWith("06-") });
-let upstream;
+let upstream, edge;
 const json = async (file, data) => writeFile(file, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
 const portOf = (server) => server.address().port;
 async function freePort() {
@@ -30,7 +31,7 @@ async function connect(url, headers) {
 }
 async function jam(args, suffix) {
   try {
-    const record = await runLogged({ command: process.execPath, args: [path.join(project, "node_modules/@mcpjam/cli/dist/index.js"), ...args], cwd: project, logs, id: `${id}-${suffix}`, env: { MCPJAM_TELEMETRY_DISABLED: "1" }, timeoutMs: 90_000 });
+    const record = await runLogged({ command: process.execPath, args: [path.join(project, "node_modules/@mcpjam/cli/dist/index.js"), ...args], cwd: project, logs, id: `${id}-${suffix}`, env: { MCPJAM_TELEMETRY_DISABLED: "1", ...(edge ? { NODE_EXTRA_CA_CERTS: edge.caFile } : {}) }, timeoutMs: 90_000 });
     commands.push(record); return record;
   } catch (error) { if (error.record) commands.push(error.record); throw error; }
 }
@@ -104,10 +105,12 @@ try {
     const authDir = path.join(project, `${id}-auth`); await mkdir(authDir);
     await json(path.join(authDir, "credentials.enc.json"), FentarisAuth.encryptCredentials({ users: { "demo-user": { apiKeys: [process.env.OAUTH_API_KEY] } }, groups: {}, defaults: {} }, process.env.FENTARIS_AUTH_KEY));
     const apiAuth = await FentarisAuth.local({ dir: authDir, key: process.env.FENTARIS_AUTH_KEY });
-    const identity = oauthIdentityStrategy({ issuer: as.url, scopes: ["mcp:tools"] });
+    edge = await startTlsProxy();
+    const url = `${edge.url}/mcp`;
+    const identity = oauthIdentityStrategy({ issuer: as.url, resource: url, scopes: ["mcp:tools"] });
     const app = fentaris({ port: 0, policy: Policy.allowAll(), identity: [identity, apiKeyIdentityStrategy({ auth: apiAuth })] }); apps.push(app);
     app.local("verification").tool("echo", { description: "Echo the authenticated subject", inputSchema: { type: "object", properties: {}, additionalProperties: false } }, (ctx) => ({ content: [{ type: "text", text: ctx.user.id ?? "anonymous" }] }));
-    const server = await app.start(), url = `http://127.0.0.1:${portOf(server)}/mcp`;
+    const server = await app.start(); edge.setUpstream(`http://127.0.0.1:${portOf(server)}`);
     const base = new URL(url).origin;
     for (const route of ["/.well-known/oauth-authorization-server", "/authorize", "/token", "/register"]) assert.equal((await fetch(`${base}${route}`)).status, 404);
     const redirect = "http://127.0.0.1:9876/callback";
@@ -142,7 +145,7 @@ try {
 } finally {
   for (const client of clients.reverse()) await client.close();
   for (const app of apps.reverse()) await app.close();
-  await upstream?.close(); await as.close();
+  await edge?.close(); await upstream?.close(); await as.close();
   for (const file of credentialFiles) await rm(file, { force: true });
   await json(path.join(project, `${id}.secrets.json`), [...secrets, ...as.sensitiveValues].filter(Boolean));
   await json(path.join(project, `${id}.commands.json`), commands.map((record) => ({ ...record, command: record.command.map((arg) => secrets.filter(Boolean).reduce((text, secret) => text.replaceAll(secret, "[REDACTED]"), arg)) })));

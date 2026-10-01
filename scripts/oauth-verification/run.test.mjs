@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
+import { pathToFileURL } from "node:url";
 import test from "node:test";
 import { parseArgs } from "./run.mjs";
 import { MCPJAM_CLI_VERSION, SCENARIOS } from "./catalog.mjs";
@@ -48,12 +49,13 @@ test("materializes parseable fixtures with stable identity and no product source
   try {
     const root = path.resolve(import.meta.dirname, "../..");
     const fixtures = await materializeFixtures(root, project);
-    assert.equal(fixtures.length, 3);
+    assert.equal(fixtures.length, 4);
     for (const fixture of fixtures) {
       assert.match(fixture.sourceDigest, /^sha256:/);
       const file = path.join(project, `${fixture.fixture}.mjs`);
       await exec(process.execPath, ["--check", file]);
       assert.doesNotMatch(await readFile(file, "utf8"), /\.\.\/.*src/);
+      if (["authorizationServer", "tlsProxy"].includes(fixture.fixture)) await import(pathToFileURL(file).href);
     }
   } finally { await rm(project, { recursive: true, force: true }); }
 });
