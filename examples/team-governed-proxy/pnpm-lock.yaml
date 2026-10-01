@@ -12,7 +12,7 @@ importers:
         specifier: ^2.3.0
         version: 2.3.0
       tsx:
-        specifier: ^4.23.13
+        specifier: ^4.23.15
         version: 4.23.15
     devDependencies:
       '@fentaris/cli':
