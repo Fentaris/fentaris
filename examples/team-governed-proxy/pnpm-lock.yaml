@@ -19,7 +19,7 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
       '@types/node':
-        specifier: ^26.6.1
+        specifier: ^26.6.2
         version: 26.6.2
       typescript:
         specifier: ^6.0.3
