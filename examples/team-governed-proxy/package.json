@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@fentaris/core": "^2.3.0",
-    "tsx": "^4.23.13"
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@fentaris/cli": "^1.4.0",
