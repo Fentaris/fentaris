@@ -1,131 +1,18 @@
+import { hashFile } from "../verification/lib.mjs";
 import { createHash } from "node:crypto";
-import { execFile, spawn } from "node:child_process";
-import { lstat, mkdir, open, readFile, readdir, readlink, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { lstat, readFile, readdir, readlink } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
 const IGNORED_TREE_NAMES = new Set([".git", "node_modules", "dist", ".turbo", ".cache"]);
 const execFileAsync = promisify(execFile);
-
-export function assertAbsoluteContained(parent, child) {
-  if (!path.isAbsolute(parent) || !path.isAbsolute(child)) throw new Error("Attempt and parent paths must be absolute.");
-  const relative = path.relative(path.resolve(parent), path.resolve(child));
-  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) throw new Error(`Path ${child} is not a child of ${parent}.`);
-  return path.resolve(child);
+const LOCAL_TOOLING_NAMES = new Set([".pnpm-store", "tmp", ".DS_Store", ".agents", ".claude", ".codex", ".cursor", ".grok", ".opencode", ".pi", "openspec", "AGENTS.md", "agent-skills.json", "agent-skills.lock"]);
+function localToolingPath(relative, name) {
+  return LOCAL_TOOLING_NAMES.has(name) || relative === ".github/prompts" || relative === ".github/skills";
 }
 
-export async function allocateAttempt(parent) {
-  if (!path.isAbsolute(parent)) throw new Error("Installation-test parent must be absolute.");
-  await mkdir(parent, { recursive: true, mode: 0o700 });
-  for (let index = 0; index < Number.MAX_SAFE_INTEGER; index += 1) {
-    const attempt = path.join(parent, `install${index}`);
-    try {
-      await mkdir(attempt, { mode: 0o700 });
-      return attempt;
-    } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
-    }
-  }
-  throw new Error("No installation-test attempt number is available.");
-}
-
-export async function initializeAttempt(attempt) {
-  if (!path.isAbsolute(attempt)) throw new Error("--attempt must be an absolute path.");
-  await mkdir(attempt, { recursive: true, mode: 0o700 });
-  const marker = path.join(attempt, ".edge-verification.json");
-  let handle;
-  try {
-    handle = await open(marker, "wx", 0o600);
-    await handle.writeFile(`${JSON.stringify({ version: 1, createdAt: new Date().toISOString() }, null, 2)}\n`);
-  } catch (error) {
-    if (error?.code === "EEXIST") throw new Error(`Attempt already used: ${attempt}`);
-    throw error;
-  } finally {
-    await handle?.close();
-  }
-  const directories = Object.fromEntries(await Promise.all(["artifacts", "logs", "projects", "cache", "tmp"].map(async (name) => {
-    const directory = path.join(attempt, name);
-    await mkdir(directory, { recursive: true, mode: 0o700 });
-    return [name, directory];
-  })));
-  return { attempt, marker, ...directories };
-}
-
-export async function runLogged(input) {
-  const { command, args = [], cwd, env = {}, logs, id, expectedExitCodes = [0], timeoutMs = 600_000, killAfterMs = 2_000 } = input;
-  const stdoutPath = path.join(logs, `${id}.stdout.log`);
-  const stderrPath = path.join(logs, `${id}.stderr.log`);
-  const result = await new Promise((resolve) => {
-    const child = spawn(command, args, {
-      cwd,
-      env: { ...process.env, ...env },
-      stdio: ["ignore", "pipe", "pipe"],
-      detached: process.platform !== "win32",
-    });
-    const stdout = [];
-    const stderr = [];
-    let timedOut = false;
-    let terminationSignal;
-    let killTimer;
-    let settled = false;
-    const finish = (value) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      clearTimeout(killTimer);
-      resolve({ ...value, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8"), timedOut, terminationSignal });
-    };
-    const timer = setTimeout(() => {
-      timedOut = true;
-      terminationSignal = "SIGTERM";
-      terminateProcessTree(child, "SIGTERM");
-      killTimer = setTimeout(() => {
-        terminationSignal = "SIGKILL";
-        terminateProcessTree(child, "SIGKILL");
-      }, killAfterMs);
-    }, timeoutMs);
-    child.stdout.on("data", (chunk) => stdout.push(chunk));
-    child.stderr.on("data", (chunk) => stderr.push(chunk));
-    child.on("error", (error) => finish({ code: 1, spawnError: error }));
-    child.on("close", (code, signal) => finish({ code: code ?? 1, signal }));
-  });
-  await writeFile(stdoutPath, result.stdout, { mode: 0o600 });
-  await writeFile(stderrPath, result.stderr, { mode: 0o600 });
-  const record = {
-    id,
-    command: [command, ...args],
-    cwd,
-    exitCode: result.code,
-    expectedExitCodes,
-    stdoutPath,
-    stderrPath,
-    ...(result.signal ? { signal: result.signal } : {}),
-    ...(result.timedOut ? { timedOut: true, terminationSignal: result.terminationSignal } : {}),
-  };
-  if (result.timedOut || result.spawnError || !expectedExitCodes.includes(result.code)) {
-    const message = result.timedOut
-      ? `${command} timed out after ${timeoutMs}ms and exited after ${result.terminationSignal}`
-      : result.spawnError
-        ? `${command} could not start: ${result.spawnError.message}`
-        : `${command} ${args.join(" ")} exited ${result.code}`;
-    const error = new Error(message);
-    error.record = record;
-    throw error;
-  }
-  return record;
-}
-
-function terminateProcessTree(child, signal) {
-  if (!child.pid) return;
-  try {
-    if (process.platform === "win32") child.kill(signal);
-    else process.kill(-child.pid, signal);
-  } catch (error) {
-    if (error?.code !== "ESRCH") throw error;
-  }
-}
-
-export async function verifyCandidateIdentity({ candidateRoot, identityRepository, branch, sourceHead, tree, targetDev }) {
+export async function verifyCandidateIdentity({ candidateRoot, identityRepository, branch, sourceHead, tree, targetDev, ignoreGenerated = false }) {
   const errors = [];
   const repository = path.resolve(identityRepository);
   const candidate = path.resolve(candidateRoot);
@@ -154,7 +41,7 @@ export async function verifyCandidateIdentity({ candidateRoot, identityRepositor
       try { branchHeads.push(await git(["rev-parse", "--verify", ref])); } catch { /* ref is optional */ }
     }
     if (!branchHeads.includes(sourceHead)) errors.push(`branch ${branch} does not resolve to source head`);
-    const materialized = await compareCandidateToCommit(candidate, repository, sourceHead);
+    const materialized = await compareCandidateToCommit(candidate, repository, sourceHead, ignoreGenerated);
     errors.push(...materialized.errors);
     return {
       verified: errors.length === 0,
@@ -169,7 +56,7 @@ export async function verifyCandidateIdentity({ candidateRoot, identityRepositor
   }
 }
 
-async function compareCandidateToCommit(candidateRoot, repository, sourceHead) {
+async function compareCandidateToCommit(candidateRoot, repository, sourceHead, ignoreGenerated) {
   const { stdout } = await execFileAsync("git", ["-C", repository, "ls-tree", "-rz", "-r", "--full-tree", sourceHead], {
     encoding: "buffer",
     maxBuffer: 32 * 1024 * 1024,
@@ -181,7 +68,7 @@ async function compareCandidateToCommit(candidateRoot, repository, sourceHead) {
     if (!match) throw new Error(`unexpected git tree entry: ${frame}`);
     tracked.set(match[4], { mode: match[1], type: match[2], object: match[3] });
   }
-  const materialized = await materializedTree(candidateRoot);
+  const materialized = await materializedTree(candidateRoot, ignoreGenerated);
   const errors = [];
   for (const file of [...new Set([...tracked.keys(), ...materialized.keys()])].sort()) {
     const expected = tracked.get(file);
@@ -194,11 +81,12 @@ async function compareCandidateToCommit(candidateRoot, repository, sourceHead) {
   return { errors, materializedFiles: materialized.size, trackedFiles: tracked.size };
 }
 
-async function materializedTree(root) {
+async function materializedTree(root, ignoreGenerated) {
   const rows = new Map();
   const walk = async (directory) => {
     for (const entry of (await readdir(directory, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name))) {
-      if (entry.name === ".git") continue;
+      const entryRelative = path.relative(root, path.join(directory, entry.name)).split(path.sep).join("/");
+      if (entry.name === ".git" || (ignoreGenerated && (IGNORED_TREE_NAMES.has(entry.name) || localToolingPath(entryRelative, entry.name) || entry.name.endsWith(".tsbuildinfo")))) continue;
       const file = path.join(directory, entry.name);
       const relative = path.relative(root, file).split(path.sep).join("/");
       if (entry.isDirectory()) await walk(file);
@@ -224,15 +112,12 @@ function validBranch(value) {
   return typeof value === "string" && /^(?!-)(?!.*\.\.)(?!.*\/\/)[A-Za-z0-9._/-]+$/.test(value);
 }
 
-export async function hashFile(file) {
-  return `sha256:${createHash("sha256").update(await readFile(file)).digest("hex")}`;
-}
-
-export async function snapshotTree(root) {
+export async function snapshotTree(root, { ignoreLocalFiles = false } = {}) {
   const rows = [];
   const walk = async (directory) => {
     for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
-      if (IGNORED_TREE_NAMES.has(entry.name) || entry.name.endsWith(".tsbuildinfo")) continue;
+      const entryRelative = path.relative(root, path.join(directory, entry.name)).split(path.sep).join("/");
+      if (IGNORED_TREE_NAMES.has(entry.name) || entry.name.endsWith(".tsbuildinfo") || (ignoreLocalFiles && localToolingPath(entryRelative, entry.name))) continue;
       const file = path.join(directory, entry.name);
       if (entry.isDirectory()) await walk(file);
       else if (entry.isFile()) rows.push({ path: path.relative(root, file).split(path.sep).join("/"), digest: await hashFile(file) });
@@ -246,22 +131,6 @@ export function compareSnapshots(before, after) {
   const left = new Map(before.map((row) => [row.path, row.digest]));
   const right = new Map(after.map((row) => [row.path, row.digest]));
   return [...new Set([...left.keys(), ...right.keys()])].sort().filter((file) => left.get(file) !== right.get(file));
-}
-
-export async function scanAndRedactLogs(logs, sentinels) {
-  const leaks = [];
-  for (const entry of await readdir(logs, { withFileTypes: true })) {
-    if (!entry.isFile() || !entry.name.endsWith(".log")) continue;
-    const file = path.join(logs, entry.name);
-    let contents = await readFile(file, "utf8");
-    for (const sentinel of sentinels) {
-      if (!contents.includes(sentinel)) continue;
-      leaks.push({ file, value: sentinel });
-      contents = contents.replaceAll(sentinel, "[REDACTED]");
-    }
-    if (leaks.some((leak) => leak.file === file)) await writeFile(file, contents, { mode: 0o600 });
-  }
-  return leaks;
 }
 
 export function coreVerdict({ selectedAll, results, matrix, leaks, changedFiles, nativeRequired = false, identityUnverified = false }) {
@@ -313,3 +182,5 @@ export function renderReport(input) {
 function escapeCell(value) {
   return String(value).replaceAll("|", "\\|").replaceAll("\n", " ");
 }
+
+export { assertAbsoluteContained, allocateAttempt, initializeAttempt, runLogged, hashFile, scanAndRedactLogs } from "../verification/lib.mjs";

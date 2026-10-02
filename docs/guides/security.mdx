@@ -294,6 +294,14 @@ const proxy = new McpProxy({
 });
 ```
 
+## Inbound OAuth
+
+Set `oauthIdentityStrategy` with an exact issuer and externally visible resource audience. Use HTTPS outside loopback. Fentaris verifies asymmetric JWT signatures, expiry and optional `nbf` with 60 seconds of skew, and every required scope. It rejects unverified tokens without exposing verifier errors in responses.
+
+`verify` is the trust boundary for opaque tokens: authenticate introspection calls, require an active token, use a bounded timeout, and return issuer, audience and expiry claims. Fentaris applies the same claim checks afterward. Sessions remain bound to the resolved user and identity strategy.
+
+Fentaris serves protected resource metadata, while authorization, token issuance and client registration remain on the configured issuer. See [OAuth 2.1](/guides/oauth) for JWKS caching and reverse-proxy configuration.
+
 ## Related Documentation
 
 * [Governance auth](/guides/governance-auth)

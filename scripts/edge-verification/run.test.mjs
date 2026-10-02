@@ -139,6 +139,13 @@ test("proves commit, tree, ancestry, branch, and materialized files", async () =
   await cp(repository, candidate, { recursive: true, filter: (source) => path.basename(source) !== ".git" });
   const verified = await verifyCandidateIdentity({ candidateRoot: candidate, identityRepository: repository, branch: "codex/test", sourceHead, tree, targetDev });
   assert.equal(verified.verified, true, verified.errors.join("; "));
+  await mkdir(path.join(candidate, "tmp"));
+  await writeFile(path.join(candidate, "tmp", "generated.txt"), "generated output");
+  await writeFile(path.join(candidate, "AGENTS.md"), "local instructions");
+  const ordinary = await verifyCandidateIdentity({ candidateRoot: candidate, identityRepository: repository, branch: "codex/test", sourceHead, tree, targetDev });
+  assert.equal(ordinary.verified, false);
+  const generated = await verifyCandidateIdentity({ candidateRoot: candidate, identityRepository: repository, branch: "codex/test", sourceHead, tree, targetDev, ignoreGenerated: true });
+  assert.equal(generated.verified, true, generated.errors.join("; "));
   await writeFile(path.join(candidate, "candidate.txt"), "dirty\n");
   const dirty = await verifyCandidateIdentity({ candidateRoot: candidate, identityRepository: repository, branch: "codex/test", sourceHead, tree, targetDev });
   assert.equal(dirty.verified, false);

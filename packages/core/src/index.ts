@@ -916,3 +916,7 @@ export type {
  * @pk
  */
 export { MemoryRateLimitStore, SlidingWindowRateLimiter, rateLimitKey, rateLimitMiddleware } from "./rate-limit/index.js";
+
+export { oauthIdentityStrategy } from "./identity/oauthIdentityStrategy.js";
+export type { OAuthIdentityStrategyOptions, OAuthIdentityStrategy, ProtectedResourceMetadata, OAuthChallengeReason } from "./identity/oauthIdentityStrategy.js";
+export type { OAuthClaims } from "./identity/jwks.js";
