@@ -61,6 +61,8 @@ Runtime entrypoint copied into build metadata.
 
 The file must exist for project health checks to pass.
 
+Tool discovery imports this module and reads its `fentarisConfig`, `config`, or default export. Generated entrypoints export the configuration and start the listener only when executed directly.
+
 ### `port`
 
 Local port printed by `fentaris dev`, used by runtime checks, and used by `app.start()` when the app does not pass an explicit port.

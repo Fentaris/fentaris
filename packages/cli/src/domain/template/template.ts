@@ -50,6 +50,7 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
             strict: true,
             esModuleInterop: true,
             skipLibCheck: true,
+            types: ["node"],
             outDir: "dist",
             rootDir: "src",
           },
@@ -106,24 +107,32 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
 }
 
 export function renderEntrypoint(): string {
-  return `import { Policy, fentaris, streamableHttp } from "@fentaris/core";
+  return `import { realpathSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+import { Policy, fentaris, mcp, streamableHttp } from "@fentaris/core";
 
-const app = fentaris({
+export const fentarisConfig = {
   // Development-only: replace this with an explicit policy before sharing the proxy.
   policy: Policy.allowAll(),
-});
+  servers: [
+    mcp("specification", {
+      transport: streamableHttp({
+        url: "${remoteMcpUrl}",
+      }),
+    }),
+  ],
+};
 
-app.mcp("specification", {
-  transport: streamableHttp({
-    url: "${remoteMcpUrl}",
-  }),
-});
+// Importing this module for CLI discovery only reads the config.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
+  const app = fentaris(fentarisConfig);
 
-app.mcp("specification").on("tool:success", ({ ctx, durationMs }) => {
-  console.log(\`specification -> \${ctx.tool?.name ?? ctx.operation} (\${durationMs}ms)\`);
-});
+  app.mcp("specification").on("tool:success", ({ ctx, durationMs }) => {
+    console.log(\`specification -> \${ctx.tool?.name ?? ctx.operation} (\${durationMs}ms)\`);
+  });
 
-await app.start();
+  await app.start();
+}
 `;
 }
 
