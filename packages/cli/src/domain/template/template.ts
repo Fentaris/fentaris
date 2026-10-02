@@ -24,7 +24,7 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
           private: true,
           type: "module",
           scripts: {
-            dev: "tsx --env-file-if-exists=.env src/index.ts",
+            dev: "tsx watch --env-file-if-exists=.env src/index.ts",
             typecheck: "tsc -p tsconfig.json --noEmit",
             build: "tsc -p tsconfig.json",
             start: "node --env-file-if-exists=.env dist/index.js",
@@ -148,7 +148,7 @@ ${input.packageManager} install
 ${runScript} dev
 \`\`\`
 
-\`fentaris dev\` starts the project. The proxy listens on \`http://127.0.0.1:${input.port}${input.proxyPath}\` by default.
+\`fentaris dev\` starts the project with \`tsx watch\` and automatically restarts the proxy when its TypeScript source files change. The proxy listens on \`http://127.0.0.1:${input.port}${input.proxyPath}\` by default.
 
 The generated \`Policy.allowAll()\` policy is for local development only. Replace it with an explicit allow-list policy before sharing or exposing the proxy.
 

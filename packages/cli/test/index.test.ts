@@ -649,7 +649,7 @@ describe("project template", () => {
       devDependencies?: Record<string, string>;
     };
     expect(packageJson.scripts).toMatchObject({
-      dev: "tsx --env-file-if-exists=.env src/index.ts",
+      dev: "tsx watch --env-file-if-exists=.env src/index.ts",
       typecheck: "tsc -p tsconfig.json --noEmit",
       start: "node --env-file-if-exists=.env dist/index.js",
     });
