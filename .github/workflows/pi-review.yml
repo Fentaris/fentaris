@@ -51,7 +51,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           provider: ${{ vars.PI_PROVIDER || 'openai' }}
-          model: ${{ vars.PI_MODEL || 'gpt-5.6-sol' }}
+          model: ${{ vars.PI_MODEL || 'gpt-6.1-sol' }}
           token: ${{ secrets.OPENAI_API_KEY }}
           thinking_level: ${{ vars.PI_THINKING_LEVEL || 'medium' }}
           # Tutti i tool built-in dell'action: get_pr_diff, get_issue_or_pr_thread,
