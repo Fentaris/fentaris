@@ -193,7 +193,9 @@ pnpm install --frozen-lockfile
 pnpm verify
 ```
 
-`pnpm verify` runs lint, typecheck, build, and every package test in that order.
+`pnpm verify` runs lint, typecheck, Core extension API type contracts, build,
+every package test, and the Edge/OAuth verification script unit tests in that order.
+These checks are self-contained and do not run the practical verification campaigns.
 
 Before promoting a release, verify the exact npm tarballs in clean projects:
 
