@@ -12,6 +12,7 @@ export class OAuthVerificationError extends Error {
 export function secureOAuthUrl(value: string): URL {
   const url = new URL(value);
   if (url.username || url.password || url.search || url.hash || !["https:", "http:"].includes(url.protocol)) throw new Error("Invalid OAuth URL");
+  // WHATWG URL.hostname retains brackets around IPv6 addresses, including loopback.
   if (url.protocol === "http:" && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) throw new Error("OAuth requires HTTPS outside loopback");
   return url;
 }

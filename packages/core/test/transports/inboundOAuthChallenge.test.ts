@@ -3,6 +3,7 @@ import { fentaris } from "../../src/proxy/McpProxy.js";
 import { oauthIdentityStrategy } from "../../src/identity/oauthIdentityStrategy.js";
 import { SseProxyExposureTransport } from "../../src/transports/exposure/SseProxyExposureTransport.js";
 import { validateFentarisConfig } from "../../src/config/validation.js";
+import { secureOAuthUrl } from "../../src/identity/jwks.js";
 
 const closes: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const close of closes.splice(0).reverse()) await close(); });
@@ -18,6 +19,17 @@ async function start(kind: "http" | "sse", configured = true) {
 }
 
 describe("inbound OAuth exposure", () => {
+  it.each(["http", "sse"] as const)("derives an IPv6 loopback resource on %s", async (kind) => {
+    const app = fentaris({ host: "::1", port: 0, identity: oauthIdentityStrategy({ issuer }) });
+    closes.push(() => app.close());
+    const server = kind === "http" ? await app.start() : (await app.listen(new SseProxyExposureTransport({ host: "::1", port: 0 }))).server;
+    const base = `http://[::1]:${(server.address() as { port: number }).port}`;
+    const path = kind === "http" ? "/mcp" : "/sse";
+    const response = await fetch(`${base}/.well-known/oauth-protected-resource${path}`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ resource: `${base}${path}` });
+    expect((await fetch(`${base}${path}`)).headers.get("www-authenticate")).toContain(`resource_metadata="${base}/.well-known/oauth-protected-resource${path}"`);
+  });
   it.each(["http", "sse"] as const)("serves public metadata and challenges on %s", async (kind) => {
     const { base, resource } = await start(kind);
     for (const path of ["/.well-known/oauth-protected-resource", `/.well-known/oauth-protected-resource/${kind === "http" ? "mcp" : "sse"}`]) {
@@ -80,6 +92,15 @@ describe("inbound OAuth exposure", () => {
 
 describe("OAuth configuration diagnostics", () => {
   const codes = (options: Parameters<typeof oauthIdentityStrategy>[0], config = {}) => validateFentarisConfig({ ...config, identity: oauthIdentityStrategy(options) }).errors.map((item) => item.code);
+  it.each(["::1", "0:0:0:0:0:0:0:1"])("accepts HTTP OAuth URLs on IPv6 loopback %s", (host) => {
+    const base = `http://[${host}]:3000`;
+    expect(secureOAuthUrl(`${base}/issuer`).hostname).toBe("[::1]");
+    expect(codes({ issuer: `${base}/issuer`, jwks: { url: `${base}/jwks` }, resource: `${base}/mcp` }, { host: "::1" })).toEqual([]);
+    expect(codes({ issuer: `${base}/issuer`, jwks: { url: `${base}/jwks` } }, { host: "::1" })).toEqual([]);
+  });
+  it.each(["::2", "2001:db8::1"])("requires HTTPS for non-loopback IPv6 %s", (host) => {
+    expect(() => secureOAuthUrl(`http://[${host}]:3000/mcp`)).toThrow("OAuth requires HTTPS outside loopback");
+  });
   it.each(["not-a-url", "https://auth.example?bad=1", "https://auth.example/#bad", "http://auth.example"])("rejects issuer %s", (issuer) => {
     expect(codes({ issuer })).toContain("FENTARIS_CONFIG_OAUTH_RESOURCE_ISSUER_INVALID");
   });
