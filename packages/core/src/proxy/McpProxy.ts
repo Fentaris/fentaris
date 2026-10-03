@@ -1388,7 +1388,7 @@ export class McpProxy {
    * @pk
    */
   async listen<THandle extends ProxyExposureHandle>(transport: ProxyExposureTransport<THandle>): Promise<THandle> {
-    this.assertRuntimeConfigValid();
+    this.assertRuntimeConfigValid(transport.listener);
 
     const state = this.state().state;
     if (state === "ready" || state === "degraded") {
@@ -3032,6 +3032,7 @@ export class McpProxy {
       ...(challenging ? { unauthorizedChallenge: (reason, request) => challenging.challenge?.(reason === "invalid_token" ? reason : request ? challenging.challengeReason?.(request) ?? reason : reason) } : {}),
       ...(metadata ? { protectedResourceMetadata: () => metadata.metadata!() } : {}),
       configureIdentityExposure: ({ host, port, path }) => {
+        this.assertRuntimeConfigValid({ host, port, path });
         const base = this.oauthOptions?.publicUrl?.replace(/\/$/, "") ?? `http://${host.includes(":") ? `[${host}]` : host}:${port}`;
         for (const strategy of strategies) bindOAuthResource(strategy, `${base}${path}`);
       },

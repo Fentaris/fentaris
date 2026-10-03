@@ -28,10 +28,11 @@ async function fetchJson(url: string): Promise<Record<string, unknown>> {
 
 type SigningJwk = webcrypto.JsonWebKey & { kid?: string; alg?: string; use?: string; key_ops?: string[] };
 
-/** Lazily discover and cache an issuer's signing keys; unknown kids refresh once. */
+/** Lazily cache signing keys, with at most one unknown-kid refresh every 30 seconds. */
 export function createJwtVerifier(options: { issuer: string; jwks?: { url: string; cacheTtlMs?: number } }) {
   let keys: SigningJwk[] | undefined;
   let expiresAt = 0;
+  let unknownKidRefreshAllowedAt = 0;
   let pending: Promise<void> | undefined;
   let jwksUrl = options.jwks?.url;
   async function refresh(): Promise<void> {
@@ -68,11 +69,21 @@ export function createJwtVerifier(options: { issuer: string; jwks?: { url: strin
     if (!header || !["RS256", "PS256", "ES256", "EdDSA"].includes(header.alg ?? "") || typeof header.kid !== "string" || header.crit !== undefined) throw new OAuthVerificationError();
     let refreshed = false;
     if (!keys || Date.now() >= expiresAt) {
-      try { await refresh(); refreshed = true; } catch { if (!keys) throw new OAuthVerificationError(); }
+      refreshed = true;
+      try { await refresh(); } catch { if (!keys) throw new OAuthVerificationError(); }
     }
     const eligible = (key: SigningJwk) => key.kid === header.kid && (!key.alg || key.alg === header.alg) && (!key.use || key.use === "sig") && (!key.key_ops || key.key_ops.includes("verify"));
     let candidates = keys?.filter(eligible) ?? [];
-    if (candidates.length === 0 && !refreshed) { await refresh(); candidates = keys?.filter(eligible) ?? []; }
+    if (candidates.length === 0 && !refreshed) {
+      if (pending) {
+        await pending;
+      } else if (Date.now() >= unknownKidRefreshAllowedAt) {
+        // Reserve the cooldown before fetching, including failed refresh attempts.
+        unknownKidRefreshAllowedAt = Date.now() + 30_000;
+        await refresh();
+      }
+      candidates = keys?.filter(eligible) ?? [];
+    }
     if (candidates.length !== 1) throw new OAuthVerificationError();
     const jwk = candidates[0]!;
     if (jwk.d || jwk.k || ((header.alg === "RS256" || header.alg === "PS256") && jwk.kty !== "RSA") || (header.alg === "ES256" && (jwk.kty !== "EC" || jwk.crv !== "P-256")) || (header.alg === "EdDSA" && (jwk.kty !== "OKP" || jwk.crv !== "Ed25519"))) throw new OAuthVerificationError();

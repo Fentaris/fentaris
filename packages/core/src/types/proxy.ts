@@ -404,5 +404,7 @@ export type ProxyMcpDeclarationConfig = McpServerOptions;
  * @pk
  */
 export type ProxyExposureTransport<THandle extends ProxyExposureHandle = ProxyExposureHandle> = {
+  /** Actual listener options used for runtime configuration validation. @pk */
+  readonly listener?: { host: string; port: number; path: string };
   listen(runtime: ProxyRuntime): Promise<THandle>;
 };

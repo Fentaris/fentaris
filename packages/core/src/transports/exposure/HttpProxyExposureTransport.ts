@@ -79,8 +79,12 @@ export class HttpProxyExposureTransport implements ProxyExposureTransport<HttpPr
     this.assertNoRouteConflicts();
   }
 
+  get listener(): { host: string; port: number; path: string } {
+    return { host: this.options.host, port: this.options.port, path: this.options.path };
+  }
+
   async listen(runtime: ProxyRuntime): Promise<HttpProxyExposureHandle> {
-    runtime.configureIdentityExposure?.({ host: this.options.host, port: this.options.port, path: this.options.path });
+    runtime.configureIdentityExposure?.(this.listener);
     const sessions = new Map<string, HttpSessionState>();
     const metadataRoutes = oauthResourceMetadataRoutes(runtime, this.options.path);
     const server = createServer(async (req, res) => {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { fentaris } from "../../src/proxy/McpProxy.js";
 import { oauthIdentityStrategy } from "../../src/identity/oauthIdentityStrategy.js";
 import { SseProxyExposureTransport } from "../../src/transports/exposure/SseProxyExposureTransport.js";
+import { HttpProxyExposureTransport } from "../../src/transports/exposure/HttpProxyExposureTransport.js";
 import { validateFentarisConfig } from "../../src/config/validation.js";
 import { secureOAuthUrl } from "../../src/identity/jwks.js";
 
@@ -66,6 +67,36 @@ describe("inbound OAuth exposure", () => {
     const app = fentaris({ identity: oauthIdentityStrategy({ issuer }) });
     await expect(app.start({ host: "0.0.0.0", port: 0 })).rejects.toThrow();
     closes.push(() => app.close());
+  });
+  it.each([
+    ["HTTP", HttpProxyExposureTransport], ["SSE", SseProxyExposureTransport],
+  ] as const)("validates explicit %s listener addresses before startup", async (_kind, Transport) => {
+    const app = fentaris({ identity: oauthIdentityStrategy({ issuer }) });
+    closes.push(() => app.close());
+    await expect(app.listen(new Transport({ host: "0.0.0.0", port: 0 }))).rejects.toMatchObject({
+      diagnostics: expect.arrayContaining([expect.objectContaining({ code: "FENTARIS_CONFIG_OAUTH_RESOURCE_MISSING" })]),
+    });
+    expect(app.state().state).toBe("created");
+  });
+  it.each([
+    ["HTTP", HttpProxyExposureTransport], ["SSE", SseProxyExposureTransport],
+  ] as const)("uses explicit %s listener options instead of constructor defaults", async (_kind, Transport) => {
+    const app = fentaris({ host: "::1", port: 3000, path: "/default", identity: oauthIdentityStrategy({ issuer }) });
+    closes.push(() => app.close());
+    const path = "/custom";
+    const { server } = await app.listen(new Transport({ host: "127.0.0.1", port: 0, path, ssePath: path }));
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    expect(await (await fetch(`${base}/.well-known/oauth-protected-resource${path}`)).json()).toMatchObject({ resource: `${base}${path}` });
+  });
+  it("validates the actual address reported by custom exposure transports", async () => {
+    const app = fentaris({ identity: oauthIdentityStrategy({ issuer }) });
+    closes.push(() => app.close());
+    await expect(app.listen({ async listen(runtime) {
+      runtime.configureIdentityExposure?.({ host: "0.0.0.0", port: 3000, path: "/custom" });
+      return { async close() {} };
+    } })).rejects.toMatchObject({
+      cause: { diagnostics: expect.arrayContaining([expect.objectContaining({ code: "FENTARIS_CONFIG_OAUTH_RESOURCE_MISSING" })]) },
+    });
   });
   it("rejects HTTP session rebinding with invalid_token", async () => {
     const { resource } = await start("http");

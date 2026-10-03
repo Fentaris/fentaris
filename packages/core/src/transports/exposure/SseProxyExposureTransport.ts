@@ -70,8 +70,12 @@ export class SseProxyExposureTransport implements ProxyExposureTransport<SseProx
     };
   }
 
+  get listener(): { host: string; port: number; path: string } {
+    return { host: this.options.host, port: this.options.port, path: this.options.ssePath };
+  }
+
   async listen(runtime: ProxyRuntime): Promise<SseProxyExposureHandle> {
-    runtime.configureIdentityExposure?.({ host: this.options.host, port: this.options.port, path: this.options.ssePath });
+    runtime.configureIdentityExposure?.(this.listener);
     const sessions = new Map<string, SseSessionState>();
     const metadataRoutes = oauthResourceMetadataRoutes(runtime, this.options.ssePath);
     const server = createServer(async (req, res) => {

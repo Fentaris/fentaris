@@ -1,13 +1,13 @@
 import { constants, generateKeyPairSync, sign } from "node:crypto";
 import { createServer } from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { oauthIdentityStrategy } from "../../src/identity/oauthIdentityStrategy.js";
 import { fentaris } from "../../src/proxy/McpProxy.js";
 import { headerIdentityStrategy } from "../../src/identity/identity.js";
 import { startAuthorizationServer } from "../fixtures/oauth/authorizationServer.js";
 
 const cleanup: (() => Promise<void>)[] = [];
-afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); });
+afterEach(async () => { vi.restoreAllMocks(); for (const close of cleanup.splice(0).reverse()) await close(); });
 const resource = "https://proxy.example/mcp";
 const issuer = "https://auth.example";
 const claims = () => ({ iss: issuer, aud: resource, sub: "alice", exp: Date.now() / 1000 + 3600, scope: "mcp profile" });
@@ -91,6 +91,45 @@ describe("JWT signature verification", () => {
     expect(await strategy.resolve(request(token()))).toMatchObject({ id: "alice" });
     kid = "missing";
     expect(await strategy.resolve(request(token()))).toBeNull();
+    expect(fetches).toBe(2);
+  });
+  it("bounds unknown-kid refreshes across sequential and concurrent requests, including failures", async () => {
+    let now = Date.now();
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const pair = generateKeyPairSync("ed25519");
+    let fetches = 0, kid = "first", unavailable = false;
+    const server = createServer((_req, res) => {
+      fetches++;
+      res.writeHead(unavailable ? 503 : 200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ keys: [{ ...pair.publicKey.export({ format: "jwk" }), kid, alg: "EdDSA" }] }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    cleanup.push(() => new Promise<void>((resolve) => server.close(() => resolve())));
+    const strategy = oauthIdentityStrategy({ issuer, resource, jwks: { url: `http://127.0.0.1:${(server.address() as { port: number }).port}/jwks` } });
+    const token = (kid: string) => {
+      const input = [Buffer.from(JSON.stringify({ alg: "EdDSA", kid })).toString("base64url"), Buffer.from(JSON.stringify(claims())).toString("base64url")].join(".");
+      return `${input}.${sign(null, Buffer.from(input), pair.privateKey).toString("base64url")}`;
+    };
+    expect(await strategy.resolve(request(token("first")))).toMatchObject({ id: "alice" });
+    expect(fetches).toBe(1);
+    expect(await Promise.all(["missing", "different", "another"].map((kid) => strategy.resolve(request(token(kid)))))).toEqual([null, null, null]);
+    for (const kid of ["missing", "different", "random"]) expect(await strategy.resolve(request(token(kid)))).toBeNull();
+    expect(fetches).toBe(2);
+    expect(await strategy.resolve(request(token("first")))).toMatchObject({ id: "alice" });
+    now += 30_000;
+    unavailable = true;
+    expect(await strategy.resolve(request(token("missing")))).toBeNull();
+    expect(await strategy.resolve(request(token("different")))).toBeNull();
     expect(fetches).toBe(3);
+    expect(await strategy.resolve(request(token("first")))).toMatchObject({ id: "alice" });
+    now += 30_000;
+    unavailable = false;
+    kid = "rotated";
+    expect(await strategy.resolve(request(token(kid)))).toMatchObject({ id: "alice" });
+    expect(fetches).toBe(4);
+    now += 300_000;
+    kid = "expired-cache-rotation";
+    expect(await strategy.resolve(request(token(kid)))).toMatchObject({ id: "alice" });
+    expect(fetches).toBe(5);
   });
 });
