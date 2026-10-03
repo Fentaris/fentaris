@@ -18,6 +18,8 @@ fentaris dev
 
 The generated proxy listens on `http://localhost:4000/mcp` by default.
 
+New projects use `tsx watch` for their `dev` script, so `fentaris dev` restarts the proxy when its TypeScript source files change.
+
 ## Project checks
 
 ```bash
