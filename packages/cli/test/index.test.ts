@@ -625,13 +625,10 @@ describe("project template", () => {
       "",
     ].join("\n"));
     expect(rendered.files["src/index.ts"]).toContain("https://mcp.specification.website/mcp");
-    expect(rendered.files["src/index.ts"]).toContain("app.mcp(");
     expect(rendered.files["src/index.ts"]).toContain("policy: Policy.allowAll()");
-    expect(rendered.files["src/index.ts"]).toContain("Development-only");
-    expect(rendered.files["src/index.ts"]).not.toContain("user:");
     expect(rendered.files["src/index.ts"]).not.toContain("credentialJson");
-    expect(rendered.files["src/index.ts"]).not.toContain("policy(");
-    expect(rendered.files["src/index.ts"]).not.toContain("profiler()");
+    expect(rendered.files["src/index.ts"]).toContain("export const fentarisConfig");
+    expect(rendered.files["src/index.ts"]).toContain("if (isEntrypoint())");
 
     expect(JSON.parse(rendered.files["fentaris.json"] ?? "{}")).toMatchObject({
       edge: {
@@ -660,6 +657,24 @@ describe("project template", () => {
       "@types/node": "^25.9.1",
       typescript: "^6.0.3",
     });
+  });
+
+  it("renders a fail-closed team configuration with manual credential guidance", () => {
+    const rendered = renderTemplate({
+      projectName: "team-demo",
+      packageManager: "pnpm",
+      port: 4000,
+      proxyPath: "/mcp",
+      coreVersionRange: "workspace:*",
+      template: "team",
+    });
+
+    expect(rendered.files["src/index.ts"]).toContain('group({\n      id: "teammates"');
+    expect(rendered.files["src/index.ts"]).toContain('.allow("search")');
+    expect(rendered.files["src/index.ts"]).toContain('credentialJson("users.teammate.apiKeys.0")');
+    expect(rendered.files["src/index.ts"]).not.toContain("allowAll");
+    expect(rendered.files["README.md"]).toContain("auth api-key add teammate --generate --non-interactive");
+    expect(rendered.files["README.md"]).toContain("contains no key");
   });
 
   it("renders package-manager-specific script commands", () => {
@@ -936,6 +951,42 @@ describe("project commands", () => {
     expect(rt.prompt.select).not.toHaveBeenCalled();
     expect(rt.calls.some((call) => call.command === "npm" && call.args[0] === "install")).toBe(false);
     expect(rt.calls.some((call) => call.command === "git" && call.args[0] === "init")).toBe(false);
+  });
+
+  it.each(["local", "team"] as const)("generates the explicit %s template non-interactively", async (template) => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: false });
+
+    await expect(main(["init", "demo", "--template", template, "--non-interactive", "--package-manager", "pnpm", "--skip-install", "--skip-git"], rt)).resolves.toBe(0);
+
+    const config = await readFile(join(dir, "demo", "src", "index.ts"), "utf8");
+    expect(config.includes("credentialJson")).toBe(template === "team");
+  });
+
+  it("defaults to the local template", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { npm: true, git: true, docker: false });
+
+    await expect(main(["init", "demo", "--package-manager", "npm", "--skip-install", "--skip-git"], rt)).resolves.toBe(0);
+    await expect(readFile(join(dir, "demo", "src", "index.ts"), "utf8")).resolves.toContain("Policy.allowAll()");
+  });
+
+  it("rejects unknown templates before creating output", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, git: true, docker: false });
+
+    await expect(main(["init", "demo", "--template", "oauth", "--skip-install"], rt)).resolves.toBe(1);
+    expect(rt.out.error).toHaveBeenCalledWith(expect.stringContaining("Unknown template 'oauth'"));
+    await expect(stat(join(dir, "demo"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it.each(["pnpm", "npm", "bun"] as const)("supports the %s package manager for team projects", async (packageManager) => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    const rt = runtime(dir, { pnpm: true, npm: true, bun: true, git: true, docker: false });
+
+    await expect(main(["init", "demo", "--template", "team", "--package-manager", packageManager, "--skip-install", "--skip-git"], rt)).resolves.toBe(0);
+    const generated = JSON.parse(await readFile(join(dir, "demo", "package.json"), "utf8")) as { name: string };
+    expect(generated.name).toBe("demo");
   });
 
   it("fails init before installing when an explicit package manager is unavailable", async () => {
