@@ -122,7 +122,11 @@ function isEntrypoint(): boolean {
 }
 
 if (isEntrypoint()) {
-  await fentaris(fentarisConfig).start();
+  const app = fentaris(fentarisConfig);
+  app.mcp("specification").on("tool:success", ({ ctx, durationMs }) => {
+    console.log(\`specification -> \${ctx.tool?.name ?? ctx.operation} (\${durationMs}ms)\`);
+  });
+  await app.start();
 }
 `;
 }
@@ -145,7 +149,9 @@ export const fentarisConfig = {
   ],
   servers: [
     mcp("specification", {
-      transport: streamableHttp({ url: "${remoteMcpUrl}" }),
+      transport: streamableHttp({
+        url: "${remoteMcpUrl}",
+      }),
     }),
   ],
 } satisfies McpProxyOptions;
@@ -158,7 +164,9 @@ export const fentarisConfig = {
 export const fentarisConfig = {
   policy: Policy.allowAll(),
   servers: [mcp("specification", {
-    transport: streamableHttp({ url: "${remoteMcpUrl}" }),
+    transport: streamableHttp({
+      url: "${remoteMcpUrl}",
+    }),
   })],
 } satisfies McpProxyOptions;
 `;

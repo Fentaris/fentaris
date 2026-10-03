@@ -629,6 +629,8 @@ describe("project template", () => {
     expect(rendered.files["src/index.ts"]).not.toContain("credentialJson");
     expect(rendered.files["src/index.ts"]).toContain("export const fentarisConfig");
     expect(rendered.files["src/index.ts"]).toContain("if (isEntrypoint())");
+    expect(rendered.files["src/index.ts"]).toContain('app.mcp("specification").on("tool:success"');
+    expect(JSON.parse(rendered.files[".fentaris/secrets.manifest.json"] ?? "{}")).toEqual({ version: 1, references: [] });
 
     expect(JSON.parse(rendered.files["fentaris.json"] ?? "{}")).toMatchObject({
       edge: {
