@@ -15,6 +15,7 @@ import { nextSteps, printBanner, printHealthResults, section, style } from "../u
 
 export async function runInit(command: CliCommand, runtime: Runtime): Promise<void> {
   printBanner(runtime);
+  const templateName = resolveTemplateOption(command);
   if (runtime.nonInteractive && !command.args[0]?.trim()) {
     throw new Error("Project name is required for non-interactive init. Pass it as an argument.");
   }
@@ -29,6 +30,7 @@ export async function runInit(command: CliCommand, runtime: Runtime): Promise<vo
     packageManager,
     port: numberOption(command.options, "port", 4000),
     proxyPath: stringOption(command.options, "path", "/mcp"),
+    template: templateName,
     coreVersionRange: resolveCoreVersionOption(command),
   });
 
@@ -60,6 +62,14 @@ export async function runInit(command: CliCommand, runtime: Runtime): Promise<vo
 
   section(runtime, "Next Steps");
   runtime.out.log(nextSteps([`cd ${projectName}`, "fentaris dev"]));
+}
+
+function resolveTemplateOption(command: CliCommand): "local" | "team" {
+  const value = stringOption(command.options, "template", "local");
+  if (value === "local" || value === "team") {
+    return value;
+  }
+  throw new Error(`Unknown template '${value}'. Supported templates: local, team.`);
 }
 
 async function resolveInitPackageManager(command: CliCommand, runtime: Runtime, options: { requireInstalled: boolean }): Promise<PackageManager> {

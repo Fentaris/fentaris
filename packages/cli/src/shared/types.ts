@@ -44,6 +44,7 @@ export type TemplateInput = {
   packageManager: PackageManager;
   port: number;
   proxyPath: string;
+  template?: "local" | "team";
   /**
    * Version range expression for `@fentaris/core` to embed in the generated
    * `package.json`. Accepts semver ranges (`^3.0.0`, `~3.0.0`, `3.0.0`),
