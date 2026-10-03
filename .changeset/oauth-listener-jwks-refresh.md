@@ -2,4 +2,4 @@
 "@fentaris/core": patch
 ---
 
-Validate explicit HTTP and SSE listener addresses for inbound OAuth and rate-limit unknown signing-key refreshes, including failed refresh attempts.
+Validate explicit HTTP and SSE listener addresses for inbound OAuth, rate-limit signing-key refreshes and outage retries, and reject undeclared OAuth users with a bearer challenge instead of a server error.

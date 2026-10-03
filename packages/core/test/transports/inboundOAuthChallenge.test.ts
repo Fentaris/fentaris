@@ -5,6 +5,8 @@ import { SseProxyExposureTransport } from "../../src/transports/exposure/SseProx
 import { HttpProxyExposureTransport } from "../../src/transports/exposure/HttpProxyExposureTransport.js";
 import { validateFentarisConfig } from "../../src/config/validation.js";
 import { secureOAuthUrl } from "../../src/identity/jwks.js";
+import { group, user, Policy } from "../../src/governance.js";
+import { headerIdentityStrategy } from "../../src/identity/identity.js";
 
 const closes: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const close of closes.splice(0).reverse()) await close(); });
@@ -97,6 +99,32 @@ describe("inbound OAuth exposure", () => {
     } })).rejects.toMatchObject({
       cause: { diagnostics: expect.arrayContaining([expect.objectContaining({ code: "FENTARIS_CONFIG_OAUTH_RESOURCE_MISSING" })]) },
     });
+  });
+  it.each(["http", "sse"] as const)("rejects undeclared OAuth users with a bearer challenge on %s", async (kind) => {
+    const resource = "https://proxy.example/mcp";
+    const app = fentaris({ port: 0, groups: [group({ id: "team", users: [user("alice")], policy: Policy.allowAll() })], identity: oauthIdentityStrategy({
+      issuer, resource,
+      verify: (token) => ({ iss: issuer, aud: resource, sub: token, exp: Date.now() / 1000 + 3600 }),
+      mapUser: (claims) => ({ id: claims.sub === "mapped" ? "mallory" : claims.sub as string }),
+    }) });
+    closes.push(() => app.close());
+    const server = kind === "http" ? await app.start() : (await app.listen(new SseProxyExposureTransport({ port: 0 }))).server;
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const path = kind === "http" ? "/mcp" : "/sse";
+    for (const token of ["unknown", "mapped"]) {
+      const response = await fetch(`${base}${path}`, { headers: { authorization: `Bearer ${token}` } });
+      expect(response.status).toBe(401);
+      expect(response.headers.get("www-authenticate")).toContain('error="invalid_token"');
+    }
+    expect(await app.resolveHttpUser({ headers: { authorization: "Bearer alice" } } as Parameters<typeof app.resolveHttpUser>[0])).toMatchObject({ user: { id: "alice" }, identity: { authenticated: true } });
+  });
+  it("allows API-key fallback after rejecting an undeclared OAuth user", async () => {
+    const app = fentaris({ groups: [group({ id: "team", users: [user("alice")], policy: Policy.allowAll() })], identity: [
+      oauthIdentityStrategy({ issuer, resource: "https://proxy.example/mcp", verify: () => ({ iss: issuer, aud: "https://proxy.example/mcp", sub: "unknown", exp: Date.now() / 1000 + 3600 }) }),
+      headerIdentityStrategy({ userIdHeader: "x-fentaris-api-key", name: "api-key" }),
+    ] });
+    closes.push(() => app.close());
+    expect(await app.resolveHttpUser({ headers: { authorization: "Bearer unknown", "x-fentaris-api-key": "alice" } } as Parameters<typeof app.resolveHttpUser>[0])).toMatchObject({ user: { id: "alice" }, identity: { strategy: "api-key", authenticated: true } });
   });
   it("rejects HTTP session rebinding with invalid_token", async () => {
     const { resource } = await start("http");

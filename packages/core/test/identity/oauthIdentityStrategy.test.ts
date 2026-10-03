@@ -93,7 +93,7 @@ describe("JWT signature verification", () => {
     expect(await strategy.resolve(request(token()))).toBeNull();
     expect(fetches).toBe(2);
   });
-  it("bounds unknown-kid refreshes across sequential and concurrent requests, including failures", async () => {
+  it("bounds unknown-kid refreshes and outage retries for fresh, expired and empty caches", async () => {
     let now = Date.now();
     vi.spyOn(Date, "now").mockImplementation(() => now);
     const pair = generateKeyPairSync("ed25519");
@@ -131,5 +131,21 @@ describe("JWT signature verification", () => {
     kid = "expired-cache-rotation";
     expect(await strategy.resolve(request(token(kid)))).toMatchObject({ id: "alice" });
     expect(fetches).toBe(5);
+    now += 300_000;
+    unavailable = true;
+    expect(await strategy.resolve(request(token(kid)))).toMatchObject({ id: "alice" });
+    expect(fetches).toBe(6);
+    for (let i = 0; i < 5; i++) expect(await strategy.resolve(request(token(kid)))).toMatchObject({ id: "alice" });
+    expect(await strategy.resolve(request(token("missing")))).toBeNull();
+    expect(fetches).toBe(6);
+    const cold = oauthIdentityStrategy({ issuer, resource, jwks: { url: `http://127.0.0.1:${(server.address() as { port: number }).port}/jwks` } });
+    for (let i = 0; i < 5; i++) expect(await cold.resolve(request(token(kid)))).toBeNull();
+    expect(fetches).toBe(7);
+    now += 30_000;
+    unavailable = false;
+    kid = "recovered";
+    expect(await strategy.resolve(request(token(kid)))).toMatchObject({ id: "alice" });
+    expect(await cold.resolve(request(token(kid)))).toMatchObject({ id: "alice" });
+    expect(fetches).toBe(9);
   });
 });

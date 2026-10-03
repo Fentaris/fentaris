@@ -1,4 +1,4 @@
-import { bindOAuthResource } from "../identity/oauthIdentityStrategy.js";
+import { bindOAuthResource, oauthIdentityOptions } from "../identity/oauthIdentityStrategy.js";
 import { existsSync, readFileSync } from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { type IncomingHttpHeaders, type IncomingMessage, type Server as HttpServer } from "node:http";
@@ -451,6 +451,7 @@ export class McpProxy {
   private readonly version: string;
   private readonly defaultPort?: number;
   private readonly defaultHost?: string;
+  private readonly rejectedOAuthRequests = new WeakSet<object>();
   private readonly defaultPath: string;
   private runtimeValidationConfig: McpProxyOptions;
   private readonly namedPolicies = new Map<string, GovernancePolicy>();
@@ -3029,7 +3030,7 @@ export class McpProxy {
     const challenging = strategies.find((strategy) => strategy.challenge);
     const metadata = strategies.find((strategy) => strategy.metadata);
     return {
-      ...(challenging ? { unauthorizedChallenge: (reason, request) => challenging.challenge?.(reason === "invalid_token" ? reason : request ? challenging.challengeReason?.(request) ?? reason : reason) } : {}),
+      ...(challenging ? { unauthorizedChallenge: (reason, request) => challenging.challenge?.(reason === "invalid_token" || (request && this.rejectedOAuthRequests.has(request)) ? "invalid_token" : request ? challenging.challengeReason?.(request) ?? reason : reason) } : {}),
       ...(metadata ? { protectedResourceMetadata: () => metadata.metadata!() } : {}),
       configureIdentityExposure: ({ host, port, path }) => {
         this.assertRuntimeConfigValid({ host, port, path });
@@ -3628,12 +3629,18 @@ export class McpProxy {
    */
   private async resolveUser(req: IncomingMessage): Promise<{ user: UserContext; identity?: IdentityMetadata; subject?: ResolvedSubject }> {
     if (this.identityOptions) {
+      this.rejectedOAuthRequests.delete(req);
       const strategies = Array.isArray(this.identityOptions.strategy) ? this.identityOptions.strategy : [this.identityOptions.strategy];
       let resolved: UserContext | null = null;
       let strategyName = strategies[0]?.name;
       for (const strategy of strategies) {
         resolved = await strategy.resolve({ headers: normalizeHeaders(req.headers), request: req });
-        if (resolved) { strategyName = strategy.name; break; }
+        if (resolved?.id && oauthIdentityOptions(strategy) && this.subjectIndex && !this.subjectIndex.resolve(resolved.id)) {
+          this.rejectedOAuthRequests.add(req);
+          resolved = null;
+          continue;
+        }
+        if (resolved) { this.rejectedOAuthRequests.delete(req); strategyName = strategy.name; break; }
       }
       const subject = this.resolveSubject(resolved ?? {});
       return {

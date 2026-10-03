@@ -33,6 +33,7 @@ export function createJwtVerifier(options: { issuer: string; jwks?: { url: strin
   let keys: SigningJwk[] | undefined;
   let expiresAt = 0;
   let unknownKidRefreshAllowedAt = 0;
+  let refreshRetryAllowedAt = 0;
   let pending: Promise<void> | undefined;
   let jwksUrl = options.jwks?.url;
   async function refresh(): Promise<void> {
@@ -59,8 +60,12 @@ export function createJwtVerifier(options: { issuer: string; jwks?: { url: strin
       if (!Array.isArray(document.keys)) throw new OAuthVerificationError();
       keys = document.keys.filter((key): key is SigningJwk => Boolean(key && typeof key === "object"));
       expiresAt = Date.now() + (options.jwks?.cacheTtlMs ?? 300_000);
+      refreshRetryAllowedAt = 0;
     })();
-    try { await pending; } finally { pending = undefined; }
+    try { await pending; } catch (error) {
+      refreshRetryAllowedAt = Date.now() + 30_000;
+      throw error;
+    } finally { pending = undefined; }
   }
   return async (token: string): Promise<OAuthClaims> => {
     const parts = token.split(".");
@@ -70,14 +75,16 @@ export function createJwtVerifier(options: { issuer: string; jwks?: { url: strin
     let refreshed = false;
     if (!keys || Date.now() >= expiresAt) {
       refreshed = true;
-      try { await refresh(); } catch { if (!keys) throw new OAuthVerificationError(); }
+      if (pending || Date.now() >= refreshRetryAllowedAt) {
+        try { await refresh(); } catch { if (!keys) throw new OAuthVerificationError(); }
+      } else if (!keys) throw new OAuthVerificationError();
     }
     const eligible = (key: SigningJwk) => key.kid === header.kid && (!key.alg || key.alg === header.alg) && (!key.use || key.use === "sig") && (!key.key_ops || key.key_ops.includes("verify"));
     let candidates = keys?.filter(eligible) ?? [];
     if (candidates.length === 0 && !refreshed) {
       if (pending) {
         await pending;
-      } else if (Date.now() >= unknownKidRefreshAllowedAt) {
+      } else if (Date.now() >= Math.max(unknownKidRefreshAllowedAt, refreshRetryAllowedAt)) {
         // Reserve the cooldown before fetching, including failed refresh attempts.
         unknownKidRefreshAllowedAt = Date.now() + 30_000;
         await refresh();
