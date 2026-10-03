@@ -1,5 +1,20 @@
 # @fentaris/cli
 
+## 1.7.0
+
+### Minor Changes
+
+- 97a7414: Add selectable `local` and `team` init boilerplates with import-safe configuration, watch-mode development, and fail-closed team governance.
+
+### Patch Changes
+
+- 97a7414: Restart generated projects automatically when TypeScript source files change during development.
+- 97a7414: Export the complete configuration from generated entrypoints and guard proxy startup so CLI tool discovery can inspect them without starting a listener.
+- Updated dependencies [97a7414]
+- Updated dependencies [97a7414]
+  - @fentaris/core@3.2.0
+  - @fentaris/edge@0.3.6
+
 ## 1.6.2
 
 ### Patch Changes
