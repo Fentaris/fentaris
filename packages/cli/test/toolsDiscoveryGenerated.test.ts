@@ -1,7 +1,8 @@
 import { execFile as execFileWithCallback, spawn, type ChildProcess } from "node:child_process";
-import { mkdtemp, mkdir, rm, symlink } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -14,6 +15,10 @@ const execFile = promisify(execFileWithCallback);
 const coreRoot = fileURLToPath(new URL("../../core/", import.meta.url));
 const tsc = fileURLToPath(new URL("../../../node_modules/.bin/tsc", import.meta.url));
 const nodeTypes = fileURLToPath(new URL("../node_modules/@types/node", import.meta.url));
+const require = createRequire(import.meta.url);
+// Exercise the real tsx watcher already installed through the locked Vite toolchain.
+const viteRequire = createRequire(createRequire(require.resolve("vitest/package.json")).resolve("vite/package.json"));
+const tsxCli = viteRequire.resolve("tsx/cli");
 
 async function listen(server: Server): Promise<number> {
   await new Promise<void>((resolve, reject) => {
@@ -90,6 +95,30 @@ async function stop(child: ChildProcess): Promise<void> {
 }
 
 describe("generated project tool discovery", () => {
+  it.each(["local", "team"] as const)("loads .env in the generated %s dev script, including after a restart", async (template) => {
+    const root = await mkdtemp(join(tmpdir(), "fentaris-generated-watch-"));
+    const { files } = renderTemplate({ projectName: "watch-demo", packageManager: "pnpm", port: 3000, proxyPath: "/mcp", template });
+    files["src/index.ts"] = "console.log('initial=' + process.env.FENTARIS_TEST_DOTENV);\n";
+    await writeTemplate(root, files);
+    await writeFile(join(root, ".env"), "FENTARIS_TEST_DOTENV=loaded\n");
+    const manifest = JSON.parse(files["package.json"]) as { scripts: { dev: string } };
+    const [command, ...arguments_] = manifest.scripts.dev.split(" ");
+    expect(command).toBe("tsx");
+    const env = { ...process.env };
+    delete env.FENTARIS_TEST_DOTENV;
+    const child = spawn(process.execPath, [tsxCli, ...arguments_], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
+    let output = "";
+    child.stdout?.on("data", (chunk) => { output += chunk.toString(); });
+    child.stderr?.on("data", (chunk) => { output += chunk.toString(); });
+    try {
+      await vi.waitFor(() => expect(output).toContain("initial=loaded"), { timeout: 5_000 });
+      await writeFile(join(root, "src", "index.ts"), "console.log('restarted=' + process.env.FENTARIS_TEST_DOTENV);\n");
+      await vi.waitFor(() => expect(output).toContain("restarted=loaded"), { timeout: 5_000 });
+    } finally {
+      await stop(child);
+      await rm(root, { recursive: true, force: true });
+    }
+  });
   it("imports config without contacting upstreams or starting a listener, then lists tools offline", async () => {
     const occupiedPort = createServer();
     const port = await listen(occupiedPort);
