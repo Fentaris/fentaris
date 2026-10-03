@@ -245,6 +245,8 @@ Options:
 
 JSON responses include `ok`, `data`, `warnings`, and `nextActions`. Collection responses also include `pagination`.
 
+Discovery imports the configured project entrypoint and reads its exported `fentarisConfig`, `config`, or default config. Generated projects export `fentarisConfig` and start the proxy only when the entrypoint is executed directly. In existing projects, keep `app.start()` out of the import path so discovery does not start the proxy listener.
+
 ### `fentaris tools search <query>`
 
 Search effective tools without loading every schema.

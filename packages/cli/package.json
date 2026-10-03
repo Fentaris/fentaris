@@ -1,6 +1,6 @@
 {
   "name": "@fentaris/cli",
-  "version": "1.6.2",
+  "version": "1.6.1",
   "description": "Fentaris MCP Proxy - CLI",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,9 +23,9 @@
     "semver": "^7.8.5"
   },
   "devDependencies": {
-    "@types/node": "^26.5.1",
+    "@types/node": "^26.6.2",
     "@types/semver": "^7.8.0",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.2"
   },
   "keywords": [
     "fentaris",

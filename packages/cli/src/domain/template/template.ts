@@ -14,9 +14,10 @@ import type { TemplateInput } from "../../shared/types.js";
 
 export function renderTemplate(input: TemplateInput): { files: Record<string, string> } {
   const coreRange = resolveCoreRange(input.coreVersionRange);
+  const template = input.template ?? "local";
   return {
     files: {
-      "README.md": renderReadme(input, coreRange),
+      "README.md": renderReadme(input, coreRange, template),
       "package.json": JSON.stringify(
         {
           name: input.projectName,
@@ -24,7 +25,7 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
           private: true,
           type: "module",
           scripts: {
-            dev: "tsx --env-file-if-exists=.env src/index.ts",
+            dev: "tsx watch --env-file-if-exists=.env src/index.ts",
             typecheck: "tsc -p tsconfig.json --noEmit",
             build: "tsc -p tsconfig.json",
             start: "node --env-file-if-exists=.env dist/index.js",
@@ -50,6 +51,7 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
             strict: true,
             esModuleInterop: true,
             skipLibCheck: true,
+            types: ["node"],
             outDir: "dist",
             rootDir: "src",
           },
@@ -99,31 +101,74 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
             ].join("\n"),
           }
         : {}),
-      ".fentaris/secrets.manifest.json": JSON.stringify({ version: 1, references: [] }, null, 2),
-      "src/index.ts": renderEntrypoint(),
+      ".fentaris/secrets.manifest.json": JSON.stringify({
+        version: 1,
+        references: [],
+        ...(template === "team" ? { apiKeys: [{ userId: "teammate", source: { type: "local" }, count: 1 }] } : {}),
+      }, null, 2),
+      "src/index.ts": renderEntrypoint(template),
     },
   };
 }
 
-export function renderEntrypoint(): string {
-  return `import { Policy, fentaris, streamableHttp } from "@fentaris/core";
+export function renderEntrypoint(template: "local" | "team" = "local"): string {
+  return `import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+${renderConfig(template)}
 
-const app = fentaris({
-  // Development-only: replace this with an explicit policy before sharing the proxy.
+function isEntrypoint(): boolean {
+  const invoked = process.argv[1];
+  return typeof invoked === "string" && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(invoked);
+}
+
+if (isEntrypoint()) {
+  const app = fentaris(fentarisConfig);
+  app.mcp("specification").on("tool:success", ({ ctx, durationMs }) => {
+    console.log(\`specification -> \${ctx.tool?.name ?? ctx.operation} (\${durationMs}ms)\`);
+  });
+  await app.start();
+}
+`;
+}
+
+function renderConfig(template: "local" | "team"): string {
+  if (template === "team") {
+    return `import { credentialJson, fentaris, group, mcp, policy, streamableHttp, user, type McpProxyOptions } from "@fentaris/core";
+
+const teammates = policy("teammates")
+  .mcp("specification")
+  .allow("search");
+
+export const fentarisConfig = {
+  groups: [
+    group({
+      id: "teammates",
+      users: [user("teammate", { apiKeys: [credentialJson("users.teammate.apiKeys.0")] })],
+      policy: teammates,
+    }),
+  ],
+  servers: [
+    mcp("specification", {
+      transport: streamableHttp({
+        url: "${remoteMcpUrl}",
+      }),
+    }),
+  ],
+} satisfies McpProxyOptions;
+`;
+  }
+
+  return `import { Policy, fentaris, mcp, streamableHttp, type McpProxyOptions } from "@fentaris/core";
+
+// Keep this small and directly editable while exploring Fentaris locally.
+export const fentarisConfig = {
   policy: Policy.allowAll(),
-});
-
-app.mcp("specification", {
-  transport: streamableHttp({
-    url: "${remoteMcpUrl}",
-  }),
-});
-
-app.mcp("specification").on("tool:success", ({ ctx, durationMs }) => {
-  console.log(\`specification -> \${ctx.tool?.name ?? ctx.operation} (\${durationMs}ms)\`);
-});
-
-await app.start();
+  servers: [mcp("specification", {
+    transport: streamableHttp({
+      url: "${remoteMcpUrl}",
+    }),
+  })],
+} satisfies McpProxyOptions;
 `;
 }
 
@@ -135,11 +180,24 @@ export async function writeTemplate(targetDir: string, files: Record<string, str
   }
 }
 
-function renderReadme(input: TemplateInput, coreRange: string): string {
+function renderReadme(input: TemplateInput, coreRange: string, template: "local" | "team"): string {
   const runScript = input.packageManager === "npm" ? "npm run" : input.packageManager;
+  const governance = template === "team"
+    ? `This team template fails closed: the \`teammates\` group can use only \`specification__search\`. Edit the group, user, and explicit tool allow-list in \`src/index.ts\`.
+
+Create a random local API key manually (the generated project contains no key):
+
+\`\`\`sh
+fentaris auth api-key add teammate --generate --non-interactive
+\`\`\`
+
+Save the printed client key once and send it as \`x-fentaris-api-key\`. Never commit the client key or \`.env\`.
+`
+    : `The generated \`Policy.allowAll()\` policy is for local development only. Edit the inspectable configuration in \`src/index.ts\` before sharing or exposing the proxy.
+`;
   return `# ${input.projectName}
 
-This project was generated by the Fentaris CLI. It starts a local MCP proxy with a remote HTTP MCP server mounted as \`specification\`.
+This ${template} boilerplate was generated by the Fentaris CLI. It mounts the public MCP specification server as \`specification\`.
 
 ## Quick start
 
@@ -148,15 +206,15 @@ ${input.packageManager} install
 ${runScript} dev
 \`\`\`
 
-\`fentaris dev\` starts the project. The proxy listens on \`http://127.0.0.1:${input.port}${input.proxyPath}\` by default.
+\`fentaris dev\` starts the project with \`tsx watch\` and automatically restarts the proxy when its TypeScript source files change. The proxy listens on \`http://127.0.0.1:${input.port}${input.proxyPath}\` by default.
 
-The generated \`Policy.allowAll()\` policy is for local development only. Replace it with an explicit allow-list policy before sharing or exposing the proxy.
+${governance}
 
 The generated project pins \`@fentaris/core\` to \`${coreRange}\` (currently \`^${coreVersion}\` by default). Run \`${input.packageManager} outdated @fentaris/core\` to check for compatible updates, then \`${input.packageManager} update @fentaris/core\` to install them.
 
 ## Project files
 
-- \`src/index.ts\` configures the upstream MCP server.
+- \`src/index.ts\` exports the inspectable configuration used by runtime and CLI discovery, and starts the proxy only when executed directly.
 - \`fentaris.json\` configures the project entrypoint, port, path, and CLI defaults.
 - \`.fentaris/secrets.manifest.json\` lists required credential references (schema only, safe to commit).
 
@@ -164,6 +222,8 @@ The generated project pins \`@fentaris/core\` to \`${coreRange}\` (currently \`^
 
 \`\`\`sh
 ${runScript} typecheck
+${runScript} build
+fentaris tools list
 fentaris doctor
 fentaris check --offline
 fentaris build

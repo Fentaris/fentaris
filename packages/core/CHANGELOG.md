@@ -1,11 +1,5 @@
 # @fentaris/core
 
-## 3.1.2
-
-### Patch Changes
-
-- 6db64e0: Update the runtime validation dependency to the latest compatible Zod release.
-
 ## 3.1.1
 
 ### Patch Changes

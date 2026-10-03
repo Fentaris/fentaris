@@ -1,3 +1,4 @@
+import { bindOAuthResource } from "../identity/oauthIdentityStrategy.js";
 import { existsSync, readFileSync } from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { type IncomingHttpHeaders, type IncomingMessage, type Server as HttpServer } from "node:http";
@@ -284,7 +285,7 @@ export type McpProxyOptions = {
   path?: string;
   logger?: Logger;
   user?: UserContext | ((request: IncomingMessage) => UserContext | Promise<UserContext>);
-  identity?: IdentityStrategy | IdentityResolverOptions;
+  identity?: IdentityStrategy | IdentityStrategy[] | IdentityResolverOptions;
   policy?: Policy;
   groups?: Group[];
   defaults?: {
@@ -390,7 +391,7 @@ export type AutoLogOptions = {
  * @pk
  */
 export type IdentityResolverOptions = {
-  strategy: IdentityStrategy;
+  strategy: IdentityStrategy | IdentityStrategy[];
   required?: boolean;
 };
 
@@ -1285,7 +1286,7 @@ export class McpProxy {
     if (this.httpServer) {
       return this.httpServer;
     }
-    this.assertRuntimeConfigValid();
+    this.assertRuntimeConfigValid({ port: options.port ?? this.defaultPort, host: options.host ?? this.defaultHost, path: options.path ?? this.defaultPath });
 
     const startedAt = Date.now();
     const result = await this.lifecycle.start(async () => {
@@ -1423,11 +1424,11 @@ export class McpProxy {
     }
   }
 
-  private assertRuntimeConfigValid(): void {
+  private assertRuntimeConfigValid(listener: McpProxyStartOptions = {}): void {
     this.oauth();
     this.materializeLocalNamespaces();
     this.refreshDerivedGovernanceState({ validate: true });
-    const validation = validateFentarisConfig(this.runtimeValidationConfig);
+    const validation = validateFentarisConfig({ ...this.runtimeValidationConfig, ...listener });
     const errors = validation.errors.filter((error) => !(
       this.oauthAgentToolsRegistered && error.code === "FENTARIS_CONFIG_OAUTH_RESERVED_NAMESPACE"
     ));
@@ -3023,7 +3024,17 @@ export class McpProxy {
   }
 
   private createRuntime(): ProxyRuntime {
+    const configured = this.identityOptions?.strategy;
+    const strategies = Array.isArray(configured) ? configured : configured ? [configured] : [];
+    const challenging = strategies.find((strategy) => strategy.challenge);
+    const metadata = strategies.find((strategy) => strategy.metadata);
     return {
+      ...(challenging ? { unauthorizedChallenge: (reason, request) => challenging.challenge?.(reason === "invalid_token" ? reason : request ? challenging.challengeReason?.(request) ?? reason : reason) } : {}),
+      ...(metadata ? { protectedResourceMetadata: () => metadata.metadata!() } : {}),
+      configureIdentityExposure: ({ host, port, path }) => {
+        const base = this.oauthOptions?.publicUrl?.replace(/\/$/, "") ?? `http://${host.includes(":") ? `[${host}]` : host}:${port}`;
+        for (const strategy of strategies) bindOAuthResource(strategy, `${base}${path}`);
+      },
       createSdkServer: (user, identity, subject) => createSdkServer(this as unknown as Parameters<typeof createSdkServer>[0], user, identity, subject),
       resolveHttpUser: (request) => this.resolveHttpUser(request as IncomingMessage),
       resolveStdioUser: () => this.resolveStdioUser(),
@@ -3616,13 +3627,20 @@ export class McpProxy {
    */
   private async resolveUser(req: IncomingMessage): Promise<{ user: UserContext; identity?: IdentityMetadata; subject?: ResolvedSubject }> {
     if (this.identityOptions) {
-      const resolved = await this.identityOptions.strategy.resolve({ headers: normalizeHeaders(req.headers), request: req });
+      const strategies = Array.isArray(this.identityOptions.strategy) ? this.identityOptions.strategy : [this.identityOptions.strategy];
+      let resolved: UserContext | null = null;
+      let strategyName = strategies[0]?.name;
+      for (const strategy of strategies) {
+        resolved = await strategy.resolve({ headers: normalizeHeaders(req.headers), request: req });
+        if (resolved) { strategyName = strategy.name; break; }
+      }
       const subject = this.resolveSubject(resolved ?? {});
       return {
         user: resolved ?? {},
         subject,
         identity: {
-          strategy: this.identityOptions.strategy.name,
+          strategy: strategyName,
+          metadata: resolved?.metadata && typeof resolved.metadata === "object" ? resolved.metadata as Record<string, unknown> : undefined,
           authenticated: Boolean(resolved),
           userId: resolved?.id,
         },
@@ -4130,7 +4148,10 @@ function normalizeIdentityOptions(
     return undefined;
   }
 
-  return "strategy" in identity ? { required, ...identity } : { strategy: identity, required };
+  const strategy = "strategy" in identity ? identity.strategy : identity;
+  const strategies = Array.isArray(strategy) ? strategy : [strategy];
+  const oauthRequired = strategies.some((item) => item.metadata !== undefined);
+  return "strategy" in identity ? { required: required || oauthRequired, ...identity } : { strategy: identity, required: required || oauthRequired };
 }
 
 function hasDeclaredApiKeys(groups: Group[]): boolean {
