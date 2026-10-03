@@ -1,6 +1,6 @@
 {
   "name": "@fentaris/edge",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Fentaris governed edge execution agent",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
