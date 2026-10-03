@@ -1,3 +1,5 @@
+import { oauthIdentityOptions } from "../identity/oauthIdentityStrategy.js";
+import { secureOAuthUrl } from "../identity/jwks.js";
 import { FentarisConfigError } from "./error.js";
 import { diagnostic, toValidationResult, type FentarisDiagnostic, type FentarisConfigValidationResult } from "./diagnostics.js";
 import { resolveFentarisConfig } from "./resolve.js";
@@ -301,9 +303,34 @@ function validatePolicyVisibility(
 function validateIdentity(config: McpProxyOptions, groups: Group[], diagnostics: FentarisDiagnostic[]): void {
   const identityConfig = config.identity;
   const required = Boolean(identityConfig && typeof identityConfig === "object" && "required" in identityConfig && identityConfig.required === true);
-  const hasStrategy = typeof identityConfig === "function"
+  const hasStrategy = Array.isArray(identityConfig) && identityConfig.length > 0
+    || Boolean(identityConfig && typeof identityConfig === "object" && "resolve" in identityConfig)
+    || typeof identityConfig === "function"
     || Boolean(identityConfig && typeof identityConfig === "object" && "strategy" in identityConfig && identityConfig.strategy)
     || Boolean(config.auth);
+  const configured = identityConfig && "strategy" in identityConfig ? identityConfig.strategy : identityConfig;
+  const strategies = Array.isArray(configured) ? configured : configured ? [configured] : [];
+  for (const [index, strategy] of strategies.entries()) {
+    if (typeof strategy !== "object") continue;
+    const options = oauthIdentityOptions(strategy);
+    if (!options) continue;
+    const path = ["identity", ...(Array.isArray(configured) ? [index] : [])];
+    const add = (code: string, message: string) => diagnostics.push(diagnostic("error", `FENTARIS_CONFIG_OAUTH_RESOURCE_${code}`, "Invalid OAuth resource server configuration", message, { path }));
+    try { secureOAuthUrl(options.issuer); } catch { add("ISSUER_INVALID", "issuer must be an absolute HTTPS URL (HTTP is allowed only on loopback), without credentials, query, or fragment."); }
+    if (options.jwks && options.verify) add("VERIFY_CONFLICT", "Configure jwks or verify, not both.");
+    if (options.jwks) {
+      try { secureOAuthUrl(options.jwks.url); } catch { add("JWKS_INVALID", "jwks.url must use HTTPS outside loopback."); }
+      if (options.jwks.cacheTtlMs !== undefined && (!Number.isFinite(options.jwks.cacheTtlMs) || options.jwks.cacheTtlMs <= 0)) add("JWKS_INVALID", "cacheTtlMs must be a positive finite number.");
+    }
+    const host = config.host ?? "127.0.0.1";
+    const resource = options.resource ?? (config.oauth?.publicUrl ? `${config.oauth.publicUrl.replace(/\/$/, "")}${config.path ?? "/mcp"}` : ["localhost", "127.0.0.1", "::1"].includes(host) ? `http://${host === "::1" ? "[::1]" : host}:${config.port ?? 3000}${config.path ?? "/mcp"}` : undefined);
+    if (!resource) add("MISSING", "Set resource or oauth.publicUrl for a non-loopback listener.");
+    else {
+      try { secureOAuthUrl(resource); } catch { add("HTTPS_REQUIRED", "resource must be an absolute HTTPS URL (HTTP is allowed only on loopback), without credentials, query, or fragment."); }
+    }
+    if (options.scopes && (!Array.isArray(options.scopes) || options.scopes.some((scope) => typeof scope !== "string" || !/^[\x21\x23-\x5B\x5D-\x7E]+$/.test(scope)))) add("SCOPES_INVALID", "scopes must contain non-empty OAuth scope tokens.");
+  }
+
   if (required && !hasStrategy && !hasDeclaredApiKeys(groups)) {
     diagnostics.push(diagnostic("error", "FENTARIS_CONFIG_IDENTITY_REQUIRED_WITHOUT_STRATEGY", "Identity is required without a strategy", "Configure identity.strategy, auth, or declared API keys before requiring identity.", {
       path: ["identity"],

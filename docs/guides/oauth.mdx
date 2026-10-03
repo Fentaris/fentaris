@@ -1,6 +1,6 @@
 ---
-title: "Upstream OAuth 2.1"
-description: "Let Fentaris obtain, store, and refresh OAuth tokens for upstream MCP servers, per user."
+title: "OAuth 2.1"
+description: "Authenticate MCP clients with an external issuer and manage upstream OAuth tokens per user."
 ---
 
 Declare `auth: oauth()` on an upstream MCP server and Fentaris performs the OAuth 2.1 client side for you: metadata discovery, dynamic client registration, PKCE, token exchange, refresh, and per-user token storage.
@@ -176,6 +176,106 @@ The `credential(...)` reference used for `clientSecret` is not declared in app d
 ### The upstream keeps asking for a new login
 
 The refresh token was rejected or the authorization server invalidated the registered client. Run `fentaris auth logout <mcp>` and sign in again.
+
+## Authenticate Inbound MCP Clients
+
+Configure an external authorization server as the issuer. Fentaris validates its access tokens and serves RFC 9728 metadata; clients discover the issuer, sign in there, and send `Authorization: Bearer <token>` to Fentaris.
+
+```ts theme={null}
+import { fentaris, oauthIdentityStrategy, group, user, policy } from "@fentaris/core";
+
+const app = fentaris({
+  identity: oauthIdentityStrategy({
+    issuer: "https://auth.example.com",
+    resource: "https://proxy.example.com/mcp",
+    scopes: ["mcp:tools"],
+    mapUser: (claims) => ({ id: String(claims.email ?? claims.sub) }),
+  }),
+  groups: [group({
+    id: "team",
+    users: [user("alice@example.com")],
+    policy: policy("team").allow("workspace", "*"),
+  })],
+});
+app.local("workspace").tool("whoami", {
+  description: "Show the authenticated user",
+  inputSchema: { type: "object", properties: {} },
+}, (ctx) => ({ content: [{ type: "text", text: ctx.user.id ?? "anonymous" }] }));
+await app.start();
+```
+
+### Issuer, resource and scopes
+
+`issuer` must exactly match the token's `iss`. `resource` must appear in `aud` (a string or array). Fentaris requires a finite `exp`, checks `nbf` when present, and allows 60 seconds of clock skew. Required `scopes` must all appear in the space-separated `scope` claim or `scp` array. Granted scopes are available in `ctx.identity.metadata.scopes`.
+
+Set the externally visible `resource` behind a reverse proxy, including any public path prefix. If omitted, it defaults to `oauth.publicUrl` plus the MCP path, or the actual loopback listener URL in development. Non-loopback HTTP and URLs with credentials, query strings or fragments are rejected. OAuth identity requires authentication by default; an explicit `{ strategy, required: false }` makes identity optional.
+
+### JWT signing keys
+
+By default, Fentaris discovers `jwks_uri` through authorization-server metadata (RFC 8414), falling back to OpenID Connect discovery. It verifies RS256, PS256, ES256 and EdDSA (Ed25519) signatures with Node crypto. HS256 and encrypted JWTs are unsupported.
+
+Use `jwks: { url: "https://auth.example.com/keys", cacheTtlMs: 300000 }` for an explicit endpoint. Keys are cached for five minutes by default. An unknown `kid` refreshes the JWKS once; cached keys remain usable during an endpoint outage, and requests without an available signing key fail closed.
+
+### Metadata and bearer challenges
+
+HTTP and SSE exposures serve public JSON at `/.well-known/oauth-protected-resource` and `/.well-known/oauth-protected-resource<mcpPath>` (the SSE path for SSE exposure). The document contains `resource`, `authorization_servers`, `bearer_methods_supported: ["header"]`, and configured `scopes_supported`.
+
+Every OAuth 401 includes `WWW-Authenticate: Bearer resource_metadata="..."`. Failed verification adds `error="invalid_token"`; missing required scopes add `error="insufficient_scope"` and `scope`. Sessions stay bound to the authenticated user and strategy; presenting another user's token on an existing session returns 401.
+
+Fentaris does not provide inbound authorization, token or client-registration endpoints. Configure those on your issuer.
+
+### Opaque tokens and introspection
+
+Provide `verify` to return trusted claims from your issuer's authenticated introspection endpoint. Fentaris still checks issuer, audience, expiry and scopes. Configure either `verify` or `jwks`.
+
+```ts theme={null}
+oauthIdentityStrategy({
+  issuer: "https://auth.example.com",
+  resource: "https://proxy.example.com/mcp",
+  scopes: ["mcp:tools"],
+  verify: async (token) => {
+    const response = await fetch("https://auth.example.com/introspect", {
+      method: "POST",
+      headers: { Authorization: `Basic ${process.env.INTROSPECTION_BASIC_AUTH}` },
+      body: new URLSearchParams({ token }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) throw new Error("Introspection unavailable");
+    const claims = await response.json();
+    if (!claims.active) throw new Error("Inactive token");
+    return claims;
+  },
+});
+```
+
+### User mapping and API-key fallback
+
+The default user id is `claims.sub`. `mapUser` may synchronously or asynchronously map trusted claims to a declared Fentaris user. When groups are configured, mapped users must belong to one of them.
+
+To keep API keys alongside OAuth, use an ordered strategy array. The first non-null identity wins; the first strategy exposing a challenge supplies OAuth discovery.
+
+```ts theme={null}
+import { apiKeyIdentityStrategy, oauthIdentityStrategy } from "@fentaris/core";
+
+const app = fentaris({
+  identity: [
+    oauthIdentityStrategy({ issuer: "https://auth.example.com", resource: "https://proxy.example.com/mcp" }),
+    apiKeyIdentityStrategy({ auth }), // your loaded FentarisAuth instance
+  ],
+});
+```
+
+## Verify OAuth Locally
+
+The repository includes an opt-in mcpjam SDK suite and a campaign against packed packages:
+
+```bash theme={null}
+FENTARIS_MCPJAM=1 pnpm --filter @fentaris/core test test/conformance
+pnpm test:oauth-verification
+pnpm verify:oauth:practical
+```
+
+The campaign covers upstream DCR/elicitation, CLI login, client credentials, inbound DCR and pre-registered headless conformance, login with tool calls, and API-key fallback. Each attempt retains a requirement-mapped `REPORT.md`, command logs and tarball SHA-256 identities. Any failed or blocked scenario returns a non-zero exit code. See `scripts/oauth-verification/README.md` in the repository for candidate and attempt options.
 
 ## Related Documentation
 

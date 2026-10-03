@@ -47,6 +47,12 @@ On Unix platforms, Fentaris writes `credentials.enc.json` with owner-only permis
   The generated `.gitignore` excludes `.fentaris/` and `.env` so local secrets do not get committed by default.
 </Note>
 
+## OAuth Resource Server
+
+Use `oauthIdentityStrategy({ issuer, resource, scopes })` for inbound OAuth access tokens. Fentaris discovers the issuer's signing keys, validates token claims, and maps `sub` (or `mapUser`) to an existing user. Granted scopes appear in identity metadata; existing group policies still decide which MCP capabilities that user can access.
+
+An ordered `identity` array accepts OAuth and API-key strategies together. The first successful strategy resolves the caller. HTTP and SSE listeners advertise protected resource metadata and add bearer discovery challenges to OAuth 401s. See [OAuth 2.1](/guides/oauth) for setup and introspection.
+
 ## Related Documentation
 
 * [Environment variables](/reference/environment-variables)

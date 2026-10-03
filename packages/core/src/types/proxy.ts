@@ -379,6 +379,12 @@ export type ProxyRuntime = {
   emitRuntimeEvent(event: RuntimeEvent): Promise<void>;
   logger: Logger;
   identityRequired: boolean;
+  /** Bearer challenge for an unauthorized request. @pk */
+  unauthorizedChallenge?(reason: import("../identity/oauthIdentityStrategy.js").OAuthChallengeReason, request?: object): string | undefined;
+  /** Protected resource document served before MCP authentication. @pk */
+  protectedResourceMetadata?(): import("../identity/oauthIdentityStrategy.js").ProtectedResourceMetadata;
+  /** Bind the actual listener address, including an ephemeral port. @pk */
+  configureIdentityExposure?(listener: { host: string; port: number; path: string }): void;
 };
 
 /**
@@ -398,5 +404,7 @@ export type ProxyMcpDeclarationConfig = McpServerOptions;
  * @pk
  */
 export type ProxyExposureTransport<THandle extends ProxyExposureHandle = ProxyExposureHandle> = {
+  /** Actual listener options used for runtime configuration validation. @pk */
+  readonly listener?: { host: string; port: number; path: string };
   listen(runtime: ProxyRuntime): Promise<THandle>;
 };

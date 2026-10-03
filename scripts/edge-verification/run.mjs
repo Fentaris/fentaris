@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { packCandidateArtifacts } from "../verification/lib.mjs";
 import { execFile } from "node:child_process";
 import { copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -185,21 +186,6 @@ async function prepareFocusedArtifacts(input) {
   return { commands, artifacts: packed.artifacts };
 }
 
-async function packCandidateArtifacts(input, prefix = "00-package-smoke") {
-  const commands = [];
-  const artifacts = [];
-  for (const directory of ["core", "edge", "cli"]) {
-    const packageRoot = path.join(input.candidateRoot, "packages", directory);
-    const beforeFiles = new Set(await readdir(input.layout.artifacts));
-    commands.push(await runLogged({ command: "pnpm", args: ["pack", "--pack-destination", input.layout.artifacts, "--json"], cwd: packageRoot, env: input.environment, logs: input.layout.logs, id: `${prefix}-pack-${directory}` }));
-    const created = (await readdir(input.layout.artifacts)).filter((file) => file.endsWith(".tgz") && !beforeFiles.has(file));
-    if (created.length !== 1) throw new Error(`Expected one ${directory} tarball, found ${created.length}.`);
-    const file = path.join(input.layout.artifacts, created[0]);
-    artifacts.push({ package: directory, file, digest: await hashFile(file) });
-  }
-  await writeJson(path.join(input.layout.artifacts, "SHA256.json"), artifacts);
-  return { commands, artifacts };
-}
 
 async function runPracticalScenario(input) {
   const manifest = {

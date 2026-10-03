@@ -1,3 +1,5 @@
+import { oauthResourceMetadataRoutes } from "./oauthResourceMetadataRoutes.js";
+import { setUnauthorizedChallenge } from "./unauthorizedChallenge.js";
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
 import { Server as McpSdkServer } from "@modelcontextprotocol/sdk/server/index.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
@@ -68,15 +70,24 @@ export class SseProxyExposureTransport implements ProxyExposureTransport<SseProx
     };
   }
 
+  get listener(): { host: string; port: number; path: string } {
+    return { host: this.options.host, port: this.options.port, path: this.options.ssePath };
+  }
+
   async listen(runtime: ProxyRuntime): Promise<SseProxyExposureHandle> {
+    runtime.configureIdentityExposure?.(this.listener);
     const sessions = new Map<string, SseSessionState>();
+    const metadataRoutes = oauthResourceMetadataRoutes(runtime, this.options.ssePath);
     const server = createServer(async (req, res) => {
       try {
         const path = req.url?.split("?")[0];
+        const metadataRoute = metadataRoutes.find((route) => req.method === route.method && path === route.path);
+        if (metadataRoute) { await metadataRoute.handler(req, res, new URL(req.url ?? "/", "http://localhost")); return; }
         if (req.method === "GET" && path === this.options.ssePath) {
           const { user, identity, subject } = await runtime.resolveHttpUser(req);
           if (runtime.identityRequired && !identity?.authenticated) {
-            sendJsonRpcError(res, 401, FentarisErrorCode.Unauthorized, "Unauthorized");
+            setUnauthorizedChallenge(runtime, req, res);
+          sendJsonRpcError(res, 401, FentarisErrorCode.Unauthorized, "Unauthorized");
             return;
           }
 
@@ -94,12 +105,14 @@ export class SseProxyExposureTransport implements ProxyExposureTransport<SseProx
 
           const { user, identity, subject } = await runtime.resolveHttpUser(req);
           if (runtime.identityRequired && !identity?.authenticated) {
-            sendJsonRpcError(res, 401, FentarisErrorCode.Unauthorized, "Unauthorized");
+            setUnauthorizedChallenge(runtime, req, res);
+          sendJsonRpcError(res, 401, FentarisErrorCode.Unauthorized, "Unauthorized");
             return;
           }
 
           if (!isBoundSessionRequest(session, user, identity, subject)) {
-            sendJsonRpcError(res, 401, FentarisErrorCode.Unauthorized, "Unauthorized");
+            setUnauthorizedChallenge(runtime, req, res, "invalid_token");
+          sendJsonRpcError(res, 401, FentarisErrorCode.Unauthorized, "Unauthorized");
             return;
           }
 
@@ -131,6 +144,8 @@ export class SseProxyExposureTransport implements ProxyExposureTransport<SseProx
 
     await new Promise<void>((resolve) => {
       server.listen(this.options.port, this.options.host, () => {
+        const address = server.address();
+        runtime.configureIdentityExposure?.({ host: this.options.host, port: typeof address === "object" && address ? address.port : this.options.port, path: this.options.ssePath });
         this.options.onStarted?.();
         resolve();
       });
