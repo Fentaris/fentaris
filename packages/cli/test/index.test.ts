@@ -673,8 +673,34 @@ describe("project template", () => {
     expect(rendered.files["src/index.ts"]).toContain('.allow("search")');
     expect(rendered.files["src/index.ts"]).toContain('credentialJson("users.teammate.apiKeys.0")');
     expect(rendered.files["src/index.ts"]).not.toContain("allowAll");
+    expect(JSON.parse(rendered.files[".fentaris/secrets.manifest.json"] ?? "{}")).toEqual({
+      version: 1,
+      references: [],
+      apiKeys: [{ userId: "teammate", source: { type: "local" }, count: 1 }],
+    });
     expect(rendered.files["README.md"]).toContain("auth api-key add teammate --generate --non-interactive");
     expect(rendered.files["README.md"]).toContain("contains no key");
+  });
+
+  it("reports a missing team API key with a readable encrypted store", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
+    await writeHealthyProject(dir);
+    const rendered = renderTemplate({ projectName: "demo", packageManager: "pnpm", port: 4000, proxyPath: "/mcp", template: "team" });
+    await writeFile(join(dir, ".fentaris", "secrets.manifest.json"), rendered.files[".fentaris/secrets.manifest.json"] ?? "");
+    await writeFile(join(dir, "src", "index.ts"), rendered.files["src/index.ts"] ?? "");
+
+    await expect(main(["secrets", "manifest", "--check"], runtime(dir))).resolves.toBe(0);
+    const rt = runtime(dir);
+    await expect(main(["secrets", "doctor", "--strict", "--json"], rt)).resolves.toBe(1);
+    const result = JSON.parse(rt.out.log.mock.calls.flat().join("\n")) as {
+      issues: Array<{ status: string; ref: string; scope: string; detail: string }>;
+    };
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      status: "fail",
+      ref: "teammate",
+      scope: "apiKey",
+      detail: expect.stringContaining("Required local API key is missing"),
+    }));
   });
 
   it("renders package-manager-specific script commands", () => {

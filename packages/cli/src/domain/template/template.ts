@@ -101,7 +101,11 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
             ].join("\n"),
           }
         : {}),
-      ".fentaris/secrets.manifest.json": JSON.stringify({ version: 1, references: [] }, null, 2),
+      ".fentaris/secrets.manifest.json": JSON.stringify({
+        version: 1,
+        references: [],
+        ...(template === "team" ? { apiKeys: [{ userId: "teammate", source: { type: "local" }, count: 1 }] } : {}),
+      }, null, 2),
       "src/index.ts": renderEntrypoint(template),
     },
   };
