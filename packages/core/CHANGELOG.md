@@ -1,5 +1,15 @@
 # @fentaris/core
 
+## 3.2.0
+
+### Minor Changes
+
+- 97a7414: Add inbound OAuth resource-server identity with JWT verification, protected resource metadata, bearer challenges and ordered API-key fallback on HTTP and SSE exposures.
+
+### Patch Changes
+
+- 97a7414: Validate explicit HTTP and SSE listener addresses for inbound OAuth, rate-limit signing-key refreshes and outage retries, and reject undeclared OAuth users with a bearer challenge instead of a server error.
+
 ## 3.1.2
 
 ### Patch Changes
