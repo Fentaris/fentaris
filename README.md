@@ -83,15 +83,7 @@ The generated proxy listens on `http://localhost:4000/mcp` by default. Point you
 Under the hood, a Fentaris proxy is just a few lines of code:
 
 ```ts
-import {
-  approval,
-  fentaris,
-  oauth,
-  policy,
-  stdio,
-  streamableHttp,
-  user,
-} from "@fentaris/core";
+import { approval, fentaris, oauth, policy, stdio, streamableHttp, user, } from "@fentaris/core";
 
 const app = fentaris();
 
