@@ -8,6 +8,8 @@ const sourceCallPattern = /\b(credentialJson|credentialEnv)\s*\(\s*["']([^"']+)[
 export type ManifestScanDiagnostic = {
   code: "UNSUPPORTED_CREDENTIAL_SOURCE";
   detail: string;
+  ref?: string;
+  scope?: string;
 };
 
 export type ManifestScanResult = {
@@ -93,6 +95,7 @@ function addCredentialEntries(
     let source: SecretsManifestSource;
     if (helper === "credentialVault") {
       source = { type: "vault", reference: locator };
+      if (trailing && !/^,\s*\{\s*\}\s*$/u.test(trailing)) diagnostics.push({ code: "UNSUPPORTED_CREDENTIAL_SOURCE", ref, scope, detail: "This vault binding has explicit runtime options. Inspect it through ProjectVault with the configured location and adapters; the default CLI vault cannot verify it." });
     } else if (helper === "credential") {
       source = { type: "local" };
     } else if (helper === "credentialEnv") {

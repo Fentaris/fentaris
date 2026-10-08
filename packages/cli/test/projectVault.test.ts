@@ -151,6 +151,19 @@ describe("vault command outputs", () => {
 
 
 describe("configuration and failure evidence", () => {
+  it.each([
+    '{dir:"other-vault"}', '{root:"/other-project"}', 'runtimeOptions', '{unlockKey:"configuration-sensitive"}',
+  ])("does not satisfy a custom vault binding through the default CLI vault: %s", async (options) => {
+    const rt = await fixture(); await mkdir(path.join(rt.cwd, "src"));
+    const vault = await ProjectVault.open({ root: rt.cwd, env: rt.env }); await vault.set("token", "default-sensitive");
+    await writeFile(path.join(rt.cwd, "src/index.ts"), `import {credentialVault,fentaris} from "@fentaris/core"; fentaris({defaults:{credentials:{token:credentialVault("token",${options})}}});`);
+    expect(await main(["secrets", "check", "--offline", "--json"], rt)).toBe(1);
+    expect(envelope(rt).data.issues).toEqual([expect.objectContaining({ reference: "token", state: "unresolvable", configurationScopes: ["default"], nextActions: [expect.stringContaining("configured location")] })]);
+    expect(await main(["secrets", "get", "token", "--offline", "--json"], rt)).toBe(0);
+    expect(envelope(rt).data.bindings).toHaveLength(2);
+    expect(output(rt)).not.toContain("sensitive");
+    expect(await vault.resolve("token")).toBe("default-sensitive");
+  });
   it("checks different sources and environment variables independently across credential scopes", async () => {
     const rt = await fixture(); await mkdir(path.join(rt.cwd, "src"));
     await writeFile(path.join(rt.cwd, "src/index.ts"), `

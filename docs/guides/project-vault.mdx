@@ -80,6 +80,10 @@ Incoming authentication caches authenticated verifiers while vault contents are 
 
 If the same logical credential name uses different sources across default, group, or user configuration, inventory shows each binding separately with its configuration scopes. A present vault value cannot satisfy a direct environment binding. `secrets check` checks each source independently; `secrets get --json` includes all matching rows in `data.bindings` when there is more than one.
 
+Static CLI checks do not execute explicit runtime options in `credentialVault`. Custom options produce an unresolved configuration row with next actions, even if the default CLI vault has a value under that name. Verify custom roots/directories and adapters through `ProjectVault` using the exact runtime options. Option expressions and secret values are never printed.
+
+OAuth lifecycle writes are serialized across account adapters. Another process's active lock is retried for up to five seconds before an error, and each write rereads the latest state before merging. A stale lock is preserved for operator recovery; no lifecycle data is silently overwritten or moved to another store.
+
 ## Incoming keys
 
 Creation yields a stable `fk_...` ID, user, name, creation time, optional `--expires <future ISO 8601 UTC timestamp>`, and a sensitive random client key. Copy the raw key immediately. Only the intentional creation result includes `sensitiveValue` (including `--json`, marked `sensitive:true`); later inventories, logs, metadata, and revocation never include it. Only SHA-256 verifier hashes are stored, inside the encrypted payload. Clients send `x-fentaris-api-key`. Authentication checks the current store on every request, rejecting expired and revoked keys immediately. Revoke by ID, never by the original value.

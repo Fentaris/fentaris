@@ -65,6 +65,8 @@ list(): Promise<OAuthStoreEntry[]>
 
 Account is selected explicitly by the adapter factory; records are isolated by `[server, account, session]`. Session remains the existing `OAuthSessionKey` (`"shared"` or `user:<id>`); never reinterpret it as an account alias. Persist the existing `OAuthStoreRecord` including registrations, discovery, access/refresh tokens, obtained-at/expiry metadata. Lifecycle records are encrypted internal data: they never appear in ordinary secrets inventory or manual set/remove commands. `list` exposes only existing redacted OAuth metadata.
 
+OAuth writes are queued per vault instance across account adapters. Independent instances/processes wait up to five seconds for the shared file lock, then reread and merge under that lock. A stale lock times out without deletion or token-store fallback; preserve it for operator recovery. Failed updates do not poison subsequent queued writes. Interactive/manual secret writes still return a retryable concurrency error immediately.
+
 Explicit legacy OAuth migration maps each `{server,session}` to an account and retains the original encrypted file/key. Existing targets, missing records, or failed unlocks abort before replacement. No OAuth migration is automatic. Account-scoped adapters can be injected into the existing OAuth manager/store abstraction by #297; #298 does not implement account-aware manager selection or pretend a single adapter handles every account.
 
 ## Shared CLI contract
@@ -107,6 +109,8 @@ Do not change `vault.json` directly or create a second key beside it. macOS Keyc
 Legacy `SecretsManifest` stays version 1 with the additive source `{type:"vault",reference?:string}`. Note that its pre-existing environment discriminator is `"env"`, whereas the new reference source discriminator is `"environment"`. Do not silently reinterpret old `scope:"user:..."|"group:..."` entries as account aliases. CLI static configuration inventory adds read-only configuration consumers without importing modules; #297 should register named MCP consumers explicitly. `migrateLegacy` and `secrets migrate` require explicit public scoped mappings and retain old encrypted stores. See `docs/guides/project-vault.mdx` for verified migration and rollback.
 
 CLI inventory preserves distinct sources for the same logical reference across configuration scopes. Its rows can add `configurationScopes:string[]`; these are legacy/default configuration scopes, never upstream accounts. A `credentialVault` declaration follows the registered reference's effective source, while each direct `credentialEnv` declaration checks its exact variable independently. Multiple bindings produce multiple inventory rows; `secrets get --json` adds `data.bindings` when needed while retaining `data.secret` for the primary row. Reads never register or replace these bindings.
+
+Static scanning cannot execute runtime options in `credentialVault`. Nonempty explicit options produce an `unresolvable` configuration binding with next actions, rather than being satisfied by the default CLI vault. Inspect custom locations/adapters through `ProjectVault` with those exact options. Scanner diagnostics do not contain option expressions or raw values.
 
 ## Integration checks to run after combining #297 and #298
 

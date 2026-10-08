@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdir, readFile, realpath, rename, rm, writeFile, open } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 import { FentarisAuth } from "../auth/auth.js";
 import { decryptEnvelope, encryptedEnvelopeSchema, encryptEnvelope, parseWithError } from "../auth/envelope.js";
@@ -49,6 +50,7 @@ export class VaultWriteVerificationError extends Error {
 export class ProjectVault {
   private relocationRoot?: string;
   private authenticationCache?: { snapshot: string; verifiers: Promise<Payload["verifiers"]> };
+  private oauthWriteChain: Promise<void> = Promise.resolve();
   private constructor(readonly options: ProjectVaultOptions, readonly root: string, readonly file: string) {}
   static async open(options: ProjectVaultOptions): Promise<ProjectVault> {
     const root = await realpath(options.root);
@@ -113,10 +115,25 @@ export class ProjectVault {
     if (payload.projectId !== state.projectId) throw new Error("Vault project identity does not match its encrypted payload.");
     return { payload, key };
   }
-  private async mutate<T>(operation: (state: State, payload: Payload) => T | Promise<T>, secrets = true): Promise<T> {
+  private async acquireLock(wait: boolean) {
+    const deadline = performance.now() + 5_000;
+    while (true) {
+      try { return await open(`${this.file}.lock`, "wx", 0o600); }
+      catch (error) {
+        if (!wait || !(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") throw new Error("Another vault write is in progress or storage is unavailable. Retry after it finishes; inspect a stale vault.json.lock after a crash.", { cause: error });
+        if (performance.now() >= deadline) throw new Error("Timed out waiting for the OAuth vault write lock. Inspect a stale vault.json.lock; the previous encrypted data was preserved.", { cause: error });
+        await delay(10);
+      }
+    }
+  }
+  private async mutateOAuth<T>(operation: (state: State, payload: Payload) => T | Promise<T>): Promise<T> {
+    const next = this.oauthWriteChain.then(() => this.mutate(operation, true, true));
+    this.oauthWriteChain = next.then(() => undefined, () => undefined);
+    return next;
+  }
+  private async mutate<T>(operation: (state: State, payload: Payload) => T | Promise<T>, secrets = true, waitForLock = false): Promise<T> {
     await mkdir(path.dirname(this.file), { recursive: true, mode: 0o700 });
-    let lock;
-    try { lock = await open(`${this.file}.lock`, "wx", 0o600); } catch { throw new Error("Another vault write is in progress. Retry after it finishes; inspect a stale vault.json.lock after a crash."); }
+    const lock = await this.acquireLock(waitForLock);
     const temporary = `${this.file}.${randomUUID()}.tmp`;
     try {
       const state = await this.state();
@@ -311,9 +328,9 @@ export class ProjectVault {
     const read = async (): Promise<Payload["oauth"]> => { const state = await this.state(); return state.encrypted ? (await this.payload(state)).payload.oauth : {}; };
     return {
       get: async (server, session) => (await read())[locator(server, session)],
-      set: async (server, session, record) => { const id = locator(server, session); await this.mutate((_state, payload) => { payload.oauth[id] = { ...record, updatedAt: record.updatedAt || Date.now() }; }); },
-      delete: async (server, session) => { const id = locator(server, session); await this.mutate((_state, payload) => { delete payload.oauth[id]; }); },
-      update: async (server, session, apply) => { const id = locator(server, session); return this.mutate((_state, payload) => {
+      set: async (server, session, record) => { const id = locator(server, session); await this.mutateOAuth((_state, payload) => { payload.oauth[id] = { ...record, updatedAt: record.updatedAt || Date.now() }; }); },
+      delete: async (server, session) => { const id = locator(server, session); await this.mutateOAuth((_state, payload) => { delete payload.oauth[id]; }); },
+      update: async (server, session, apply) => { const id = locator(server, session); return this.mutateOAuth((_state, payload) => {
         let updated: OAuthStoreRecord;
         try { updated = apply(payload.oauth[id] ?? { updatedAt: 0 }); }
         catch { throw new Error("OAuth lifecycle update failed; provider details were redacted and the previous record was preserved."); }

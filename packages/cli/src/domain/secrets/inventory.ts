@@ -16,6 +16,11 @@ export async function inspectProjectSecrets(project: ProjectDiscovery, vault: Pr
   for (const entry of configuration.references) {
     if (entry.source?.type !== "vault" && entry.source?.type !== "env") continue;
     const reference = entry.source.type === "vault" ? entry.source.reference ?? entry.ref : entry.ref;
+    const unsupported = configuration.diagnostics.find((diagnostic) => diagnostic.ref === entry.ref && diagnostic.scope === entry.scope);
+    if (unsupported) {
+      inventory.push({ reference, source: { type: "vault" }, present: false, state: "unresolvable", consumers: [{ kind: "configuration", server: "project-config" }], configurationScopes: [entry.scope], remoteValidity: "unverified", nextActions: [unsupported.detail] });
+      continue;
+    }
     const environmentName = entry.source.type === "env" ? entry.source.name : undefined;
     // A vault helper follows its registered binding; a direct env helper must
     // independently check that exact variable, even under the same logical name.

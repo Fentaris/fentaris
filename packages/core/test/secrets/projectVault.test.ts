@@ -240,6 +240,31 @@ describe("environment precedence", () => {
 
 describe("OAuth lifecycle and recovery contracts", () => {
   const record = { tokens: { access_token: "oauth-access-sensitive", refresh_token: "oauth-refresh-sensitive", token_type: "Bearer", obtainedAt: 1000, expires_in: 3600 }, updatedAt: 1000 };
+  it("serializes lifecycle writes across accounts and independent vault instances without losing rotated tokens", async () => {
+    const { root, vault } = await fixture();
+    const other = await ProjectVault.open({ root, unlockKey });
+    const work = vault.oauthStore("work"), personal = vault.oauthStore("personal"), peer = other.oauthStore("work");
+    await Promise.all([work.set("github", "shared", record), personal.set("github", "shared", record), peer.set("mastra", "shared", record)]);
+    await Promise.all([
+      work.update!("github", "shared", (current) => ({ ...current, tokens: { ...current.tokens!, refresh_token: "rotated-sensitive" } })),
+      peer.update!("github", "shared", (current) => ({ ...current, clientInformation: { client_id: "retained-client" } })),
+    ]);
+    expect(await work.get("github", "shared")).toMatchObject({ tokens: { refresh_token: "rotated-sensitive" }, clientInformation: { client_id: "retained-client" } });
+    expect(await personal.get("github", "shared")).toMatchObject(record);
+    expect(await peer.get("mastra", "shared")).toMatchObject(record);
+    await Promise.all([work.delete("mastra", "shared"), personal.delete("github", "shared")]);
+    expect(await peer.get("mastra", "shared")).toBeUndefined();
+    expect(await personal.get("github", "shared")).toBeUndefined();
+    expect((await work.get("github", "shared"))?.tokens?.refresh_token).toBe("rotated-sensitive");
+  });
+  it("waits for an active cross-process vault lock before saving a lifecycle update", async () => {
+    const { vault } = await fixture(); const store = vault.oauthStore("work");
+    await store.set("github", "shared", record);
+    await writeFile(`${vault.file}.lock`, "other-writer", { flag: "wx" });
+    const released = new Promise((resolve) => setTimeout(resolve, 50)).then(() => rm(`${vault.file}.lock`));
+    await Promise.all([store.update!("github", "shared", (current) => ({ ...current, tokens: { ...current.tokens!, refresh_token: "rotated-after-lock" } })), released]);
+    expect((await store.get("github", "shared"))?.tokens?.refresh_token).toBe("rotated-after-lock");
+  });
   it("isolates upstream accounts and session namespaces, refreshes atomically, and hides lifecycle data from secrets", async () => {
     const { root, vault } = await fixture();
     const work = vault.oauthStore("work"), personal = vault.oauthStore("personal");
