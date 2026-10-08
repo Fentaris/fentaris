@@ -153,7 +153,7 @@ export class McpDiscoveryService {
       }, remaining(), options.signal);
       row.tools = tools; row.toolCount = tools.length; row.toolMetadata = { source: "verified", checkedAt: Date.now() };
       row.connectivity = "reachable"; row.status = "Ready";
-      if (["stored", "refresh-needed", "unverified"].includes(row.authentication.state)) { row.authentication.state = "authorized"; row.authentication.verified = true; }
+      if (row.authentication.method === "oauth" && ["stored", "refresh-needed", "unverified"].includes(row.authentication.state)) { row.authentication.state = "authorized"; row.authentication.verified = true; }
       if (row.authentication.method === "oauth" && Date.now() < deadline) {
         const current = await bounded(() => this.dependencies.oauthStore!.get(server.name, `account:${account}`), remaining(), options.signal).catch(() => undefined);
         row.authentication.expiresAt = oauthTokensExpireAt(current?.tokens);
@@ -163,7 +163,10 @@ export class McpDiscoveryService {
       if (inspectIdentity && Date.now() < deadline) {
         // A failed optional provider lookup does not erase successful tool discovery.
         const metadata = await bounded(inspectIdentity, remaining(), options.signal).catch(() => undefined);
-        if (metadata?.identity) row.authentication.providerIdentity = metadata.identity;
+        if (metadata?.identity) {
+          row.authentication.providerIdentity = metadata.identity;
+          if (!["none", "managed"].includes(row.authentication.method)) { row.authentication.state = "authorized"; row.authentication.verified = true; }
+        }
         if (metadata?.permissions) row.authentication.permissions = metadata.permissions;
       }
       if (tools.length === 0) row.recovery = [`MCP "${server.name}" account "${account}" exposes no tools.`];

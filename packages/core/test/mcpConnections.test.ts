@@ -84,6 +84,13 @@ describe("named upstream MCP connections", () => {
     expect(result.connections[0].authentication).toMatchObject({ state: "server-managed", verified: false });
     expect(result.connections[0].authentication.providerIdentity).toBeUndefined();
   });
+  it("does not treat a successful public tools response as proof of opaque credential validity", async () => {
+    const opaque = (): FentarisTransport & { withEnv: () => FentarisTransport } => ({ ...transport(), withEnv: () => opaque() });
+    const result = await new McpDiscoveryService({ servers: [mcp("bundle", { transport: opaque(), env: { API_KEY: ref("opaque") } }), mcp("bearer", { transport: opaque(), auth: bearer(ref("opaque")) }), mcp("inspected", { transport: opaque(), accounts: { work: { auth: bearer(ref("opaque")), inspectIdentity: async () => ({ identity: { login: "verified-provider-user" } }) } } })] }, { secrets: async () => "present" }).discover();
+    expect(result.connections[0]).toMatchObject({ status: "Ready", connectivity: "reachable", authentication: { state: "stored", verified: false } });
+    expect(result.connections[1].authentication).toMatchObject({ state: "stored", verified: false });
+    expect(result.connections[2].authentication).toMatchObject({ state: "authorized", verified: true, providerIdentity: { login: "verified-provider-user" } });
+  });
   it("bounds hanging checks, closes transports, and reports an explicit no-tools state", async () => {
     const hanging = transport(() => new Promise(() => undefined));
     const empty = transport(async () => ({ tools: [] }));
