@@ -222,82 +222,85 @@ fentaris build
 
 The built proxy runs with `node dist/index.js` or the generated project's `npm start` script.
 
-### `fentaris tools list`
+### `fentaris mcp`
 
-List effective MCP tools for a configured account context.
-
-```bash theme={null}
-fentaris tools list --mcp github --as user:alice --compact --json
-```
-
-Options:
-
-* `--json` - print the agent-facing JSON envelope.
-* `--compact` - return compact metadata instead of detailed schema-oriented records.
-* `--limit <n>` - maximum tools returned. Default: `20`.
-* `--cursor <cursor>` - continue from a previous page.
-* `--max-tokens <n>` - apply a best-effort response budget and return narrowing guidance when truncated.
-* `--mcp <name>` - restrict discovery to one upstream MCP server.
-* `--as <selector>` - use a configured selector such as `user:alice` or `group:support`.
-* `--include <text>` - include only matching tools. Comma-separated values are accepted.
-* `--exclude <text>` - exclude matching tools. Comma-separated values are accepted.
-* `--refresh` - request fresh discovery metadata where supported.
-* `--no-start` - do not start stdio MCP servers during discovery.
-
-JSON responses include `ok`, `data`, `warnings`, and `nextActions`. Collection responses also include `pagination`.
-
-Discovery imports the configured project entrypoint and reads its exported `fentarisConfig`, `config`, or default config. Generated projects export `fentarisConfig` and start the proxy only when the entrypoint is executed directly. In existing projects, keep `app.start()` out of the import path so discovery does not start the proxy listener.
-
-### `fentaris tools search <query>`
-
-Search effective tools without loading every schema.
+Inspect every configured upstream connection without a downstream client identity. Multiple named accounts appear as separate rows, including connections that need login or cannot be reached. Configuration validity, local authorization state, and connectivity are separate facts.
 
 ```bash theme={null}
-fentaris tools search issue --mcp github --as user:alice --limit 10 --json
+fentaris mcp
+fentaris mcp get gmail
+fentaris mcp get gmail --account gabry848
+fentaris mcp --offline --json
 ```
 
-The command supports the same discovery flags as `tools list` and returns follow-up commands for exact inspection.
+Live checks have a 5000 ms deadline per connection and at most four connections run concurrently. Override the deadline with `--timeout <milliseconds>` (1–60000). Verified tool counts include zero only when the server actually exposes no tools. Offline metadata is marked cached with its age; absent counts are `—` in text and `null` in JSON. Endpoints omit credentials, query strings, and fragments. Provider identity and permissions appear only when the provider supplies them; account aliases never imply provider identity.
 
-### `fentaris tools get <tool>`
+### `fentaris mcp tools`
 
-Inspect one tool's availability and metadata.
+Discover tools grouped by MCP and account. Optional filters remain optional. Healthy results survive failures on other connections. Terminal progress is cleared on completion, and temporary clients, sessions, and subprocesses are closed.
 
 ```bash theme={null}
-fentaris tools get github__create_issue --json
+fentaris mcp tools
+fentaris mcp tools gmail
+fentaris mcp tools gmail --account gabry848
+fentaris mcp tools get gmail__search_messages --account gabry848
+fentaris mcp tools schema gmail__search_messages --input
+fentaris mcp tools schema gmail__search_messages --output
 ```
 
-The tool name is the proxied Fentaris name, for example `github__create_issue`.
+Tool get/schema requires an explicit account when the MCP has several accounts; a single account is inferred. MCP details without an account show every account. Schema output contains `inputSchema` and/or `outputSchema`; an unavailable output schema is `null`. Without either schema flag both schemas are included.
 
-### `fentaris tools schema <tool>`
+### `fentaris mcp auth`
 
-Inspect one tool schema without returning unrelated schemas.
+Bare auth shows an inventory. In a terminal, choose an action, server, and account; mutations selected from this menu require explicit confirmation. Explicit action commands progressively ask only for missing required fields and preserve supplied flags, including a recognized value-taking flag supplied without its value.
 
 ```bash theme={null}
-fentaris tools schema github__create_issue --input --output --json
+fentaris mcp auth
+fentaris mcp auth get gmail --account gabry848
+fentaris mcp auth connect gmail --account gabry848
+fentaris mcp auth connect github --account work --secret github.work.token
+fentaris mcp auth connect gmail --account gabry848 --reauth
+fentaris mcp auth disconnect gmail --account gabry848
+fentaris mcp auth connect --account gabry848
 ```
 
-Options:
+Connect chooses browser OAuth, hidden credential input, reuse of a named secret, or an explanation that authentication is unnecessary or managed by the upstream. Existing credentials are preserved unless `--reauth` explicitly requests replacement. `--secret` reuses one existing reference; a credential bundle completes each configured reference individually. Repeat `--credential SLOT=REFERENCE` to reuse several existing named secrets (slots are `bearer`, an HTTP header name, or an environment name). Disconnect disables only the selected connection, preserves shared secrets, and reports remote OAuth revocation as `revoked`, `unsupported`, `failed`, or `unnecessary`.
 
-* `--input` - include the input schema.
-* `--output` - include the output schema when the upstream MCP server declares one.
+For headless OAuth, supply `--print-url --non-interactive`; the authorization URL goes to stderr and the command waits for a browser callback. OAuth `--timeout` is in milliseconds, defaults to 300000, and accepts 1–300000. `--port` chooses a fixed loopback port for pre-registered clients. JSON authorization-code flows also require explicit `--print-url`; client-credentials flows need no browser. Store credentials through the project vault; supply its unlock key through the environment, or `--key` for explicit auth actions. Read commands do not create a vault key.
 
-If an output schema is unavailable, the JSON response reports explicit availability metadata instead of inventing a schema.
+### Read flags and exit codes
 
-### `fentaris tools auth`
+All MCP commands accept `--json` and global `--non-interactive`. JSON emits one versioned result on stdout without prompts, banners, or progress. Non-TTY execution never waits for terminal input. Missing fields produce a nonzero result with `error.code = "MISSING_INPUT"`, `missingFields`, and a complete `nextCommand`. Unknown flags and invalid supplied values remain errors.
 
-Inspect configured MCP account selectors and login state without printing secrets.
+`--offline` is available on inventory, get, tools, and auth get. It reads configuration, credential metadata, and cached schemas without contacting upstreams, spawning processes, or starting OAuth. Configuration modules must be safe to import: export `fentarisConfig`, `config`, or a default config and start the proxy only on direct execution. The project `.env` is loaded before importing that configuration; defined process environment values win.
+
+| Exit | Discovery result | Meaning |
+| --- | --- | --- |
+| 0 | `success` | Every selected live check succeeded, or valid offline inventory was read; no configured MCPs is an explicit successful empty result. |
+| 3 | `partial` | At least one selected connection succeeded and another failed or needs login. |
+| 1 | `failure` | Every selected live connection failed, configuration was invalid, or required input was missing. |
+| 2 | `INVALID_INPUT` | Parsing rejected an unknown command/flag, an empty supplied value, or malformed syntax. |
+
+Disconnect also returns 3 when local disconnect succeeded but remote revocation failed. Authentication mutations otherwise return 0 on success or 1 on failure.
+
+Discovery JSON uses `{ version: 1, outcome, offline, connections, summary, exitCode }`. Each connection has `server`, `account`, `configuration`, `authentication`, `connectivity`, `status`, `toolCount`, `tools`, `toolMetadata`, `recovery`, and optional `error`. Tool get/schema adds `data`. Authentication mutations use `{ version: 1, ok: true, data }`; command errors use `{ version: 1, ok: false, error }`. Secret values are never part of these results.
+
+### Migration
+
+The previous tools namespace is removed with no compatibility alias. Replace its commands with the MCP commands above. Named upstream accounts belong in `mcp(..., { accounts: ... })`; legacy `cli.mcpAccounts` user/group selectors are not upstream aliases.
+
+Legacy OAuth records are never silently reassigned. Declare an account and copy an exact legacy session explicitly:
 
 ```bash theme={null}
-fentaris tools auth list --json
-fentaris tools auth status --mcp github --as user:alice --json
-fentaris tools auth login --mcp github --as user:alice --json
+fentaris mcp auth migrate gmail --account gabry848 --from-session user:alice
+fentaris mcp auth migrate gmail --account gabry848 --from-session shared
 ```
 
-`auth list` returns each configured MCP key, its default selector, allowed selectors, and non-sensitive status. For a server declared with `oauth()`, `auth status` reports the stored authorization state and `auth login` runs the same browser login as `fentaris auth login`. Otherwise `auth login` returns machine-readable delegated login instructions.
+Migration refuses an occupied destination and preserves the original record for rollback. Remote validity remains unverified until a live check. See [Named MCP connections](/guides/mcp-connections) for configuration and the shared-vault integration contract.
 
-### `fentaris auth login <mcp>`
+### Legacy `fentaris auth login <mcp>`
 
-Sign in to an upstream MCP server declared with `oauth()`. The command opens the authorization URL, receives the redirect on a loopback listener it owns, and writes the tokens to the project's encrypted OAuth store.
+This legacy API addresses existing downstream-scoped OAuth sessions only. Use `fentaris mcp auth connect` for named upstream accounts. The command opens the authorization URL, receives the redirect on a loopback listener it owns, and writes the tokens to the project's encrypted OAuth store.
 
 ```bash theme={null}
 fentaris auth login linear --as user:alice

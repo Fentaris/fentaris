@@ -19,7 +19,13 @@ Configure `identity: { strategy: projectVaultIdentityStrategy({root: process.cwd
 
 ## Upstream Authentication
 
-Incoming users identify clients to Fentaris. Upstream account aliases identify the connection Fentaris uses to authenticate to an MCP server. The related MCP workflow owns `fentaris mcp auth`; aliases must not be inferred from incoming user/group scopes. Existing `oauth()` SDK authentication remains available. The project vault's `oauthStore(account)` adapter isolates lifecycle-managed tokens/refreshes by server, account, and explicit session, keeping them outside manually editable inventory.
+Incoming users identify clients to Fentaris. Upstream account aliases identify the connection Fentaris uses to authenticate to an MCP server; aliases must not be inferred from incoming user/group scopes.
+
+```ts theme={null}
+mcp("linear", { transport: streamableHttp({ url: "https://mcp.linear.app/mcp" }), accounts: { work: { auth: oauth() } } })
+```
+
+Each named account has its own upstream authorization, stored through the project credential vault and refreshed automatically. Connect it with `fentaris mcp auth connect linear --account work`. Runtime selects the account with `upstreamAccounts` and still checks policy. Legacy per-user OAuth sessions require explicit migration and remain separate. The project vault's `oauthStore(account)` adapter isolates lifecycle-managed tokens by server, account, and session, keeping them outside manually editable inventory. See [Named MCP connections](/guides/mcp-connections) and [Upstream OAuth 2.1](/guides/oauth).
 
 ## Project Credentials
 

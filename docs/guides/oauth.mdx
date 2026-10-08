@@ -1,9 +1,9 @@
 ---
 title: "OAuth 2.1"
-description: "Authenticate MCP clients with an external issuer and manage upstream OAuth tokens per user."
+description: "Authenticate MCP clients with an external issuer and manage named upstream OAuth accounts."
 ---
 
-Declare `auth: oauth()` on an upstream MCP server and Fentaris performs the OAuth 2.1 client side for you: metadata discovery, dynamic client registration, PKCE, token exchange, refresh, and per-user token storage.
+Declare `auth: oauth()` on an upstream MCP server and Fentaris performs the OAuth 2.1 client side for you: metadata discovery, dynamic client registration, PKCE, token exchange, refresh, and account-scoped token storage. Legacy per-user authorizations remain supported by the SDK and require explicit migration for named-account CLI use.
 
 ## Quick Start
 
@@ -14,7 +14,7 @@ const app = fentaris({
   servers: [
     mcp("linear", {
       transport: streamableHttp({ url: "https://mcp.linear.app/mcp" }),
-      auth: oauth(),
+      accounts: { work: { auth: oauth() } },
     }),
   ],
   oauth: { publicUrl: "https://proxy.example.com" },
@@ -24,22 +24,22 @@ await app.start();
 ```
 
 ```bash theme={null}
-export FENTARIS_AUTH_KEY="$(cat .fentaris/protection.key 2>/dev/null || echo my-local-key)"
-fentaris auth login linear --as user:alice
-fentaris auth status
+export FENTARIS_AUTH_KEY="<project-encryption-key>"
+fentaris mcp auth connect linear --account work
+fentaris mcp auth get linear --account work
 ```
 
-The first tool call for a user who has no authorization asks that human to sign in; every later call uses their own access token.
+Runtime selects the account independently of the downstream identity: `{ id: "assistant", upstreamAccounts: { linear: "work" } }`. A single configured account may be inferred; multiple accounts require an explicit choice.
 
 ## Four Ways to Declare It
 
 ### `oauth()`
 
-Zero configuration. Fentaris discovers the protected resource and authorization server, registers a client dynamically (RFC 7591), uses PKCE with `S256`, and stores one authorization per Fentaris user.
+Zero configuration. Fentaris discovers the protected resource and authorization server, registers a client dynamically (RFC 7591), uses PKCE with `S256`, and stores one authorization per named account. Servers without named accounts retain legacy per-user SDK behavior.
 
 ### `oauth({ clientId, clientSecret, scopes })`
 
-Pre-registered client. Fentaris skips dynamic registration and authenticates to the token endpoint with the strongest method the authorization server supports. `clientSecret` accepts a literal string or `credential("...")`; a credential reference must be declared under `defaults.credentials`, because the client secret belongs to the application rather than to a caller.
+Pre-registered client. Fentaris skips dynamic registration and authenticates to the token endpoint with the strongest method the authorization server supports. `clientSecret` accepts a literal string or `credential("...")`; a named-account credential reference resolves through the project vault or `defaults.credentials`. Legacy scoped OAuth requires an application default declaration; group/user credentials are never implicitly used as client secrets.
 
 ```ts theme={null}
 mcp("github", {
@@ -117,35 +117,24 @@ Clients that cannot elicit a URL get a structured error result instead:
 
 ## Token Store
 
-Tokens, client registrations, and cached discovery state live in `<authDir>/oauth-tokens.enc.json`, encrypted with the same key as `credentials.enc.json`, written atomically with owner-only permissions. The file is separate from the credentials store, so `fentaris secrets set` and the secrets manifest are never touched.
+Named-account tokens, client registrations, and discovery metadata are lifecycle records in the shared encrypted project vault under `fentaris.internal.oauth.<encoded-server>.<encoded-account>`. They are omitted from ordinary secret listings and never exposed by MCP JSON output. On the standalone branch this uses the existing encrypted credential backend; the ProjectVault facade is used when integrated. Legacy scoped records remain in `<authDir>/oauth-tokens.enc.json` and are never automatically reassigned.
 
-The proxy and the CLI share the file without IPC: a CLI login is visible to a running proxy on its next read, with no restart. A headless or stdio exposure can refresh that stored authorization without declaring `redirectUrl`; a callback URL is only required to start or complete a new authorization-code flow.
-
-<Warning>
-  Without a store key (`FENTARIS_AUTH_KEY` or a configured `oauth.store`), authorizations are kept in memory only and are lost on restart. Configuration reports `FENTARIS_CONFIG_OAUTH_STORE_EPHEMERAL`.
-</Warning>
+The runtime reads the same vault references as the CLI, so refreshes persist automatically. A headless transport can refresh stored authorization without a callback URL; a callback is required only for a new authorization-code flow. Supply `FENTARIS_VAULT_UNLOCK_KEY`, the existing `FENTARIS_AUTH_KEY`, or an explicit `oauth.store`. MCP connect does not silently create a key. Without durable credentials, SDK OAuth uses an ephemeral store and reports a configuration warning.
 
 ## CLI
 
-### `fentaris auth login <mcp>`
-
-Runs the whole flow in-process against a loopback redirect, opens the browser, waits for the callback, and writes the tokens.
-
 ```bash theme={null}
-fentaris auth login linear --as user:alice
-fentaris auth login linear --print-url          # headless: print the URL, open it yourself
-fentaris auth login github --port 8976 --json   # fixed redirect port for pre-registered clients
+fentaris mcp auth connect linear --account work
+fentaris mcp auth connect linear --account work --print-url --non-interactive
+fentaris mcp auth connect github --account work --port 8976
+fentaris mcp auth get linear --account work
+fentaris mcp auth connect linear --account work --reauth
+fentaris mcp auth disconnect linear --account work
 ```
 
-`--print-url` and `--non-interactive` never spawn a browser. The command waits for the redirect callback for `--timeout` seconds (300 by default) and then exits non-zero, so an unattended run cannot block a pipeline forever.
+Connect opens a loopback browser flow or prints the URL to stderr when explicitly requested. JSON and noninteractive flows do not open a browser; authorization-code flows require `--print-url`. OAuth `--timeout` is in milliseconds (300000 by default). Existing authorization is preserved until `--reauth` succeeds; cancellation closes the listener and leaves the connection unchanged.
 
-### `fentaris auth status [mcp]`
-
-Lists stored authorizations with their session and expiry.
-
-### `fentaris auth logout <mcp>`
-
-Deletes the stored authorization for one server and session.
+Disconnect clears only the selected account, attempts remote revocation if the provider advertises an endpoint, and reports its outcome. Shared credential values are preserved. To migrate a legacy session, explicitly run `fentaris mcp auth migrate linear --account work --from-session user:alice`; the source is retained for rollback. Legacy `shared` and `user:` namespaces remain distinct from `account:` sessions.
 
 ## Network Guardrails
 
@@ -175,7 +164,7 @@ The `credential(...)` reference used for `clientSecret` is not declared in app d
 
 ### The upstream keeps asking for a new login
 
-The refresh token was rejected or the authorization server invalidated the registered client. Run `fentaris auth logout <mcp>` and sign in again.
+The refresh token was rejected or the authorization server invalidated the registered client. Run `fentaris mcp auth connect <MCP> --account <ACCOUNT> --reauth` to authorize that account again.
 
 ## Authenticate Inbound MCP Clients
 

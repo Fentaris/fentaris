@@ -39,6 +39,9 @@ export type Runtime = {
   nonInteractive?: boolean;
   stdin?: import("node:stream").Readable;
   vaultOptions?: Pick<import("@fentaris/core").ProjectVaultOptions, "credentialStore" | "externalProviders">;
+  interactive?: boolean;
+  /** Transient terminal progress, removed by the returned cleanup function. */
+  progress?: (message: string) => (() => void);
 };
 
 export type TemplateInput = {

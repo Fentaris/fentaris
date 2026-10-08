@@ -138,9 +138,9 @@ Supported fields:
 
 If `entrypoint` is omitted, `fentaris secrets manifest` checks `src/index.ts`, `src/main.ts`, and `index.ts`. Pass `--entrypoint <path>` when the file uses another name.
 
-## Application Config: `cli.mcpAccounts`
+## Application Config: control plane and legacy CLI metadata
 
-Agent-native tool discovery commands read `cli.mcpAccounts` from the Fentaris application config exported by the project entrypoint. Each MCP key declares the default selector and the selectors an agent may request with `--as`.
+The legacy `AgentToolDiscoveryService` library reads `cli.mcpAccounts` for downstream policy-filtered discovery. Administrative MCP commands use named upstream declarations and do not accept `--as`.
 
 ### `edge.controlPlane`
 
@@ -166,40 +166,37 @@ Serializable configuration accepts only safe scalar fields. Approval callbacks, 
 
 The separate `edge.control` option enables agent-native inventory and explicit orchestration tools. It is independent from the integrated connection control plane and remains an explicit policy-governed opt-in. See [Edge API Reference](/reference/edge#integrated-control-plane).
 
+## Application Config: named MCP accounts
+
 ```ts theme={null}
-import { defineFentarisConfig, mcp, policy } from "@fentaris/core";
+import { defineFentarisConfig, mcp, oauth, bearer, credential, policy, streamableHttp } from "@fentaris/core";
 
 export default defineFentarisConfig({
   servers: [
+    mcp("gmail", {
+      description: "Mail tools",
+      transport: streamableHttp({ url: "https://mail.example.com/mcp" }),
+      accounts: {
+        gabry848: { auth: oauth(), allowedUsers: ["assistant"] },
+        gino: { auth: oauth() },
+      },
+    }),
     mcp("github", {
-      transport: githubTransport,
+      transport: streamableHttp({ url: "https://github.example.com/mcp" }),
+      accounts: { work: { auth: bearer(credential("github.work.token")) } },
     }),
   ],
-  policy: policy("default").mcp("github").allow("*"),
-  cli: {
-    mcpAccounts: {
-      github: {
-        default: "user:alice",
-        allowed: ["user:alice", "group:support"],
-      },
-    },
-  },
+  policy: policy("default").mcp("gmail").allow("*"),
 });
 ```
 
-### `cli.mcpAccounts.<mcp>.default`
+`accounts` maps stable local aliases to optional `auth`, `env`, `transport`, `allowedUsers`, and `inspectIdentity` declarations. Account settings inherit server settings. `auth: { type: "none" }` explicitly disables inherited authentication; `{ type: "managed" }` describes authentication performed inside an upstream server. Transport credential bundles use environment credential references. Account aliases contain letters, numbers, dots, underscores, and hyphens.
 
-Default account selector used when `fentaris tools ... --mcp <mcp>` omits `--as`.
+`inspectIdentity` is an optional async provider lookup returning `{ identity?: Record<string, string>, permissions?: string[] }`. Live discovery calls it only after successful tool discovery. Offline reads never call it; failure leaves identity unavailable without dropping tools.
 
-The selector must be present in `allowed`.
+Without an `accounts` declaration, administrative inventory shows one `default` connection. Runtime preserves legacy scoped authentication until an explicit connect/migration creates that default account's binding. An explicit empty `accounts` object is invalid for inventory. Runtime requests use `UserContext.upstreamAccounts`, for example `{ id: "assistant", upstreamAccounts: { gmail: "gabry848" } }`. Multiple accounts require an explicit selection; runtime never picks the first. `allowedUsers` adds connection restrictions to existing policy checks and never grants tool access.
 
-### `cli.mcpAccounts.<mcp>.allowed`
-
-Selectors the CLI may use for the MCP. Values use `user:<id>` or `group:<id>`.
-
-<Note>
-  `cli.mcpAccounts` bounds CLI discovery choices. It is not a security boundary by itself; effective access still comes from Fentaris policy and credential resolution.
-</Note>
+Legacy `cli.mcpAccounts` remains a contract of the policy-filtered `AgentToolDiscoveryService` library. Its `default` and `allowed` values are downstream `user:<id>` / `group:<id>` selectors. Administrative MCP inventory does not use this mapping, and no migration interprets those selectors as upstream account aliases.
 
 ## Application Config: `oauth`
 

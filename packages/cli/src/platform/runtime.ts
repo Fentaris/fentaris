@@ -9,6 +9,15 @@ export function defaultRuntime(): Runtime {
     cwd: process.cwd(),
     nonInteractive: !(process.stdin.isTTY && process.stdout.isTTY),
     env: process.env,
+    interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
+    progress: (message) => {
+      if (!process.stderr.isTTY) return () => undefined;
+      const frames = ["|", "/", "-", "\\"];
+      let frame = 0;
+      const timer = setInterval(() => process.stderr.write(`\r\u001b[2K${frames[frame++ % frames.length]} ${message}`), 100);
+      process.stderr.write(message);
+      return () => { clearInterval(timer); process.stderr.write("\r\u001b[2K"); };
+    },
     out: console,
     runner: runProcess,
     probe: (command, args = ["--version"]) => spawnSync(command, args, { stdio: "ignore", timeout: 2_000 }).status === 0,
