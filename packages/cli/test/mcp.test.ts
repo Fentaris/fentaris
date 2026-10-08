@@ -30,7 +30,7 @@ async function project(config: string, defaults: Record<string, string> = {}) {
   await writeFile(join(root, "fentaris.json"), JSON.stringify({ name: "mcp-test", entrypoint: "src/index.ts", packageManager: "pnpm", authDir: ".fentaris", port: 4000, path: "/mcp" }));
   await writeFile(join(root, ".env"), `MCP_297_CONFIG_IMPORT_VALUE=loaded\nFENTARIS_AUTH_KEY=${key}\n`);
   await writeFile(join(root, ".fentaris", "credentials.enc.json"), JSON.stringify(FentarisAuth.encryptCredentials({ defaults, users: {}, groups: {} }, key)));
-  await writeFile(join(root, "src", "index.ts"), `import { mcp, bearer, credential, oauth, streamableHttp } from ${JSON.stringify(core)};
+  await writeFile(join(root, "src", "index.ts"), `import { mcp, bearer, credential, credentialEnv, oauth, streamableHttp } from ${JSON.stringify(core)};
 const captured = process.env.MCP_297_CONFIG_IMPORT_VALUE;
 class Fake {
   constructor(user = {}) { this.user = user; }
@@ -53,6 +53,39 @@ describe("fentaris mcp", () => {
     expect(json(rt)).toMatchObject({ version: 1, outcome: "success", connections: [{ server: "mail", account: "gabry848", toolCount: 1 }, { server: "mail", account: "gino", toolCount: 1 }] });
     expect(json(rt).connections[0].tools[0].name).toBe("mail__loaded_search");
     expect(rt.output).toHaveLength(1); expect(rt.progress).not.toHaveBeenCalled(); expect(rt.prompt.select).not.toHaveBeenCalled();
+  });
+  it.each([["mcp", "--json"], ["mcp", "auth", "get", "delayed", "--json"]])("keeps environment and transports alive through async %j", async (...args) => {
+    const root = await project(`(() => {
+      let closed = false;
+      class Delayed extends Fake {
+        withUser(user) { return new Delayed(user); }
+        async listTools() {
+          await new Promise(resolve => setTimeout(resolve, 20));
+          if (closed) throw new Error('Transport closed during discovery');
+          if (process.env.MCP_297_CONFIG_IMPORT_VALUE !== 'loaded') throw new Error('Project environment restored too early');
+          return super.listTools();
+        }
+        async close() { closed = true; }
+      }
+      return { servers: [mcp('delayed', { transport: new Delayed() })] };
+    })()`);
+    const rt = runtime(root);
+    expect(await main(args, rt)).toBe(0);
+    expect(json(rt).connections[0]).toMatchObject({ connectivity: "reachable", toolCount: 1 });
+    expect(process.env.MCP_297_CONFIG_IMPORT_VALUE).toBeUndefined();
+  });
+  it("retains dotenv-only credential sources through asynchronous account connect", async () => {
+    const root = await project(`{ servers: [mcp('github', { transport: new Fake(), auth: bearer(credential('env-token')) })], defaults: { credentials: { 'env-token': credentialEnv('MCP_297_LIFETIME_TOKEN') } } }`);
+    await writeFile(join(root, ".env"), (await readFile(join(root, ".env"), "utf8")) + "MCP_297_LIFETIME_TOKEN=dotenv-only-token\n");
+    const rt = runtime(root, true);
+    vi.mocked(rt.prompt.select).mockImplementation(async (_question, choices) => {
+      await new Promise(resolve => setTimeout(resolve, 20)); return choices[0];
+    });
+    expect(await main(["mcp", "auth", "connect"], rt)).toBe(0);
+    expect(rt.output.join("\n")).toContain("already has credentials");
+    expect(rt.prompt.text).not.toHaveBeenCalled();
+    expect(process.env.MCP_297_LIFETIME_TOKEN).toBeUndefined();
+    expect(rt.output.join("\n")).not.toContain("dotenv-only-token");
   });
   it("keeps tool filters optional, selects the correct account for get/schema, and requires selection when ambiguous", async () => {
     const rt = runtime(await project(plain));

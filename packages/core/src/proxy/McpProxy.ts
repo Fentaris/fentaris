@@ -2177,7 +2177,7 @@ export class McpProxy {
 
           return withOAuthConsent({
             manager: this.oauth(),
-            server,
+            server: server.hasNamedAccounts() ? server.selectedAccount(upstreamUser) : server,
             user: upstreamUser,
             interaction,
             log,

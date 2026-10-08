@@ -8,8 +8,8 @@ export async function runMcp(command: CliCommand, runtime: Runtime): Promise<num
   const options = await completeOptionValues(command.options, runtime, command.args);
   const context = await openMcpContext(runtime, options);
   try {
-    if (command.args[0] === "auth") return runAuthentication(context, command.args.slice(1), options);
-    return runRead(context, command.args, options);
+    if (command.args[0] === "auth") return await runAuthentication(context, command.args.slice(1), options);
+    return await runRead(context, command.args, options);
   } finally { await context.close(); }
 }
 
