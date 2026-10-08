@@ -13,6 +13,7 @@ import {
 
 const manifestSourceSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("local") }),
+  z.object({ type: z.literal("vault"), reference: z.string().min(1).optional() }),
   z.object({ type: z.literal("env"), name: z.string().min(1) }),
   z.object({ type: z.literal("manual"), reason: z.string().min(1) }),
 ]);

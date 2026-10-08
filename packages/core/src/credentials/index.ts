@@ -1,5 +1,6 @@
 export {
   credential,
+  credentialVault,
   credentialEnv,
   credentialJson,
   isCredentialReference,
@@ -8,6 +9,7 @@ export {
   resolveCredentialSource,
 } from "./credentials.js";
 export type {
+  CredentialVaultSource,
   CredentialEnvSource,
   CredentialJsonOptions,
   CredentialJsonSource,

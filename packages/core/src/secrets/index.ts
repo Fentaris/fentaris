@@ -24,3 +24,7 @@ export type {
   SecretsManifestSource,
   SecretsProvider,
 } from "./types.js";
+export { ProjectVault, VaultWriteVerificationError, assertVaultName, projectVaultIdentityStrategy } from "./project-vault.js";
+export type { ProjectVaultOptions, ProjectSecretSource, ProjectSecretMetadata, SecretConsumer, IncomingKeyMetadata, ExternalSecretProvider } from "./project-vault.js";
+export { systemCredentialStore } from "./system-credential-store.js";
+export type { SystemCredentialStore } from "./system-credential-store.js";

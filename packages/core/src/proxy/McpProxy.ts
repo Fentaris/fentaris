@@ -1487,7 +1487,7 @@ export class McpProxy {
       } catch {
         unavailable.push({
           source: requirement.source.type,
-          locator: requirement.source.type === "env" ? requirement.source.name : requirement.source.path,
+          locator: requirement.source.type === "env" ? requirement.source.name : requirement.source.type === "vault" ? requirement.source.reference : requirement.source.path,
           usages: [...new Set(requirement.usages)].sort(),
         });
       }
@@ -4167,6 +4167,7 @@ function hasDeclaredApiKeys(groups: Group[]): boolean {
 }
 
 function credentialReadinessKey(source: CredentialSource): string {
+  if (source.type === "vault") return `vault:${source.root ?? ""}:${source.dir ?? ""}:${source.reference}`;
   return source.type === "env"
     ? `env:${source.name}`
     : `json:${source.file ?? ""}:${source.path}:${source.keyEnv ?? ""}:${String(source.key ?? "")}`;

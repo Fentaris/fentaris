@@ -1,3 +1,4 @@
+import "./secrets/environment-bootstrap.js";
 /**
  * Core public exports for Fentaris.
  * @pk
@@ -920,3 +921,12 @@ export { MemoryRateLimitStore, SlidingWindowRateLimiter, rateLimitKey, rateLimit
 export { oauthIdentityStrategy } from "./identity/oauthIdentityStrategy.js";
 export type { OAuthIdentityStrategyOptions, OAuthIdentityStrategy, ProtectedResourceMetadata, OAuthChallengeReason } from "./identity/oauthIdentityStrategy.js";
 export type { OAuthClaims } from "./identity/jwks.js";
+export { ProjectVault, VaultWriteVerificationError, assertVaultName, projectVaultIdentityStrategy, systemCredentialStore } from "./secrets/index.js";
+export type { ProjectVaultOptions, ProjectSecretSource, ProjectSecretMetadata, SecretConsumer, IncomingKeyMetadata, ExternalSecretProvider, SystemCredentialStore } from "./secrets/index.js";
+
+export { loadProjectEnvironment, applyProjectEnvironment, findEnvironmentProjectRoot } from "./secrets/environment.js";
+
+export { redactOAuthMessage, redactOAuthUrl, redactOAuthValue } from "./auth/oauth/redaction.js";
+
+export { credentialVault } from "./credentials/index.js";
+export type { CredentialVaultSource } from "./credentials/index.js";
