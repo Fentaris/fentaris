@@ -34,3 +34,6 @@ if (isDirectCliInvocation()) {
     process.exitCode = code;
   });
 }
+
+export { completeInput, chooseAction, canPrompt, commandResult, commandError, CommandInputError, sanitizeCommandMessage } from "./shared/input.js";
+export { openProjectVault } from "./domain/secrets/vault.js";

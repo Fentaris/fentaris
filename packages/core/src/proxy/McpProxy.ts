@@ -1443,7 +1443,7 @@ export class McpProxy {
   }
 
   private async assertRuntimeCredentialsAvailable(): Promise<void> {
-    const requirements = new Map<string, { source: CredentialSource; usages: string[] }>();
+    const requirements = new Map<string | CredentialSource, { source: CredentialSource; usages: string[] }>();
     const add = (source: CredentialSource, usage: string) => {
       const key = credentialReadinessKey(source);
       const existing = requirements.get(key);
@@ -1487,7 +1487,7 @@ export class McpProxy {
       } catch {
         unavailable.push({
           source: requirement.source.type,
-          locator: requirement.source.type === "env" ? requirement.source.name : requirement.source.path,
+          locator: requirement.source.type === "env" ? requirement.source.name : requirement.source.type === "vault" ? requirement.source.reference : requirement.source.path,
           usages: [...new Set(requirement.usages)].sort(),
         });
       }
@@ -1498,7 +1498,7 @@ export class McpProxy {
     const lines = unavailable.flatMap((entry) => entry.usages.map((usage) => `- ${usage} (${entry.source}:${entry.locator})`));
     throw new FentarisRuntimeError(`Declared credentials are unavailable:\n${lines.join("\n")}`, {
       code: "FENTARIS_CREDENTIALS_UNAVAILABLE",
-      hints: ["Run fentaris secrets setup before starting the proxy."],
+      hints: ["Run fentaris secrets check --offline and inspect each configured source before starting the proxy."],
       context: { requirements: unavailable },
     });
   }
@@ -4166,7 +4166,10 @@ function hasDeclaredApiKeys(groups: Group[]): boolean {
   return groups.some((group) => group.users.some((user) => user.apiKeys.length > 0));
 }
 
-function credentialReadinessKey(source: CredentialSource): string {
+function credentialReadinessKey(source: CredentialSource): string | CredentialSource {
+  // Distinct declarations may select different environment/unlock/provider
+  // options for the same reference. Only the identical declaration can merge.
+  if (source.type === "vault") return source;
   return source.type === "env"
     ? `env:${source.name}`
     : `json:${source.file ?? ""}:${source.path}:${source.keyEnv ?? ""}:${String(source.key ?? "")}`;

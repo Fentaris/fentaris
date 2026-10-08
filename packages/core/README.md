@@ -42,3 +42,6 @@ FENTARIS_MCPJAM=1 pnpm --filter @fentaris/core test test/conformance
 ```
 
 The default test run skips this suite. For verification against packed packages, use `pnpm verify:oauth:practical` from the repository root; see [the campaign guide](../../scripts/oauth-verification/README.md).
+
+
+Project credential vaults are available through `ProjectVault`, `credentialVault`, and `projectVaultIdentityStrategy`. Source bindings are explicit; incoming named keys store only verifier hashes and enforce expiry/revocation. `vault.oauthStore(account)` implements the existing OAuth store interface while isolating upstream account aliases from incoming identities. See [project vault setup and recovery](../../docs/guides/project-vault.mdx) and the [integration contract](../../docs/issue-298-integration.md).

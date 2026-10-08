@@ -13,29 +13,15 @@ FENTARIS_API_KEY=... fentaris doctor --runtime
 
 ## Variables
 
+### `FENTARIS_VAULT_KEY`
+
+Explicit project-vault unlock key for servers/CI and platforms without a supported system credential store. On macOS, Fentaris normally stores a generated key in Keychain, isolated by project UUID. Fentaris never generates this variable into `.env`, never uses a plaintext fallback, and never regenerates a missing key over existing encrypted data. Supply it from your deployment secret manager or protected environment. Applications can also pass `unlockKey` or a `SystemCredentialStore` adapter to `ProjectVault.open`.
+
+Project `.env` loads automatically before CLI configuration imports and at core entry-point initialization. Existing process values, including empty strings, take precedence. Use `applyProjectEnvironment(root)` before a dynamic configuration import in custom launchers whose dependencies need the environment earlier. Environment/external reference bindings do not copy credential values into the vault or automatically switch sources.
+
 ### `FENTARIS_AUTH_KEY`
 
-Encryption key used to decrypt local credentials in `.fentaris/credentials.enc.json` and upstream OAuth state in `.fentaris/oauth-tokens.enc.json`.
-
-```bash theme={null}
-export FENTARIS_AUTH_KEY="<local-encryption-key>"
-```
-
-`fentaris doctor` checks whether this variable is present before verifying encrypted credentials when a local credential store exists.
-
-Local `fentaris secrets`, `fentaris auth api-key`, and `fentaris auth login|status|logout` commands resolve the key in this order: `--key`, the exported process environment, then the discovered project `.env`. A shell export overrides the project `.env`.
-
-Without this key and without a configured `oauth.store`, upstream OAuth authorizations are kept in memory only and do not survive a restart.
-
-On the first command that writes an encrypted local credential store, the CLI generates a random project key in `.env` when no key is configured. Read-only commands do not create a key, and projects without encrypted credentials do not require one. If `credentials.enc.json` already exists, Fentaris never replaces its missing key automatically; provide the original key so the store remains recoverable.
-
-`fentaris secrets setup` applies the same precedence and creates the key only when its plan needs the local encrypted backend. It also writes prompted `credentialEnv(...)` values to `.env` with file mode `0600`. Existing shell values and `.env` assignments are left unchanged.
-
-Generated `dev` and `start` scripts load `.env` automatically. `fentaris dev` also loads the discovered project `.env` before starting the package script.
-
-For an older SDK-only project, update direct launch commands to load the file explicitly, for example `node --env-file-if-exists=.env dist/index.js`. The core does not mutate `process.env` or load dotenv files implicitly.
-
-Retain this value through your normal local secret-management process. The same value is required for future reads and updates. Do not commit `.env` or expose the key in command output.
+Original unlock key for legacy `.fentaris/credentials.enc.json` and `.fentaris/oauth-tokens.enc.json`. Retain it with the legacy encrypted files until explicit migration, source changes, and client authentication have been verified. Legacy read/maintenance helpers resolve explicit `--key`, process environment, then project `.env`; they no longer generate keys into `.env`. Use `FENTARIS_VAULT_KEY`/Keychain for the new project vault. See [migration and recovery](/guides/project-vault).
 
 ### `FENTARIS_GUEST_API_KEY`
 

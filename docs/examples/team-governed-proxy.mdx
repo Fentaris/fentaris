@@ -3,6 +3,8 @@ title: "Team-governed proxy"
 description: "Run a complete API-key-authenticated proxy with users, groups, policy, a remote upstream, and local tools."
 ---
 
+This external example may still use legacy credential declarations. Before using the current named-key commands below, explicitly migrate its configuration to `projectVaultIdentityStrategy` and `credentialVault`; see [project vault migration](/guides/project-vault).
+
 This example is a copyable, runnable project for a small team. It keeps the
 endpoint on localhost, authenticates two users with Fentaris-managed API keys,
 filters tools by group policy, connects a public remote MCP server, and exposes
@@ -170,7 +172,7 @@ the manifest; never commit `.fentaris/credentials.enc.json`.
 
 `credentialJson(...)` references API-key material in that encrypted auth store,
 not upstream secrets scanned into the manifest. The committed empty manifest is
-expected here: `fentaris auth api-key add` does not add `credentialJson` paths
+expected here: `fentaris auth keys create` does not add `credentialJson` paths
 to `secrets.manifest.json`, so a later static `fentaris doctor` may warn that
 stored API-key hashes are "not listed in the secrets manifest". That warning is
 unrelated to this example's empty upstream-secret manifest.
@@ -203,8 +205,8 @@ on the first credential write. Agents must leave the client API-key values to
 the user.
 
 ```bash theme={null}
-pnpm exec fentaris auth api-key add reader --generate --non-interactive
-pnpm exec fentaris auth api-key add maintainer --generate --non-interactive
+pnpm exec fentaris auth keys create --user reader --name workstation --non-interactive
+pnpm exec fentaris auth keys create --user maintainer --name workstation --non-interactive
 ```
 
 Save each printed client key once. Fentaris stores only its hash, and clients

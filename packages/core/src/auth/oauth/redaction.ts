@@ -1,4 +1,17 @@
 const redactedQueryParams = new Set([
+  "token",
+  "api_key",
+  "apikey",
+  "password",
+  "secret",
+  "authorization",
+  "proxy-authorization",
+  "x-api-key",
+  "x-fentaris-api-key",
+  "api-key",
+  "accesstoken",
+  "refreshtoken",
+  "clientsecret",
   "code",
   "state",
   "access_token",
@@ -14,6 +27,20 @@ const redactedJsonKeys = [
   "refresh_token",
   "id_token",
   "client_secret",
+  "token",
+  "api_key",
+  "apikey",
+  "password",
+  "secret",
+  "authorization",
+  "proxy-authorization",
+  "x-api-key",
+  "x-fentaris-api-key",
+  "api-key",
+  "accesstoken",
+  "refreshtoken",
+  "clientsecret",
+  "sensitivevalue",
   "code",
   "code_verifier",
   "state",
@@ -34,6 +61,8 @@ export function redactOAuthUrl(value: string | URL): string {
     return redactedPlaceholder;
   }
 
+  if (url.username) url.username = redactedPlaceholder;
+  if (url.password) url.password = redactedPlaceholder;
   for (const name of [...url.searchParams.keys()]) {
     if (redactedQueryParams.has(name.toLowerCase())) {
       url.searchParams.set(name, redactedPlaceholder);
@@ -56,21 +85,23 @@ export function redactOAuthValue<T>(value: T): T {
  * @pk
  */
 export function redactOAuthMessage(message: string): string {
-  let redacted = message;
+  let redacted = message.replaceAll(/\b(Bearer|Basic)\s+[^\s,;]+/gi, `$1 ${redactedPlaceholder}`)
+    .replaceAll(/\bfentaris_[A-Za-z0-9_-]{40,}\b/g, redactedPlaceholder);
   for (const key of redactedJsonKeys) {
     redacted = redacted.replaceAll(new RegExp(`(["']?${key}["']?\\s*[=:]\\s*["']?)([^"'\\s,&}]+)`, "gi"), `$1${redactedPlaceholder}`);
   }
 
+  redacted = redacted.replaceAll(/\bBearer\s+[^\s,;]+/gi, `Bearer ${redactedPlaceholder}`);
   return redacted.replaceAll(/https?:\/\/\S+/g, (match) => redactOAuthUrl(match));
 }
 
 function redactValue(value: unknown, depth: number): unknown {
   if (depth > 6) {
-    return value;
+    return redactedPlaceholder;
   }
 
   if (typeof value === "string") {
-    return value.includes("://") ? redactOAuthUrl(value) : value;
+    return redactOAuthMessage(value);
   }
 
   if (Array.isArray(value)) {

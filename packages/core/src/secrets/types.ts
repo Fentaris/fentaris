@@ -36,6 +36,7 @@ export type SecretsManifest = {
  */
 export type SecretsManifestSource =
   | { type: "local" }
+  | { type: "vault"; reference?: string }
   | { type: "env"; name: string }
   | { type: "manual"; reason: string };
 

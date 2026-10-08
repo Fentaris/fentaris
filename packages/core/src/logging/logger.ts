@@ -1,3 +1,5 @@
+import { redactOAuthMessage } from "../auth/oauth/redaction.js";
+
 /**
  * Logging primitives for the core runtime.
  * @pk
@@ -68,6 +70,7 @@ const defaultSensitiveKeys = [
   /authorization/i,
   /api[-_]?key/i,
   /credential/i,
+  /sensitivevalue/i,
   // OAuth authorization codes and PKCE verifiers. `code` and `state` alone are not
   // listed: they collide with error codes and lifecycle state, so OAuth call sites
   // redact those explicitly through redactOAuthUrl/redactOAuthValue. @pk
@@ -312,7 +315,7 @@ export class Logger {
 
     const entry: LogEntry = {
       level,
-      message,
+      message: this.redaction.enabled ? redactOAuthMessage(message) : message,
       timestamp: new Date(),
       context: redactRecord(this.context, this.redaction),
       metadata: redactRecord({
@@ -376,6 +379,7 @@ function redactValue(
   if (typeof value === "string" && shouldRedactValue(value)) {
     return options.replacement;
   }
+  if (typeof value === "string") return redactOAuthMessage(value);
 
   if (!value || typeof value !== "object") {
     return value;

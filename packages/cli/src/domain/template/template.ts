@@ -104,7 +104,7 @@ export function renderTemplate(input: TemplateInput): { files: Record<string, st
       ".fentaris/secrets.manifest.json": JSON.stringify({
         version: 1,
         references: [],
-        ...(template === "team" ? { apiKeys: [{ userId: "teammate", source: { type: "local" }, count: 1 }] } : {}),
+        ...(template === "team" ? { apiKeys: [{ userId: "teammate", source: { type: "vault" }, count: 1 }] } : {}),
       }, null, 2),
       "src/index.ts": renderEntrypoint(template),
     },
@@ -133,17 +133,18 @@ if (isEntrypoint()) {
 
 function renderConfig(template: "local" | "team"): string {
   if (template === "team") {
-    return `import { credentialJson, fentaris, group, mcp, policy, streamableHttp, user, type McpProxyOptions } from "@fentaris/core";
+    return `import { fentaris, group, mcp, policy, projectVaultIdentityStrategy, streamableHttp, user, type McpProxyOptions } from "@fentaris/core";
 
 const teammates = policy("teammates")
   .mcp("specification")
   .allow("search");
 
 export const fentarisConfig = {
+  identity: { strategy: projectVaultIdentityStrategy({ root: process.cwd() }), required: true },
   groups: [
     group({
       id: "teammates",
-      users: [user("teammate", { apiKeys: [credentialJson("users.teammate.apiKeys.0")] })],
+      users: [user("teammate")],
       policy: teammates,
     }),
   ],
@@ -185,10 +186,10 @@ function renderReadme(input: TemplateInput, coreRange: string, template: "local"
   const governance = template === "team"
     ? `This team template fails closed: the \`teammates\` group can use only \`specification__search\`. Edit the group, user, and explicit tool allow-list in \`src/index.ts\`.
 
-Create a random local API key manually (the generated project contains no key):
+Create a named incoming API key (the generated project contains no key). On macOS the vault uses Keychain. On servers/CI, explicitly configure FENTARIS_VAULT_KEY through your deployment secret manager before creation:
 
 \`\`\`sh
-fentaris auth api-key add teammate --generate --non-interactive
+fentaris auth keys create --user teammate --name workstation --non-interactive
 \`\`\`
 
 Save the printed client key once and send it as \`x-fentaris-api-key\`. Never commit the client key or \`.env\`.

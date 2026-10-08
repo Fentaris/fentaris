@@ -37,6 +37,8 @@ export type Runtime = {
   probe: ExecProbe;
   prompt: Prompt;
   nonInteractive?: boolean;
+  stdin?: import("node:stream").Readable;
+  vaultOptions?: Pick<import("@fentaris/core").ProjectVaultOptions, "credentialStore" | "externalProviders">;
 };
 
 export type TemplateInput = {

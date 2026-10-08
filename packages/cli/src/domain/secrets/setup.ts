@@ -33,6 +33,7 @@ export async function runGuidedSecretsSetup(
     ...(scan.envVars.length ? { envVars: scan.envVars } : {}),
     ...(scan.apiKeys.length ? { apiKeys: scan.apiKeys } : {}),
   };
+  if (manifest.references.some((entry) => entry.source?.type === "vault") || manifest.apiKeys?.some((entry) => entry.source.type === "vault")) return emitIncomplete(runtime, options, ["project-vault-setup"], [{ description: "Configure the project vault explicitly", command: "Use fentaris secrets set <reference> and fentaris auth keys create --user <user> --name <name>. Legacy setup does not modify project vault sources." }]);
   const machine = options.json === true || runtime.nonInteractive === true;
   const env = await loadProjectEnv(project.root, runtime.env);
   const storeExists = await exists(credentialsPath(project));
@@ -184,13 +185,12 @@ function nextActionsForMissing(references: SecretsManifestEntry[], apiKeys: Secr
     if (entry.source?.type === "env") {
       actions.push({ description: `Provide ${entry.source.name}`, command: `Set ${entry.source.name} in .env or the deployment environment` });
     } else if (entry.source?.type !== "manual") {
-      const suffix = entry.scope === "default" ? "" : entry.scope.startsWith("user:") ? ` --user ${entry.scope.slice(5)}` : ` --group ${entry.scope.slice(6)}`;
-      actions.push({ description: `Store ${entry.ref}`, command: `fentaris secrets set ${entry.ref}${suffix}` });
+      actions.push({ description: `Migrate ${entry.ref} (${entry.scope}) explicitly or maintain the legacy manifest`, command: "fentaris secrets migrate --mapping <file> --legacy-file <file>; or fentaris secrets setup" });
     }
   }
   for (const entry of apiKeys) {
     if (entry.source.type === "manual") continue;
-    actions.push({ description: `Generate an API key for ${entry.userId}`, command: `fentaris auth api-key add ${entry.userId} --generate` });
+    actions.push({ description: `Generate an API key for ${entry.userId}`, command: "fentaris secrets setup (explicit legacy maintenance); or migrate incoming verifiers and update the identity strategy" });
   }
   return actions.slice(0, 10);
 }

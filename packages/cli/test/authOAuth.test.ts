@@ -156,11 +156,11 @@ describe("fentaris auth login", () => {
 
     const nonOauth = runtime(root);
     expect(await main(["auth", "login", "plain", "--json"], nonOauth)).toBe(1);
-    expect(nonOauth.errors.join("\n")).toContain('not declared with oauth()');
+    expect(JSON.parse(nonOauth.output.at(-1)!).error.message).toContain('not declared with oauth()');
 
     const badSelector = runtime(root);
     expect(await main(["auth", "status", "protected", "--as", "group:admins", "--json"], badSelector)).toBe(1);
-    expect(badSelector.errors.join("\n")).toContain("is not supported");
+    expect(JSON.parse(badSelector.output.at(-1)!).error.message).toContain("is not supported");
   }, 20_000);
 
   it("fails before any network call when no store key is available", async () => {
@@ -194,7 +194,7 @@ describe("fentaris auth login", () => {
     // Nobody opens the printed URL: the command must give up on its own.
     expect(await main(["auth", "login", "protected", "--timeout", "1", "--json"], rt)).toBe(1);
     expect(Date.now() - started).toBeLessThan(15_000);
-    expect(rt.errors.join("\n")).toMatch(/Timed out waiting/i);
+    expect(JSON.parse(rt.output.at(-1)!).error.message).toMatch(/Timed out waiting/i);
   }, 30_000);
 
   it("rejects an invalid --timeout value", async () => {
@@ -203,7 +203,7 @@ describe("fentaris auth login", () => {
     const rt = runtime(root, true);
 
     expect(await main(["auth", "login", "protected", "--timeout", "0", "--json"], rt)).toBe(1);
-    expect(rt.errors.join("\n")).toContain("Invalid --timeout value");
+    expect(JSON.parse(rt.output.at(-1)!).error.message).toContain("Invalid --timeout value");
   }, 20_000);
 
   it("launches Windows OAuth URLs without cmd.exe parsing", () => {
