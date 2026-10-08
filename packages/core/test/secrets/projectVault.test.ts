@@ -123,6 +123,20 @@ describe("project vault", () => {
     await expect(resolveCredentialSource(credentialVault("external", options))).rejects.toThrow("error details were redacted");
     await expect(resolveCredentialSource(credentialVault("external", { root, unlockKey }))).rejects.toThrow("External secret provider is not configured");
   });
+  it("reuses SDK source reads while detecting updates and keeping source declarations project-isolated", async () => {
+    const a = await fixture(), b = await fixture();
+    await a.vault.set("token", "a-sensitive"); await b.vault.set("token", "b-sensitive");
+    const get = vi.fn(async () => unlockKey);
+    const source = credentialVault("token", { root: a.root, env: {}, credentialStore: { get, set: vi.fn() } });
+    expect(await Promise.all(Array.from({ length: 10 }, () => resolveCredentialSource(source)))).toEqual(Array(10).fill("a-sensitive"));
+    expect(get).toHaveBeenCalledTimes(1);
+    await a.vault.set("token", "a-updated");
+    expect(await resolveCredentialSource(source)).toBe("a-updated");
+    expect(get).toHaveBeenCalledTimes(2);
+    source.root = b.root;
+    expect(await resolveCredentialSource(source)).toBe("b-sensitive");
+    expect(get).toHaveBeenCalledTimes(3);
+  });
   it("keeps reference validation errors free of secret values", async () => {
     const { vault } = await fixture();
     await expect(vault.set("https://token-sensitive", "raw-sensitive")).rejects.toThrow("Secret reference must contain");
@@ -240,6 +254,24 @@ describe("environment precedence", () => {
 
 describe("OAuth lifecycle and recovery contracts", () => {
   const record = { tokens: { access_token: "oauth-access-sensitive", refresh_token: "oauth-refresh-sensitive", token_type: "Bearer", obtainedAt: 1000, expires_in: 3600 }, updatedAt: 1000 };
+  it("reuses authenticated OAuth reads, isolates returned records and reloads remote writes or tampering", async () => {
+    const { root, vault } = await fixture();
+    await vault.oauthStore("work").set("github", "shared", record);
+    const get = vi.fn(async () => unlockKey);
+    const reader = await ProjectVault.open({ root, env: {}, credentialStore: { get, set: vi.fn() } });
+    const store = reader.oauthStore("work");
+    const records = await Promise.all(Array.from({ length: 20 }, () => store.get("github", "shared")));
+    expect(get).toHaveBeenCalledTimes(1);
+    records[0]!.tokens!.refresh_token = "caller-mutated";
+    expect((await store.get("github", "shared"))?.tokens?.refresh_token).toBe("oauth-refresh-sensitive");
+    expect(records[1]?.tokens?.refresh_token).toBe("oauth-refresh-sensitive");
+    await vault.oauthStore("work").update!("github", "shared", (current) => ({ ...current, tokens: { ...current.tokens!, refresh_token: "remote-rotation" } }));
+    expect((await store.get("github", "shared"))?.tokens?.refresh_token).toBe("remote-rotation");
+    expect(get).toHaveBeenCalledTimes(2);
+    const state = JSON.parse(await readFile(vault.file, "utf8")); state.references.push({ reference: "tampered", source: { type: "vault" }, consumers: [], present: true, updatedAt: new Date().toISOString() });
+    await writeFile(vault.file, JSON.stringify(state));
+    await expect(store.get("github", "shared")).rejects.toThrow("metadata was modified");
+  });
   it("serializes lifecycle writes across accounts and independent vault instances without losing rotated tokens", async () => {
     const { root, vault } = await fixture();
     const other = await ProjectVault.open({ root, unlockKey });

@@ -10,6 +10,7 @@ const defaultCredentialFile = ".fentaris/credentials.enc.json";
 const legacyCredentialFile = ".fentaris/auth/credentials.enc.json";
 const defaultKeyEnv = "FENTARIS_AUTH_KEY";
 const jsonCache = new Map<string, Promise<unknown>>();
+const vaultCache = new WeakMap<CredentialVaultSource, { options: ProjectVaultOptions; vault: Promise<ProjectVault> }>();
 
 /**
  * Logical credential reference resolved against the current subject.
@@ -118,11 +119,20 @@ export function isCredentialSource(value: unknown): value is CredentialSource {
 
 export async function resolveCredentialSource(source: CredentialSource): Promise<string> {
   if (source.type === "vault") {
-    const vault = await ProjectVault.open({
+    const options: ProjectVaultOptions = {
       root: source.root ?? findEnvironmentProjectRoot(process.cwd()), dir: source.dir,
       env: source.env, unlockKey: source.unlockKey,
       credentialStore: source.credentialStore, externalProviders: source.externalProviders,
-    });
+    };
+    let cached = vaultCache.get(source);
+    const fields = ["root", "dir", "env", "unlockKey", "credentialStore", "externalProviders"] as const;
+    if (!cached || !fields.every((field) => Object.is(cached!.options[field], options[field]))) {
+      const entry = { options, vault: ProjectVault.open(options) };
+      vaultCache.set(source, entry);
+      void entry.vault.catch(() => { if (vaultCache.get(source) === entry) vaultCache.delete(source); });
+      cached = entry;
+    }
+    const vault = await cached.vault;
     const value = await vault.resolve(source.reference);
     if (!value) throw new Error("Project credential reference is missing. Run fentaris secrets check --offline.");
     return value;

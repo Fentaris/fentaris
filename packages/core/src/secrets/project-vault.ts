@@ -49,7 +49,7 @@ export class VaultWriteVerificationError extends Error {
 /** Project-isolated source bindings and encrypted values. References confer no access rights. */
 export class ProjectVault {
   private relocationRoot?: string;
-  private authenticationCache?: { snapshot: string; verifiers: Promise<Payload["verifiers"]> };
+  private readCache?: { snapshot: string; payload: Promise<Payload> };
   private oauthWriteChain: Promise<void> = Promise.resolve();
   private constructor(readonly options: ProjectVaultOptions, readonly root: string, readonly file: string) {}
   static async open(options: ProjectVaultOptions): Promise<ProjectVault> {
@@ -115,6 +115,18 @@ export class ProjectVault {
     if (payload.projectId !== state.projectId) throw new Error("Vault project identity does not match its encrypted payload.");
     return { payload, key };
   }
+  /** Internal read-only snapshot; never give a caller mutable cached records. */
+  private async cachedPayload(state: State): Promise<Payload> {
+    // Compare the complete parsed file, including authenticated metadata. File
+    // timestamps alone cannot detect tampering, token rotation or revocation.
+    const snapshot = JSON.stringify(state);
+    if (this.readCache?.snapshot !== snapshot) {
+      const cache = { snapshot, payload: this.payload(state).then((loaded) => loaded.payload) };
+      this.readCache = cache;
+      void cache.payload.catch(() => { if (this.readCache === cache) this.readCache = undefined; });
+    }
+    return this.readCache.payload;
+  }
   private async acquireLock(wait: boolean) {
     const deadline = performance.now() + 5_000;
     while (true) {
@@ -165,7 +177,7 @@ export class ProjectVault {
     const state = await this.state();
     let values: Payload["values"] | undefined;
     if (state.encrypted) {
-      try { values = (await this.payload(state)).payload.values; } catch { /* Locked is a resolution state, never a remotely verified result. */ }
+      try { values = (await this.cachedPayload(state)).values; } catch { /* Locked is a resolution state, never a remotely verified result. */ }
     }
     return Promise.all(state.references.map(async (entry): Promise<ProjectSecretMetadata> => {
       let resolution: ProjectSecretMetadata["state"] = "missing";
@@ -197,7 +209,7 @@ export class ProjectVault {
     assertVaultName(reference, "Secret reference");
     const state = await this.state();
     // Authenticate public bindings before using any source in an encrypted vault.
-    const loaded = state.encrypted ? await this.payload(state) : undefined;
+    const loaded = state.encrypted ? await this.cachedPayload(state) : undefined;
     const entry = state.references.find((candidate) => candidate.reference === reference);
     if (!entry) return undefined;
     if (entry.source.type === "environment") return (this.options.env ?? process.env)[entry.source.name] || undefined;
@@ -207,7 +219,7 @@ export class ProjectVault {
       try { return await provider.resolve(entry.source.locator); }
       catch { throw new Error("External secret provider resolution failed. Check provider configuration; its error details were redacted."); }
     }
-    return loaded?.payload.values[reference];
+    return loaded?.values[reference];
   }
   async set(reference: string, value: string, options: { consumer?: SecretConsumer; replaceSource?: boolean } = {}): Promise<void> {
     assertVaultName(reference, "Secret reference");
@@ -293,15 +305,7 @@ export class ProjectVault {
   async authenticate(value: string): Promise<string | null> {
     const state = await this.state();
     if (!state.encrypted) return null;
-    // Compare the complete parsed file, including authenticated metadata, on every
-    // request. File timestamps alone cannot detect tampering or immediate revocation.
-    const snapshot = JSON.stringify(state);
-    if (this.authenticationCache?.snapshot !== snapshot) {
-      const cache = { snapshot, verifiers: this.payload(state).then(({ payload }) => ({ ...payload.verifiers })) };
-      this.authenticationCache = cache;
-      void cache.verifiers.catch(() => { if (this.authenticationCache === cache) this.authenticationCache = undefined; });
-    }
-    const verifiers = await this.authenticationCache.verifiers;
+    const { verifiers } = await this.cachedPayload(state);
     for (const key of state.keys) {
       if (key.revokedAt || (key.expiresAt && Date.parse(key.expiresAt) <= Date.now())) continue;
       const verifier = verifiers[key.id];
@@ -325,9 +329,9 @@ export class ProjectVault {
       if (session !== "shared" && !/^user:[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(session)) throw new Error("Invalid OAuth session namespace.");
       return JSON.stringify([server, account, session]);
     };
-    const read = async (): Promise<Payload["oauth"]> => { const state = await this.state(); return state.encrypted ? (await this.payload(state)).payload.oauth : {}; };
+    const read = async (): Promise<Payload["oauth"]> => { const state = await this.state(); return state.encrypted ? (await this.cachedPayload(state)).oauth : {}; };
     return {
-      get: async (server, session) => (await read())[locator(server, session)],
+      get: async (server, session) => { const record = (await read())[locator(server, session)]; return record ? structuredClone(record) : undefined; },
       set: async (server, session, record) => { const id = locator(server, session); await this.mutateOAuth((_state, payload) => { payload.oauth[id] = { ...record, updatedAt: record.updatedAt || Date.now() }; }); },
       delete: async (server, session) => { const id = locator(server, session); await this.mutateOAuth((_state, payload) => { delete payload.oauth[id]; }); },
       update: async (server, session, apply) => { const id = locator(server, session); return this.mutateOAuth((_state, payload) => {

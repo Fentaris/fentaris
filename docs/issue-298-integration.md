@@ -67,6 +67,10 @@ Account is selected explicitly by the adapter factory; records are isolated by `
 
 OAuth writes are queued per vault instance across account adapters. Independent instances/processes wait up to five seconds for the shared file lock, then reread and merge under that lock. A stale lock times out without deletion or token-store fallback; preserve it for operator recovery. Failed updates do not poison subsequent queued writes. Interactive/manual secret writes still return a retryable concurrency error immediately.
 
+Authenticated reads share a cached decrypted snapshot while the complete file remains unchanged. OAuth `get` returns an independent copy, so callers cannot mutate cached records. File changes from local or other-process writes force reauthentication; reads of tampered metadata fail without using the old cache. Mutations always load a fresh working payload under the file lock.
+
+The SDK resolver retains a vault per `CredentialVaultSource` declaration with unchanged options, so repeated upstream credential lookups also share authenticated reads. Changing its project location or adapter/unlock options opens a fresh vault. Default project discovery still runs per resolution; it cannot reuse a declaration's previous project after the working project changes.
+
 Explicit legacy OAuth migration maps each `{server,session}` to an account and retains the original encrypted file/key. Existing targets, missing records, or failed unlocks abort before replacement. No OAuth migration is automatic. Account-scoped adapters can be injected into the existing OAuth manager/store abstraction by #297; #298 does not implement account-aware manager selection or pretend a single adapter handles every account.
 
 ## Shared CLI contract
