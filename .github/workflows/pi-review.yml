@@ -28,6 +28,8 @@ jobs:
     # Optional AI review must not block merges when the provider has no credits
     # or returns a transient auth/billing error.
     continue-on-error: true
+    env:
+      PI_REVIEW_MODEL: ${{ vars.PI_MODEL || 'gpt-6.1-sol' }}
 
     steps:
       - name: Checkout
@@ -51,7 +53,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           provider: ${{ vars.PI_PROVIDER || 'openai' }}
-          model: ${{ vars.PI_MODEL || 'gpt-6.1-sol' }}
+          model: ${{ env.PI_REVIEW_MODEL }}
           token: ${{ secrets.OPENAI_API_KEY }}
           thinking_level: ${{ vars.PI_THINKING_LEVEL || 'medium' }}
           # Tutti i tool built-in dell'action: get_pr_diff, get_issue_or_pr_thread,
@@ -81,17 +83,23 @@ jobs:
             3. Se il contesto non è chiaro, leggi i file rilevanti con `read_file` (pi tool nativo, non un GitHub tool).
             4. Analizza seguendo rigorosamente la skill `pr-review` caricata automaticamente (severity scale, formato output, cosa controllare/ignorare).
 
+            ## Attribuzione del modello
+            Il modello configurato per questa esecuzione è `${{ env.PI_REVIEW_MODEL }}`.
+            Copia esattamente questo identificatore nell'intestazione e nell'attribuzione finale.
+            Non dedurlo dalla tua identità e non sostituirlo con nomi generici come "GPT-5" o "OpenAI".
+            Questa attribuzione prevale su eventuali nomi di modello presenti nel template della skill.
+
             ## Output (Codex-like, stretto)
             Segui **esattamente** il template definito nella skill `pr-review` caricata automaticamente. In sintesi:
             - **Body di sommario: 4-5 righe max**, formato:
               ```
-              💡 AI Review by <model-id>
+              💡 AI Review by ${{ env.PI_REVIEW_MODEL }}
 
               Reviewed commit: <short-sha>
 
               N issue: X 🛑 P1, Y 🟠 P2, Z 🟡 P3. PR [OK / da rivedere / con blocker].
 
-              🤖 pi + <model-id>. Per Q&A: `/pi <domanda>`.
+              🤖 pi + ${{ env.PI_REVIEW_MODEL }}. Per Q&A: `/pi <domanda>`.
               ```
             - **Inline comments**: prima riga = `<emoji> P<N>: <Title, max 80 char>`, body 2-4 righe, no editorial, no "Useful? React with 👍/👎"
             - **NON narrare** ("Ho letto la PR...", "Procedo con la review..."). Output = solo la review finale.
