@@ -34,7 +34,7 @@ export async function inspectProjectSecrets(project: ProjectDiscovery, vault: Pr
       continue;
     }
     const source = entry.source.type === "vault" ? { type: "vault" as const } : { type: "environment" as const, name: entry.source.name };
-    const present = source.type === "environment" && Boolean(env[source.name]);
+    const present = source.type === "environment" && Object.hasOwn(env, source.name) && Boolean(env[source.name]);
     inventory.push({ reference, source, present, state: present ? "present" : "missing", consumers: [{ kind: "configuration", server: "project-config" }], configurationScopes: [entry.scope], remoteValidity: "unverified", nextActions: present ? [] : [source.type === "vault" ? `fentaris secrets set ${reference}` : `Set ${source.name} in the process environment or project .env.`] });
   }
   return inventory.sort((a, b) => a.reference.localeCompare(b.reference));

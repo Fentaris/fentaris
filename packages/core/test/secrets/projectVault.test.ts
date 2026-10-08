@@ -20,6 +20,22 @@ async function fixture(env: NodeJS.ProcessEnv = { FENTARIS_VAULT_KEY: unlockKey 
 afterEach(async () => { vi.useRealTimers(); vi.restoreAllMocks(); await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
 
 describe("project vault", () => {
+  it("treats inherited names as missing while permitting real credentials with those names", async () => {
+    const { root, vault } = await fixture(); await vault.set("existing", "existing-value");
+    for (const reference of ["constructor", "toString", "hasOwnProperty"]) {
+      await vault.bind(reference, { type: "vault" });
+      expect(await vault.resolve(reference)).toBeUndefined();
+      expect((await vault.get(reference))?.state).toBe("missing");
+      await vault.set(reference, "own-sensitive"); expect(await vault.resolve(reference)).toBe("own-sensitive");
+      await vault.remove(reference); expect(await vault.resolve(reference)).toBeUndefined();
+      expect((await vault.get(reference))?.state).toBe("missing");
+    }
+    const envVault = await ProjectVault.open({ root, env: { FENTARIS_VAULT_KEY: unlockKey } });
+    await envVault.bind("env", { type: "environment", name: "constructor" });
+    expect(await envVault.resolve("env")).toBeUndefined(); expect((await envVault.get("env"))?.state).toBe("missing");
+    await envVault.bind("external", { type: "external", provider: "constructor", locator: "token" });
+    await expect(envVault.resolve("external")).rejects.toThrow("provider is not configured");
+  });
   it("encrypts values separately, reports metadata, and preserves references/consumers on update and removal", async () => {
     const { root, vault } = await fixture();
     await vault.set("github.work.token", "first-sensitive-value");
@@ -329,6 +345,29 @@ describe("OAuth lifecycle and recovery contracts", () => {
     await expect(vault.migrateLegacyOAuth({ file, key: "old-key", mappings: [{ server: "github", session: "user:alice", account: "work" }] })).rejects.toThrow("target exists");
     expect(await readFile(vault.file, "utf8")).toBe(before);
     expect(await readFile(file, "utf8")).toBe(original);
+  });
+  it("preserves legacy email session IDs through migration, read, refresh and deletion", async () => {
+    const { root, vault } = await fixture(); const session = "user:alice@example.com";
+    const file = path.join(root, "legacy-email-oauth.enc.json");
+    const original = JSON.stringify(encryptEnvelope({ github: { [session]: record } }, "old-key")); await writeFile(file, original);
+    expect(await vault.migrateLegacyOAuth({ file, key: "old-key", mappings: [{ server: "github", session, account: "work" }] })).toMatchObject({ records: 1, verified: true });
+    const store = vault.oauthStore("work");
+    expect((await store.get("github", session))?.tokens?.refresh_token).toBe("oauth-refresh-sensitive");
+    await store.update!("github", session, (current) => ({ ...current, tokens: { ...current.tokens!, refresh_token: "email-session-rotated" } }));
+    expect((await store.get("github", session))?.tokens?.refresh_token).toBe("email-session-rotated");
+    expect(await vault.oauthStore("personal").get("github", session)).toBeUndefined();
+    await store.delete("github", session); expect(await store.get("github", session)).toBeUndefined();
+    expect(await readFile(file, "utf8")).toBe(original);
+  });
+  it("rejects an unsupported migration session atomically without storing earlier valid mappings", async () => {
+    const { root, vault } = await fixture(); await vault.set("preserved", "preserved-value");
+    const file = path.join(root, "invalid-session-oauth.enc.json");
+    const original = JSON.stringify(encryptEnvelope({ github: { shared: record, "account:work": record } }, "old-key")); await writeFile(file, original);
+    const before = await readFile(vault.file, "utf8");
+    await expect(vault.migrateLegacyOAuth({ file, key: "old-key", mappings: [{ server: "github", session: "shared", account: "work" }, { server: "github", session: "account:work" as "shared", account: "work" }] })).rejects.toThrow("Invalid OAuth session namespace");
+    expect(await readFile(vault.file, "utf8")).toBe(before);
+    expect(await readFile(file, "utf8")).toBe(original);
+    expect(await vault.oauthStore("work").get("github", "shared")).toBeUndefined();
   });
   it("relocates only with explicit previous root and unlock, retains identity and a rollback snapshot", async () => {
     const original = await fixture(), moved = await fixture();

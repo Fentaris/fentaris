@@ -151,6 +151,12 @@ describe("vault command outputs", () => {
 
 
 describe("configuration and failure evidence", () => {
+  it("does not report inherited environment properties as present credential bindings", async () => {
+    const rt = await fixture(); await mkdir(path.join(rt.cwd, "src"));
+    await writeFile(path.join(rt.cwd, "src/index.ts"), 'import {credentialEnv,fentaris} from "@fentaris/core"; fentaris({defaults:{credentials:{token:credentialEnv("constructor")}}});');
+    expect(await main(["secrets", "check", "--offline", "--json"], rt)).toBe(1);
+    expect(envelope(rt).data.issues).toEqual([expect.objectContaining({ source: { type: "environment", name: "constructor" }, state: "missing" })]);
+  });
   it.each([
     '{dir:"other-vault"}', '{root:"/other-project"}', 'runtimeOptions', '{unlockKey:"configuration-sensitive"}',
   ])("does not satisfy a custom vault binding through the default CLI vault: %s", async (options) => {

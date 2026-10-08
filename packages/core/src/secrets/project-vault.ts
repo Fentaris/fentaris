@@ -184,10 +184,10 @@ export class ProjectVault {
       if (state.encrypted && !values) resolution = "locked";
       else if (entry.source.type === "vault") {
         if (entry.present && state.encrypted) {
-          resolution = values ? values[entry.reference] ? "present" : "missing" : "locked";
+          resolution = values ? ownValue(values, entry.reference) ? "present" : "missing" : "locked";
         }
       } else if (entry.source.type === "environment") {
-        resolution = (this.options.env ?? process.env)[entry.source.name] ? "present" : "missing";
+        resolution = ownValue(this.options.env ?? process.env, entry.source.name) ? "present" : "missing";
       } else if (options.offline) resolution = "unverified";
       else {
         try { resolution = await this.resolve(entry.reference) ? "present" : "missing"; }
@@ -212,14 +212,14 @@ export class ProjectVault {
     const loaded = state.encrypted ? await this.cachedPayload(state) : undefined;
     const entry = state.references.find((candidate) => candidate.reference === reference);
     if (!entry) return undefined;
-    if (entry.source.type === "environment") return (this.options.env ?? process.env)[entry.source.name] || undefined;
+    if (entry.source.type === "environment") return ownValue(this.options.env ?? process.env, entry.source.name) || undefined;
     if (entry.source.type === "external") {
-      const provider = this.options.externalProviders?.[entry.source.provider];
+      const provider = ownValue(this.options.externalProviders, entry.source.provider);
       if (!provider) throw new Error("External secret provider is not configured. Configure the explicitly bound provider.");
       try { return await provider.resolve(entry.source.locator); }
       catch { throw new Error("External secret provider resolution failed. Check provider configuration; its error details were redacted."); }
     }
-    return loaded?.values[reference];
+    return ownValue(loaded?.values, reference);
   }
   async set(reference: string, value: string, options: { consumer?: SecretConsumer; replaceSource?: boolean } = {}): Promise<void> {
     assertVaultName(reference, "Secret reference");
@@ -248,7 +248,7 @@ export class ProjectVault {
       }
       if (!entry) { entry = { reference, source: parsed, consumers: [], present: false, updatedAt: new Date().toISOString() }; state.references.push(entry); }
       entry.source = parsed;
-      entry.present = parsed.type === "vault" && Boolean(payload.values[reference]);
+      entry.present = parsed.type === "vault" && Boolean(ownValue(payload.values, reference));
       entry.updatedAt = new Date().toISOString();
       if (consumer && !entry.consumers.some((item) => JSON.stringify(item) === JSON.stringify(consumer))) entry.consumers.push(consumer);
     }, false);
@@ -308,7 +308,7 @@ export class ProjectVault {
     const { verifiers } = await this.cachedPayload(state);
     for (const key of state.keys) {
       if (key.revokedAt || (key.expiresAt && Date.parse(key.expiresAt) <= Date.now())) continue;
-      const verifier = verifiers[key.id];
+      const verifier = ownValue(verifiers, key.id);
       if (verifier && FentarisAuth.compareApiKey(verifier, value)) return key.user;
     }
     return null;
@@ -326,7 +326,7 @@ export class ProjectVault {
     assertVaultName(account, "Upstream account alias");
     const locator = (server: string, session: OAuthSessionKey): string => {
       assertVaultName(server, "MCP server");
-      if (session !== "shared" && !/^user:[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(session)) throw new Error("Invalid OAuth session namespace.");
+      assertOAuthSession(session);
       return JSON.stringify([server, account, session]);
     };
     const read = async (): Promise<Payload["oauth"]> => { const state = await this.state(); return state.encrypted ? (await this.cachedPayload(state)).oauth : {}; };
@@ -350,6 +350,9 @@ export class ProjectVault {
   }
   /** Explicit legacy OAuth migration. Session scopes are not interpreted as upstream account names. */
   async migrateLegacyOAuth(options: { file: string; key: string; mappings: Array<{ server: string; session: OAuthSessionKey; account: string }> }): Promise<{ records: number; verified: true; legacyPreserved: true }> {
+    for (const mapping of options.mappings) {
+      assertVaultName(mapping.server, "MCP server"); assertVaultName(mapping.account, "Upstream account alias"); assertOAuthSession(mapping.session);
+    }
     let encrypted: unknown;
     try { encrypted = JSON.parse(await readFile(options.file, "utf8")); } catch { throw new Error("Unable to read the legacy OAuth store; no migration was performed."); }
     const legacy = decryptEnvelope(parseWithError(encryptedEnvelopeSchema, encrypted, "Invalid legacy OAuth envelope"), options.key, "Unable to unlock legacy OAuth store. Restore its original key.");
@@ -357,7 +360,7 @@ export class ProjectVault {
     return this.mutate((_state, payload) => {
       for (const mapping of options.mappings) {
         assertVaultName(mapping.server, "MCP server"); assertVaultName(mapping.account, "Upstream account alias");
-        const record = state[mapping.server]?.[mapping.session];
+        const record = ownValue(ownValue(state, mapping.server), mapping.session);
         if (!record) throw new Error("Mapped legacy OAuth session was not found; no migration was written.");
         const id = JSON.stringify([mapping.server, mapping.account, mapping.session]);
         if (payload.oauth[id]) throw new Error("OAuth migration target exists. Reauthorize or choose an explicit unused upstream account; existing records were preserved.");
@@ -376,9 +379,10 @@ export class ProjectVault {
       let references = 0, keys = 0;
       for (const mapping of options.mappings) {
         if (state.references.some((item) => item.reference === mapping.target)) throw new Error("Migration target already exists. Choose a new target; existing data was preserved.");
-        const value = mapping.scope === "default" ? old.defaults[mapping.reference]
-          : mapping.scope.startsWith("user:") ? old.users[mapping.scope.slice(5)]?.credentials[mapping.reference]
-          : old.groups[mapping.scope.slice(6)]?.[mapping.reference];
+        const credentials = mapping.scope === "default" ? old.defaults
+          : mapping.scope.startsWith("user:") ? ownValue(old.users, mapping.scope.slice(5))?.credentials
+          : ownValue(old.groups, mapping.scope.slice(6));
+        const value = ownValue(credentials, mapping.reference);
         if (!value) throw new Error("A mapped legacy credential is missing; no migration was written.");
         payload.values[mapping.target] = value;
         state.references.push({ reference: mapping.target, source: { type: "vault" }, present: true, consumers: [], updatedAt: new Date().toISOString() }); references++;
@@ -411,6 +415,12 @@ export function projectVaultIdentityStrategy(options: ProjectVaultOptions): Iden
   } };
 }
 function isMissing(error: unknown): boolean { return error instanceof Error && "code" in error && error.code === "ENOENT"; }
+function ownValue<T>(record: Record<string, T> | undefined, name: string): T | undefined {
+  return record && Object.hasOwn(record, name) ? record[name] : undefined;
+}
+function assertOAuthSession(value: unknown): asserts value is OAuthSessionKey {
+  if (typeof value !== "string" || (value !== "shared" && !value.startsWith("user:"))) throw new Error("Invalid OAuth session namespace. Use shared or an existing user:<id> session; account aliases are separate.");
+}
 
 function metadataDigest(state: State): string {
   const normalized = stateSchema.parse(state);

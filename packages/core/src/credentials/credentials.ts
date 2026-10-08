@@ -138,7 +138,7 @@ export async function resolveCredentialSource(source: CredentialSource): Promise
     return value;
   }
   if (source.type === "env") {
-    const value = process.env[source.name];
+    const value = Object.hasOwn(process.env, source.name) ? process.env[source.name] : undefined;
     if (!value) {
       throw new Error(`Missing credential environment variable "${source.name}"`);
     }

@@ -73,6 +73,8 @@ The SDK resolver retains a vault per `CredentialVaultSource` declaration with un
 
 Explicit legacy OAuth migration maps each `{server,session}` to an account and retains the original encrypted file/key. Existing targets, missing records, or failed unlocks abort before replacement. No OAuth migration is automatic. Account-scoped adapters can be injected into the existing OAuth manager/store abstraction by #297; #298 does not implement account-aware manager selection or pretend a single adapter handles every account.
 
+The existing `OAuthSessionKey` contract is preserved: `shared` or `user:<id>`, including legacy IDs containing email addresses and other characters outside the new incoming-key name rules. Migration and ordinary store operations use the same session validation. An unsupported namespace aborts all mappings before a write; a successfully migrated session remains readable, refreshable and deletable. Session IDs never become account aliases.
+
 ## Shared CLI contract
 
 Implementation: `packages/cli/src/shared/input.ts`; exported by `packages/cli/src/index.ts`.
