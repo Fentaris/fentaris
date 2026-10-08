@@ -1,7 +1,7 @@
 import { constants as fsConstants } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import { findEnvironmentProjectRoot } from "../secrets/environment.js";
-import { ProjectVault, assertVaultName } from "../secrets/project-vault.js";
+import { ProjectVault, assertVaultName, type ProjectVaultOptions } from "../secrets/project-vault.js";
 import { FentarisAuth, type LocalCredentials } from "../auth/auth.js";
 
 const credentialReferenceMarker = Symbol.for("fentaris.credential.reference");
@@ -25,9 +25,10 @@ export type CredentialReference = {
  * @pk
  */
 export type CredentialSource = CredentialJsonSource | CredentialEnvSource | CredentialVaultSource;
-export type CredentialVaultSource = { readonly [credentialSourceMarker]: true; readonly type: "vault"; readonly reference: string; readonly root?: string; readonly dir?: string };
+export type CredentialVaultOptions = Omit<ProjectVaultOptions, "root"> & { root?: string };
+export type CredentialVaultSource = CredentialVaultOptions & { readonly [credentialSourceMarker]: true; readonly type: "vault"; readonly reference: string };
 /** Bind runtime credentials to the project vault, using its explicit source selection. */
-export function credentialVault(reference: string, options: { root?: string; dir?: string } = {}): CredentialVaultSource {
+export function credentialVault(reference: string, options: CredentialVaultOptions = {}): CredentialVaultSource {
   assertVaultName(reference, "Secret reference");
   return { [credentialSourceMarker]: true, type: "vault", reference, ...options };
 }
@@ -117,7 +118,11 @@ export function isCredentialSource(value: unknown): value is CredentialSource {
 
 export async function resolveCredentialSource(source: CredentialSource): Promise<string> {
   if (source.type === "vault") {
-    const vault = await ProjectVault.open({ root: source.root ?? findEnvironmentProjectRoot(process.cwd()), dir: source.dir });
+    const vault = await ProjectVault.open({
+      root: source.root ?? findEnvironmentProjectRoot(process.cwd()), dir: source.dir,
+      env: source.env, unlockKey: source.unlockKey,
+      credentialStore: source.credentialStore, externalProviders: source.externalProviders,
+    });
     const value = await vault.resolve(source.reference);
     if (!value) throw new Error("Project credential reference is missing. Run fentaris secrets check --offline.");
     return value;

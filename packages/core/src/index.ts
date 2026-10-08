@@ -929,4 +929,4 @@ export { loadProjectEnvironment, applyProjectEnvironment, findEnvironmentProject
 export { redactOAuthMessage, redactOAuthUrl, redactOAuthValue } from "./auth/oauth/redaction.js";
 
 export { credentialVault } from "./credentials/index.js";
-export type { CredentialVaultSource } from "./credentials/index.js";
+export type { CredentialVaultSource, CredentialVaultOptions } from "./credentials/index.js";

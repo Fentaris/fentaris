@@ -74,6 +74,10 @@ const app = fentaris({
 
 `credentialVault` resolves the explicitly bound reference source; it does not grant access or assign a user to an upstream account. Configure `root`/`dir` explicitly for custom locations. The CLI discovers SDK-only projects from `package.json` with `@fentaris/core` and optional `fentaris.entrypoint`/`fentaris.authDir` metadata. Static inventory includes explicit entrypoint references without executing that module; dynamically constructed consumers must be registered through the vault API.
 
+For external sources, pass the provider adapters into runtime resolution explicitly, for example `credentialVault("github.work.token", { externalProviders: { cloud: mySecretProvider } })`. The same options accept `env`, `unlockKey` and `credentialStore`; no adapter or value is silently copied from another vault instance. These adapters belong in runtime configuration, never the public vault metadata.
+
+Incoming authentication caches authenticated verifiers while vault contents are unchanged, avoiding repeated password derivation for invalid requests. Every request rereads the vault and checks expiry; metadata or encrypted-data changes invalidate that cache immediately, including revocation from another process.
+
 ## Incoming keys
 
 Creation yields a stable `fk_...` ID, user, name, creation time, optional `--expires <future ISO 8601 UTC timestamp>`, and a sensitive random client key. Copy the raw key immediately. Only the intentional creation result includes `sensitiveValue` (including `--json`, marked `sensitive:true`); later inventories, logs, metadata, and revocation never include it. Only SHA-256 verifier hashes are stored, inside the encrypted payload. Clients send `x-fentaris-api-key`. Authentication checks the current store on every request, rejecting expired and revoked keys immediately. Revoke by ID, never by the original value.

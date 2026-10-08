@@ -111,6 +111,18 @@ describe("project vault", () => {
     expect((await vault.get("token"))?.state).toBe("unresolvable");
     await expect(vault.resolve("token")).rejects.toThrow("error details were redacted");
   });
+  it("resolves external credential sources with their injected adapters and unlock configuration", async () => {
+    const { root, vault } = await fixture();
+    await vault.set("local", "local-sensitive");
+    await vault.bind("external", { type: "external", provider: "cloud", locator: "work/token" });
+    const resolve = vi.fn(async () => "external-sensitive");
+    const options = { root, env: {}, unlockKey, externalProviders: { cloud: { resolve } } };
+    expect(await resolveCredentialSource(credentialVault("external", options))).toBe("external-sensitive");
+    expect(resolve).toHaveBeenCalledWith("work/token");
+    resolve.mockRejectedValueOnce(new Error("Bearer provider-sensitive"));
+    await expect(resolveCredentialSource(credentialVault("external", options))).rejects.toThrow("error details were redacted");
+    await expect(resolveCredentialSource(credentialVault("external", { root, unlockKey }))).rejects.toThrow("External secret provider is not configured");
+  });
   it("keeps reference validation errors free of secret values", async () => {
     const { vault } = await fixture();
     await expect(vault.set("https://token-sensitive", "raw-sensitive")).rejects.toThrow("Secret reference must contain");
@@ -154,6 +166,19 @@ describe("project vault", () => {
 });
 
 describe("incoming key lifecycle", () => {
+  it("reuses authenticated verifiers for concurrent invalid requests and reloads cross-instance revocation", async () => {
+    const { vault, root } = await fixture();
+    const key = await vault.createKey("pi", "cached");
+    const get = vi.fn(async () => unlockKey);
+    const strategy = projectVaultIdentityStrategy({ root, env: {}, credentialStore: { get, set: vi.fn() } });
+    const request = (value: string) => ({ headers: { "x-fentaris-api-key": value } });
+    expect(await strategy.resolve(request(key.sensitiveValue))).toEqual({ id: "pi" });
+    expect(await Promise.all(Array.from({ length: 20 }, () => strategy.resolve(request("invalid"))))).toEqual(Array(20).fill(null));
+    expect(get).toHaveBeenCalledTimes(1);
+    await vault.revokeKey(key.key.id);
+    expect(await strategy.resolve(request(key.sensitiveValue))).toBeNull();
+    expect(get).toHaveBeenCalledTimes(2);
+  });
   it("stores only a verifier, exposes the raw value once, and revokes by a stable ID immediately", async () => {
     const { vault } = await fixture();
     const created = await vault.createKey("pi-agent", "macbook");
@@ -177,6 +202,7 @@ describe("incoming key lifecycle", () => {
     const a = await vault.createKey("pi", "a", "2030-01-01T00:01:00Z"); const b = await vault.createKey("pi", "b");
     await expect(vault.createKey("pi", "a")).rejects.toThrow("already exists");
     await expect(vault.createKey("pi", "invalid", "yesterday")).rejects.toThrow("future ISO");
+    expect(await vault.authenticate(a.sensitiveValue)).toBe("pi");
     vi.setSystemTime(new Date("2030-01-01T00:02:00Z"));
     expect(await vault.authenticate(a.sensitiveValue)).toBeNull();
     expect(await vault.authenticate(b.sensitiveValue)).toBe("pi");
@@ -186,6 +212,7 @@ describe("incoming key lifecycle", () => {
   });
   it("detects tampered expiry or source metadata before authentication or resolution", async () => {
     const { vault } = await fixture(); const key = await vault.createKey("pi", "macbook");
+    expect(await vault.authenticate(key.sensitiveValue)).toBe("pi");
     const state = JSON.parse(await readFile(vault.file, "utf8"));
     state.keys[0].expiresAt = "2099-01-01T00:00:00.000Z";
     await writeFile(vault.file, JSON.stringify(state));

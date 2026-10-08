@@ -48,6 +48,7 @@ export class VaultWriteVerificationError extends Error {
 /** Project-isolated source bindings and encrypted values. References confer no access rights. */
 export class ProjectVault {
   private relocationRoot?: string;
+  private authenticationCache?: { snapshot: string; verifiers: Promise<Payload["verifiers"]> };
   private constructor(readonly options: ProjectVaultOptions, readonly root: string, readonly file: string) {}
   static async open(options: ProjectVaultOptions): Promise<ProjectVault> {
     const root = await realpath(options.root);
@@ -275,10 +276,18 @@ export class ProjectVault {
   async authenticate(value: string): Promise<string | null> {
     const state = await this.state();
     if (!state.encrypted) return null;
-    const { payload } = await this.payload(state);
+    // Compare the complete parsed file, including authenticated metadata, on every
+    // request. File timestamps alone cannot detect tampering or immediate revocation.
+    const snapshot = JSON.stringify(state);
+    if (this.authenticationCache?.snapshot !== snapshot) {
+      const cache = { snapshot, verifiers: this.payload(state).then(({ payload }) => ({ ...payload.verifiers })) };
+      this.authenticationCache = cache;
+      void cache.verifiers.catch(() => { if (this.authenticationCache === cache) this.authenticationCache = undefined; });
+    }
+    const verifiers = await this.authenticationCache.verifiers;
     for (const key of state.keys) {
       if (key.revokedAt || (key.expiresAt && Date.parse(key.expiresAt) <= Date.now())) continue;
-      const verifier = payload.verifiers[key.id];
+      const verifier = verifiers[key.id];
       if (verifier && FentarisAuth.compareApiKey(verifier, value)) return key.user;
     }
     return null;
@@ -373,7 +382,12 @@ export function assertVaultName(value: string, label: string): void {
   if (!nameSchema.safeParse(value).success) throw new Error(`${label} must contain 1-128 letters, numbers, dots, underscores, or hyphens, starting with a letter or number.`);
 }
 export function projectVaultIdentityStrategy(options: ProjectVaultOptions): IdentityStrategy {
-  return { name: "project-vault-api-key", resolve: async (request) => (await ProjectVault.open(options)).identityStrategy().resolve(request) };
+  let vault: Promise<ProjectVault> | undefined;
+  return { name: "project-vault-api-key", resolve: async (request) => {
+    if (!request.headers?.["x-fentaris-api-key"]) return null;
+    vault ??= ProjectVault.open(options).catch((error: unknown) => { vault = undefined; throw error; });
+    return (await vault).identityStrategy().resolve(request);
+  } };
 }
 function isMissing(error: unknown): boolean { return error instanceof Error && "code" in error && error.code === "ENOENT"; }
 

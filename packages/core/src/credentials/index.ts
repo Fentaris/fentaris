@@ -9,6 +9,7 @@ export {
   resolveCredentialSource,
 } from "./credentials.js";
 export type {
+  CredentialVaultOptions,
   CredentialVaultSource,
   CredentialEnvSource,
   CredentialJsonOptions,
