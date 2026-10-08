@@ -151,6 +151,46 @@ describe("vault command outputs", () => {
 
 
 describe("configuration and failure evidence", () => {
+  it("checks different sources and environment variables independently across credential scopes", async () => {
+    const rt = await fixture(); await mkdir(path.join(rt.cwd, "src"));
+    await writeFile(path.join(rt.cwd, "src/index.ts"), `
+      import { credentialVault, credentialEnv, fentaris, group, user } from "@fentaris/core";
+      fentaris({ defaults: { credentials: { token: credentialVault("token") } }, groups: [
+        group({ id: "staff", credentials: { token: credentialEnv("STAFF_TOKEN") } }),
+        group({ id: "other", credentials: { token: credentialEnv("OTHER_TOKEN") } })
+      ], users: [user("pi", { credentials: { token: credentialEnv("STAFF_TOKEN") } })] });
+      throw new Error("Configuration must not execute");
+    `);
+    const vault = await ProjectVault.open({ root: rt.cwd, env: rt.env });
+    await vault.set("token", "vault-sensitive");
+    expect(await main(["secrets", "check", "--offline", "--json"], rt)).toBe(1);
+    const data = envelope(rt).data;
+    expect(data.secrets).toHaveLength(3);
+    expect(data.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ reference: "token", source: { type: "environment", name: "STAFF_TOKEN" }, state: "missing", configurationScopes: ["group:staff", "user:pi"] }),
+      expect.objectContaining({ reference: "token", source: { type: "environment", name: "OTHER_TOKEN" }, state: "missing" }),
+    ]));
+    expect(await main(["secrets", "get", "token", "--offline", "--json"], rt)).toBe(0);
+    expect(envelope(rt).data.bindings).toHaveLength(3);
+    rt.env.STAFF_TOKEN = "staff-sensitive";
+    expect(await main(["secrets", "check", "--offline", "--json"], rt)).toBe(1);
+    expect(envelope(rt).data.issues).toEqual([expect.objectContaining({ source: { type: "environment", name: "OTHER_TOKEN" } })]);
+    rt.env.OTHER_TOKEN = "other-sensitive";
+    expect(await main(["secrets", "check", "--offline", "--json"], rt)).toBe(0);
+    expect(output(rt)).not.toContain("sensitive");
+    expect((await vault.get("token"))?.source).toEqual({ type: "vault" });
+  });
+  it("does not treat an unregistered vault reference as satisfied by a direct environment declaration", async () => {
+    const rt = await fixture(); await mkdir(path.join(rt.cwd, "src")); rt.env.STAFF_TOKEN = "environment-sensitive";
+    await writeFile(path.join(rt.cwd, "src/index.ts"), `
+      import {credentialVault,credentialEnv,fentaris,group} from "@fentaris/core";
+      fentaris({defaults:{credentials:{token:credentialVault("token")}},groups:[group({id:"staff",credentials:{token:credentialEnv("STAFF_TOKEN")}})]});
+    `);
+    expect(await main(["secrets", "check", "--offline", "--json"], rt)).toBe(1);
+    expect(envelope(rt).data.secrets).toHaveLength(2);
+    expect(envelope(rt).data.issues).toEqual([expect.objectContaining({ reference: "token", source: { type: "vault" }, state: "missing", configurationScopes: ["default"] })]);
+    await expect(readFile(path.join(rt.cwd, ".fentaris/vault.json"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
   it("reports explicitly configured missing references and consumers without importing configuration", async () => {
     const rt = await fixture(); await mkdir(path.join(rt.cwd, "src"));
     await writeFile(path.join(rt.cwd, "src/index.ts"), 'import { credentialVault, credentialEnv, fentaris } from "@fentaris/core";\nfentaris({defaults:{credentials:{token:credentialVault("github.work.token"),other:credentialEnv("OTHER_TOKEN")}}});\nthrow new Error("Configuration must never be executed for inventory");');

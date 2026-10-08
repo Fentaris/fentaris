@@ -78,6 +78,8 @@ For external sources, pass the provider adapters into runtime resolution explici
 
 Incoming authentication caches authenticated verifiers while vault contents are unchanged, avoiding repeated password derivation for invalid requests. Every request rereads the vault and checks expiry; metadata or encrypted-data changes invalidate that cache immediately, including revocation from another process.
 
+If the same logical credential name uses different sources across default, group, or user configuration, inventory shows each binding separately with its configuration scopes. A present vault value cannot satisfy a direct environment binding. `secrets check` checks each source independently; `secrets get --json` includes all matching rows in `data.bindings` when there is more than one.
+
 ## Incoming keys
 
 Creation yields a stable `fk_...` ID, user, name, creation time, optional `--expires <future ISO 8601 UTC timestamp>`, and a sensitive random client key. Copy the raw key immediately. Only the intentional creation result includes `sensitiveValue` (including `--json`, marked `sensitive:true`); later inventories, logs, metadata, and revocation never include it. Only SHA-256 verifier hashes are stored, inside the encrypted payload. Clients send `x-fentaris-api-key`. Authentication checks the current store on every request, rejecting expired and revoked keys immediately. Revoke by ID, never by the original value.

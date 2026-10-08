@@ -22,8 +22,8 @@ export async function runVaultSecrets(command: CliCommand, runtime: Runtime): Pr
       if (!references.length) throw new Error("Secret reference was not found. Run fentaris secrets to inspect registered references.");
     }
     const problems = references.filter((entry) => entry.state !== "present" && entry.state !== "unverified");
-    const data = action === "get" ? { secret: references[0] } : { secrets: references, remoteValidity: "unverified", ...(action === "check" ? { issues: problems } : {}) };
-    const rows = references.map((entry) => `${entry.reference}  ${sourceLabel(entry)}  ${entry.state}  ${entry.consumers.map((item) => `${item.server}${item.account ? ` (${item.account})` : ""}`).join(", ") || "—"}`);
+    const data = action === "get" ? { secret: references[0], ...(references.length > 1 ? { bindings: references } : {}) } : { secrets: references, remoteValidity: "unverified", ...(action === "check" ? { issues: problems } : {}) };
+    const rows = references.map((entry) => `${entry.reference}  ${sourceLabel(entry)}  ${entry.state}  ${entry.consumers.map((item) => `${item.server}${item.account ? ` (${item.account})` : item.kind === "configuration" && entry.configurationScopes?.length ? ` (${entry.configurationScopes.join(", ")})` : ""}`).join(", ") || "—"}`);
     commandResult(runtime, options, data, ["SECRET  SOURCE  STATUS  USED BY", ...rows, ...(references.length ? [] : ["No secret references. Next: fentaris secrets set <reference> --stdin"]), "Remote validity: unverified.", ...problems.flatMap((entry) => entry.nextActions)], action !== "check" || problems.length === 0);
     // A bare inventory may offer an explicit action only after displaying the read-only view.
     if (!suppliedAction && canPrompt(runtime, options)) {
