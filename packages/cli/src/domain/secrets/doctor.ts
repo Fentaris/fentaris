@@ -15,6 +15,7 @@ import type { HealthResult, ProjectDiscovery, Runtime } from "../../shared/types
 import { exists } from "../../shared/utils.js";
 import { loadProjectEnv } from "../project/env.js";
 import { credentialsPath, formatScopeLabel, manifestPath, openLocalSecretsBackend } from "./backend.js";
+import { openProjectVault } from "./vault.js";
 import { scanEntrypointForSecrets } from "./manifest-scan.js";
 
 export type SecretsDoctorOptions = {
@@ -33,7 +34,7 @@ export type SecretsDoctorIssue = {
 export async function getSecretsDoctorIssues(project: ProjectDiscovery, runtime: Runtime, options: SecretsDoctorOptions = {}): Promise<SecretsDoctorIssue[]> {
   const issues: SecretsDoctorIssue[] = [];
   const manifest = await loadRequiredManifest(project);
-  const required = manifest.references.filter((entry) => entry.source?.type !== "env" && entry.source?.type !== "manual");
+  const required = manifest.references.filter((entry) => entry.source?.type !== "env" && entry.source?.type !== "manual" && entry.source?.type !== "vault");
   const env = await loadProjectEnv(project.root, runtime.env);
   const key = options.key ?? env.FENTARIS_AUTH_KEY;
   const storeExists = await exists(credentialsPath(project));
@@ -69,7 +70,7 @@ export async function getSecretsDoctorIssues(project: ProjectDiscovery, runtime:
       ref: entry.ref,
       scope: entry.scope,
       detail: "Required secret is missing from the local store.",
-      hint: hintForSet(entry),
+      hint: hintForSet(),
     });
   }
 
@@ -103,7 +104,18 @@ export async function getSecretsDoctorIssues(project: ProjectDiscovery, runtime:
     }
   }
 
+  const vault = await openProjectVault(project, runtime);
+  for (const requirement of manifest.references.filter((entry) => entry.source?.type === "vault")) {
+    const reference = requirement.source?.type === "vault" ? requirement.source.reference ?? requirement.ref : requirement.ref;
+    const metadata = await vault.get(reference, { offline: true });
+    if (metadata?.state !== "present") issues.push({ status: options.strict ? "fail" : "warn", ref: reference, scope: "vault", detail: "Required project vault reference is missing or locked; remote validity is unverified.", hint: `Run fentaris secrets get ${reference} --offline.` });
+  }
   for (const requirement of manifest.apiKeys ?? []) {
+    if (requirement.source.type === "vault") {
+      const keys = (await vault.keys(requirement.userId)).filter((key) => !key.revokedAt && (!key.expiresAt || Date.parse(key.expiresAt) > Date.now()));
+      if (keys.length < (requirement.count ?? 1)) issues.push({ status: options.strict ? "fail" : "warn", ref: requirement.userId, scope: "apiKey", detail: "Required incoming project vault API key is missing.", hint: `Run fentaris auth keys create --user ${requirement.userId} --name <name>.` });
+      continue;
+    }
     const issue = apiKeyIssue(requirement, stored, env, options.strict === true);
     if (issue) issues.push(issue);
   }
@@ -288,7 +300,7 @@ function apiKeyIssue(requirement: SecretsManifestApiKey, stored: SecretRef[], en
     ref: requirement.userId,
     scope: "apiKey",
     detail: `Required local API key is missing (${storedEntry?.count ?? 0}/${requirement.count ?? 1}).`,
-    hint: `Run fentaris auth api-key add ${requirement.userId} --generate or fentaris secrets setup.`,
+    hint: `Use explicit legacy secrets setup, or migrate verifiers and configure projectVaultIdentityStrategy before creating named keys.`,
   };
 }
 
@@ -310,17 +322,8 @@ async function gitTrackedSecretFiles(project: ProjectDiscovery): Promise<string[
   return tracked;
 }
 
-function hintForSet(entry: SecretsManifestEntry): string {
-  if (entry.scope === "default") {
-    return `fentaris secrets set ${entry.ref}`;
-  }
-  if (entry.scope.startsWith("user:")) {
-    return `fentaris secrets set ${entry.ref} --user ${entry.scope.slice("user:".length)}`;
-  }
-  if (entry.scope.startsWith("group:")) {
-    return `fentaris secrets set ${entry.ref} --group ${entry.scope.slice("group:".length)}`;
-  }
-  return `fentaris secrets set ${entry.ref}`;
+function hintForSet(): string {
+  return "Migrate explicitly with fentaris secrets migrate --mapping <file> --legacy-file <file>, then update the credential source; or maintain this legacy manifest with fentaris secrets setup.";
 }
 
 function decodeScope(scope: string): SecretRef["scope"] {

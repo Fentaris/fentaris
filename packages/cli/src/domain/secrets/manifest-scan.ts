@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { SecretsManifestApiKey, SecretsManifestEntry, SecretsManifestSource } from "@fentaris/core";
 
 const credentialPattern = /\bcredential\s*\(\s*["'`]([^"'`]+)["'`]\s*\)/gu;
-const sourceEntryPattern = /(?:["']([^"']+)["']|([A-Za-z_$][\w$]*))\s*:\s*(credential|credentialJson|credentialEnv)\s*\(\s*["']([^"']+)["']([^)]*)\)/gu;
+const sourceEntryPattern = /(?:["']([^"']+)["']|([A-Za-z_$][\w$]*))\s*:\s*(credential|credentialJson|credentialEnv|credentialVault)\s*\(\s*["']([^"']+)["']([^)]*)\)/gu;
 const sourceCallPattern = /\b(credentialJson|credentialEnv)\s*\(\s*["']([^"']+)["']([^)]*)\)/gu;
 
 export type ManifestScanDiagnostic = {
@@ -64,6 +64,9 @@ export function scanSourceForSecrets(source: string): ManifestScanResult {
     references.set(`default:${ref}`, { ref, scope: "default", source: { type: "local" } });
   }
 
+  if (/\bprojectVaultIdentityStrategy\s*\(/u.test(source)) {
+    for (const match of source.matchAll(/\buser\s*\(\s*["']([A-Za-z0-9._-]+)["']/gu)) apiKeys.set(`${match[1]}:vault`, { userId: match[1]!, source: { type: "vault" }, count: 1 });
+  }
   return {
     references: [...references.values()].sort(compareReferences),
     envVars: [...envVars].sort(),
@@ -88,7 +91,9 @@ function addCredentialEntries(
     if (!ref || !locator || !helper) continue;
 
     let source: SecretsManifestSource;
-    if (helper === "credential") {
+    if (helper === "credentialVault") {
+      source = { type: "vault", reference: locator };
+    } else if (helper === "credential") {
       source = { type: "local" };
     } else if (helper === "credentialEnv") {
       source = { type: "env", name: locator };

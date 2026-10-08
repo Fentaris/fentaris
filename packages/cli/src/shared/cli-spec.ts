@@ -27,6 +27,8 @@ export type CliCommandSpec = {
   details?: string[];
   usage: string;
   allowNoSubcommand?: boolean;
+  /** Complete recognized missing input at runtime; never correct unknown or invalid explicit options. */
+  progressive?: boolean;
   commandGroups?: CliCommandGroup[];
   arguments?: CliArgumentSpec[];
   options?: CliOptionSpec[];
@@ -374,66 +376,6 @@ export const cliSpec: CliCommandSpec = {
             { name: "help", short: "h", description: "Print help" },
           ],
         },
-        "api-key": {
-          name: "api-key",
-          path: ["auth", "api-key"],
-          description: "Manage API keys for local user identity.",
-          usage: "fentaris auth api-key [OPTIONS] [COMMAND]",
-          details: ["API keys authenticate clients through the x-fentaris-api-key header and resolve them to Fentaris users."],
-          commandGroups: [
-            {
-              title: "Commands",
-              commands: [
-                { name: "add", summary: "Store a local API key for a user." },
-                { name: "list", summary: "List local API-key counts by user." },
-                { name: "remove", summary: "Remove a local API key from a user." },
-              ],
-            },
-          ],
-          options: [{ name: "help", short: "h", description: "Print help" }],
-          commands: {
-            add: {
-              name: "add",
-              path: ["auth", "api-key", "add"],
-              description: "Store a local API key for a user.",
-              usage: "fentaris auth api-key add [OPTIONS] [user-id]",
-              details: ["Omit the user id or API-key value to use the guided setup with user selection, key generation or entry, a redacted review, and confirmation before writing."],
-              arguments: [{ name: "user-id", description: "User id resolved when the API key is presented. If omitted, an interactive prompt is used." }],
-              options: [
-                { name: "value", valueName: "VALUE", description: "API key value. Prefer --value-stdin to avoid exposing keys in process arguments." },
-                { name: "value-stdin", description: "Read the API key value from stdin instead of process arguments or an interactive prompt." },
-                { name: "generate", description: "Generate a new API key and print it once." },
-                localSecretsKeyOption,
-                { name: "help", short: "h", description: "Print help" },
-              ],
-            },
-            list: {
-              name: "list",
-              path: ["auth", "api-key", "list"],
-              description: "List local API-key counts by user.",
-              usage: "fentaris auth api-key list [OPTIONS]",
-              options: [
-                { name: "user", valueName: "ID", description: "Only list keys for one user id." },
-                { name: "json", description: "Output API-key references as JSON." },
-                localSecretsKeyOption,
-                { name: "help", short: "h", description: "Print help" },
-              ],
-            },
-            remove: {
-              name: "remove",
-              path: ["auth", "api-key", "remove"],
-              description: "Remove a local API key from a user.",
-              usage: "fentaris auth api-key remove [OPTIONS] <user-id>",
-              arguments: [{ name: "user-id", required: true, description: "User id to remove the API key from." }],
-              options: [
-                { name: "value", valueName: "VALUE", description: "API key value to remove. Prefer --value-stdin to avoid exposing keys in process arguments." },
-                { name: "value-stdin", description: "Read the API key value from stdin instead of process arguments or an interactive prompt." },
-                localSecretsKeyOption,
-                { name: "help", short: "h", description: "Print help" },
-              ],
-            },
-          },
-        },
       },
     },
     secrets: {
@@ -470,48 +412,6 @@ export const cliSpec: CliCommandSpec = {
             { name: "dry-run", description: "Show the setup plan without creating keys or changing files." },
             { name: "yes", description: "Apply the setup plan without confirmation." },
             { name: "json", description: "Output the canonical machine-readable setup envelope." },
-            localSecretsKeyOption,
-            { name: "help", short: "h", description: "Print help" },
-          ],
-        },
-        set: {
-          name: "set",
-          path: ["secrets", "set"],
-          description: "Store a local credential value.",
-          usage: "fentaris secrets set [OPTIONS] [reference]",
-          details: [
-            "Omit reference or --value to use a guided setup with manifest reference selection, scope selection, a redacted review, and confirmation before writing.",
-          ],
-          arguments: [{ name: "reference", description: "Secret reference to store, for example github.token. If omitted, an interactive prompt is used." }],
-          options: [
-            { name: "user", valueName: "ID", description: "Store the credential for a user scope." },
-            { name: "group", valueName: "ID", description: "Store the credential for a group scope." },
-            { name: "value", valueName: "VALUE", description: "Credential value. Prefer --value-stdin to avoid exposing secrets in process arguments." },
-            { name: "value-stdin", description: "Read the credential value from stdin instead of process arguments or an interactive prompt." },
-            localSecretsKeyOption,
-            { name: "help", short: "h", description: "Print help" },
-          ],
-        },
-        list: {
-          name: "list",
-          path: ["secrets", "list"],
-          description: "List required and stored credentials.",
-          usage: "fentaris secrets list [OPTIONS]",
-          options: [
-            { name: "json", description: "Output credentials as JSON." },
-            localSecretsKeyOption,
-            { name: "help", short: "h", description: "Print help" },
-          ],
-        },
-        unset: {
-          name: "unset",
-          path: ["secrets", "unset"],
-          description: "Remove a local credential value.",
-          usage: "fentaris secrets unset [OPTIONS] <reference>",
-          arguments: [{ name: "reference", required: true, description: "Secret reference to remove." }],
-          options: [
-            { name: "user", valueName: "ID", description: "Remove the credential from a user scope." },
-            { name: "group", valueName: "ID", description: "Remove the credential from a group scope." },
             localSecretsKeyOption,
             { name: "help", short: "h", description: "Print help" },
           ],
@@ -665,3 +565,39 @@ function authDiscoveryOptions(): CliOptionSpec[] {
     { name: "help", short: "h", description: "Print help" },
   ];
 }
+
+// #298 command contract. #297 can mark its MCP specs progressive to use the same parser.
+const vaultReadOptions: CliOptionSpec[] = [{ name: "json", description: "Machine-readable metadata; never prompt." }, { name: "offline", description: "Inspect local resolution only; remote validity is unverified." }, { name: "help", short: "h", description: "Print help" }];
+const keyCommands: Record<string, CliCommandSpec> = Object.fromEntries(["create", "list", "revoke"].map((action) => [action, {
+  name: action, path: ["auth", "keys", action], progressive: true,
+  description: `${action[0]!.toUpperCase()}${action.slice(1)} named incoming client keys.`, usage: `fentaris auth keys ${action} [OPTIONS]${action === "revoke" ? " [key-id]" : ""}`,
+  ...(action === "revoke" ? { arguments: [{ name: "key-id", description: "Stable key ID, never its secret value." }] } : {}),
+  options: [...(action === "revoke" ? [] : [{ name: "user", valueName: "USER", description: "Incoming identity, distinct from upstream account aliases." }]),
+    ...(action === "create" ? [{ name: "name", valueName: "NAME", description: "Name of this incoming key." }, { name: "expires", valueName: "TIMESTAMP", description: "Optional future ISO 8601 UTC expiry." }] : []), ...vaultReadOptions.filter((option) => action === "list" || option.name !== "offline")],
+}]));
+cliSpec.commands!.auth!.allowNoSubcommand = true;
+cliSpec.commands!.auth!.description = "Manage incoming client identities and named access keys.";
+cliSpec.commands!.auth!.options = vaultReadOptions;
+cliSpec.commands!.auth!.commandGroups = [{ title: "Commands", commands: [{ name: "keys", summary: "Create, list, and revoke incoming keys by ID." }] }];
+cliSpec.commands!.auth!.commands!.keys = { name: "keys", path: ["auth", "keys"], description: "Manage incoming client keys. Choose an explicit action interactively.", usage: "fentaris auth keys [create|list|revoke] [OPTIONS]", allowNoSubcommand: true, progressive: true, options: vaultReadOptions, commands: keyCommands, commandGroups: [{ title: "Commands", commands: ["create", "list", "revoke"].map((name) => ({ name, summary: `${name} incoming keys.` })) }] };
+delete cliSpec.commands!.auth!.commands!["api-key"];
+cliSpec.commands!.secrets!.allowNoSubcommand = true;
+cliSpec.commands!.secrets!.options = vaultReadOptions;
+cliSpec.commands!.secrets!.description = "Inspect and maintain project credential references without exposing values.";
+cliSpec.commands!.secrets!.commands!.set = {
+  name: "set", path: ["secrets", "set"], progressive: true, description: "Set a hidden or stdin vault value, or explicitly bind another source.", usage: "fentaris secrets set [reference] [OPTIONS]",
+  arguments: [{ name: "reference", description: "Stable project credential reference." }],
+  options: [{ name: "stdin", description: "Read the credential from stdin; never put values in arguments." }, { name: "source", valueName: "SOURCE", description: "vault (default), environment, or external." },
+    { name: "env", valueName: "VARIABLE", description: "Explicit environment source variable." }, { name: "provider", valueName: "PROVIDER", description: "Explicit external provider ID." }, { name: "locator", valueName: "LOCATOR", description: "Public external secret locator." }, { name: "replace-source", description: "Explicitly replace the source binding without copying a value." },
+    { name: "json", description: "Machine-readable result; never prompt." }, { name: "help", short: "h", description: "Print help" }],
+};
+for (const action of ["get", "list", "remove", "check"] as const) cliSpec.commands!.secrets!.commands![action] = {
+  name: action, path: ["secrets", action], progressive: true, description: `${action[0].toUpperCase()}${action.slice(1)} project credential reference metadata.`, usage: `fentaris secrets ${action}${["get", "remove"].includes(action) ? " [reference]" : ""} [OPTIONS]`,
+  ...(["get", "remove"].includes(action) ? { arguments: [{ name: "reference", description: "Stable project credential reference." }] } : {}),
+  options: [...(action === "remove" ? [{ name: "force", description: "Explicitly delete an in-use stored value while retaining consumers for recovery." }] : []), ...vaultReadOptions.filter((option) => action !== "remove" || option.name !== "offline")],
+};
+cliSpec.commands!.secrets!.commands!.migrate = { name: "migrate", path: ["secrets", "migrate"], progressive: true, description: "Explicitly migrate legacy encrypted credentials while retaining recovery data.", usage: "fentaris secrets migrate --mapping <file> --legacy-file <file> [OPTIONS]", options: [
+  { name: "mapping", valueName: "FILE", description: "Public JSON array of {reference, scope, target} mappings." }, { name: "legacy-file", valueName: "FILE", description: "Existing encrypted store; never modified." }, { name: "incoming-keys", description: "Explicitly migrate incoming verifiers with new IDs and names." }, { name: "json", description: "Machine-readable migration result." }, { name: "help", short: "h", description: "Print help" },
+] };
+delete cliSpec.commands!.secrets!.commands!.unset;
+cliSpec.commands!.secrets!.commandGroups = [{ title: "Commands", commands: ["set", "get", "list", "remove", "check", "migrate", "manifest", "doctor", "setup"].map((name) => ({ name, summary: cliSpec.commands!.secrets!.commands![name]!.description })) }];

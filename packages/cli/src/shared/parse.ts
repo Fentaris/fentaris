@@ -53,7 +53,7 @@ export function parseCommand(argv: string[]): ParseResult {
   }
 
   const missing = (spec.arguments ?? []).find((argument, index) => argument.required === true && !parsed.args[index]);
-  if (missing) {
+  if (missing && !spec.progressive) {
     return { kind: "parse-error", message: `the following required arguments were not provided: <${missing.name}>`, path };
   }
 
@@ -65,15 +65,17 @@ export function parseCommand(argv: string[]): ParseResult {
       args: path.slice(1).concat(parsed.args),
       options: {
         ...parsed.options,
+        ...(global.json ? { json: true } : {}),
         ...(global.nonInteractive ? { "non-interactive": true } : {}),
       },
     },
   };
 }
 
-function extractGlobalOptions(argv: string[]): { kind: "ok"; argv: string[]; nonInteractive: boolean } | { kind: "parse-error"; message: string } {
+function extractGlobalOptions(argv: string[]): { kind: "ok"; argv: string[]; nonInteractive: boolean; json: boolean } | { kind: "parse-error"; message: string } {
   const parsedArgv: string[] = [];
   let nonInteractive = false;
+  let json = false;
   let passthrough = false;
 
   for (const token of argv) {
@@ -88,19 +90,21 @@ function extractGlobalOptions(argv: string[]): { kind: "ok"; argv: string[]; non
       continue;
     }
 
+    if (token === "--json") { json = true; continue; }
+    if (token.startsWith("--json=")) return { kind: "parse-error", message: "--json does not take a value" };
     if (token === "--non-interactive") {
       nonInteractive = true;
       continue;
     }
 
     if (token.startsWith("--non-interactive=")) {
-      return { kind: "parse-error", message: `unexpected argument '${token}' found` };
+      return { kind: "parse-error", message: `unexpected argument '${token.split('=')[0]}' found` };
     }
 
     parsedArgv.push(token);
   }
 
-  return { kind: "ok", argv: parsedArgv, nonInteractive };
+  return { kind: "ok", argv: parsedArgv, nonInteractive, json };
 }
 
 function parseHelp(args: string[]): ParseResult {
@@ -186,7 +190,7 @@ function parseOptionsAndArgs(spec: CliCommandSpec, tokens: string[]):
 
     if (!token.startsWith("-") || token === "-") {
       if (spec.commands?.[token]) {
-        return { kind: "parse-error", message: `unexpected argument '${token}' found` };
+        return { kind: "parse-error", message: `unexpected argument '${token.split('=')[0]}' found` };
       }
       args.push(token);
       continue;
@@ -194,7 +198,7 @@ function parseOptionsAndArgs(spec: CliCommandSpec, tokens: string[]):
 
     const parsedOption = findOption(spec, token);
     if (!parsedOption) {
-      return { kind: "parse-error", message: `unexpected argument '${token}' found` };
+      return { kind: "parse-error", message: `unexpected argument '${token.split('=')[0]}' found` };
     }
 
     const { option, inlineValue, hasInlineValue } = parsedOption;
@@ -205,12 +209,15 @@ function parseOptionsAndArgs(spec: CliCommandSpec, tokens: string[]):
       version = true;
     }
 
+    if (options[option.name] !== undefined && !option.repeatable) return { kind: "parse-error", message: `option --${option.name} was supplied more than once` };
     if (option.valueName) {
       const value = hasInlineValue ? inlineValue : tokens[index + 1];
-      if (value === undefined) {
+      if (value === undefined || (!hasInlineValue && value.startsWith("--"))) {
+        if (spec.progressive) { options[option.name] = true; continue; }
         return { kind: "parse-error", message: `a value is required for '${token}' but none was supplied` };
       }
       const existing = options[option.name];
+      if (existing !== undefined && !option.repeatable) return { kind: "parse-error", message: `option --${option.name} was supplied more than once` };
       options[option.name] = option.repeatable && typeof existing === "string"
         ? `${existing},${value}`
         : value;
@@ -219,12 +226,13 @@ function parseOptionsAndArgs(spec: CliCommandSpec, tokens: string[]):
       }
     } else {
       if (hasInlineValue) {
-        return { kind: "parse-error", message: `unexpected argument '${token}' found` };
+        return { kind: "parse-error", message: `unexpected argument '${token.split('=')[0]}' found` };
       }
       options[option.name] = true;
     }
   }
 
+  if (args.length > (spec.arguments?.length ?? 0)) return { kind: "parse-error", message: "unexpected positional argument; run --help for the command syntax" };
   return { kind: "ok", args, options, help, version };
 }
 

@@ -46,9 +46,9 @@ Keep authorization durable. Put stable access control in `policy(...)` and group
 | Add app-owned tools, resources, prompts, or completions | `app.local("name")` | Local namespace names must not collide with upstream server names |
 | Add static authorization | `policy("name").mcp("server").allow("tool")` | Middleware should not replace durable policy |
 | Add runtime argument checks | `app.mcp("server").tool(...)`, `app.local(...).tool(...)`, or middleware | Policy does not inspect arbitrary tool arguments |
-| Enable per-user API-key auth | `user(id, { apiKeys: [credentialJson("users.<id>.apiKeys.0")] })` plus `fentaris auth api-key add` | Do not generate or store raw API keys in app code |
+| Enable per-user API-key auth | `projectVaultIdentityStrategy(...)` and `fentaris auth keys create` | Do not generate or store raw API keys in app code |
 | Reference upstream credentials | `credential("github.token")`, `credentialJson(...)`, or `credentialEnv(...)` | Secret values stay outside committed TypeScript |
-| Store group-owned credentials | `group({ credentials: { "github.token": credentialJson(...) } })` plus `fentaris secrets set --group` | Match the CLI scope to the declaration scope |
+| Store group-owned credentials | `group({ credentials: { "github.token": credentialVault("github.team.token") } })` plus `fentaris secrets set github.team.token` | Keep storage references separate from access policies |
 | Add local-only development access | `Policy.allowAll()` only in disposable examples | Production proxies should use least-privilege `policy(...)` rules |
 | Place work on an edge target | `app.target(...)` plus the target binding API documented for the edge flow | Target binding does not grant policy access |
 | Add group-scoped governance incrementally | `app.group(id).users(...).policy(...)` | Fluent group handles do not own credential sources |
@@ -68,9 +68,9 @@ Use this handoff shape:
 
 ```txt theme={null}
 Run:
-export FENTARIS_AUTH_KEY="<your-local-key>"
-fentaris auth api-key add alice --generate
-printf '%s' "$GITHUB_TOKEN" | fentaris secrets set github.token --group maintainers --value-stdin --non-interactive
+export FENTARIS_VAULT_KEY="<explicit-vault-unlock-key>"
+fentaris auth keys create --user alice --name workstation
+printf '%s' "$GITHUB_TOKEN" | fentaris secrets set github.maintainers.token --stdin --non-interactive
 fentaris secrets manifest --check
 fentaris doctor --runtime
 ```

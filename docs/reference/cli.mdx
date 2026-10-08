@@ -19,6 +19,7 @@ fentaris dev
 
 * `--help`, `-h` - print CLI usage.
 * `--version`, `-v` - print the CLI version.
+* `--json` - auth/secrets emit a machine-readable result without terminal prompts.
 * `--non-interactive` - fail instead of prompting for input. Use this in automation and agent-driven runs.
 
 Help is contextual. Use `fentaris <command> --help`, `fentaris auth <command> --help`, or `fentaris secrets <command> --help` to print usage, arguments, and options for one command.
@@ -322,162 +323,44 @@ Delete the stored authorization for one server and session. The next call requir
 fentaris auth logout linear --as user:alice
 ```
 
-### `fentaris auth`
+### `fentaris auth` and `fentaris auth keys`
 
-Open the guided local API-key menu:
+`auth` displays incoming identities and active key counts. `auth keys` offers an explicit Create/List/Revoke menu in a terminal. Partially specified commands ask only for missing fields; automation and JSON return missing fields and next actions without prompting.
 
 ```bash theme={null}
 fentaris auth
+fentaris auth keys
+fentaris auth keys create --user pi-agent --name macbook
+fentaris auth keys create --name macbook
+fentaris auth keys list --user pi-agent --json
+fentaris auth keys revoke <key-id> --non-interactive
 ```
 
-Choose whether to add, list, or remove an API key. Add and remove flows select known users from the entrypoint, secrets manifest, and encrypted credential store. They show a redacted review and require confirmation before changing the store.
+Creation stores only an encrypted verifier hash and intentionally delivers the raw generated key once, marked sensitive. Later inventory shows ID, name, incoming user, creation time, optional expiry, and revocation status. Revoke by ID. Clients send `x-fentaris-api-key`; configure `projectVaultIdentityStrategy` to enforce expiry and revocation. The removed `auth api-key` commands are replaced by named keys.
 
-Generated projects are discovered from `fentaris.json`. SDK-only projects are discovered from the nearest `package.json` that depends on `@fentaris/core`.
+### `fentaris secrets`
 
-Use the explicit `fentaris auth api-key` commands with `--non-interactive` in automation.
-
-### `fentaris auth api-key add [user-id]`
-
-Store a local API key for a user identity. Clients send this value in the `x-fentaris-api-key` header when connecting to Fentaris.
+Bare secrets and list display reference, source, resolution state, and consumers. Get returns metadata, never the value. Stored/present always leaves remote validity unverified. Offline reads never contact providers. Check returns nonzero for missing, locked, or unresolvable references.
 
 ```bash theme={null}
-fentaris auth api-key add
-printf '%s' "$ADMIN_API_KEY" | fentaris auth api-key add alice --value-stdin
-fentaris auth api-key add alice --generate
+fentaris secrets
+fentaris secrets set github.work.token
+printf '%s' "$GITHUB_TOKEN" | fentaris secrets set github.work.token --stdin --non-interactive
+fentaris secrets set mastra.token --source environment --env MASTRA_TOKEN
+fentaris secrets get github.work.token --offline --json
+fentaris secrets remove github.work.token --force --non-interactive
+fentaris secrets check --offline --json
 ```
 
-When the user id is omitted, the command offers known users and allows manual entry. When no key value option is present, choose whether to generate a new key or enter an existing key, then review and confirm the change.
+Set uses hidden input or stdin and preserves references/consumers on update. It accepts explicit environment/external source bindings, with `--replace-source` required for a source change. Raw `--value`, secret user/group scopes, and `unset` have been removed. Removing an in-use credential requires an explicit destructive choice; noninteractive commands must supply `--force`. References/consumers remain for recovery.
 
-The raw API key is never stored. Fentaris writes a `sha256:` hash into `.fentaris/credentials.enc.json` and compares incoming client keys against that hash.
+The project vault uses macOS Keychain when supported, or an explicitly configured `FENTARIS_VAULT_KEY`/application credential-store adapter. Fentaris never automatically puts an unlock key into project `.env`. Existing process variables override automatically loaded project `.env` values.
 
-Options:
-
-* `--value <key>` - pass the API key non-interactively.
-* `--value-stdin` - read the API key from standard input.
-* `--generate` - generate a new API key, print it once, and store only its hash.
-* `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
-
-<Warning>
-  Save generated API keys immediately. Fentaris stores only a hash and cannot print the raw key again.
-</Warning>
-
-### `fentaris auth api-key list`
-
-List stored API-key counts by user without printing key values.
-
-```bash theme={null}
-fentaris auth api-key list
-fentaris auth api-key list --user alice --json
-```
-
-Options:
-
-* `--user <id>` - only list API-key counts for one user.
-* `--json` - print machine-readable output.
-* `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
-
-### `fentaris auth api-key remove <user-id>`
-
-Remove a local API key from a user by providing the raw value to match.
-
-```bash theme={null}
-printf '%s' "$OLD_ADMIN_API_KEY" | fentaris auth api-key remove alice --value-stdin
-```
-
-Options:
-
-* `--value <key>` - pass the API key to remove non-interactively.
-* `--value-stdin` - read the API key to remove from standard input.
-* `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
-
-### `fentaris secrets set [reference]`
-
-Store a secret in the local encrypted credential store.
-
-```bash theme={null}
-fentaris secrets set
-fentaris secrets set github.token --user admin
-fentaris secrets set github.token --value-stdin --non-interactive
-```
-
-Generated projects are discovered from `fentaris.json`. SDK-only projects are discovered from the nearest `package.json` that depends on `@fentaris/core`; in that mode the CLI uses `.fentaris/` unless `package.json` contains a `fentaris.authDir` override.
-
-Auth and secrets commands read `FENTARIS_AUTH_KEY` from the exported environment or the discovered project `.env` before prompting. An exported value takes precedence over `.env`.
-
-When `reference` or `--value` is omitted, the command walks through an interactive setup: pick a manifest reference, choose `default`, `user`, or `group` scope, enter the hidden value, review the redacted summary, and confirm before anything is written. Declining the confirmation leaves both `.env` and `.fentaris/credentials.enc.json` unchanged; a new project does not get an empty credential store.
-
-Options:
-
-* `--user <id>` - store a user-scoped credential.
-* `--group <id>` - store a group-scoped credential.
-* `--value <secret>` - pass the value non-interactively.
-* `--value-stdin` - read the value from standard input.
-* `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
-
-Use `--value=<secret>` when a scripted secret value starts with `-`, for example `--value=-token`.
-
-<Warning>
-  Do not pass `--value` in shared shell history unless the environment is trusted.
-</Warning>
-
-### `fentaris secrets setup`
-
-Discover every credential and Fentaris user API-key requirement in the project entrypoint, then configure everything that the local backend supports.
-
-```bash theme={null}
-fentaris secrets setup
-fentaris secrets setup --dry-run
-fentaris secrets setup --yes --json
-fentaris secrets setup --non-interactive --yes --json
-```
-
-Interactive setup shows a redacted plan, prompts invisibly for missing third-party tokens, creates `FENTARIS_AUTH_KEY` in the ignored project `.env` when an encrypted local store is needed, and generates missing Fentaris API keys. Generated client API keys are printed only after a successful write; save them immediately because the store retains only their hashes. Rerunning setup does not replace configured credentials or regenerate existing keys.
-
-Options:
-
-* `--entrypoint <path>` - scan a specific TypeScript entrypoint.
-* `--dry-run` - show planned prompts, generation, and manual actions without changing files.
-* `--yes` - apply a complete plan without confirmation.
-* `--non-interactive` - disable prompts. This is a global option and can appear anywhere in the command.
-* `--json` - emit the canonical machine-readable envelope.
-* `--key <key>` - use an explicit local-store encryption key.
-
-JSON and non-interactive setup validates all non-generatable values before writing. If an external value is unavailable, it exits with `SECRETS_SETUP_INCOMPLETE`, leaves `.env`, the encrypted store, and the manifest unchanged, and returns commands in `nextActions`. Fentaris never invents third-party tokens. Custom JSON files or non-standard paths are reported as manual actions.
-
-### `fentaris secrets list`
-
-List credential references from the committed secrets manifest and show whether each reference is set in the local store.
-
-```bash theme={null}
-fentaris secrets list
-```
-
-Options:
-
-* `--json` - print machine-readable output with reference, scope, and status fields.
-* `--user <id>` - list secrets for a user scope when opening the local store.
-* `--group <id>` - list secrets for a group scope when opening the local store.
-* `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
-
-Secret values are never printed.
-
-### `fentaris secrets unset <reference>`
-
-Remove a secret from the local encrypted credential store.
-
-```bash theme={null}
-fentaris secrets unset github.token --group support
-```
-
-Options:
-
-* `--user <id>` - remove a user-scoped credential.
-* `--group <id>` - remove a group-scoped credential.
-* `--key <key>` - use an explicit encryption key instead of prompting or reading `FENTARIS_AUTH_KEY`.
+See [Project vault and client keys](/guides/project-vault) for storage, source adapters, SDK configuration, recovery, and the explicit `secrets migrate --mapping <file> --legacy-file <file> [--incoming-keys]` migration. Legacy `secrets setup`/`doctor` remain available for old manifests; setup requires the original explicit legacy unlock key and does not generate one into `.env`. Vault requirements direct users to the new command families.
 
 ### `fentaris secrets manifest`
 
-Generate or validate `.fentaris/secrets.manifest.json` from `credential(...)`, `credentialJson(...)`, and `credentialEnv(...)` declarations in the project entrypoint. The manifest contains source metadata and Fentaris user API-key counts, but never credential values.
+Generate or validate `.fentaris/secrets.manifest.json` from `credential(...)`, `credentialJson(...)`, `credentialVault(...)`, and `credentialEnv(...)` declarations in the project entrypoint. The manifest contains source metadata and Fentaris user API-key counts, but never credential values.
 
 ```bash theme={null}
 fentaris secrets manifest

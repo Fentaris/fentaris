@@ -1,0 +1,105 @@
+---
+title: "Project Vault and Client Keys"
+description: "Explicit credential sources, encrypted project storage, incoming keys, and recoverable migration."
+---
+
+`fentaris secrets` maintains credential references. `fentaris auth` maintains incoming client identities and named access keys. Upstream account authentication belongs to `fentaris mcp auth` in the related MCP workflow; an upstream account alias never becomes an incoming identity. A reference grants no connection access: your existing Fentaris policy still decides what an authenticated client may use.
+
+## Guided and scripted setup
+
+```bash theme={null}
+fentaris secrets
+fentaris secrets set github.work.token
+printf '%s' "$GITHUB_TOKEN" | fentaris secrets set github.work.token --stdin --non-interactive
+fentaris secrets get github.work.token --offline --json
+fentaris secrets check --offline --json
+fentaris auth
+fentaris auth keys
+fentaris auth keys create --user pi-agent --name macbook
+fentaris auth keys list --user pi-agent --json
+fentaris auth keys revoke fk_replace_with_actual_id --non-interactive
+```
+
+Bare secrets displays an inventory before offering an explicit action menu. Bare auth displays incoming identities and active key counts. Bare auth keys asks for Create/List/Revoke in a terminal. Missing names and users are requested independently; `--name macbook`, `--user pi-agent`, either flag order, and an omitted recognized flag value all use the same completion contract. Invalid supplied values, duplicates, unknown flags, and conflicting source options are errors. Fully specified commands do not ask redundant questions. Cancellation before a write leaves no credential or key record.
+
+Secret input is hidden; `--stdin` supports automation. Raw `--value` arguments, scoped `--user`/`--group` secret writes, `secrets unset`, and `auth api-key` have been removed. Updates retain references and consumers. In-use removal shows affected consumers and requires confirmation; scripts must explicitly use `secrets remove <reference> --force`. Removal retains missing reference metadata so check can guide recovery. Disconnecting one connection must call `detachConsumer`, preserving a shared value.
+
+JSON execution and non-TTY/`--non-interactive` execution never prompt. Missing data returns nonzero with `missingFields` and `nextActions`. Auth/secrets JSON results use `{ok,data}` or `{ok:false,error}`. Secret reads return source, presence, resolution state, available update time, and consumers, never values. `check` returns nonzero for missing, locked, or unresolvable references. Offline reads never call external providers; external resolution and all remote credential validity remain unverified. A local present credential has not been verified with its upstream service.
+
+## Unlocking and isolation
+
+The encrypted vault is `<authDir>/vault.json` (default `.fentaris/vault.json`). AES-256-GCM protects credential values, verifier hashes, and internal OAuth records; an encrypted metadata digest authenticates the public project identity, source bindings, consumers, expiry, and revocation metadata. Public metadata is visible without decrypting values. Files are written atomically with owner-only permissions and a lock; simultaneous writers fail with a retry instruction. Inspect a leftover `vault.json.lock` after a crash before removing it when no writer is running.
+
+On macOS, the generated unlock key goes into Keychain under service `com.fentaris.project-vault`, account equal to the vault's project UUID. It is never generated into `.env`. On Linux/Windows, in CI, or when Keychain is unavailable, explicitly supply `FENTARIS_VAULT_KEY` from protected process environment/your deployment secret manager. Applications can instead inject a `SystemCredentialStore` adapter or `unlockKey` through `ProjectVault.open`. There is no plaintext fallback. Existing encrypted vaults never regenerate a missing key. Back up both encrypted data and your unlock mechanism using your organization's protected recovery process.
+
+A vault is identified by a UUID and its canonical project root. Symlinks to the same project resolve to that same root; copying a vault into another project is rejected. Its directory must resolve inside the project. Cross-project sharing requires explicit bindings to a common environment or external provider; it never uses another project's vault automatically.
+
+For a deliberate project move, retain the original and copy the encrypted vault directory to the new location, then explicitly unlock and relocate it:
+
+```ts theme={null}
+const vault = await ProjectVault.relocate({
+  root: "/new/project", previousRoot: "/old/project",
+  unlockKey: process.env.FENTARIS_VAULT_KEY,
+});
+```
+
+Relocation preserves the UUID and credentials and writes `vault.json.relocation-backup` for rollback. Verify resolution and authentication at the new location before retiring the original. Restore the backup only at its original root. A pre-existing relocation backup is never overwritten.
+
+Ignore vault files, backups, temporary files, legacy encrypted stores, and `.env` in version control. Commit only configuration and `secrets.manifest.json`, which contain public reference metadata.
+
+## Explicit sources and environment precedence
+
+```bash theme={null}
+fentaris secrets set mastra.token --source environment --env MASTRA_TOKEN
+fentaris secrets set exa.api-key --source external --provider production --locator exa-api-key
+```
+
+Project `.env` loads before the CLI imports configuration. The core entry point also loads the nearest project `.env` before the importing configuration module's body evaluates. Existing process variables, including empty values, win. No shell wrapper is needed. For a launcher that evaluates other environment-dependent modules first, call `applyProjectEnvironment(root)` before dynamically importing configuration.
+
+Environment-only and external-only bindings need no local unlock key. They never copy values into the vault. Sources are explicit: `{type:"vault"}`, `{type:"environment",name}`, or `{type:"external",provider,locator}`. An external provider is an application-supplied `ExternalSecretProvider` adapter implementing `resolve(locator): Promise<string|undefined>`; Fentaris does not implicitly install a vendor integration. Programmatic CLI runtimes inject adapters through `runtime.vaultOptions.externalProviders`. Offline inventory requires no adapter. Provider errors are sanitized, never printed verbatim.
+
+Use `--replace-source` only for an intentional source change; it deletes an old local value and does not copy it to the new source. There is no environment fallback for a missing vault value. When an encrypted vault also holds environment bindings, restore its unlock mechanism to authenticate those bindings before runtime resolution.
+
+SDK configuration uses the existing credential abstraction:
+
+```ts theme={null}
+import { credentialVault, projectVaultIdentityStrategy, fentaris, user } from "@fentaris/core";
+const app = fentaris({
+  defaults: { credentials: { "github.token": credentialVault("github.work.token") } },
+  identity: { strategy: projectVaultIdentityStrategy({ root: process.cwd() }), required: true },
+  users: [user("pi-agent")],
+  // Keep your existing server configuration and access policy here.
+});
+```
+
+`credentialVault` resolves the explicitly bound reference source; it does not grant access or assign a user to an upstream account. Configure `root`/`dir` explicitly for custom locations. The CLI discovers SDK-only projects from `package.json` with `@fentaris/core` and optional `fentaris.entrypoint`/`fentaris.authDir` metadata. Static inventory includes explicit entrypoint references without executing that module; dynamically constructed consumers must be registered through the vault API.
+
+## Incoming keys
+
+Creation yields a stable `fk_...` ID, user, name, creation time, optional `--expires <future ISO 8601 UTC timestamp>`, and a sensitive random client key. Copy the raw key immediately. Only the intentional creation result includes `sensitiveValue` (including `--json`, marked `sensitive:true`); later inventories, logs, metadata, and revocation never include it. Only SHA-256 verifier hashes are stored, inside the encrypted payload. Clients send `x-fentaris-api-key`. Authentication checks the current store on every request, rejecting expired and revoked keys immediately. Revoke by ID, never by the original value.
+
+If a write persists but read-back verification fails, the command reports `stored:true,verified:false` and fails. Preserve the snapshot and inspect inventory/check before retrying. An incoming key whose raw value was not delivered can be found by its user/name and revoked by ID. No new key is silently generated to conceal a failed verification.
+
+## Migration and rollback
+
+Legacy `credentialJson` and environment sources remain supported by the SDK. Normal secrets commands operate on project references; they do not silently adopt old scoped encrypted credentials. Keep `credentials.enc.json`, `oauth-tokens.enc.json`, `.env`, and their original `FENTARIS_AUTH_KEY` until migration and application behavior are verified. Use a distinct explicit vault unlock mechanism.
+
+Create a public mapping file:
+
+```json theme={null}
+[
+  {"reference":"github.token","scope":"default","target":"github.work.token"},
+  {"reference":"linear.token","scope":"user:alice","target":"linear.personal.token"},
+  {"reference":"shared.token","scope":"group:staff","target":"staff.shared.token"}
+]
+```
+
+```bash theme={null}
+fentaris secrets migrate --mapping migration.json --legacy-file .fentaris/credentials.enc.json --incoming-keys --non-interactive --json
+```
+
+Configure the original `FENTARIS_AUTH_KEY` and the new `FENTARIS_VAULT_KEY`/Keychain first. Missing values, bad keys, ambiguous incoming users, or existing targets stop migration atomically. `--incoming-keys` explicitly migrates existing client verifiers into named `legacy-N` keys with new stable IDs; clients retain their old raw values. Update configuration to `credentialVault` and `projectVaultIdentityStrategy` explicitly, check resolution and client behavior, then retire old paths separately. Until then, rollback uses your original configuration, encrypted files, and original key; migration never edits them.
+
+For existing environment-backed setups, bind the reference to the existing variable with `--source environment --env VARIABLE` and update configuration deliberately. Values stay in the environment. Scoped legacy users/groups are not upstream accounts.
+
+OAuth migration is a lifecycle API: `vault.migrateLegacyOAuth({file,key,mappings:[{server,session,account}]})` retains the old encrypted file. `vault.oauthStore(account)` implements the existing `OAuthTokenStore` interface for authorization, refresh, and disconnect, keeping records outside the ordinary manually editable inventory. The peer MCP workflow must select account aliases explicitly and use this adapter; no automatic interpretation of an incoming user as an account is permitted.

@@ -84,22 +84,15 @@ The same API is available through classes when you prefer object construction, b
 
 ## Provision Local Auth And Secrets
 
-The TypeScript declarations identify where Fentaris reads API-key hashes and upstream credentials. Provision the values after the project is built:
+The older `credentialJson` declarations in the examples below remain supported for legacy stores. For new projects, configure `projectVaultIdentityStrategy({root:process.cwd()})`, declare incoming users without embedded key sources, and replace local upstream sources with `credentialVault("github.work.token")`.
 
 ```bash theme={null}
-fentaris secrets setup
-fentaris check --offline
-fentaris doctor
-fentaris dev
+fentaris auth keys create --user alice --name workstation
+printf '%s' "$GITHUB_TOKEN" | fentaris secrets set github.work.token --stdin
+fentaris secrets check --offline
 ```
 
-The setup plan creates the local encryption key when necessary, asks invisibly for missing upstream tokens, and generates each declared Fentaris user API key. Save each generated API key when the CLI prints it. Fentaris stores only its hash. Clients send the raw value in the `x-fentaris-api-key` header.
-
-For CI, provide third-party tokens through the process environment first, then run `fentaris secrets setup --non-interactive --yes --json`. An incomplete plan exits before changing files and returns `SECRETS_SETUP_INCOMPLETE` with concrete next actions.
-
-For local development, let the CLI generate `FENTARIS_AUTH_KEY` in the ignored project `.env` on the first encrypted write. For deployments, provide it through your secret manager. Keep the same value for later reads and updates, and never commit or include it in an agent response.
-
-`credentialJson("users.alice.apiKeys.0")` points at the first CLI-managed API-key hash for `alice`. `fentaris auth api-key add alice --generate` writes that value; application code must not generate or encrypt it directly.
+macOS uses Keychain; CI/other platforms require an explicitly supplied `FENTARIS_VAULT_KEY` or credential-store adapter. A generated client key is delivered once, then stored only as a verifier hash. Revoke by stable key ID. Public references do not grant policy access. Read [project vault migration and recovery](/guides/project-vault) before updating an existing scoped store; retain its encrypted files and original `FENTARIS_AUTH_KEY` until verification. Legacy `secrets setup` requires that original explicit key and never creates one into `.env`.
 
 ## Team-Governed Proxy
 
@@ -228,7 +221,7 @@ For deployments or externally managed keys, prefer environment and stdin inputs 
 
 ```bash theme={null}
 export FENTARIS_AUTH_KEY="local-encryption-key"
-printf '%s' "$GITHUB_TOKEN" | fentaris secrets set github.token --value-stdin
+printf '%s' "$GITHUB_TOKEN" | fentaris secrets set github.work.token --stdin
 ```
 
 `--key` and `--value` remain available for compatibility, but Fentaris warns because those values can be visible through process inspection.

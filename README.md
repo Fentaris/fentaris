@@ -158,7 +158,7 @@ Runtime routes can deny, approve, hide, log, or transform calls to any tool, res
 Authenticate clients with an API key, and let Fentaris handle OAuth 2.1 for upstream servers automatically:
 
 ```bash
-fentaris auth api-key add alice --generate
+fentaris auth keys create --user alice --name workstation
 ```
 
 ```ts
