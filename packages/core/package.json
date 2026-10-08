@@ -56,8 +56,8 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/node": "^26.6.2",
-    "vitest": "^5.0.2",
-    "@mcpjam/sdk": "8.20.0"
+    "@types/node": "^26.6.4",
+    "vitest": "^5.0.3",
+    "@mcpjam/sdk": "8.20.1"
   }
 }
