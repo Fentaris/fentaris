@@ -31,6 +31,8 @@ export type HttpTransportOptions = {
 export class HttpTransport implements FentarisTransport {
   private readonly options: HttpTransportOptions;
   private readonly fetchImpl: typeof fetch;
+  private readonly requests = new Set<AbortController>();
+  private generation = 0;
 
   /**
    * Create a new HTTP transport.
@@ -70,14 +72,22 @@ export class HttpTransport implements FentarisTransport {
   }
 
   async close(): Promise<void> {
-    return undefined;
+    this.generation++;
+    for (const controller of this.requests) controller.abort();
+    this.requests.clear();
   }
 
   private async post<TResult>(method: "listTools" | "callTool", body: unknown): Promise<TResult> {
+    const generation = this.generation;
     const requestUrl = new URL(method, ensureTrailingSlash(this.options.baseUrl));
     await assertAllowedUpstreamUrl(requestUrl, this.options.network);
     const authHeaders = await resolveHttpTransportHeaders(this.options.auth, {});
+    if (generation !== this.generation) throw new Error("Connection closed during initialization.");
+    const controller = new AbortController();
+    this.requests.add(controller);
+    try {
     const response = await this.fetchImpl(requestUrl, {
+      signal: controller.signal,
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -92,7 +102,8 @@ export class HttpTransport implements FentarisTransport {
       throw new Error(`HTTP transport request failed with status ${response.status}`);
     }
 
-    return response.json() as Promise<TResult>;
+    return await response.json() as TResult;
+    } finally { this.requests.delete(controller); }
   }
 }
 

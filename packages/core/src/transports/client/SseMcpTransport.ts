@@ -23,7 +23,7 @@ import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.
 import { resolveHttpTransportHeaders, type HttpTransportAuthOptions } from "../auth/transportAuth.js";
 import type { UserContext } from "../../types/shared.js";
 import type { FentarisTransport } from "../../types/transport.js";
-import { guardedUpstreamFetch, isDefinitiveUnauthorized } from "./guardedFetch.js";
+import { guardedUpstreamFetch, isDefinitiveUnauthorized, UpstreamRequestLifetime } from "./guardedFetch.js";
 import { assertAllowedUpstreamUrl, type UpstreamHttpNetworkOptions } from "./upstreamUrlGuardrails.js";
 
 /**
@@ -52,6 +52,9 @@ export class SseMcpTransport implements FentarisTransport {
   private client: Client | null = null;
   private transport: SSEClientTransport | null = null;
   private connectPromise: Promise<Client> | null = null;
+  private pendingClient: Client | null = null;
+  private connectionGeneration = 0;
+  private readonly requests = new UpstreamRequestLifetime();
 
   /**
    * Create a native MCP SSE transport.
@@ -89,7 +92,7 @@ export class SseMcpTransport implements FentarisTransport {
    * @internal
    */
   createGuardedFetch(): ReturnType<typeof guardedUpstreamFetch> {
-    return guardedUpstreamFetch(this.options.network, this.options.fetch);
+    return this.requests.wrap(guardedUpstreamFetch(this.options.network, this.options.fetch));
   }
 
   /**
@@ -153,6 +156,10 @@ export class SseMcpTransport implements FentarisTransport {
   }
 
   async close(): Promise<void> {
+    this.requests.close();
+    this.connectionGeneration++;
+    await this.pendingClient?.close();
+    this.pendingClient = null;
     await this.client?.close();
     await this.transport?.close();
     this.client = null;
@@ -214,6 +221,7 @@ export class SseMcpTransport implements FentarisTransport {
   }
 
   private async connect(): Promise<Client> {
+    const generation = this.connectionGeneration;
     await assertAllowedUpstreamUrl(new URL(this.options.url), this.options.network);
     const headers = await resolveHttpTransportHeaders(this.options.auth, this.user);
     const client = new Client(
@@ -223,7 +231,7 @@ export class SseMcpTransport implements FentarisTransport {
       },
       { capabilities: {} },
     );
-    const guardedFetch = guardedUpstreamFetch(this.options.network, this.options.fetch);
+    const guardedFetch = this.createGuardedFetch();
     const transport = new SSEClientTransport(new URL(this.options.url), {
       fetch: guardedFetch,
       authProvider: this.options.authProvider,
@@ -240,9 +248,15 @@ export class SseMcpTransport implements FentarisTransport {
       },
     });
 
-    await client.connect(transport);
+    if (generation !== this.connectionGeneration) throw new Error("Connection was closed during initialization.");
+    this.pendingClient = client;
     this.transport = transport;
-    return client;
+    try {
+      await client.connect(transport);
+      if (generation !== this.connectionGeneration) { await transport.close(); throw new Error("Connection was closed during initialization."); }
+      return client;
+    } catch (error) { await transport.close(); await client.close(); throw error; }
+    finally { if (this.pendingClient === client) this.pendingClient = null; }
   }
 }
 

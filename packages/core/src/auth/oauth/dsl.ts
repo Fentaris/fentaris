@@ -45,6 +45,8 @@ export type OAuthProviderFactory = (context: OAuthProviderFactoryContext) => OAu
  */
 export type OAuthAuth = {
   type: "oauth";
+  /** Stable upstream account alias, independent of the downstream caller. @pk */
+  account?: string;
   grant: OAuthGrant;
   registration: OAuthRegistrationMode;
   tokens: OAuthTokenScope;
@@ -145,6 +147,7 @@ export function isOAuthAuth(value: unknown): value is OAuthAuth {
  * @pk
  */
 export function oauthSessionKeyFor(auth: OAuthAuth, user: UserContext): OAuthSessionKey {
+  if (auth.account) return `account:${auth.account}`;
   if (auth.tokens === "shared" || !user.id) {
     return "shared";
   }
