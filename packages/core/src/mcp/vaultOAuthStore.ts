@@ -2,6 +2,7 @@ import { oauthTokensExpireAt, type OAuthSessionKey, type OAuthStoreEntry, type O
 
 /** Minimal shared ProjectVault contract used by upstream authentication. @pk */
 export type McpVault = {
+  oauthStore?(account: string): OAuthTokenStore;
   resolve(reference: string): Promise<string | undefined>;
   set(reference: string, value: string, options?: { consumer?: { kind: "mcp"; server: string; account: string }; replaceSource?: boolean }): Promise<unknown>;
   detachConsumer?(reference: string, consumer: { kind: "mcp"; server: string; account: string }): Promise<unknown>;
@@ -24,6 +25,7 @@ export class McpVaultOAuthTokenStore implements OAuthTokenStore {
   }
   async get(server: string, session: OAuthSessionKey): Promise<OAuthStoreRecord | undefined> {
     if (!session.startsWith("account:")) return this.options.legacyStore?.get(server, session);
+    if (this.options.vault.oauthStore) return this.options.vault.oauthStore(session.slice(8)).get(server, "shared");
     const value = await this.options.vault.resolve(mcpOAuthSecretReference(server, session.slice(8)));
     if (value) this.known.set(`${server}\u0000${session.slice(8)}`, { server, account: session.slice(8) });
     return value ? JSON.parse(value) as OAuthStoreRecord : undefined;
@@ -35,9 +37,14 @@ export class McpVaultOAuthTokenStore implements OAuthTokenStore {
     }
     const account = session.slice(8);
     this.known.set(`${server}\u0000${account}`, { server, account });
+    if (this.options.vault.oauthStore) return this.options.vault.oauthStore(account).set(server, "shared", record);
     await this.options.vault.set(mcpOAuthSecretReference(server, account), JSON.stringify(record), { consumer: { kind: "mcp", server, account } });
   }
   async update(server: string, session: OAuthSessionKey, mutate: (record: OAuthStoreRecord) => OAuthStoreRecord): Promise<OAuthStoreRecord> {
+    if (session.startsWith("account:") && this.options.vault.oauthStore) {
+      const store = this.options.vault.oauthStore(session.slice(8));
+      if (store.update) return store.update(server, "shared", mutate);
+    }
     const run = this.writeChain.then(async () => {
       const next = { ...mutate((await this.get(server, session)) ?? { updatedAt: 0 }), updatedAt: Date.now() };
       await this.set(server, session, next); return next;
@@ -47,6 +54,7 @@ export class McpVaultOAuthTokenStore implements OAuthTokenStore {
   }
   async delete(server: string, session: OAuthSessionKey): Promise<void> {
     if (!session.startsWith("account:")) return this.options.legacyStore?.delete(server, session);
+    if (this.options.vault.oauthStore) return this.options.vault.oauthStore(session.slice(8)).delete(server, "shared");
     // Clear just this lifecycle record; never remove a user-managed/shared reference.
     await this.set(server, session, { updatedAt: Date.now() });
     await this.options.vault.detachConsumer?.(mcpOAuthSecretReference(server, session.slice(8)), { kind: "mcp", server, account: session.slice(8) });

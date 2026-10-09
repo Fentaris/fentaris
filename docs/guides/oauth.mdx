@@ -24,7 +24,7 @@ await app.start();
 ```
 
 ```bash theme={null}
-export FENTARIS_AUTH_KEY="<project-encryption-key>"
+export FENTARIS_VAULT_KEY="<project-vault-key>"
 fentaris mcp auth connect linear --account work
 fentaris mcp auth get linear --account work
 ```
@@ -117,9 +117,9 @@ Clients that cannot elicit a URL get a structured error result instead:
 
 ## Token Store
 
-Named-account tokens, client registrations, and discovery metadata are lifecycle records in the shared encrypted project vault under `fentaris.internal.oauth.<encoded-server>.<encoded-account>`. They are omitted from ordinary secret listings and never exposed by MCP JSON output. On the standalone branch this uses the existing encrypted credential backend; the ProjectVault facade is used when integrated. Legacy scoped records remain in `<authDir>/oauth-tokens.enc.json` and are never automatically reassigned.
+Named-account tokens, client registrations, and discovery metadata are private lifecycle records in the shared encrypted ProjectVault, isolated by server and account. They are omitted from ordinary secret listings and never exposed by MCP JSON output. Legacy scoped records remain in `<authDir>/oauth-tokens.enc.json` and are never automatically reassigned.
 
-The runtime reads the same vault references as the CLI, so refreshes persist automatically. A headless transport can refresh stored authorization without a callback URL; a callback is required only for a new authorization-code flow. Supply `FENTARIS_VAULT_UNLOCK_KEY`, the existing `FENTARIS_AUTH_KEY`, or an explicit `oauth.store`. MCP connect does not silently create a key. Without durable credentials, SDK OAuth uses an ephemeral store and reports a configuration warning.
+The runtime reads the same vault references as the CLI, so refreshes persist automatically. A headless transport can refresh stored authorization without a callback URL; a callback is required only for a new authorization-code flow. Named accounts use ProjectVault with macOS Keychain, an application credential-store adapter, or an explicit `FENTARIS_VAULT_KEY` (`FENTARIS_VAULT_UNLOCK_KEY` is an MCP-only alternative). MCP and secrets never write unlock keys to `.env`. Legacy SDK sessions use `FENTARIS_AUTH_KEY` or an explicit `oauth.store`; without either, those legacy sessions use an ephemeral store and report a configuration warning.
 
 ## CLI
 

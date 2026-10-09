@@ -241,7 +241,7 @@ function parseOptionsAndArgs(spec: CliCommandSpec, tokens: string[]):
         if (spec.progressive === true) { options[option.name] = true; continue; }
         return { kind: "parse-error", message: `a value is required for '${token}' but none was supplied` };
       }
-      if (value === "") return { kind: "parse-error", message: `invalid empty value for --${option.name}` };
+      if (value === "" && !spec.progressive) return { kind: "parse-error", message: `invalid empty value for --${option.name}` };
       const existing = options[option.name];
       if (existing !== undefined && !option.repeatable) return { kind: "parse-error", message: `option --${option.name} was supplied more than once` };
       options[option.name] = option.repeatable && typeof existing === "string"

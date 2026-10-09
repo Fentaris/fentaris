@@ -12,7 +12,6 @@ import type { McpProxyOptions } from "../proxy/McpProxy.js";
 import { validateEdgeControlPlaneConfig } from "../edge/integratedConfig.js";
 import { isOAuthCapableTransport, oauthCallbackPath } from "../proxy/oauthRuntime.js";
 import { exposurePathsConflict } from "../transports/exposure/routeRegistry.js";
-import { hasSharedProjectVault } from "../mcp/runtimeVault.js";
 
 type PolicyWithDeclarations = {
   getDeclaredServerNames?: () => string[];
@@ -557,7 +556,7 @@ function validateOAuth(
     ));
   }
 
-  if (declared.length > 0 && !config.oauth?.store && !process.env.FENTARIS_AUTH_KEY && !process.env.FENTARIS_VAULT_UNLOCK_KEY && !hasSharedProjectVault()) {
+  if (declared.some(({ server }) => !server.hasNamedAccounts() && !server.getOAuthAuth()?.account) && !config.oauth?.store && !process.env.FENTARIS_AUTH_KEY) {
     diagnostics.push(diagnostic(
       "warning",
       "FENTARIS_CONFIG_OAUTH_STORE_EPHEMERAL",

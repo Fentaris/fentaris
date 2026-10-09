@@ -3,7 +3,7 @@ import { mkdir, open, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { credential } from "../credentials/index.js";
-import { hasSharedProjectVault, mcpRuntimeVault } from "./runtimeVault.js";
+import { mcpRuntimeVault } from "./runtimeVault.js";
 import type { McpServer } from "../server/McpServer.js";
 import { findEnvironmentProjectRoot } from "../environment.js";
 
@@ -88,10 +88,6 @@ export function applyMcpConnectionState(servers: readonly McpServer[], state: Mc
 
 /** Local adapter to the current shared encrypted secrets system. @pk */
 export async function resolveMcpProjectSecret(ref: string, dir: string, env: NodeJS.ProcessEnv = process.env): Promise<string | undefined> {
-  if (hasSharedProjectVault()) return mcpRuntimeVault(dir, env).resolve(ref);
-  const source = readMcpConnectionState(dir).sources[ref];
-  if (source?.type === "environment") return env[source.name];
-  if (source?.type === "external") throw new Error(`External provider "${source.provider}" must be configured through the shared project vault.`);
   return mcpRuntimeVault(dir, env).resolve(ref);
 }
 

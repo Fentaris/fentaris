@@ -7,7 +7,7 @@ export class CommandInputError extends Error {
   readonly nextActions: string[];
   constructor(readonly missingFields: string[], next: string | string[]) {
     const actions = typeof next === "string" ? [next] : next;
-    super(`Missing required information: ${missingFields.join(", ")}. Next command: ${actions.join("; ")}`);
+    super(`Missing required fields: ${missingFields.join(", ")}. Next command: ${actions.join("; ")}`);
     this.nextActions = actions;
     this.nextCommand = actions.join("; ");
   }

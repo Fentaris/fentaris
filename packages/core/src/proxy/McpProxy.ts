@@ -3750,7 +3750,7 @@ export class McpProxy {
     if (!this.oauthInitialized) {
       this.oauthInitialized = true;
       const { store, ephemeral } = resolveOAuthStore(this.oauthOptions);
-      this.oauthStoreEphemeral = ephemeral;
+      this.oauthStoreEphemeral = ephemeral && this.serverCatalog.allServers().some((server) => !server.hasNamedAccounts() && Boolean(server.getOAuthAuth()));
       this.oauthManagerCache = createOAuthManager({
         servers: this.serverCatalog.allServers(),
         options: this.oauthOptions,

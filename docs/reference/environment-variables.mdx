@@ -25,7 +25,7 @@ Original unlock key for legacy `.fentaris/credentials.enc.json` and `.fentaris/o
 
 ### `FENTARIS_VAULT_UNLOCK_KEY`
 
-Explicit project-vault unlock key for named MCP credentials and OAuth lifecycle records. MCP CLI and runtime use this value before the legacy `FENTARIS_AUTH_KEY`; neither read-only inventory nor MCP connect silently generates or writes a key. Auth actions can alternatively accept `--key`, though an environment variable avoids placing the key in process arguments. Shared ProjectVault integration may provide an OS credential store; see the [integration contract](/guides/mcp-connections#integration-contract).
+MCP-only alternative to `FENTARIS_VAULT_KEY` for named MCP credentials and OAuth lifecycle records. Prefer `FENTARIS_VAULT_KEY` so MCP, secrets, and incoming client keys use the same key. When both are set, `FENTARIS_VAULT_KEY` wins. MCP auth actions can explicitly select the destination key with `--key`; environment variables avoid putting keys in process arguments. Legacy OAuth migration always decrypts its source with the original `FENTARIS_AUTH_KEY`, independently of the destination key. The shared vault supports macOS Keychain or an application credential-store adapter and never writes its key to project `.env`.
 
 ### `FENTARIS_GUEST_API_KEY`
 

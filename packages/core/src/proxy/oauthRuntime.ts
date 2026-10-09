@@ -1,5 +1,5 @@
 import path from "node:path";
-import { hasSharedProjectVault, mcpRuntimeVault } from "../mcp/runtimeVault.js";
+import { mcpRuntimeVault } from "../mcp/runtimeVault.js";
 import { McpVaultOAuthTokenStore } from "../mcp/vaultOAuthStore.js";
 import { mcpStateDirectory, readMcpConnectionState } from "../mcp/projectState.js";
 import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
@@ -79,17 +79,13 @@ export function resolveOAuthStore(options: ProxyOAuthOptions | undefined): {
     return { store: options.store, ephemeral: false };
   }
 
-  const key = process.env.FENTARIS_VAULT_UNLOCK_KEY ?? process.env.FENTARIS_AUTH_KEY;
-  if (!key && !hasSharedProjectVault()) {
-    return { store: new MemoryOAuthTokenStore(), ephemeral: true };
-  }
-
+  const key = process.env.FENTARIS_AUTH_KEY;
   const dir = path.resolve(options?.authDir ?? mcpStateDirectory());
   return { store: new McpVaultOAuthTokenStore({
     vault: mcpRuntimeVault(dir),
     connections: () => readMcpConnectionState(dir).connections,
-    legacyStore: key ? new LocalOAuthTokenStore({ dir, key }) : undefined,
-  }), ephemeral: false };
+    legacyStore: key ? new LocalOAuthTokenStore({ dir, key }) : new MemoryOAuthTokenStore(),
+  }), ephemeral: !key };
 }
 
 /**

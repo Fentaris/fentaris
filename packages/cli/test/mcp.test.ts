@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { FentarisAuth, LocalSecretsBackend, LocalOAuthTokenStore, McpVaultOAuthTokenStore } from "@fentaris/core";
+import { ProjectVault, LocalOAuthTokenStore, McpVaultOAuthTokenStore } from "@fentaris/core";
 import { main } from "../src/index.js";
 import { parseCommand } from "../src/shared/parse.js";
 import type { Runtime } from "../src/shared/types.js";
@@ -19,7 +19,7 @@ const cleanups: Array<() => Promise<unknown>> = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); vi.restoreAllMocks(); });
 function runtime(cwd: string, interactive = false) {
   const output: string[] = []; const errors: string[] = [];
-  const rt: Runtime = { cwd, env: { FENTARIS_AUTH_KEY: key }, interactive, out: { log: (v) => output.push(String(v)), error: (v) => errors.push(String(v)) }, runner: async () => ({ code: 0 }), probe: () => true,
+  const rt: Runtime = { cwd, env: { FENTARIS_AUTH_KEY: "legacy-key", FENTARIS_VAULT_KEY: key }, interactive, out: { log: (v) => output.push(String(v)), error: (v) => errors.push(String(v)) }, runner: async () => ({ code: 0 }), probe: () => true,
     prompt: { text: vi.fn(async () => "hidden-value"), select: vi.fn(async (_q, choices) => choices[0]), confirm: vi.fn(async () => true), close: vi.fn() }, progress: vi.fn(() => vi.fn()) };
   return { ...rt, output, errors };
 }
@@ -28,8 +28,9 @@ async function project(config: string, defaults: Record<string, string> = {}) {
   await mkdir(join(root, "src")); await mkdir(join(root, ".fentaris"));
   await writeFile(join(root, "package.json"), JSON.stringify({ name: "mcp-test", type: "module", dependencies: { "@fentaris/core": "workspace:*" } }));
   await writeFile(join(root, "fentaris.json"), JSON.stringify({ name: "mcp-test", entrypoint: "src/index.ts", packageManager: "pnpm", authDir: ".fentaris", port: 4000, path: "/mcp" }));
-  await writeFile(join(root, ".env"), `MCP_297_CONFIG_IMPORT_VALUE=loaded\nFENTARIS_AUTH_KEY=${key}\n`);
-  await writeFile(join(root, ".fentaris", "credentials.enc.json"), JSON.stringify(FentarisAuth.encryptCredentials({ defaults, users: {}, groups: {} }, key)));
+  await writeFile(join(root, ".env"), `MCP_297_CONFIG_IMPORT_VALUE=loaded\nFENTARIS_AUTH_KEY=legacy-key\nFENTARIS_VAULT_KEY=${key}\n`);
+  const vault = await ProjectVault.open({ root, unlockKey: key });
+  for (const [reference, value] of Object.entries(defaults)) await vault.set(reference, value);
   await writeFile(join(root, "src", "index.ts"), `import { mcp, bearer, credential, credentialEnv, oauth, streamableHttp } from ${JSON.stringify(core)};
 const captured = process.env.MCP_297_CONFIG_IMPORT_VALUE;
 class Fake {
@@ -120,7 +121,7 @@ describe("fentaris mcp", () => {
     expect(await main(["mcp", "auth", "connect", "github", "--account", "work", "--json"], rt)).toBe(0); expect(json(rt).data.status).toBe("already-connected");
     expect(await main(["mcp", "auth", "connect", "github", "--account", "home", "--secret", "shared", "--json"], rt)).toBe(0);
     expect(await main(["mcp", "auth", "disconnect", "github", "--account", "work", "--json"], rt)).toBe(0); expect(json(rt).data.sharedSecretsPreserved).toBe(true);
-    expect(await new LocalSecretsBackend({ dir: join(root, ".fentaris"), key }).resolve("shared")).toBe("sensitive-token");
+    expect(await (await ProjectVault.open({ root, unlockKey: key })).resolve("shared")).toBe("sensitive-token");
     expect(await main(["mcp", "get", "github", "--account", "home", "--json"], rt)).toBe(0);
     expect(rt.output.join("\n")).not.toContain("sensitive-token");
   });
@@ -150,7 +151,7 @@ describe("fentaris mcp", () => {
     const root = await project(`{ servers: [mcp('bundle', { transport: new Fake(), env: { CLIENT_ID: credential('bundle.id'), CLIENT_SECRET: credential('bundle.secret') } })] }`); const rt = runtime(root, true);
     vi.mocked(rt.prompt.text).mockResolvedValueOnce("first-value").mockRejectedValueOnce(new Error("Prompt cancelled."));
     expect(await main(["mcp", "auth", "connect", "bundle"], rt)).toBe(1);
-    const store = new LocalSecretsBackend({ dir: join(root, ".fentaris"), key }); expect(await store.has("bundle.id", { kind: "default" })).toBe(false); await expect(readFile(join(root, ".fentaris", "mcp-connections.json"))).rejects.toThrow();
+    const store = await ProjectVault.open({ root, unlockKey: key }); expect(await store.resolve("bundle.id")).toBeUndefined(); await expect(readFile(join(root, ".fentaris", "mcp-connections.json"))).rejects.toThrow();
     expect(rt.output.join("\n") + rt.errors.join("\n")).not.toContain("first-value");
   });
   it("performs real browser OAuth through the vault, discovers tools, and remotely revokes only the selected account", async () => {
@@ -163,17 +164,17 @@ describe("fentaris mcp", () => {
     await fetch(rt.errors.find((line) => line.includes("/authorize?"))!);
     expect(await login).toBe(0); expect(rt.output).toHaveLength(1); expect(json(rt).data.status).toBe("connected");
     expect(await main(["mcp", "tools", "mail", "--account", "work", "--json"], rt)).toBe(0); expect(json(rt).connections[0].authentication.state).toBe("authorized");
-    const refs = await new LocalSecretsBackend({ dir: join(root, ".fentaris"), key }).listRefs(); expect(refs.some((entry) => entry.ref.startsWith("fentaris.internal.oauth."))).toBe(false);
+    const refs = await (await ProjectVault.open({ root, unlockKey: key })).inventory(); expect(refs).toEqual([]);
     expect(await main(["mcp", "auth", "disconnect", "mail", "--account", "work", "--json"], rt)).toBe(0); expect(json(rt).data.remoteRevocation).toBe("revoked");
     expect(await main(["mcp", "auth", "get", "mail", "--account", "home", "--json"], rt)).toBe(1); expect(json(rt).connections[0].authentication.state).toBe("missing");
     for (const sensitive of authorization.sensitiveValues) if (sensitive) expect(rt.output.join("\n")).not.toContain(sensitive);
   });
-  it("requires an explicit migration source and retains the original encrypted authorization", async () => {
+  it("migrates with separate legacy and destination keys and retains the original encrypted authorization", async () => {
     const root = await project(`{ servers: [mcp('mail', { transport: streamableHttp({ url: 'https://example.com/mcp' }), auth: oauth() })] }`);
-    const legacy = new LocalOAuthTokenStore({ dir: join(root, ".fentaris"), key });
+    const legacy = new LocalOAuthTokenStore({ dir: join(root, ".fentaris"), key: "legacy-key" });
     await legacy.set("mail", "user:old-client", { updatedAt: 1, tokens: { access_token: "legacy-secret", token_type: "Bearer", obtainedAt: 1 } });
     const rt = runtime(root); expect(await main(["mcp", "--offline", "--json"], rt)).toBe(0); expect(json(rt).connections[0].authentication.state).toBe("migration-required");
-    expect(await main(["mcp", "auth", "migrate", "mail", "--account", "default", "--from-session", "user:old-client", "--json"], rt)).toBe(0); expect(json(rt).data.legacyPreserved).toBe(true);
+    expect(await main(["mcp", "auth", "migrate", "mail", "--account", "default", "--from-session", "user:old-client", "--key", key, "--json"], rt)).toBe(0); expect(json(rt).data.legacyPreserved).toBe(true);
     expect((await legacy.get("mail", "user:old-client"))?.tokens?.access_token).toBe("legacy-secret"); expect(rt.output.join("\n")).not.toContain("legacy-secret");
   });
   it("refreshes expired named OAuth tokens through the vault and preserves prior authorization after cancellation", async () => {
@@ -184,8 +185,8 @@ describe("fentaris mcp", () => {
     const login = main(["mcp", "auth", "connect", "mail", "--print-url", "--json"], rt);
     await vi.waitFor(() => expect(rt.errors.some((line) => line.includes("/authorize?"))).toBe(true));
     await fetch(rt.errors.find((line) => line.includes("/authorize?"))!); expect(await login).toBe(0);
-    const backend = new LocalSecretsBackend({ dir: join(root, ".fentaris"), key });
-    const vault = new McpVaultOAuthTokenStore({ vault: { resolve: (ref) => backend.resolve(ref), set: (ref, value) => backend.setInternal(ref, value) }, connections: [{ server: "mail", account: "work" }] });
+    const backend = await ProjectVault.open({ root, unlockKey: key });
+    const vault = new McpVaultOAuthTokenStore({ vault: backend, connections: [{ server: "mail", account: "work" }] });
     const original = (await vault.get("mail", "account:work"))!;
     await vault.set("mail", "account:work", { ...original, tokens: { ...original.tokens!, obtainedAt: 0, expires_in: 1 } });
     authorization.expireAccessTokens();
@@ -261,19 +262,36 @@ describe("fentaris mcp", () => {
     expect(await main(["mcp", "auth", "connect", "github", "--account", "work", "--reauth"], rt)).toBe(0);
     const state = JSON.parse(await readFile(join(root, ".fentaris", "mcp-connections.json"), "utf8"));
     expect(state.connections[0].bindings.bearer).toBe("github.work.token");
-    const store = new LocalSecretsBackend({ dir: join(root, ".fentaris"), key });
+    const store = await ProjectVault.open({ root, unlockKey: key });
     expect(await store.resolve("github.token")).toBe("shared-old"); expect(await store.resolve("github.work.token")).toBe("replacement");
     expect(await main(["mcp", "get", "github", "--account", "home", "--json"], rt)).toBe(0);
   });
-  it("prompts for an explicit missing vault key without writing it to project environment", async () => {
+  it("preserves an OAuth client secret when reauthorizing a bearer that shares its reference", async () => {
+    const root = await project(`{ servers: [
+      mcp('github', { transport: new Fake(), auth: bearer(credential('shared.secret')) }),
+      mcp('oauth', { transport: streamableHttp({ url: 'https://example.com/mcp' }), auth: oauth.clientCredentials({ clientId: 'client', clientSecret: credential('shared.secret') }) })
+    ] }`, { "shared.secret": "original-client-secret" });
+    const rt = runtime(root, true); vi.mocked(rt.prompt.text).mockResolvedValue("replacement-bearer");
+    expect(await main(["mcp", "auth", "connect", "github", "--reauth"], rt)).toBe(0);
+    const vault = await ProjectVault.open({ root, unlockKey: key });
+    expect(await vault.resolve("shared.secret")).toBe("original-client-secret");
+    expect(await vault.resolve("github.default.token")).toBe("replacement-bearer");
+    const state = JSON.parse(await readFile(join(root, ".fentaris", "mcp-connections.json"), "utf8"));
+    expect(state.connections[0].bindings.bearer).toBe("github.default.token");
+  });
+  it("uses the shared system credential store without writing its key to project environment", async () => {
     const root = await project(`{ servers: [mcp('github', { transport: new Fake(), auth: bearer(credential('new.token')) })] }`);
-    await rm(join(root, ".fentaris", "credentials.enc.json")); await writeFile(join(root, ".env"), "MCP_297_CONFIG_IMPORT_VALUE=loaded\n");
+    await writeFile(join(root, ".env"), "MCP_297_CONFIG_IMPORT_VALUE=loaded\n");
     const rt = runtime(root, true); rt.env = {};
-    vi.mocked(rt.prompt.text).mockResolvedValueOnce("new-value").mockResolvedValueOnce(key);
+    const values = new Map<string, string>();
+    rt.vaultOptions = { credentialStore: { get: async (id) => values.get(id), set: async (id, value) => { values.set(id, value); } } };
+    vi.mocked(rt.prompt.text).mockResolvedValueOnce("new-value");
     expect(await main(["mcp", "auth", "connect", "github"], rt)).toBe(0);
-    expect(rt.prompt.text).toHaveBeenNthCalledWith(2, "Project vault unlock key", { secret: true });
-    expect(await readFile(join(root, ".env"), "utf8")).not.toContain(key);
-    expect(await new LocalSecretsBackend({ dir: join(root, ".fentaris"), key }).resolve("new.token")).toBe("new-value");
+    expect(rt.prompt.text).toHaveBeenCalledTimes(1);
+    expect(values.size).toBe(1);
+    expect(await readFile(join(root, ".env"), "utf8")).toBe("MCP_297_CONFIG_IMPORT_VALUE=loaded\n");
+    const vault = await ProjectVault.open({ root, env: {}, ...rt.vaultOptions });
+    expect(await vault.resolve("new.token")).toBe("new-value");
   });
   it("returns explicit empty inventory and rejects retired commands/unknown flags in one JSON result", async () => {
     const rt = runtime(await project(`{ servers: [] }`));

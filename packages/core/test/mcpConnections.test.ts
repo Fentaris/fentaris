@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -11,7 +11,7 @@ import { OAuthManager } from "../src/auth/oauth/manager.js";
 import { McpVaultOAuthTokenStore, mcpOAuthSecretReference } from "../src/mcp/vaultOAuthStore.js";
 import { applyMcpConnectionState, readMcpConnectionState, writeMcpConnectionState, updateMcpConnectionState } from "../src/mcp/projectState.js";
 import { loadProjectEnvironment, applyProjectEnvironment } from "../src/environment.js";
-import { fentaris, Policy, streamableHttp, stdio, LocalSecretsBackend, validateFentarisConfig } from "../src/index.js";
+import { fentaris, Policy, streamableHttp, stdio, LocalSecretsBackend, ProjectVault, validateFentarisConfig } from "../src/index.js";
 import type { FentarisTransport } from "../src/types/transport.js";
 
 const cleanups: Array<() => Promise<unknown>> = [];
@@ -20,7 +20,7 @@ const tool = { name: "search", inputSchema: { type: "object" as const }, outputS
 function transport(run = async () => ({ tools: [tool] })): FentarisTransport {
   return { listTools: vi.fn(run), callTool: vi.fn(async () => ({ content: [] })), close: vi.fn(async () => undefined) };
 }
-async function directory() { const dir = await mkdtemp(join(tmpdir(), "fentaris-mcp-")); cleanups.push(() => rm(dir, { force: true, recursive: true })); return dir; }
+async function directory() { const dir = await realpath(await mkdtemp(join(tmpdir(), "fentaris-mcp-"))); cleanups.push(() => rm(dir, { force: true, recursive: true })); return dir; }
 
 describe("named upstream MCP connections", () => {
   it("splits upstream accounts without requiring a downstream identity, keeps healthy results, and cleans failed checks", async () => {
@@ -194,9 +194,32 @@ describe("named upstream MCP connections", () => {
     expect(() => fetchFn("http://127.0.0.1:9999/token")).toThrow();
   });
 
+  it("persists named OAuth lifecycle records privately in the shared vault and isolates accounts", async () => {
+    const root = await directory();
+    const vault = await ProjectVault.open({ root, unlockKey: "shared-oauth-key" });
+    const connections = [{ server: "mail", account: "work" }, { server: "mail", account: "home" }];
+    const store = new McpVaultOAuthTokenStore({ vault, connections });
+    const record = { updatedAt: 1, tokens: { access_token: "private-oauth-token", token_type: "Bearer", obtainedAt: 1 } };
+    await store.set("mail", "account:work", record);
+    await store.set("mail", "account:home", record);
+    expect(await vault.inventory()).toEqual([]);
+    expect(await readFile(vault.file, "utf8")).not.toContain("private-oauth-token");
+    const reopened = await ProjectVault.open({ root, unlockKey: "shared-oauth-key" });
+    const reader = new McpVaultOAuthTokenStore({ vault: reopened, connections });
+    expect(await reader.get("mail", "account:work")).toEqual(record);
+    await reader.update("mail", "account:work", (current) => ({ ...current, tokens: { ...current.tokens!, refresh_token: "rotated" } }));
+    expect((await store.get("mail", "account:work"))?.tokens?.refresh_token).toBe("rotated");
+    expect((await store.get("mail", "account:home"))?.tokens?.refresh_token).toBeUndefined();
+    await reader.delete("mail", "account:work");
+    expect(await store.get("mail", "account:work")).toBeUndefined();
+    expect((await store.get("mail", "account:home"))?.tokens?.access_token).toBe("private-oauth-token");
+    expect(await vault.inventory()).toEqual([]);
+  });
+
   it("observes account connect/disconnect bindings on a running proxy without damaging another connection", async () => {
     const dir = await directory(); const key = "runtime-binding-test-key";
-    vi.stubEnv("FENTARIS_AUTH_KEY", key); vi.stubEnv("MCP_RUNNING_TOKEN", "original"); cleanups.push(async () => vi.unstubAllEnvs());
+    vi.spyOn(process, "cwd").mockReturnValue(dir);
+    vi.stubEnv("FENTARIS_VAULT_KEY", key); vi.stubEnv("MCP_RUNNING_TOKEN", "original"); cleanups.push(async () => vi.unstubAllEnvs());
     const calls: string[] = [];
     class Upstream {
       constructor(private readonly user: Record<string, unknown> = {}) {}
@@ -209,7 +232,7 @@ describe("named upstream MCP connections", () => {
     const app = fentaris({ servers: [server], defaults: { credentials: { original: credentialEnv("MCP_RUNNING_TOKEN") } }, oauth: { authDir: dir } }); cleanups.push(() => app.close());
     const user = (account: string) => ({ id: "client", upstreamAccounts: { github: account } });
     expect((await app.callTool({ name: "github__search" }, user("work"))).isError).not.toBe(true);
-    const store = new LocalSecretsBackend({ dir, key }); await store.set("replacement", "new", { kind: "default" });
+    const store = await ProjectVault.open({ root: dir, dir: ".", unlockKey: key }); await store.set("replacement", "new");
     const state = { version: 1 as const, connections: [{ server: "github", account: "work", disconnected: true, bindings: { bearer: "replacement" }, updatedAt: 1 }], sources: { replacement: { type: "vault" as const } } };
     await writeMcpConnectionState(dir, state);
     expect((await app.callTool({ name: "github__search" }, user("work"))).isError).toBe(true);
@@ -229,8 +252,9 @@ describe("named upstream MCP connections", () => {
 
   it("starts with an explicitly bound vault source even when its previous environment source is unavailable", async () => {
     const dir = await directory(); const key = "source-binding-test-key";
-    vi.stubEnv("FENTARIS_AUTH_KEY", key); vi.stubEnv("MCP_297_MISSING_SOURCE", undefined); cleanups.push(async () => vi.unstubAllEnvs());
-    await new LocalSecretsBackend({ dir, key }).set("token", "vault-value", { kind: "default" });
+    vi.spyOn(process, "cwd").mockReturnValue(dir);
+    vi.stubEnv("FENTARIS_VAULT_KEY", key); vi.stubEnv("MCP_297_MISSING_SOURCE", undefined); cleanups.push(async () => vi.unstubAllEnvs());
+    await (await ProjectVault.open({ root: dir, dir: ".", unlockKey: key })).set("token", "vault-value");
     await writeMcpConnectionState(dir, { version: 1, connections: [{ server: "github", account: "work", bindings: { bearer: "token" }, updatedAt: 1 }], sources: { token: { type: "vault" } } });
     const source = streamableHttp({ url: "https://example.com/mcp" });
     const app = fentaris({ servers: [mcp("github", { transport: source, accounts: { work: { auth: bearer(ref("token")) } } })], defaults: { credentials: { token: credentialEnv("MCP_297_MISSING_SOURCE") } }, oauth: { authDir: dir } }); cleanups.push(() => app.close());

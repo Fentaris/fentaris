@@ -100,7 +100,6 @@ async function runAuthentication(context: McpCliContext, args: string[], options
       commandResult(context.runtime, options, { server, account, status: "unnecessary", remoteRevocation: "unnecessary" }, `No Fentaris-managed authorization exists for ${server} (${account}).`);
       return 0;
     }
-    if (connection.getOAuthAuth() && !context.config.oauth?.store) await context.vault.ensureUnlocked?.(options, `fentaris mcp auth disconnect ${server} --account ${account}`);
     const remoteRevocation = connection.getOAuthAuth() ? await revokeOAuth(context, connection, account) : "unnecessary";
     if (connection.getOAuthAuth()) await context.tokenStore.delete(server, `account:${account}`);
     for (const binding of connection.getCredentialBindings()) await context.vault.detachConsumer(binding.credential.reference, consumer);
@@ -114,8 +113,7 @@ async function runAuthentication(context: McpCliContext, args: string[], options
     if (!connection.getOAuthAuth()) throw new Error("Only OAuth connections have legacy authorization sessions to migrate.");
     const input = await completeInput(context.runtime, options, [{ name: "from-session", question: "Exact legacy OAuth session (shared or user:<id>)", validate: (value) => { if (value !== "shared" && !/^user:.+/.test(value)) throw new Error("Migration requires an explicit legacy session, shared or user:<id>."); } }], `fentaris mcp auth migrate ${server} --account ${account} --from-session <LEGACY_SESSION>`);
     const from = input["from-session"] as "shared" | `user:${string}`;
-    await context.vault.ensureUnlocked?.(options, `fentaris mcp auth migrate ${server} --account ${account} --from-session ${from}`);
-    const key = context.runtime.env.FENTARIS_VAULT_UNLOCK_KEY ?? context.runtime.env.FENTARIS_AUTH_KEY;
+    const key = context.runtime.env.FENTARIS_AUTH_KEY;
     const legacy = context.legacy ?? (key ? new LocalOAuthTokenStore({ dir: context.directory, key }) : undefined);
     const record = await legacy?.get(server, from) ?? await context.tokenStore.get(server, from);
     if (!record?.tokens) throw new Error("The selected legacy session has no stored tokens. Nothing was changed.");
@@ -143,16 +141,8 @@ async function runAuthentication(context: McpCliContext, args: string[], options
     commandResult(context.runtime, options, { server, account, status: auth?.type === "managed" ? "server-managed" : "unnecessary", remoteValidity: "unverified" }, auth?.type === "managed" ? `Authentication for ${server} (${account}) is managed by the upstream server. Fentaris cannot inspect or verify it.` : `No Fentaris-managed authentication is required for ${server} (${account}).`);
     return 0;
   }
-  if (auth?.type === "oauth" && !context.config.oauth?.store) await context.vault.ensureUnlocked?.(options, `fentaris mcp auth connect ${server} --account ${account}`);
   const session = auth?.type === "oauth" ? await context.tokenStore.get(server, `account:${account}`) : undefined;
-  const resolve = async (reference: string) => {
-    try { return await context.vault.resolve(reference); }
-    catch (error) {
-      if (!context.vault.ensureUnlocked || !(error instanceof Error) || !error.message.startsWith("The project vault is locked")) throw error;
-      await context.vault.ensureUnlocked(options, `fentaris mcp auth connect ${server} --account ${account}`);
-      return context.vault.resolve(reference);
-    }
-  };
+  const resolve = (reference: string) => context.vault.resolve(reference);
   let connected = Boolean(session?.tokens?.access_token);
   if (auth?.type !== "oauth") {
     connected = true;
@@ -170,7 +160,7 @@ async function runAuthentication(context: McpCliContext, args: string[], options
     let clientSecret = reference ? await context.vault.resolve(reference) : undefined;
     let pendingSecret = false;
     if (reference && !clientSecret) {
-      const input = await completeInput(context.runtime, options, [{ name: "oauth-client-secret", question: `OAuth client secret for ${reference}`, secret: true }], `fentaris secrets set ${reference} --value-stdin && fentaris mcp auth connect ${server} --account ${account}`);
+      const input = await completeInput(context.runtime, options, [{ name: "oauth-client-secret", question: `OAuth client secret for ${reference}`, secret: true }], `fentaris secrets set ${reference} --stdin && fentaris mcp auth connect ${server} --account ${account}`);
       clientSecret = input["oauth-client-secret"]; pendingSecret = true;
     }
     await connectOAuth(context, connection, account, options, { clientSecret, commit: pendingSecret ? async () => { await context.vault.set(reference!, clientSecret!, { consumer }); } : undefined });
@@ -195,10 +185,9 @@ async function runAuthentication(context: McpCliContext, args: string[], options
       updates[slot] = reference;
     }
     const followup = `fentaris mcp auth connect ${server} --account ${account} --reauth ${Object.entries(updates).map(([slot, ref]) => `--credential ${commandValue(`${slot}=${ref}`)}`).join(" ")}`;
-    const input = await completeInput(context.runtime, options, missing.map((reference) => ({ name: `credential:${reference}`, question: `Credential for ${reference}`, secret: true })), [...missing.map((ref, index) => `printf '%s' "$MCP_CREDENTIAL_${index + 1}" | fentaris secrets set ${commandValue(ref)} --value-stdin`), followup].join(" && "));
+    const input = await completeInput(context.runtime, options, missing.map((reference) => ({ name: `credential:${reference}`, question: `Credential for ${reference}`, secret: true })), [...missing.map((ref, index) => `printf '%s' "$MCP_CREDENTIAL_${index + 1}" | fentaris secrets set ${commandValue(ref)} --stdin`), followup].join(" && "));
     const pending = missing.map((reference) => ({ reference, value: input[`credential:${reference}`] }));
     // All required input is complete before any credential/connection writes.
-    if (pending.length) await context.vault.ensureUnlocked?.(options, `fentaris mcp auth connect ${server} --account ${account}`);
     for (const entry of pending) await context.vault.set(entry.reference, entry.value, { consumer });
     for (const reference of Object.values(updates)) {
       const configured = context.config.defaults?.credentials?.[reference];
@@ -213,7 +202,13 @@ async function runAuthentication(context: McpCliContext, args: string[], options
 }
 
 function sharedReference(context: McpCliContext, reference: string, server: string, account: string): boolean {
-  return context.servers.some((candidate) => candidate.accountNames().some((alias) => (candidate.name !== server || alias !== account) && candidate.account(alias).getCredentialBindings().some((binding) => binding.credential.reference === reference)));
+  return context.servers.some((candidate) => candidate.accountNames().some((alias) => {
+    if (candidate.name === server && alias === account) return false;
+    const connection = candidate.account(alias);
+    const clientSecret = connection.getOAuthAuth()?.clientSecret;
+    return connection.getCredentialBindings().some((binding) => binding.credential.reference === reference)
+      || (typeof clientSecret === "object" && clientSecret.reference === reference);
+  }));
 }
 
 async function saveBinding(context: McpCliContext, server: string, account: string, changes: { disconnected?: boolean; bindings?: Record<string, string> }) {

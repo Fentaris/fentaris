@@ -26,7 +26,7 @@ export async function openMcpContext(runtime: Runtime, options: CliOptions) {
     applyMcpConnectionState(servers, state);
     const effectiveRuntime = { ...runtime, env };
     const vault = await openMcpProjectVault(project, effectiveRuntime, config, state, typeof options.key === "string" ? options.key : undefined);
-    const key = typeof options.key === "string" ? options.key : env.FENTARIS_VAULT_UNLOCK_KEY ?? env.FENTARIS_AUTH_KEY;
+    const key = env.FENTARIS_AUTH_KEY;
     const legacy = key ? new LocalOAuthTokenStore({ dir: directory, key }) : undefined;
     const tokenStore = config.oauth?.store ?? new McpVaultOAuthTokenStore({ vault, connections: servers.flatMap((server) => server.accountNames().map((account) => ({ server: server.name, account }))), legacyStore: legacy });
     let cache: McpDiscoveryCache = {};

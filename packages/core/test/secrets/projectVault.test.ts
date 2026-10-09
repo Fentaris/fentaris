@@ -100,7 +100,8 @@ describe("project vault", () => {
     await expect(readFile(path.join(root, ".env"))).rejects.toMatchObject({ code: "ENOENT" });
   });
   it("documents an explicit unlock alternative and does not silently use plaintext on unsupported systems", async () => {
-    const { root, vault } = await fixture({});
+    const { root } = await fixture({});
+    const vault = await ProjectVault.open({ root, env: {}, credentialStore: { get: async () => undefined, set: async () => { throw new Error("unsupported"); } } });
     await expect(vault.set("token", "secret")).rejects.toThrow("FENTARIS_VAULT_KEY");
     await expect(readFile(vault.file)).rejects.toMatchObject({ code: "ENOENT" });
     await expect(readFile(path.join(root, ".env"))).rejects.toMatchObject({ code: "ENOENT" });
@@ -374,9 +375,9 @@ describe("OAuth lifecycle and recovery contracts", () => {
     await original.vault.set("token", "move-sensitive");
     await mkdir(path.join(moved.root, ".fentaris")); await cp(original.vault.file, moved.vault.file);
     const before = await readFile(moved.vault.file, "utf8");
-    await expect(ProjectVault.relocate({ root: moved.root, previousRoot: original.root, unlockKey: "wrong" })).rejects.toThrow("unlock");
+    await expect(ProjectVault.relocate({ root: moved.root, previousRoot: original.vault.root, unlockKey: "wrong" })).rejects.toThrow("unlock");
     expect(await readFile(moved.vault.file, "utf8")).toBe(before);
-    const relocated = await ProjectVault.relocate({ root: moved.root, previousRoot: original.root, unlockKey });
+    const relocated = await ProjectVault.relocate({ root: moved.root, previousRoot: original.vault.root, unlockKey });
     expect(await relocated.resolve("token")).toBe("move-sensitive");
     expect(JSON.parse(await readFile(relocated.file, "utf8")).projectId).toBe(JSON.parse(before).projectId);
     expect(JSON.parse(await readFile(relocated.file + ".relocation-backup", "utf8"))).toEqual(JSON.parse(before));
