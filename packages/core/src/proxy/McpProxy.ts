@@ -74,6 +74,7 @@ import {
 import { filterToolsByPolicy, toCapabilityRequest } from "../policy.js";
 import { rateLimitKey } from "../rate-limit/index.js";
 import { FentarisAuth } from "../auth.js";
+import { applyMcpConnectionState, mcpStateDirectory, readMcpConnectionState, resolveMcpProjectSecret } from "../mcp/projectState.js";
 import { resolveCredentialSource, type CredentialSource, type CredentialSourceMap } from "../credentials/index.js";
 import {
   buildSubjectIndex,
@@ -138,6 +139,7 @@ import type { OAuthManager } from "../auth/oauth/manager.js";
 import { isCredentialReference } from "../credentials/index.js";
 import {
   createOAuthManager,
+  isOAuthCapableTransport,
   deriveOAuthCallbackUrl,
   oauthCallbackPath,
   oauthServers,
@@ -471,6 +473,7 @@ export class McpProxy {
   private httpServer: HttpServer | null = null;
   private readonly oauthOptions?: ProxyOAuthOptions;
   private oauthManagerCache?: OAuthManager;
+  private readonly connectionBindingVersions = new Map<string, string>();
   private oauthStoreEphemeral = false;
   private oauthInitialized = false;
   private oauthAgentToolsRegistered = false;
@@ -501,6 +504,16 @@ export class McpProxy {
     );
     this.subjectIndex = resolved.subjectIndex;
     this.serverCatalog = new ServerCatalog({ servers: this.servers, groups: this.groups, subjectIndex: this.subjectIndex });
+    const connectionDirectory = options.oauth?.authDir ?? mcpStateDirectory();
+    const connectionState = readMcpConnectionState(connectionDirectory);
+    applyMcpConnectionState(this.serverCatalog.allServers(), connectionState);
+    for (const entry of connectionState.connections) this.connectionBindingVersions.set(`${entry.server}\u0000${entry.account}`, JSON.stringify(entry));
+    for (const server of this.serverCatalog.allServers()) server.attachAccountSecrets(async (reference) => {
+      if (readMcpConnectionState(connectionDirectory).sources[reference]) return resolveMcpProjectSecret(reference, connectionDirectory);
+      const source = this.defaultCredentials[reference];
+      if (source) return resolveCredentialSource(source);
+      return resolveMcpProjectSecret(reference, connectionDirectory);
+    });
     this.registry = options.registry;
     this.oauthOptions = options.oauth;
     this.autoLog = normalizeAutoLog(options.autoLog);
@@ -683,9 +696,15 @@ export class McpProxy {
         throw this.localNamespaceCollisionError(name);
       }
       if (!this.serverByName.has(name)) {
+        const directory = this.oauthOptions?.authDir ?? mcpStateDirectory();
+        const state = readMcpConnectionState(directory);
+        applyMcpConnectionState([server], state);
+        server.attachAccountSecrets(async (reference) => readMcpConnectionState(directory).sources[reference] || !this.defaultCredentials[reference]
+          ? resolveMcpProjectSecret(reference, directory) : resolveCredentialSource(this.defaultCredentials[reference]));
         this.servers.push(server);
         this.serverCatalog.addGlobalServer(server);
         this.serverByName.set(name, server);
+        this.oauthInitialized = false;
       }
     }
 
@@ -1451,7 +1470,17 @@ export class McpProxy {
       else requirements.set(key, { source, usages: [usage] });
     };
 
-    for (const [reference, source] of Object.entries(this.defaultCredentials)) add(source, `default credential ${reference}`);
+    const bindingSources = readMcpConnectionState(this.oauthOptions?.authDir ?? mcpStateDirectory()).sources;
+    const servers = this.serverCatalog.allServers();
+    for (const [reference, source] of Object.entries(this.defaultCredentials)) {
+      const namedUse = servers.filter((server) => server.hasNamedAccounts()).some((server) => server.accountNames().some((alias) => {
+        const connection = server.account(alias);
+        const secret = connection.getOAuthAuth()?.clientSecret;
+        return connection.getCredentialBindings().some((binding) => binding.credential.reference === reference) || (typeof secret === "object" && secret.reference === reference);
+      }));
+      const legacyUse = servers.filter((server) => !server.hasNamedAccounts()).some((server) => server.getCredentialBindings().some((binding) => binding.credential.reference === reference));
+      if (!(bindingSources[reference] && namedUse && !legacyUse)) add(source, `default credential ${reference}`);
+    }
     for (const server of oauthServers(this.serverCatalog.allServers())) {
       const clientSecret = server.getOAuthAuth()?.clientSecret;
       if (!isCredentialReference(clientSecret)) {
@@ -1459,6 +1488,10 @@ export class McpProxy {
       }
 
       const source = this.defaultCredentials[clientSecret.reference];
+      if (server.getOAuthAuth()?.account && (!source || bindingSources[clientSecret.reference])) {
+        if (!await resolveMcpProjectSecret(clientSecret.reference, this.oauthOptions?.authDir ?? mcpStateDirectory())) throw new FentarisRuntimeError("Named upstream OAuth client credentials are unavailable.", { code: "FENTARIS_CREDENTIALS_UNAVAILABLE", hints: ["Unlock the project vault and provide the configured OAuth client secret reference."] });
+        continue;
+      }
       if (source) {
         add(source, `oauth client secret ${clientSecret.reference} for server ${server.name}`);
       } else {
@@ -1917,7 +1950,7 @@ export class McpProxy {
             (transport) => transport.listTools(params),
           );
         } catch (error: unknown) {
-          if (!server.getOAuthAuth()) {
+          if (!(server.hasNamedAccounts() ? server.selectedAccount(resolvedUser) : server).getOAuthAuth()) {
             throw error;
           }
 
@@ -1992,7 +2025,10 @@ export class McpProxy {
    * derived from the token store only.
    */
   private async oauthServerRequiresLogin(server: McpServer, user: UserContext): Promise<boolean> {
-    if (!server.getOAuthAuth()) {
+    this.refreshMcpBindings(server);
+    const connection = server.hasNamedAccounts() ? server.selectedAccount(user) : server;
+    const auth = connection.getOAuthAuth();
+    if (!auth) {
       return false;
     }
 
@@ -2001,7 +2037,8 @@ export class McpProxy {
       return false;
     }
 
-    return (await manager.status(server.name, manager.sessionKeyFor(server.name, user))) === "requires-login";
+    const upstreamUser = auth.account ? { ...user, upstreamAccounts: { ...user.upstreamAccounts, [server.name]: auth.account } } : user;
+    return (await manager.status(server.name, manager.sessionKeyFor(server.name, upstreamUser))) === "requires-login";
   }
 
   private shouldDiscoverToolsForServer(serverName: string, userGroups: Group[]): boolean {
@@ -2140,7 +2177,7 @@ export class McpProxy {
 
           return withOAuthConsent({
             manager: this.oauth(),
-            server,
+            server: server.hasNamedAccounts() ? server.selectedAccount(upstreamUser) : server,
             user: upstreamUser,
             interaction,
             log,
@@ -3713,7 +3750,7 @@ export class McpProxy {
     if (!this.oauthInitialized) {
       this.oauthInitialized = true;
       const { store, ephemeral } = resolveOAuthStore(this.oauthOptions);
-      this.oauthStoreEphemeral = ephemeral;
+      this.oauthStoreEphemeral = ephemeral && this.serverCatalog.allServers().some((server) => !server.hasNamedAccounts() && Boolean(server.getOAuthAuth()));
       this.oauthManagerCache = createOAuthManager({
         servers: this.serverCatalog.allServers(),
         options: this.oauthOptions,
@@ -3778,6 +3815,8 @@ export class McpProxy {
 
     return async () => {
       const source = this.defaultCredentials[clientSecret.reference];
+      const directory = this.oauthOptions?.authDir ?? mcpStateDirectory();
+      if (server.getOAuthAuth()?.account && (!source || readMcpConnectionState(directory).sources[clientSecret.reference])) return resolveMcpProjectSecret(clientSecret.reference, directory);
       if (!source) {
         throw new Error(
           `Missing OAuth client secret credential "${clientSecret.reference}" for server "${server.name}". Declare it under defaults.credentials.`,
@@ -3788,11 +3827,40 @@ export class McpProxy {
     };
   }
 
+  /** Observe committed CLI bindings on the next request without disturbing other accounts. */
+  private refreshMcpBindings(server: McpServer): void {
+    const directory = this.oauthOptions?.authDir ?? mcpStateDirectory();
+    for (const entry of readMcpConnectionState(directory).connections.filter((candidate) => candidate.server === server.name)) {
+      if (!server.accountNames().includes(entry.account)) continue;
+      const key = `${entry.server}\u0000${entry.account}`;
+      const version = JSON.stringify(entry);
+      if (this.connectionBindingVersions.get(key) === version) continue;
+      server.bindAccount(entry.account, entry);
+      this.connectionBindingVersions.set(key, version);
+      const connection = server.account(entry.account);
+      const auth = connection.getOAuthAuth();
+      const manager = this.oauthManagerCache;
+      if (manager && auth && isOAuthCapableTransport(connection.transport)) {
+        manager.pending.clear(server.name, `account:${entry.account}`);
+        manager.register(server.name, { auth, serverUrl: connection.transport.upstreamUrl, fetchFn: connection.transport.createGuardedFetch(), resolveClientSecret: this.oauthClientSecretResolver(connection) });
+        connection.attachOAuth((user) => manager.providerFor(server.name, { ...user, upstreamAccounts: { ...user.upstreamAccounts, [server.name]: entry.account } }));
+      }
+    }
+  }
+
   private async applyUpstreamAuth(
     server: McpServer,
     user: UserContext,
     subject: ResolvedSubject | undefined,
   ): Promise<{ user: UserContext; credentialSource?: CredentialSourceMetadata }> {
+    this.refreshMcpBindings(server);
+    if (server.hasNamedAccounts()) {
+      const connection = server.selectedAccount(user);
+      this.oauth();
+      const account = connection.getOAuthAuth()?.account ?? user.upstreamAccounts?.[server.name] ?? (server.accountNames().length === 1 ? server.accountNames()[0] : undefined);
+      if (!account) throw new Error(`MCP "${server.name}" requires an explicit upstream account.`);
+      return { user: { ...user, upstreamAccounts: { ...user.upstreamAccounts, [server.name]: account } } };
+    }
     if (server.getOAuthAuth()) {
       // OAuth is applied through the transport auth provider; a missing token must
       // never fail the request here.

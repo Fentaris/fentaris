@@ -58,8 +58,9 @@ export async function resolveHttpTransportHeaders(
   options: HttpTransportAuthOptions | undefined,
   user: UserContext = {},
 ): Promise<Record<string, string>> {
+  const accountHeaders = user.__fentarisUpstreamEnv as Record<string, string> | undefined;
   if (!options) {
-    return {};
+    return { ...accountHeaders };
   }
 
   const context = { user };
@@ -88,5 +89,5 @@ export async function resolveHttpTransportHeaders(
     throw new MissingHttpTransportCredentialError();
   }
 
-  return headers;
+  return { ...headers, ...accountHeaders };
 }

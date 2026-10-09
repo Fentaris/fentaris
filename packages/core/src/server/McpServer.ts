@@ -22,7 +22,7 @@ import { isOAuthAuth, oauthSessionKeyFor, type OAuthAuth } from "../auth/oauth/d
 import { PendingAuthorizations } from "../auth/oauth/pending.js";
 import { FentarisOAuthClientProvider } from "../auth/oauth/provider.js";
 import { MemoryOAuthTokenStore } from "../auth/oauth/store.js";
-import { isCredentialReference, type CredentialReference } from "../credentials/index.js";
+import { credential as credentialReference, isCredentialReference, type CredentialReference } from "../credentials/index.js";
 import type { FentarisTransport } from "../types/transport.js";
 import type { Isolation } from "../types/policy.js";
 import type { UserContext } from "../types/shared.js";
@@ -44,7 +44,24 @@ export type EnvResolver = Record<string, EnvValue> | ((user: UserContext) => Rec
  * Server credential application configuration.
  * @pk
  */
-export type McpServerAuth = BearerCredentialAuth | HeaderCredentialAuth | OAuthAuth;
+export type McpServerAuth = BearerCredentialAuth | HeaderCredentialAuth | OAuthAuth | { type: "none" | "managed" };
+
+/** A named upstream connection. Client restrictions do not grant server/tool access. @pk */
+export type McpAccountOptions = {
+  auth?: McpServerAuth;
+  env?: EnvResolver;
+  transport?: FentarisTransport;
+  /** Downstream clients permitted to use this connection, in addition to runtime policies. @pk */
+  allowedUsers?: string[];
+  /** A disconnected account stays in inventory but cannot be used. @pk */
+  disconnected?: boolean;
+  /** Optional provider lookup. Called only after a successful live check; never infer identity from an alias. @pk */
+  inspectIdentity?: () => Promise<{ identity?: Record<string, string>; permissions?: string[] }>;
+};
+
+/** Resolve an upstream reference in the project credential store, never a client scope. @pk */
+export type McpSecretResolver = (reference: string) => Promise<string | undefined>;
+
 
 /**
  * Resolve the OAuth client provider bound to a caller for this server.
@@ -75,6 +92,8 @@ export type ServerCredentialBinding =
 export type McpServerOptions = {
   name: string;
   displayName?: string;
+  description?: string;
+  accounts?: Record<string, McpAccountOptions>;
   transport: FentarisTransport;
   auth?: McpServerAuth;
   env?: EnvResolver;
@@ -101,6 +120,15 @@ type OAuthAwareTransport = FentarisTransport & {
 export class McpServer {
   readonly name: string;
   readonly displayName: string;
+  readonly description?: string;
+  private accountDeclarations?: Record<string, McpAccountOptions>;
+  private readonly accountServers = new Map<string, McpServer>();
+  private readonly accountEnvReferences = new Map<string, Record<string, CredentialReference>>();
+  private boundEnvReferences: Record<string, CredentialReference> = {};
+  private accountAlias?: string;
+  private disconnected = false;
+  private secretResolver?: McpSecretResolver;
+
 
   /** The transport backing this server; exposed for edge recipe/validation. @pk */
   readonly transport: FentarisTransport;
@@ -121,6 +149,9 @@ export class McpServer {
 
     this.name = options.name;
     this.displayName = options.displayName ?? options.name;
+    this.description = options.description;
+    this.accountDeclarations = options.accounts;
+
     this.transport = options.transport;
     this.auth = options.auth;
     this.env = options.env;
@@ -133,6 +164,8 @@ export class McpServer {
    * @pk
    */
   async listTools(params?: ListToolsRequest["params"], user: UserContext = {}): Promise<ListToolsResult> {
+    if (this.accountDeclarations) return this.selectedAccount(user).listTools(params, user);
+    user = await this.prepareAccountUser(user);
     return this.transportFor(user).listTools(params);
   }
 
@@ -141,6 +174,8 @@ export class McpServer {
    * @pk
    */
   async callTool(params: CallToolRequest["params"], user: UserContext = {}): Promise<CallToolResult> {
+    if (this.accountDeclarations) return this.selectedAccount(user).callTool(params, user);
+    user = await this.prepareAccountUser(user);
     return this.runIsolated(user, () => this.transportFor(user).callTool(params));
   }
 
@@ -162,6 +197,8 @@ export class McpServer {
    * @pk
    */
   async listResources(params?: ListResourcesRequest["params"], user: UserContext = {}): Promise<ListResourcesResult> {
+    if (this.accountDeclarations) return this.selectedAccount(user).listResources(params, user);
+    user = await this.prepareAccountUser(user);
     const transport = this.transportFor(user);
     if (!transport.listResources) {
       return { resources: [] };
@@ -175,6 +212,8 @@ export class McpServer {
    * @pk
    */
   async readResource(params: ReadResourceRequest["params"], user: UserContext = {}): Promise<ReadResourceResult> {
+    if (this.accountDeclarations) return this.selectedAccount(user).readResource(params, user);
+    user = await this.prepareAccountUser(user);
     const transport = this.transportFor(user);
     if (!transport.readResource) {
       throw unsupportedCapability(this.name, "resources");
@@ -191,6 +230,8 @@ export class McpServer {
     params?: ListResourceTemplatesRequest["params"],
     user: UserContext = {},
   ): Promise<ListResourceTemplatesResult> {
+    if (this.accountDeclarations) return this.selectedAccount(user).listResourceTemplates(params, user);
+    user = await this.prepareAccountUser(user);
     const transport = this.transportFor(user);
     if (!transport.listResourceTemplates) {
       return { resourceTemplates: [] };
@@ -204,6 +245,8 @@ export class McpServer {
    * @pk
    */
   async listPrompts(params?: ListPromptsRequest["params"], user: UserContext = {}): Promise<ListPromptsResult> {
+    if (this.accountDeclarations) return this.selectedAccount(user).listPrompts(params, user);
+    user = await this.prepareAccountUser(user);
     const transport = this.transportFor(user);
     if (!transport.listPrompts) {
       return { prompts: [] };
@@ -217,6 +260,8 @@ export class McpServer {
    * @pk
    */
   async getPrompt(params: GetPromptRequest["params"], user: UserContext = {}): Promise<GetPromptResult> {
+    if (this.accountDeclarations) return this.selectedAccount(user).getPrompt(params, user);
+    user = await this.prepareAccountUser(user);
     const transport = this.transportFor(user);
     if (!transport.getPrompt) {
       throw unsupportedCapability(this.name, "prompts");
@@ -230,6 +275,8 @@ export class McpServer {
    * @pk
    */
   async complete(params: CompleteRequest["params"], user: UserContext = {}): Promise<CompleteResult> {
+    if (this.accountDeclarations) return this.selectedAccount(user).complete(params, user);
+    user = await this.prepareAccountUser(user);
     const transport = this.transportFor(user);
     if (!transport.complete) {
       throw unsupportedCapability(this.name, "completions");
@@ -243,7 +290,8 @@ export class McpServer {
    * @pk
    */
   async withProxyContext<T>(context: ProxyContext, run: () => Promise<T>): Promise<T> {
-    const transport = this.transportFor(context.user);
+    if (this.accountDeclarations) return this.selectedAccount(context.user).withProxyContext(context, run);
+    const transport = this.transportFor(await this.prepareAccountUser(context.user));
     if (!transport.withProxyContext) {
       return run();
     }
@@ -280,9 +328,11 @@ export class McpServer {
    * @pk
    */
   async close(): Promise<void> {
+    await Promise.all([...this.accountServers.values()].map((server) => server.close()));
+    this.accountServers.clear();
     await Promise.all([...this.userTransports.values()].map((transport) => transport.close()));
     this.userTransports.clear();
-    await this.isolation?.close();
+    if (!this.accountAlias) await this.isolation?.close();
     await this.transport.close();
   }
 
@@ -345,7 +395,91 @@ export class McpServer {
       }
     }
 
+    for (const [name, value] of Object.entries(this.boundEnvReferences)) bindings.push({ type: "env", env: name, credential: value });
     return bindings;
+  }
+
+  /** Configured local aliases; a legacy singleton is displayed as default. @pk */
+  accountNames(): string[] { return this.accountDeclarations ? Object.keys(this.accountDeclarations) : ["default"]; }
+
+  /** Whether this server uses explicit upstream accounts. @pk */
+  hasNamedAccounts(): boolean { return this.accountDeclarations !== undefined; }
+
+  /** Read a declaration without starting a transport. @pk */
+  accountOptions(alias: string): McpAccountOptions {
+    if (!this.accountNames().includes(alias)) throw new Error(`Unknown account "${alias}" for MCP "${this.name}".`);
+    return this.accountDeclarations?.[alias] ?? { auth: this.auth, env: this.env };
+  }
+
+  /** Authentication declaration, without exposing any resolved credential. @pk */
+  authentication(): McpServerAuth | undefined { return this.auth; }
+
+  /** Bind a project credential resolver for named account runtime and discovery. @pk */
+  attachAccountSecrets(resolve: McpSecretResolver): void {
+    this.secretResolver = resolve;
+    for (const server of this.accountServers.values()) server.attachAccountSecrets(resolve);
+  }
+
+  /** Apply persisted reference bindings to a configured account. @pk */
+  bindAccount(alias: string, entry: { disconnected?: boolean; bindings?: Record<string, string> }): void {
+    const existing = this.accountOptions(alias);
+    const bindings = entry.bindings ?? {};
+    let auth = existing.auth ?? this.auth;
+    if (bindings.bearer && auth?.type === "bearer") auth = { ...auth, credential: credentialReference(bindings.bearer) };
+    if (auth?.type === "header" && bindings[auth.header]) auth = { ...auth, credential: credentialReference(bindings[auth.header]) };
+    const originalEnv = existing.env ?? this.env;
+    const envBindings = Object.fromEntries(Object.entries(bindings).filter(([slot]) => slot !== "bearer" && (auth?.type !== "header" || slot !== auth.header)).map(([slot, ref]) => [slot, credentialReference(ref)]));
+    const env = Object.keys(envBindings).length === 0 || typeof originalEnv === "function" ? originalEnv : { ...originalEnv, ...envBindings };
+    if (typeof originalEnv === "function") this.accountEnvReferences.set(alias, envBindings);
+    this.accountDeclarations = { ...(this.accountDeclarations ?? { default: { auth: this.auth, env: this.env } }), [alias]: { ...existing, auth, env, disconnected: entry.disconnected } };
+    const previous = this.accountServers.get(alias);
+    this.accountServers.delete(alias);
+    void previous?.close().catch(() => undefined);
+  }
+
+  /** An administrative connection view. It never fabricates a downstream user. @pk */
+  account(alias: string): McpServer {
+    const existing = this.accountServers.get(alias);
+    if (existing) return existing;
+    const declaration = this.accountOptions(alias);
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(alias)) throw new Error("Account aliases must contain letters, numbers, dots, underscores, or hyphens; user/group selectors are not account names.");
+    const transport = declaration.transport ?? this.transport;
+    const copy = isUserAwareTransport(transport) ? transport.withUser({}) : isEnvAwareTransport(transport) ? transport.withEnv({}) : transport;
+    const auth = declaration.auth ?? this.auth;
+    const server = new McpServer({ name: this.name, displayName: this.displayName, description: this.description, transport: copy,
+      auth: isOAuthAuth(auth) ? { ...auth, account: alias } : auth,
+      env: declaration.env ?? this.env, isolation: this.isolation, isolationTimeout: this.isolationTimeout });
+    server.accountAlias = alias;
+    server.boundEnvReferences = this.accountEnvReferences.get(alias) ?? {};
+    server.disconnected = declaration.disconnected === true;
+    server.secretResolver = this.secretResolver;
+    this.accountServers.set(alias, server);
+    return server;
+  }
+
+  /** Select one account explicitly or infer a singleton; never choose the first of several. @pk */
+  selectedAccount(user: UserContext): McpServer {
+    const names = this.accountNames();
+    const alias = user.upstreamAccounts?.[this.name] ?? (names.length === 1 ? names[0] : undefined);
+    if (!alias) throw new Error(`MCP "${this.name}" requires an explicit upstream account: ${names.join(", ")}.`);
+    const declaration = this.accountOptions(alias);
+    if (declaration.allowedUsers && (!user.id || !declaration.allowedUsers.includes(user.id))) throw new Error(`Client is not permitted to use MCP "${this.name}" account "${alias}".`);
+    return this.account(alias);
+  }
+
+  private async prepareAccountUser(user: UserContext): Promise<UserContext> {
+    if (!this.accountAlias) return user;
+    if (this.disconnected) throw new Error(`MCP "${this.name}" account "${this.accountAlias}" is disconnected. Connect it before use.`);
+    const bindings = this.getCredentialBindings();
+    if (bindings.length === 0) return user;
+    const env: Record<string, string> = {};
+    for (const binding of bindings) {
+      const value = await this.secretResolver?.(binding.credential.reference);
+      if (!value) throw new Error(`Missing upstream credential reference "${binding.credential.reference}".`);
+      if (binding.type === "bearer") env.AUTHORIZATION = `Bearer ${value}`;
+      else env[binding.type === "header" ? binding.header : binding.env] = value;
+    }
+    return { ...user, __fentarisUpstreamEnv: { ...(user.__fentarisUpstreamEnv as Record<string, string> | undefined), ...env } };
   }
 
   private sessionCacheKey(user: UserContext): string {
@@ -412,12 +546,12 @@ export class McpServer {
     }
 
     let transport = this.transport;
-    if ((this.env || upstreamEnv) && !isEnvAwareTransport(transport)) {
+    if ((this.env || upstreamEnv) && !isEnvAwareTransport(transport) && !isUserAwareTransport(transport)) {
       throw new Error(`Transport for server "${this.name}" does not support env injection`);
     }
 
-    if (this.env || upstreamEnv) {
-      transport = (transport as EnvAwareTransport).withEnv(resolvedEnv);
+    if ((this.env || upstreamEnv) && isEnvAwareTransport(transport)) {
+      transport = transport.withEnv(resolvedEnv);
     }
 
     if (isUserAwareTransport(transport)) {

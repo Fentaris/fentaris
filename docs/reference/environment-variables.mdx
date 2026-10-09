@@ -23,6 +23,10 @@ Project `.env` loads automatically before CLI configuration imports and at core 
 
 Original unlock key for legacy `.fentaris/credentials.enc.json` and `.fentaris/oauth-tokens.enc.json`. Retain it with the legacy encrypted files until explicit migration, source changes, and client authentication have been verified. Legacy read/maintenance helpers resolve explicit `--key`, process environment, then project `.env`; they no longer generate keys into `.env`. Use `FENTARIS_VAULT_KEY`/Keychain for the new project vault. See [migration and recovery](/guides/project-vault).
 
+### `FENTARIS_VAULT_UNLOCK_KEY`
+
+MCP-only alternative to `FENTARIS_VAULT_KEY` for named MCP credentials and OAuth lifecycle records. Prefer `FENTARIS_VAULT_KEY` so MCP, secrets, and incoming client keys use the same key. When both are set, `FENTARIS_VAULT_KEY` wins. MCP auth actions can explicitly select the destination key with `--key`; environment variables avoid putting keys in process arguments. Legacy OAuth migration always decrypts its source with the original `FENTARIS_AUTH_KEY`, independently of the destination key. The shared vault supports macOS Keychain or an application credential-store adapter and never writes its key to project `.env`.
+
 ### `FENTARIS_GUEST_API_KEY`
 
 API key used by runtime health checks for projects that still use a guest user convention.

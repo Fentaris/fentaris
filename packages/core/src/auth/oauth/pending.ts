@@ -179,6 +179,7 @@ export class PendingAuthorizations {
   clear(server: string, session: OAuthSessionKey): void {
     for (const [state, entry] of this.entries) {
       if (entry.server === server && entry.session === session) {
+        for (const waiter of entry.waiters.splice(0)) waiter.resolve({ status: "failed", reason: "authorization cancelled" });
         this.entries.delete(state);
         this.settled.delete(state);
       }

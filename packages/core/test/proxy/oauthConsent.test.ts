@@ -20,26 +20,26 @@ afterEach(async () => {
   }
 });
 
-async function proxyHarness(): Promise<{ app: McpProxy; upstreamUrl: string }> {
+async function proxyHarness(named = false): Promise<{ app: McpProxy; upstreamUrl: string; server: ReturnType<typeof mcp> }> {
   const authServer = await startAuthorizationServer();
   cleanups.push(() => authServer.close());
   const upstream = await startProtectedMcpServer({ authorizationServer: authServer });
   cleanups.push(() => upstream.close());
 
+  const server = mcp("protected", {
+    transport: streamableHttp({ url: upstream.url, network: { allowPrivateNetworkUrls: true } }),
+    auth: named ? undefined : oauth(),
+    accounts: named ? { work: { auth: oauth() }, home: { auth: oauth() } } : undefined,
+  });
   const app = fentaris({
     policy: Policy.allowAll(),
     oauth: { store: oauthTokens.memory() },
-    servers: [
-      mcp("protected", {
-        transport: streamableHttp({ url: upstream.url, network: { allowPrivateNetworkUrls: true } }),
-        auth: oauth(),
-      }),
-    ],
+    servers: [server],
   });
   app.oauth()?.setCallbackUrl("http://127.0.0.1:4599/_fentaris/oauth/callback");
   cleanups.push(() => app.close());
 
-  return { app, upstreamUrl: upstream.url };
+  return { app, upstreamUrl: upstream.url, server };
 }
 
 function interactionStub(options: {
@@ -84,6 +84,33 @@ describe("OAuth consent through URL elicitation", () => {
 
     expect(result.isError).toBeFalsy();
     expect(result.content).toEqual([{ type: "text", text: "demo-user:hello" }]);
+    expect(interaction.completions).toHaveLength(1);
+  });
+
+  it("returns structured consent for an explicitly selected account without treating it as a downstream identity", async () => {
+    const { app } = await proxyHarness(true);
+    const result = await app.callTool({ name: "protected__echo", arguments: { message: "pending" } }, { id: "downstream-client", upstreamAccounts: { protected: "work" } });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({ code: OAUTH_AUTHORIZATION_REQUIRED_CODE, server: "protected" });
+    expect(await app.oauth()?.store.get("protected", "user:downstream-client")).toBeUndefined();
+  });
+
+  it("completes selected-account consent, evicts only that account's session and retries successfully", async () => {
+    const { app, server } = await proxyHarness(true);
+    const work = vi.spyOn(server.account("work"), "evictTransport");
+    const home = vi.spyOn(server.account("home"), "evictTransport");
+    const parent = vi.spyOn(server, "evictTransport");
+    const manager = app.oauth();
+    const interaction = interactionStub({ supportsUrl: true, onElicit: async ({ url }) => {
+      const callback = await approveAuthorization(url);
+      await manager?.completeCallback({ state: callback.state as string, code: callback.code });
+    } });
+    const result = await app.callTool({ name: "protected__echo", arguments: { message: "selected" } }, { id: "downstream-client", upstreamAccounts: { protected: "work" } }, undefined, undefined, interaction);
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toEqual([{ type: "text", text: "demo-user:selected" }]);
+    expect(work).toHaveBeenCalledOnce(); expect(home).not.toHaveBeenCalled(); expect(parent).not.toHaveBeenCalled();
+    expect((await manager?.store.get("protected", "account:work"))?.tokens?.access_token).toBeTruthy();
+    expect(await manager?.store.get("protected", "account:home")).toBeUndefined();
     expect(interaction.completions).toHaveLength(1);
   });
 

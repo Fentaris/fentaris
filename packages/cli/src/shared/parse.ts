@@ -25,7 +25,8 @@ export function parseCommand(argv: string[]): ParseResult {
     return parseHelp(rest);
   }
 
-  const pathResult = resolveCommandPath(parsedArgv);
+  const progressive = cliSpec.commands?.[first]?.progressive === true;
+  const pathResult = progressive ? resolveProgressivePath(parsedArgv) : resolveCommandPath(parsedArgv);
   if (pathResult.kind === "parse-error") {
     return pathResult;
   }
@@ -105,6 +106,30 @@ function extractGlobalOptions(argv: string[]): { kind: "ok"; argv: string[]; non
   }
 
   return { kind: "ok", argv: parsedArgv, nonInteractive, json };
+}
+
+function resolveProgressivePath(argv: string[]): ReturnType<typeof resolveCommandPath> {
+  const root = cliSpec.commands![argv[0]];
+  const allOptions: CliOptionSpec[] = [];
+  const collect = (spec: CliCommandSpec) => { allOptions.push(...(spec.options ?? [])); for (const child of Object.values(spec.commands ?? {})) collect(child); };
+  collect(root);
+  const flags: string[] = [];
+  const positionals: string[] = [];
+  for (let i = 1; i < argv.length; i++) {
+    const token = argv[i];
+    if (token.startsWith("-")) {
+      flags.push(token);
+      const name = token.replace(/^--?/, "").split("=")[0];
+      const option = allOptions.find((entry) => entry.name === name || entry.short === name);
+      if (option?.valueName && !token.includes("=") && argv[i + 1] !== undefined && !argv[i + 1].startsWith("-")) flags.push(argv[++i]);
+    } else positionals.push(token);
+  }
+  let spec = root;
+  const path = [argv[0]];
+  while (positionals.length && spec.commands?.[positionals[0]]) { const name = positionals.shift()!; path.push(name); spec = spec.commands![name]; }
+  if (positionals.length && !spec.arguments?.length) return { kind: "parse-error", message: `unrecognized subcommand '${positionals[0]}'`, path };
+  if (positionals.length > (spec.arguments?.length ?? 0)) return { kind: "parse-error", message: `unexpected argument '${positionals[(spec.arguments?.length ?? 0)]}' found`, path };
+  return { kind: "ok", spec, path, remaining: [...positionals, ...flags] };
 }
 
 function parseHelp(args: string[]): ParseResult {
@@ -212,10 +237,11 @@ function parseOptionsAndArgs(spec: CliCommandSpec, tokens: string[]):
     if (options[option.name] !== undefined && !option.repeatable) return { kind: "parse-error", message: `option --${option.name} was supplied more than once` };
     if (option.valueName) {
       const value = hasInlineValue ? inlineValue : tokens[index + 1];
-      if (value === undefined || (!hasInlineValue && value.startsWith("--"))) {
-        if (spec.progressive) { options[option.name] = true; continue; }
+      if (value === undefined || (!hasInlineValue && (value.startsWith("--") || (spec.progressive === true && value.startsWith("-"))))) {
+        if (spec.progressive === true) { options[option.name] = true; continue; }
         return { kind: "parse-error", message: `a value is required for '${token}' but none was supplied` };
       }
+      if (value === "" && !spec.progressive) return { kind: "parse-error", message: `invalid empty value for --${option.name}` };
       const existing = options[option.name];
       if (existing !== undefined && !option.repeatable) return { kind: "parse-error", message: `option --${option.name} was supplied more than once` };
       options[option.name] = option.repeatable && typeof existing === "string"

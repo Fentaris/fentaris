@@ -442,7 +442,16 @@ function validateOAuth(
   groups: Group[],
   diagnostics: FentarisDiagnostic[],
 ): void {
-  const allServers = [...servers, ...groups.flatMap((group) => group.servers)];
+  const allServers = [...servers, ...groups.flatMap((group) => group.servers)].flatMap((server) => {
+    if (!server.hasNamedAccounts?.()) return [server];
+    const accounts: McpServer[] = [];
+    for (const alias of server.accountNames()) {
+      try { accounts.push(server.account(alias)); }
+      catch { diagnostics.push(diagnostic("error", "FENTARIS_CONFIG_MCP_ACCOUNT_INVALID", "Invalid upstream account", `MCP "${server.name}" has an invalid upstream account declaration.`, { path: ["servers", server.name, "accounts", alias] })); }
+    }
+    if (!server.accountNames().length) diagnostics.push(diagnostic("error", "FENTARIS_CONFIG_MCP_ACCOUNTS_EMPTY", "No upstream accounts configured", `MCP "${server.name}" requires at least one upstream account.`, { path: ["servers", server.name, "accounts"] }));
+    return accounts;
+  });
   const declared = allServers
     .map((server, index) => ({ server, index }))
     .filter((entry) => Boolean(entry.server.getOAuthAuth?.()));
@@ -453,7 +462,7 @@ function validateOAuth(
       continue;
     }
 
-    const path = ["servers", server.name, "auth"];
+    const path = auth.account ? ["servers", server.name, "accounts", auth.account, "auth"] : ["servers", server.name, "auth"];
 
     if (!isOAuthCapableTransport(server.transport)) {
       diagnostics.push(diagnostic(
@@ -485,7 +494,7 @@ function validateOAuth(
       ));
     }
 
-    if (isCredentialReference(auth.clientSecret) && !config.defaults?.credentials?.[auth.clientSecret.reference]) {
+    if (!auth.account && isCredentialReference(auth.clientSecret) && !config.defaults?.credentials?.[auth.clientSecret.reference]) {
       // An OAuth client secret belongs to the application, not to a caller: it is
       // resolved once per token request with no subject, so only app defaults can
       // supply it. Accepting a group- or user-scoped source here would pass
@@ -547,7 +556,7 @@ function validateOAuth(
     ));
   }
 
-  if (declared.length > 0 && !config.oauth?.store && !process.env.FENTARIS_AUTH_KEY) {
+  if (declared.some(({ server }) => !server.hasNamedAccounts() && !server.getOAuthAuth()?.account) && !config.oauth?.store && !process.env.FENTARIS_AUTH_KEY) {
     diagnostics.push(diagnostic(
       "warning",
       "FENTARIS_CONFIG_OAUTH_STORE_EPHEMERAL",
@@ -557,7 +566,7 @@ function validateOAuth(
     ));
   }
 
-  const perUserServers = declared.filter(({ server }) => server.getOAuthAuth?.()?.tokens === "per-user");
+  const perUserServers = declared.filter(({ server }) => !server.getOAuthAuth?.()?.account && server.getOAuthAuth?.()?.tokens === "per-user");
   if (perUserServers.length > 0 && config.identity && typeof config.identity === "object" && "required" in config.identity && config.identity.required === false) {
     diagnostics.push(diagnostic(
       "warning",

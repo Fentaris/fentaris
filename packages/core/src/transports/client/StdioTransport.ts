@@ -58,6 +58,8 @@ export class StdioTransport implements FentarisTransport {
   private readonly options: StdioTransportOptions;
   private client: Client | null = null;
   private connectPromise: Promise<Client> | null = null;
+  private pendingClient: Client | null = null;
+  private connectionGeneration = 0;
 
   /**
    * Create a new stdio transport.
@@ -203,6 +205,9 @@ export class StdioTransport implements FentarisTransport {
    * @pk
    */
   async close(): Promise<void> {
+    this.connectionGeneration++;
+    await this.pendingClient?.close();
+    this.pendingClient = null;
     await this.client?.close();
     this.client = null;
     this.connectPromise = null;
@@ -227,6 +232,7 @@ export class StdioTransport implements FentarisTransport {
   }
 
   private async connect(): Promise<Client> {
+    const generation = this.connectionGeneration;
     const client = new Client(
       {
         name: this.options.clientName ?? "fentaris-core",
@@ -235,16 +241,19 @@ export class StdioTransport implements FentarisTransport {
       { capabilities: {} },
     );
 
-    await client.connect(
-      new StdioClientTransport({
+    this.pendingClient = client;
+    const pendingTransport = new StdioClientTransport({
         command: this.options.command,
         args: this.resolveCloudLaunchArgs(this.options.args ?? []),
         env: this.resolveCloudLaunchEnv(this.options.env),
         stderr: this.options.stderr ?? "inherit",
-      }),
-    );
-
-    return client;
+      });
+    try {
+      await client.connect(pendingTransport);
+      if (generation !== this.connectionGeneration) { await pendingTransport.close(); throw new Error("Connection was closed during initialization."); }
+      return client;
+    } catch (error) { await pendingTransport.close(); await client.close(); throw error; }
+    finally { if (this.pendingClient === client) this.pendingClient = null; }
   }
 
   /**

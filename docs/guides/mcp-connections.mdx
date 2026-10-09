@@ -1,0 +1,116 @@
+---
+title: "Named MCP connections"
+description: "Discover configured upstream accounts, connect safely, and migrate legacy authorizations."
+---
+
+An upstream account is a stable local alias for one connection's credentials. It does not identify a client authenticating to Fentaris. For example, `gmail (gabry848)` and `gmail (gino)` can have different OAuth authorizations while the same incoming user is permitted to use both.
+
+## Configure accounts
+
+```ts theme={null}
+import { mcp, oauth, bearer, credential, streamableHttp, stdio } from "@fentaris/core";
+
+export const fentarisConfig = {
+  servers: [
+    mcp("gmail", {
+      description: "Mail tools",
+      transport: streamableHttp({ url: "https://mail.example.com/mcp" }),
+      accounts: {
+        gabry848: { auth: oauth(), allowedUsers: ["assistant"] },
+        gino: { auth: oauth() },
+      },
+    }),
+    mcp("github", {
+      transport: streamableHttp({ url: "https://github.example.com/mcp" }),
+      accounts: { work: { auth: bearer(credential("github.work.token")) } },
+    }),
+    mcp("bundle", {
+      transport: stdio({ command: "configured-upstream" }),
+      accounts: {
+        default: { env: { CLIENT_ID: credential("bundle.id"), CLIENT_SECRET: credential("bundle.secret") } },
+      },
+    }),
+  ],
+};
+```
+
+No authentication is represented by `auth: { type: "none" }`; authentication managed inside the upstream uses `{ type: "managed" }`. Fentaris reports managed authentication as unverified. Native HTTP transports isolate sessions per account; custom transports should implement `withUser`/`withEnv` or provide a separate `transport` in each account declaration.
+
+Runtime calls pass `{ id: "assistant", upstreamAccounts: { gmail: "gabry848" } }`. A singleton account may be inferred. With several accounts, omission fails rather than selecting the first. Existing runtime policies still govern server/tool access, and optional `allowedUsers` adds account restrictions. Administrative inventory deliberately does not require an incoming identity and must not be used to test a client's permissions.
+
+## Discover and recover
+
+```bash theme={null}
+fentaris mcp
+fentaris mcp get gmail --account gabry848
+fentaris mcp tools
+fentaris mcp tools gmail --account gabry848
+fentaris mcp tools get gmail__search_messages --account gabry848
+fentaris mcp tools schema gmail__search_messages --input --account gabry848
+```
+
+Inventory separates valid configuration, available credentials, and connectivity. Stored tokens are unverified until a live upstream accepts the connection. Missing credentials, known expiration, rejected authorization, transport timeouts, and unreachable endpoints have distinct metadata and recovery commands. Provider identity is shown only through an explicit `inspectIdentity` provider lookup; aliases and incoming users never supply it.
+
+Live discovery checks at most four connections concurrently with a per-connection timeout. It retains successful rows after failures and closes temporary resources. A failed optional identity lookup leaves tools available. A successful tools response verifies connectivity, but opaque credential bundles and bearer/API-key references remain `stored` and unverified unless an explicit provider identity inspection confirms their use. Tool counts are verified, cached with age, or unavailable; a missing count is never reported as zero. `--offline` never contacts an upstream or starts its process. Config imports must have no startup side effects; generated entrypoints already follow this pattern.
+
+See [CLI Reference](/reference/cli#read-flags-and-exit-codes) for the versioned JSON schema and exit codes 0 (success), 3 (partial), and 1 (failure). All human output is English. JSON and non-TTY calls never prompt. Progressive input preserves supplied arguments and flags; unknown flags and invalid supplied values fail immediately. Bare auth is read-only unless an explicit menu action and mutation confirmation are completed.
+
+## Connect and disconnect
+
+```bash theme={null}
+fentaris mcp auth connect gmail --account gabry848
+fentaris mcp auth connect github --account work --secret github.work.token
+fentaris mcp auth connect bundle --credential CLIENT_ID=bundle.id --credential CLIENT_SECRET=bundle.secret
+fentaris mcp auth connect gmail --account gabry848 --reauth
+fentaris mcp auth disconnect gmail --account gabry848
+```
+
+Connect selects the flow declared by the transport: browser OAuth, hidden credential input, existing named reference, no auth, or managed auth. Existing authorization is reported without replacement. `--reauth` authorizes replacement explicitly. A credential bundle collects every missing value before saving connection bindings, so cancelling a prompt cannot leave a partially configured connection. OAuth registration, consent, and tokens are buffered until completion; failed or cancelled reauthorization preserves existing records.
+
+For automation, provision references through `fentaris secrets set <REFERENCE> --stdin`, then connect with `--secret <REFERENCE>`. MCP commands use the shared ProjectVault: macOS Keychain or a configured system credential store manages its key, while automation supplies `FENTARIS_VAULT_KEY`. `FENTARIS_VAULT_UNLOCK_KEY` remains an MCP-only alternative and `--key` explicitly selects the destination vault key. The original `FENTARIS_AUTH_KEY` is used only for legacy stores and migration; it is never substituted for the destination key. `--print-url --non-interactive` requests a headless browser flow explicitly; its URL is on stderr and callback waiting is bounded. Client-credentials OAuth requires no browser.
+
+Disconnect disables only the selected account and preserves user-managed values referenced elsewhere. A running proxy observes committed binding changes on its next request; replacing a bearer or bundle credential shared with another connection allocates a separate account reference. OAuth revocation is attempted when its cached provider metadata advertises a supported revocation endpoint. The result says whether revocation succeeded, was unsupported, failed, or was unnecessary. Local disconnect still completes if remote revocation fails, returning 3 to report that partial outcome.
+
+## Migrate legacy authorizations
+
+The previous CLI tools namespace has been removed, with no alias. Configure upstream aliases in `accounts`, then replace discovery calls with `fentaris mcp tools` and authorization calls with `fentaris mcp auth`.
+
+Legacy `cli.mcpAccounts` remains a downstream selector contract of the `AgentToolDiscoveryService` library. Its user/group selectors are not upstream accounts. Legacy runtime OAuth behavior remains until the account is explicitly bound; no authorization is silently copied or renamed.
+
+```bash theme={null}
+fentaris mcp auth migrate gmail --account gabry848 --from-session user:alice
+# Or, for an existing shared session:
+fentaris mcp auth migrate gmail --account gabry848 --from-session shared
+```
+
+Migration requires the exact source session, rejects a destination containing OAuth state, copies its full tokens/registration/discovery record, and preserves the source for rollback. It does not assert remote validity. Check the selected connection live afterward. Removing a named binding and its account declaration, then restarting the proxy, restores the legacy SDK configuration; keep the original encrypted OAuth file and key until migration is accepted. There is no implicit bulk migration from incoming API-key IDs, users, or groups.
+
+## Integration contract
+
+Named accounts, discovery, and upstream authentication share ProjectVault and progressive input with the secrets and incoming-client-key commands.
+
+The exported core contracts added here are `McpAccountOptions`, `McpSecretResolver`, `UserContext.upstreamAccounts`, `McpDiscoveryService` and its result/cache types, `McpConnectionState`, `McpConnectionBinding`, `McpSecretSource`, `readMcpConnectionState`, `writeMcpConnectionState`, `updateMcpConnectionState`, `applyMcpConnectionState`, `McpVaultOAuthTokenStore`, `McpVault`, `MCP_OAUTH_SECRET_PREFIX`, and `mcpOAuthSecretReference`. Environment exports are `loadProjectEnvironment(root, baseEnv?)`, `applyProjectEnvironment(root?)`, and `findEnvironmentProjectRoot(from?)`.
+
+`<authDir>/mcp-connections.json` is public binding metadata only:
+
+```json theme={null}
+{
+  "version": 1,
+  "connections": [
+    { "server": "github", "account": "work", "bindings": { "bearer": "github.work.token" }, "disconnected": false, "updatedAt": 0 }
+  ],
+  "sources": { "github.work.token": { "type": "vault" } }
+}
+```
+
+A binding slot is `bearer`, an HTTP header name, or a transport environment name. Connections must already exist in configuration; loading state never invents accounts. Sources match the peer schema: `{ type: "vault" }`, `{ type: "environment", name }`, or `{ type: "external", provider, locator }`. ProjectVault's source registry is authoritative; the connection registry records public bindings without duplicating credential values. `mcp-cache.json` stores non-secret tool schemas with `checkedAt`; malformed JSON is ignored, and cached results are always labelled. Connection registry writes use atomic replacement; `updateMcpConnectionState(dir, mutate)` serializes concurrent account updates and preserves unrelated bindings.
+
+The CLI bridge is `domain/mcp/vault.ts:openMcpProjectVault`, using `openProjectVault(project, runtime)`. Runtime uses `ProjectVault.open({ root, dir, env })` through `mcpRuntimeVault`. Both resolve named references through the shared vault and preserve explicitly configured default credential sources. External providers require a configured vault adapter.
+
+Both bridges use `resolve(ref)` internally, `set(ref, value, { consumer, replaceSource? })`, `bind(ref, source, { consumer, replaceSource? })`, and `detachConsumer(ref, consumer)`. An MCP consumer is exactly `{ kind: "mcp", server, account }`. Values never enter inventory; ProjectVault owns credential metadata and source changes.
+
+Public OAuth sessions use `account:<alias>`, distinct from legacy `shared` and `user:<id>` sessions. `McpVaultOAuthTokenStore` delegates each named account to `ProjectVault.oauthStore(alias)`, using the account's private `shared` slot inside the encrypted lifecycle payload. The account remains an explicit independent namespace; incoming identities are never reinterpreted as account aliases. Lifecycle records are absent from ordinary secret inventory. Custom minimal `McpVault` implementations without an `oauthStore` adapter retain the reserved `fentaris.internal.oauth.<base64url(server)>.<base64url(account)>` value contract. Legacy sessions retain `LocalOAuthTokenStore` or the explicitly configured OAuth store and require explicit migration into a named account.
+
+Shared CLI exports in `shared/input.ts` are `completeInput(runtime, options, fields, nextCommand)`, `chooseAction`, `canPrompt`, `commandResult`, and `CommandInputError`, and `commandValue` (safe shell quoting for public command values). Field shape is `{ name, question, required?, secret?, choices?, validate? }`; a missing recognized flag value is `true`, and supplied strings remain authoritative. Progressive command specs use `progressive: true`. Integrating the peer implementation must preserve these signatures or provide adapters. `main.ts`, `cli-spec.ts`, environment exports, and ordinary secret filtering are expected merge coordination points.
+
+CLI browser OAuth supports an ephemeral HTTP loopback callback by default. For a preregistered client, set `redirectUrl` to an HTTP loopback URL with its registered port and path; `--port`, if supplied, must match. Hosted or HTTPS redirects require the runtime OAuth callback flow rather than this temporary CLI listener. Discovery summaries distinguish `verifiedTools` from `cachedTools`; cached descriptions do not establish current availability.

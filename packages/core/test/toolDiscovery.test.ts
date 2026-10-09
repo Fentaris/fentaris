@@ -60,7 +60,7 @@ describe("agent-native tool discovery", () => {
     expect(result).toMatchObject({
       ok: false,
       error: { code: "FENTARIS_AUTH_SELECTOR_NOT_ALLOWED" },
-      nextActions: [{ command: "fentaris tools auth list --json" }],
+      nextActions: [{ command: "fentaris mcp auth --json" }],
     });
   });
 
@@ -114,7 +114,7 @@ describe("agent-native tool discovery", () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.pagination?.truncated).toBe(true);
-    expect(result.ok && result.nextActions.some((action) => action.command?.includes("tools search"))).toBe(true);
+    expect(result.ok && result.nextActions.some((action) => action.command === "fentaris mcp tools <MCP> --json")).toBe(true);
   });
 
   it("reports auth account lists, delegated login, and unconfigured selector refusal", () => {
@@ -203,7 +203,7 @@ describe("agent-native tool discovery", () => {
     expect(withTokens.authLogin("linear", "user:alice")).toMatchObject({
       ok: true,
       data: { loginMode: "browser", status: "authenticated" },
-      nextActions: [{ command: "fentaris auth login linear --as user:alice --json" }],
+      nextActions: [{ command: "fentaris mcp auth connect linear --account <ACCOUNT> --print-url --non-interactive" }],
     });
   });
 

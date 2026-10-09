@@ -320,36 +320,11 @@ describe("command routing helpers", () => {
     });
   });
 
-  it("parses agent-native tools commands and filters", () => {
-    expect(parseCommand(["tools", "list", "--mcp", "github", "--as", "user:alice", "--limit", "10", "--json"])).toEqual({
-      kind: "ok",
-      path: ["tools", "list"],
-      command: {
-        name: "tools",
-        args: ["list"],
-        options: { mcp: "github", as: "user:alice", limit: "10", json: true },
-      },
-    });
-
-    expect(parseCommand(["tools", "schema", "github__create_issue", "--input", "--output", "--json"])).toEqual({
-      kind: "ok",
-      path: ["tools", "schema"],
-      command: {
-        name: "tools",
-        args: ["schema", "github__create_issue"],
-        options: { input: true, output: true, json: true },
-      },
-    });
-
-    expect(parseCommand(["tools", "auth", "status", "--mcp", "github", "--as", "user:alice", "--json"])).toEqual({
-      kind: "ok",
-      path: ["tools", "auth", "status"],
-      command: {
-        name: "tools",
-        args: ["auth", "status"],
-        options: { mcp: "github", as: "user:alice", json: true },
-      },
-    });
+  it("parses MCP commands and rejects the removed tools family", () => {
+    expect(parseCommand(["mcp", "tools", "github", "--account", "work", "--json"])).toMatchObject({ kind: "ok", path: ["mcp", "tools"], command: { name: "mcp", args: ["tools", "github"], options: { account: "work", json: true } } });
+    expect(parseCommand(["mcp", "tools", "schema", "github__create_issue", "--input", "--output", "--json"])).toMatchObject({ kind: "ok", path: ["mcp", "tools", "schema"], command: { args: ["tools", "schema", "github__create_issue"], options: { input: true, output: true, json: true } } });
+    expect(parseCommand(["mcp", "auth", "get", "github", "--account", "work", "--json"])).toMatchObject({ kind: "ok", path: ["mcp", "auth", "get"], command: { args: ["auth", "get", "github"], options: { account: "work", json: true } } });
+    expect(parseCommand(["tools", "list"])).toMatchObject({ kind: "parse-error", message: "unrecognized subcommand 'tools'" });
   });
 
   it("parses inline public options and rejects removed raw credential options", () => {

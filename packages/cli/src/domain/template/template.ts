@@ -224,7 +224,7 @@ The generated project pins \`@fentaris/core\` to \`${coreRange}\` (currently \`^
 \`\`\`sh
 ${runScript} typecheck
 ${runScript} build
-fentaris tools list
+fentaris mcp tools
 fentaris doctor
 fentaris check --offline
 fentaris build

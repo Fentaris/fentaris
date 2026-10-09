@@ -164,7 +164,7 @@ export class AgentToolDiscoveryService {
         .filter((entry) => [entry.compact.name, entry.compact.upstreamName, entry.compact.description, entry.compact.title].some((value) => value?.toLowerCase().includes(normalized)))
         .map((entry) => options.compact === false ? entry.detailed : entry.compact);
     }, [
-      { label: "Inspect a matched tool", command: "fentaris tools get <tool> --json" },
+      { label: "Inspect a matched tool", command: "fentaris mcp tools get <tool> --json" },
     ]);
   }
 
@@ -173,10 +173,10 @@ export class AgentToolDiscoveryService {
       const tool = (await this.collect(options)).find((entry) => entry.compact.name === toolName);
       if (!tool) {
         throw new ToolDiscoveryError("FENTARIS_TOOL_NOT_FOUND", `Tool "${toolName}" was not found for the selected context.`, {
-          nextActions: [{ label: "Search available tools", command: "fentaris tools search <query> --json" }],
+          nextActions: [{ label: "Search available tools", command: "fentaris mcp tools --json" }],
         });
       }
-      return success(tool.detailed, [], [{ label: "Inspect schemas", command: `fentaris tools schema ${toolName} --input --output --json` }]);
+      return success(tool.detailed, [], [{ label: "Inspect schemas", command: `fentaris mcp tools schema ${toolName} --input --output --json` }]);
     });
   }
 
@@ -204,7 +204,7 @@ export class AgentToolDiscoveryService {
       default: account.default,
       allowed: [...account.allowed],
       statuses: account.allowed.map((selector) => ({ selector, status: this.authStatus(mcp, selector) })),
-    })), [], [{ label: "Inspect one account", command: "fentaris tools auth status --mcp <mcp> --as <selector> --json" }]);
+    })), [], [{ label: "Inspect one account", command: "fentaris mcp auth get <mcp> --account <ACCOUNT> --json" }]);
   }
 
   authStatus(mcp: string, selector: string): AuthStatus {
@@ -231,7 +231,7 @@ export class AgentToolDiscoveryService {
     if (!account || !account.allowed.includes(selector)) {
       return failure("FENTARIS_AUTH_SELECTOR_NOT_ALLOWED", `Selector "${selector}" is not configured for MCP "${mcp}".`, {
         allowed: account?.allowed ?? [],
-      }, [], [{ label: "List configured auth accounts", command: "fentaris tools auth list --json" }]);
+      }, [], [{ label: "List configured auth accounts", command: "fentaris mcp auth --json" }]);
     }
     return success({ mcp, selector, status: this.authStatus(mcp, selector), allowed: [...account.allowed] }, [], []);
   }
@@ -249,8 +249,8 @@ export class AgentToolDiscoveryService {
         selector,
         status: status.data.status,
         loginMode: "browser" as const,
-        instructions: `Run \`fentaris auth login ${mcp} --as ${selector}\` to complete the OAuth flow in a browser.`,
-      }, [], [{ label: "Sign in to this MCP", command: `fentaris auth login ${mcp} --as ${selector} --json` }]);
+        instructions: `Run \`fentaris mcp auth connect ${mcp} --account <ACCOUNT>\` to complete the OAuth flow in a browser.`,
+      }, [], [{ label: "Sign in to this MCP", command: `fentaris mcp auth connect ${mcp} --account <ACCOUNT> --print-url --non-interactive` }]);
     }
 
     return success({
@@ -276,14 +276,17 @@ export class AgentToolDiscoveryService {
     if (stdioBlocked) {
       throw new ToolDiscoveryError("FENTARIS_MCP_STDIO_NOT_STARTED", `MCP "${stdioBlocked.name}" uses stdio and --no-start prevents discovery startup.`, {
         warnings: [{ code: "FENTARIS_MCP_STDIO_NOT_STARTED", message: "Discovery was skipped because process startup is disabled.", mcp: stdioBlocked.name }],
-        nextActions: [{ label: "Run discovery with startup", command: `fentaris tools list --mcp ${stdioBlocked.name} --json` }],
+        nextActions: [{ label: "Run discovery with startup", command: `fentaris mcp tools ${stdioBlocked.name} --json` }],
       });
     }
 
     const primaryMcp = options.mcp ?? selectedServers[0]?.name;
     const selector = primaryMcp ? this.resolveSelector(primaryMcp, options.selector) : options.selector;
     const context = selectorToContext(selector);
-    const result = await new McpProxy(this.config).listTools(undefined, context.user, { authenticated: selector !== undefined, userId: context.user.id }, context.subject);
+    const proxy = new McpProxy(this.config);
+    let result;
+    try { result = await proxy.listTools(undefined, context.user, { authenticated: selector !== undefined, userId: context.user.id }, context.subject); }
+    finally { await proxy.close(); }
     const selectedNames = new Set(selectedServers.map((server) => server.name));
     const tools = result.tools
       .map((tool) => this.toListedTool(tool, selector, options.refresh === true))
@@ -301,7 +304,7 @@ export class AgentToolDiscoveryService {
     if (!account.allowed.includes(selector)) {
       throw new ToolDiscoveryError("FENTARIS_AUTH_SELECTOR_NOT_ALLOWED", `Selector "${selector}" is not configured for MCP "${mcp}".`, {
         details: { mcp, selector, allowed: account.allowed },
-        nextActions: [{ label: "List configured auth accounts", command: "fentaris tools auth list --json" }],
+        nextActions: [{ label: "List configured auth accounts", command: "fentaris mcp auth --json" }],
       });
     }
     return selector;
@@ -349,8 +352,8 @@ export class AgentToolDiscoveryService {
       const nextCursor = start + data.length < all.length ? String(start + data.length) : null;
       return success(data, [], [
         ...nextActions,
-        ...(nextCursor ? [{ label: "Fetch next page", command: `fentaris tools list --cursor ${nextCursor} --json` }] : []),
-        ...(truncated ? [{ label: "Narrow the response", command: "fentaris tools search <query> --limit 10 --compact --json", reason: "--max-tokens truncated the response." }] : []),
+        ...(nextCursor ? [{ label: "Inspect all administrative connections", command: `fentaris mcp tools --json` }] : []),
+        ...(truncated ? [{ label: "Narrow the response", command: "fentaris mcp tools <MCP> --json", reason: "--max-tokens truncated the response." }] : []),
       ], { limit, cursor: options.cursor ?? null, nextCursor, total: all.length, returned: data.length, ...(truncated ? { truncated } : {}) });
     });
   }

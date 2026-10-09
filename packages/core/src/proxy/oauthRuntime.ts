@@ -1,4 +1,7 @@
 import path from "node:path";
+import { mcpRuntimeVault } from "../mcp/runtimeVault.js";
+import { McpVaultOAuthTokenStore } from "../mcp/vaultOAuthStore.js";
+import { mcpStateDirectory, readMcpConnectionState } from "../mcp/projectState.js";
 import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { OAuthManager } from "../auth/oauth/manager.js";
 import { LocalOAuthTokenStore, MemoryOAuthTokenStore, type OAuthTokenStore } from "../auth/oauth/store.js";
@@ -60,7 +63,7 @@ export function isOAuthCapableTransport(transport: FentarisTransport): transport
  * @pk
  */
 export function oauthServers(servers: readonly McpServer[]): McpServer[] {
-  return servers.filter((server) => Boolean(server.getOAuthAuth()));
+  return servers.flatMap((server) => server.hasNamedAccounts() ? server.accountNames().map((alias) => server.account(alias)) : [server]).filter((server) => Boolean(server.getOAuthAuth()));
 }
 
 /**
@@ -77,11 +80,12 @@ export function resolveOAuthStore(options: ProxyOAuthOptions | undefined): {
   }
 
   const key = process.env.FENTARIS_AUTH_KEY;
-  if (!key) {
-    return { store: new MemoryOAuthTokenStore(), ephemeral: true };
-  }
-
-  return { store: new LocalOAuthTokenStore({ dir: path.resolve(options?.authDir ?? DEFAULT_AUTH_DIR), key }), ephemeral: false };
+  const dir = path.resolve(options?.authDir ?? mcpStateDirectory());
+  return { store: new McpVaultOAuthTokenStore({
+    vault: mcpRuntimeVault(dir),
+    connections: () => readMcpConnectionState(dir).connections,
+    legacyStore: key ? new LocalOAuthTokenStore({ dir, key }) : new MemoryOAuthTokenStore(),
+  }), ephemeral: !key };
 }
 
 /**
@@ -161,7 +165,7 @@ export function createOAuthManager(params: {
       fetchFn: transport.createGuardedFetch(),
       ...(params.resolveClientSecret?.(server) ? { resolveClientSecret: params.resolveClientSecret(server) } : {}),
     });
-    server.attachOAuth((user) => manager.providerFor(server.name, user));
+    server.attachOAuth((user) => manager.providerFor(server.name, auth.account ? { ...user, upstreamAccounts: { ...user.upstreamAccounts, [server.name]: auth.account } } : user));
   }
 
   return manager;

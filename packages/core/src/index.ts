@@ -194,6 +194,8 @@ export type {
   HeaderCredentialAuth,
   McpServerAuth,
   McpServerOptions,
+  McpAccountOptions,
+  McpSecretResolver,
   ServerCredentialBinding,
 } from "./server/index.js";
 /**
@@ -407,6 +409,7 @@ export {
   isOAuthAuth,
   oauth,
   oauthTokens,
+  oauthTokensExpireAt,
 } from "./auth/oauth/index.js";
 export type {
   OAuthAuth,
@@ -930,3 +933,12 @@ export { redactOAuthMessage, redactOAuthUrl, redactOAuthValue } from "./auth/oau
 
 export { credentialVault } from "./credentials/index.js";
 export type { CredentialVaultSource, CredentialVaultOptions } from "./credentials/index.js";
+
+export { applyMcpConnectionState, readMcpConnectionState, writeMcpConnectionState, updateMcpConnectionState, resolveMcpProjectSecret, mcpStateDirectory } from "./mcp/projectState.js";
+export type { McpConnectionState, McpConnectionBinding, McpSecretSource } from "./mcp/projectState.js";
+export { McpDiscoveryService, bounded, endpointOf } from "./mcp/discovery.js";
+export type { McpDiscoveryResult, McpDiscoveryRow, McpDiscoveryCache, McpDiscoveryOptions, McpAuthenticationState } from "./mcp/discovery.js";
+export { McpVaultOAuthTokenStore, MCP_OAUTH_SECRET_PREFIX, mcpOAuthSecretReference } from "./mcp/vaultOAuthStore.js";
+export type { McpVault } from "./mcp/vaultOAuthStore.js";
+
+export { resolveCredentialSource } from "./credentials/index.js";

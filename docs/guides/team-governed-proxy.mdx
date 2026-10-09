@@ -291,65 +291,18 @@ Start the proxy:
 npm run dev
 ```
 
-In another shell, test runtime access:
+In another shell, inspect administrative connections and verify runtime health:
 
 ```bash theme={null}
 export FENTARIS_VAULT_KEY="<explicit-vault-unlock-key>"
 export FENTARIS_API_KEY="<reader-api-key>"
 
 fentaris doctor --runtime
-fentaris tools list --as user:reader --compact --json
-fentaris tools get workspace__status --as user:reader --json
+fentaris mcp
+fentaris mcp tools github --json
 ```
 
-Expected reader discovery includes local status and filesystem list access, but not maintainer-only GitHub writes:
-
-```json theme={null}
-{
-  "ok": true,
-  "data": {
-    "tools": [
-      {
-        "name": "workspace__status"
-      },
-      {
-        "name": "filesystem__list_directory"
-      }
-    ]
-  },
-  "warnings": []
-}
-```
-
-Calling a hidden or denied tool should fail before dispatch:
-
-```bash theme={null}
-fentaris tools get github__create_issue --as user:reader --json
-```
-
-```json theme={null}
-{
-  "ok": false,
-  "error": {
-    "code": "FENTARIS_TOOL_NOT_FOUND",
-    "message": "Tool \"github__create_issue\" was not found for the selected context."
-  },
-  "warnings": [],
-  "nextActions": [
-    {
-      "label": "Search available tools",
-      "command": "fentaris tools search <query> --json"
-    }
-  ]
-}
-```
-
-Switch to the maintainer API key to inspect maintainer-only access:
-
-```bash theme={null}
-export FENTARIS_API_KEY="<maintainer-api-key>"
-fentaris tools get github__create_issue --as user:maintainer --json
-```
+MCP inventory lists configured upstreams independently of the incoming user. Test reader and maintainer policies through the running MCP endpoint using their respective API keys. The reader's `tools/list` should include filesystem list access and omit maintainer-only GitHub writes; a denied tool call must fail before upstream dispatch. Administrative tool discovery does not establish a client's runtime permissions.
 
 ## MCP Client Test
 

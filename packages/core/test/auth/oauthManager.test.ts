@@ -27,7 +27,7 @@ describe("OAuthManager custom providers", () => {
 
     const factory = vi.fn(() => custom);
     const manager = new OAuthManager({ store: new MemoryOAuthTokenStore(), callbackUrl: "http://127.0.0.1:4000/_fentaris/oauth/callback" });
-    manager.register("custom", { auth: oauth({ provider: factory }), serverUrl: "https://mcp.example.com/mcp" });
+    manager.register("custom", { auth: oauth({ provider: factory }), serverUrl: "https://mcp.example.com/mcp", fetchFn: async () => new Response(null, { status: 404 }) });
 
     expect(manager.providerFor("custom", { id: "alice" })).toBe(custom);
 

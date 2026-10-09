@@ -5,6 +5,9 @@ import { StdioTransport } from "../../src/transports/client/StdioTransport.js";
 import { StreamableHttpMcpTransport } from "../../src/transports/client/StreamableHttpMcpTransport.js";
 import { MissingHttpTransportCredentialError } from "../../src/transportAuth.js";
 
+// These are mocked protocol clients; DNS guardrails have their own real tests.
+vi.mock("node:dns/promises", () => ({ lookup: vi.fn(async () => [{ address: "203.0.113.10" }]) }));
+
 const fakes = vi.hoisted(() => {
   const clientInstances: FakeClient[] = [];
   const stdioTransports: FakeStdioTransport[] = [];
