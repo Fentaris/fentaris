@@ -106,6 +106,8 @@ import {
   EdgeSingleCallCoordinator,
   EdgeFanoutCoordinator,
   InMemoryEdgeChildBindingStore,
+  EDGE_ERROR_CODES,
+  isEdgeError,
   EDGE_CONTROL_NAMESPACE,
   registerEdgeControlProvider,
   type DeviceResolver,
@@ -1926,11 +1928,6 @@ export class McpProxy {
         if (!this.shouldDiscoverToolsForServer(server.name, userGroups)) {
           return [];
         }
-        if (await this.oauthServerRequiresLogin(server, resolvedUser)) {
-          // Never contact the authorization server while listing; contribute nothing
-          // for this upstream instead of failing the whole listing. @pk
-          return [];
-        }
         const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
           operation: "tools:list",
           serverName: server.name,
@@ -1940,9 +1937,14 @@ export class McpProxy {
           subject: resolvedSubject,
           identity,
         });
-        const { user: userForServer } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
         let result: ListToolsResult;
         try {
+          if (await this.oauthServerRequiresLogin(server, resolvedUser)) {
+            // Never contact the authorization server while listing; contribute nothing
+            // for this upstream instead of failing the whole listing. @pk
+            return [];
+          }
+          const { user: userForServer } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
           result = await this.dispatchTargetOperation(
             server,
             context,
@@ -1950,13 +1952,17 @@ export class McpProxy {
             (transport) => transport.listTools(params),
           );
         } catch (error: unknown) {
-          if (!(server.hasNamedAccounts() ? server.selectedAccount(resolvedUser) : server).getOAuthAuth()) {
+          const normalizedEdgeError = isEdgeError(error)
+            && EDGE_ERROR_CODES.some((code) => code === error.code)
+            && error.name === `EdgeError[${error.code}]`;
+          if (normalizedEdgeError && !["EDGE_UNAVAILABLE", "EDGE_CAPACITY", "EDGE_WORKLOAD"].includes(error.code)) {
             throw error;
           }
-
-          // An OAuth upstream that rejects the stored authorization must not fail the
-          // whole listing for every other server. @pk
-          log_listToolsOAuthFailure(this.logger, server.name, error);
+          // Discovery is best-effort per upstream. Authentication preparation and
+          // transport failures must not hide capabilities from healthy servers. The
+          // policy and request validation above, and the global hooks below, remain
+          // outside this boundary so their failures are still request failures. @pk
+          log_listToolsUpstreamFailure(this.logger, server.name, error);
           return [];
         }
         const tools = this.groups.length > 0
@@ -4407,8 +4413,8 @@ function parseTimeoutMs(message: string): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
-function log_listToolsOAuthFailure(logger: Logger, serverName: string, error: unknown): void {
-  logger.warn("Omitting OAuth-protected server from tools/list", {
+function log_listToolsUpstreamFailure(logger: Logger, serverName: string, error: unknown): void {
+  logger.warn("Omitting unavailable upstream server from tools/list", {
     server: serverName,
     reason: redactOAuthMessage(error instanceof Error ? error.message : String(error)),
   });
