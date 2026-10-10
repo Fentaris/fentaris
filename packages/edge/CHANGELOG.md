@@ -1,5 +1,13 @@
 # @fentaris/edge
 
+## 0.3.7
+
+### Patch Changes
+
+- Updated dependencies [ac90c17]
+- Updated dependencies [ac90c17]
+  - @fentaris/core@3.3.0
+
 ## 0.3.6
 
 ### Patch Changes
