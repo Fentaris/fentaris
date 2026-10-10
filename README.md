@@ -80,6 +80,8 @@ fentaris dev
 
 The generated proxy listens on `http://localhost:4000/mcp` by default. Point your MCP client to that endpoint.
 
+Inspect configured upstream connections with `fentaris mcp`, discover tools with `fentaris mcp tools`, and connect a named upstream account with `fentaris mcp auth connect <MCP> --account <ACCOUNT>`. Inventory works independently of incoming client identities; runtime policies still govern tool use. See [named MCP connections](https://fentaris.mintlify.app/guides/mcp-connections) for migration and automation contracts.
+
 Under the hood, a Fentaris proxy is just a few lines of code:
 
 ```ts
@@ -158,7 +160,7 @@ Runtime routes can deny, approve, hide, log, or transform calls to any tool, res
 Authenticate clients with an API key, and let Fentaris handle OAuth 2.1 for upstream servers automatically:
 
 ```bash
-fentaris auth api-key add alice --generate
+fentaris auth keys create --user alice --name workstation
 ```
 
 ```ts

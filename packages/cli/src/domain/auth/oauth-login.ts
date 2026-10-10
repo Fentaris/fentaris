@@ -55,10 +55,14 @@ export async function openOAuthCliContext(
   behavior: { port?: number; withCallback?: boolean } = {},
 ): Promise<OAuthCliContext> {
   const project = await discoverSecretsProject(runtime.cwd, { requireEntrypoint: true });
+  const env = await loadProjectEnv(project.root, { ...runtime.env, ...process.env });
+  const inserted: string[] = [];
+  for (const [name, value] of Object.entries(env)) if (value !== undefined && process.env[name] === undefined) { process.env[name] = value; inserted.push(name); }
+  const restore = () => { for (const name of inserted) delete process.env[name]; };
+  try {
   const config = await loadProjectConfig(project);
   let store = config.oauth?.store;
   if (!store) {
-    const env = await loadProjectEnv(project.root, runtime.env);
     const key = await authKeyFromRuntime({ ...runtime, env }, options);
     store = new LocalOAuthTokenStore({ dir: authDirectory(project), key });
   }
@@ -95,9 +99,10 @@ export async function openOAuthCliContext(
         });
       }
 
-      await app.close();
+      try { await app.close(); } finally { restore(); }
     },
   };
+  } catch (error) { restore(); throw error; }
 }
 
 /**

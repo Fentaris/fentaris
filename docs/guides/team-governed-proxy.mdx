@@ -95,7 +95,8 @@ Create `src/index.ts`:
 import {
   bearer,
   credential,
-  credentialJson,
+  credentialVault,
+  projectVaultIdentityStrategy,
   fentaris,
   group,
   jsonConsoleLogger,
@@ -135,6 +136,7 @@ const maintainerPolicy = policy("maintainer")
 const app = fentaris({
   logger: jsonConsoleLogger(),
   autoLog: true,
+  identity: { strategy: projectVaultIdentityStrategy({ root: process.cwd() }), required: true },
   cli: {
     mcpAccounts: {
       workspace: {
@@ -154,22 +156,22 @@ const app = fentaris({
   groups: [
     group({
       id: "readers",
-      users: [user("reader", { apiKeys: [credentialJson("users.reader.apiKeys.0")] })],
+      users: [user("reader")],
       policy: readerPolicy,
     }),
     group({
       id: "developers",
-      users: [user("developer", { apiKeys: [credentialJson("users.developer.apiKeys.0")] })],
+      users: [user("developer")],
       credentials: {
-        "github.token": credentialJson("groups.developers.github.token"),
+        "github.token": credentialVault("github.developers.token"),
       },
       policy: developerPolicy,
     }),
     group({
       id: "maintainers",
-      users: [user("maintainer", { apiKeys: [credentialJson("users.maintainer.apiKeys.0")] })],
+      users: [user("maintainer")],
       credentials: {
-        "github.token": credentialJson("groups.maintainers.github.token"),
+        "github.token": credentialVault("github.maintainers.token"),
       },
       policy: maintainerPolicy,
     }),
@@ -215,9 +217,10 @@ await app.start();
 Create the manifest after the entrypoint exists:
 
 ```bash theme={null}
-export FENTARIS_AUTH_KEY="<local-encryption-key>"
 fentaris secrets manifest
 ```
+
+See [project vault unlocking and migration](/guides/project-vault). macOS can use Keychain instead of an explicit unlock key. Group policies remain distinct from upstream account aliases.
 
 The generated `.fentaris/secrets.manifest.json` is a schema file, not a secret store. Its exact entries depend on the credential helpers in the entrypoint. It uses this shape:
 
@@ -227,29 +230,30 @@ The generated `.fentaris/secrets.manifest.json` is a schema file, not a secret s
   "references": [
     {
       "ref": "github.token",
-      "scope": "default"
+      "scope": "group:developers",
+      "source": { "type": "vault", "reference": "github.developers.token" }
     }
   ]
 }
 ```
 
-Commit the generated manifest. Do not commit `.fentaris/credentials.enc.json`, raw API keys, upstream tokens, or `FENTARIS_AUTH_KEY`.
+Commit the generated manifest. Do not commit `.fentaris/vault.json`, raw API keys, upstream tokens, or `FENTARIS_VAULT_KEY`.
 
 ## Provision Local Credentials
 
 Generate API keys and store upstream credentials:
 
 ```bash theme={null}
-export FENTARIS_AUTH_KEY="<local-encryption-key>"
+export FENTARIS_VAULT_KEY="<explicit-vault-unlock-key>"
 
-fentaris auth api-key add reader --generate
-fentaris auth api-key add developer --generate
-fentaris auth api-key add maintainer --generate
+fentaris auth keys create --user reader --name workstation
+fentaris auth keys create --user developer --name workstation
+fentaris auth keys create --user maintainer --name workstation
 
 printf '%s' "$DEVELOPER_GITHUB_TOKEN" \
-  | fentaris secrets set github.token --group developers --value-stdin --non-interactive
+  | fentaris secrets set github.developers.token --stdin --non-interactive
 printf '%s' "$MAINTAINER_GITHUB_TOKEN" \
-  | fentaris secrets set github.token --group maintainers --value-stdin --non-interactive
+  | fentaris secrets set github.maintainers.token --stdin --non-interactive
 ```
 
 Save each generated API key when it is printed. Fentaris stores only hashes in the encrypted local credential store.
@@ -287,65 +291,18 @@ Start the proxy:
 npm run dev
 ```
 
-In another shell, test runtime access:
+In another shell, inspect administrative connections and verify runtime health:
 
 ```bash theme={null}
-export FENTARIS_AUTH_KEY="<local-encryption-key>"
+export FENTARIS_VAULT_KEY="<explicit-vault-unlock-key>"
 export FENTARIS_API_KEY="<reader-api-key>"
 
 fentaris doctor --runtime
-fentaris tools list --as user:reader --compact --json
-fentaris tools get workspace__status --as user:reader --json
+fentaris mcp
+fentaris mcp tools github --json
 ```
 
-Expected reader discovery includes local status and filesystem list access, but not maintainer-only GitHub writes:
-
-```json theme={null}
-{
-  "ok": true,
-  "data": {
-    "tools": [
-      {
-        "name": "workspace__status"
-      },
-      {
-        "name": "filesystem__list_directory"
-      }
-    ]
-  },
-  "warnings": []
-}
-```
-
-Calling a hidden or denied tool should fail before dispatch:
-
-```bash theme={null}
-fentaris tools get github__create_issue --as user:reader --json
-```
-
-```json theme={null}
-{
-  "ok": false,
-  "error": {
-    "code": "FENTARIS_TOOL_NOT_FOUND",
-    "message": "Tool \"github__create_issue\" was not found for the selected context."
-  },
-  "warnings": [],
-  "nextActions": [
-    {
-      "label": "Search available tools",
-      "command": "fentaris tools search <query> --json"
-    }
-  ]
-}
-```
-
-Switch to the maintainer API key to inspect maintainer-only access:
-
-```bash theme={null}
-export FENTARIS_API_KEY="<maintainer-api-key>"
-fentaris tools get github__create_issue --as user:maintainer --json
-```
+MCP inventory lists configured upstreams independently of the incoming user. Test reader and maintainer policies through the running MCP endpoint using their respective API keys. The reader's `tools/list` should include filesystem list access and omit maintainer-only GitHub writes; a denied tool call must fail before upstream dispatch. Administrative tool discovery does not establish a client's runtime permissions.
 
 ## MCP Client Test
 

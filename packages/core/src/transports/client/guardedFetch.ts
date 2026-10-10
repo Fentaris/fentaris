@@ -4,6 +4,25 @@ import { assertAllowedUpstreamUrl, BlockedUpstreamUrlError, type UpstreamHttpNet
 
 const maxRedirects = 10;
 
+/** Abort protocol and OAuth requests when their upstream connection closes. */
+export class UpstreamRequestLifetime {
+  private controller = new AbortController();
+
+  wrap(inner: FetchLike): FetchLike {
+    const lifetime = this.controller.signal;
+    return (input, init) => {
+      lifetime.throwIfAborted();
+      const caller = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+      return inner(input, { ...init, signal: caller ? AbortSignal.any([lifetime, caller]) : lifetime });
+    };
+  }
+
+  close(): void {
+    this.controller.abort();
+    this.controller = new AbortController();
+  }
+}
+
 /**
  * Wrap a fetch implementation so every outbound URL, including authorization-server
  * requests made by the OAuth client provider, passes the upstream network guardrails.

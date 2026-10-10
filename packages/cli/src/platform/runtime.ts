@@ -7,7 +7,17 @@ import { style } from "../ui/format.js";
 export function defaultRuntime(): Runtime {
   return {
     cwd: process.cwd(),
+    nonInteractive: !(process.stdin.isTTY && process.stdout.isTTY),
     env: process.env,
+    interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
+    progress: (message) => {
+      if (!process.stderr.isTTY) return () => undefined;
+      const frames = ["|", "/", "-", "\\"];
+      let frame = 0;
+      const timer = setInterval(() => process.stderr.write(`\r\u001b[2K${frames[frame++ % frames.length]} ${message}`), 100);
+      process.stderr.write(message);
+      return () => { clearInterval(timer); process.stderr.write("\r\u001b[2K"); };
+    },
     out: console,
     runner: runProcess,
     probe: (command, args = ["--version"]) => spawnSync(command, args, { stdio: "ignore", timeout: 2_000 }).status === 0,
@@ -219,7 +229,7 @@ async function askSelect<T extends string>(question: string, choices: T[], visib
 
 async function askSecret(question: string, defaultValue?: string): Promise<string> {
   if (!process.stdin.isTTY || !process.stdout.isTTY || typeof process.stdin.setRawMode !== "function") {
-    throw new Error("Secret prompts require an interactive terminal. Use FENTARIS_AUTH_KEY, --key, or --value-stdin for automation.");
+    throw new Error("Secret prompts require an interactive terminal. Configure FENTARIS_VAULT_KEY and use --stdin for automation.");
   }
 
   return new Promise((resolve, reject) => {
@@ -236,7 +246,7 @@ async function askSecret(question: string, defaultValue?: string): Promise<strin
     const finish = () => {
       cleanup();
       output.write("\n");
-      resolve(answer.trim() || defaultValue || "");
+      resolve(answer || defaultValue || "");
     };
     const cancel = () => {
       cleanup();
@@ -269,7 +279,7 @@ async function askSecret(question: string, defaultValue?: string): Promise<strin
       }
     };
 
-    output.write(`${question}${defaultValue ? ` ${style.hint(`(${defaultValue})`)}` : ""}: `);
+    output.write(`${question}: `);
     emitKeypressEvents(input);
     input.setRawMode(true);
     input.resume();

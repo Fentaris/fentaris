@@ -309,123 +309,46 @@ describe("default runtime prompts", () => {
 
 describe("command routing helpers", () => {
   it("parses nested commands and options", () => {
-    expect(parseCommand(["secrets", "set", "github.token", "--user", "alice", "--key", "test-key"])).toEqual({
+    expect(parseCommand(["secrets", "set", "github.token", "--source", "environment", "--env", "TOKEN"])).toEqual({
       kind: "ok",
       path: ["secrets", "set"],
       command: {
         name: "secrets",
         args: ["set", "github.token"],
-        options: { user: "alice", key: "test-key" },
+        options: { source: "environment", env: "TOKEN" },
       },
     });
   });
 
-  it("parses agent-native tools commands and filters", () => {
-    expect(parseCommand(["tools", "list", "--mcp", "github", "--as", "user:alice", "--limit", "10", "--json"])).toEqual({
-      kind: "ok",
-      path: ["tools", "list"],
-      command: {
-        name: "tools",
-        args: ["list"],
-        options: { mcp: "github", as: "user:alice", limit: "10", json: true },
-      },
-    });
-
-    expect(parseCommand(["tools", "schema", "github__create_issue", "--input", "--output", "--json"])).toEqual({
-      kind: "ok",
-      path: ["tools", "schema"],
-      command: {
-        name: "tools",
-        args: ["schema", "github__create_issue"],
-        options: { input: true, output: true, json: true },
-      },
-    });
-
-    expect(parseCommand(["tools", "auth", "status", "--mcp", "github", "--as", "user:alice", "--json"])).toEqual({
-      kind: "ok",
-      path: ["tools", "auth", "status"],
-      command: {
-        name: "tools",
-        args: ["auth", "status"],
-        options: { mcp: "github", as: "user:alice", json: true },
-      },
-    });
+  it("parses MCP commands and rejects the removed tools family", () => {
+    expect(parseCommand(["mcp", "tools", "github", "--account", "work", "--json"])).toMatchObject({ kind: "ok", path: ["mcp", "tools"], command: { name: "mcp", args: ["tools", "github"], options: { account: "work", json: true } } });
+    expect(parseCommand(["mcp", "tools", "schema", "github__create_issue", "--input", "--output", "--json"])).toMatchObject({ kind: "ok", path: ["mcp", "tools", "schema"], command: { args: ["tools", "schema", "github__create_issue"], options: { input: true, output: true, json: true } } });
+    expect(parseCommand(["mcp", "auth", "get", "github", "--account", "work", "--json"])).toMatchObject({ kind: "ok", path: ["mcp", "auth", "get"], command: { args: ["auth", "get", "github"], options: { account: "work", json: true } } });
+    expect(parseCommand(["tools", "list"])).toMatchObject({ kind: "parse-error", message: "unrecognized subcommand 'tools'" });
   });
 
-  it("parses dash-prefixed and inline option values", () => {
-    expect(parseCommand(["secrets", "set", "github.token", "--value", "-secret-value"])).toEqual({
-      kind: "ok",
-      path: ["secrets", "set"],
-      command: {
-        name: "secrets",
-        args: ["set", "github.token"],
-        options: { value: "-secret-value" },
-      },
-    });
-
-    expect(parseCommand(["secrets", "set", "github.token", "--value=-secret-value"])).toEqual({
-      kind: "ok",
-      path: ["secrets", "set"],
-      command: {
-        name: "secrets",
-        args: ["set", "github.token"],
-        options: { value: "-secret-value" },
-      },
-    });
+  it("parses inline public options and rejects removed raw credential options", () => {
+    expect(parseCommand(["secrets", "set", "token", "--source=environment", "--env=TOKEN"])).toMatchObject({ kind: "ok", command: { options: { source: "environment", env: "TOKEN" } } });
+    expect(parseCommand(["secrets", "set", "token", "--value=-secret"])).toMatchObject({ kind: "parse-error" });
   });
 
   it("parses stdin secret value option", () => {
-    expect(parseCommand(["secrets", "set", "github.token", "--value-stdin"])).toEqual({
+    expect(parseCommand(["secrets", "set", "github.token", "--stdin"])).toEqual({
       kind: "ok",
       path: ["secrets", "set"],
       command: {
         name: "secrets",
         args: ["set", "github.token"],
-        options: { "value-stdin": true },
+        options: { stdin: true },
       },
     });
   });
 
-  it("parses auth api-key commands", () => {
-    expect(parseCommand(["auth"])).toEqual({
-      kind: "ok",
-      path: ["auth"],
-      command: {
-        name: "auth",
-        args: [],
-        options: {},
-      },
-    });
-
-    expect(parseCommand(["auth", "api-key", "add"])).toEqual({
-      kind: "ok",
-      path: ["auth", "api-key", "add"],
-      command: {
-        name: "auth",
-        args: ["api-key", "add"],
-        options: {},
-      },
-    });
-
-    expect(parseCommand(["auth", "api-key", "add", "alice", "--value-stdin"])).toEqual({
-      kind: "ok",
-      path: ["auth", "api-key", "add"],
-      command: {
-        name: "auth",
-        args: ["api-key", "add", "alice"],
-        options: { "value-stdin": true },
-      },
-    });
-
-    expect(parseCommand(["auth", "api-key", "list", "--user", "alice", "--json"])).toEqual({
-      kind: "ok",
-      path: ["auth", "api-key", "list"],
-      command: {
-        name: "auth",
-        args: ["api-key", "list"],
-        options: { user: "alice", json: true },
-      },
-    });
+  it("parses incoming key commands with stable IDs and names", () => {
+    expect(parseCommand(["auth"])).toMatchObject({ kind: "ok", command: { args: [] } });
+    expect(parseCommand(["auth", "keys", "create", "--name", "macbook", "--user", "pi"])).toMatchObject({ kind: "ok", command: { args: ["keys", "create"], options: { name: "macbook", user: "pi" } } });
+    expect(parseCommand(["auth", "keys", "revoke", "fk_example"])).toMatchObject({ kind: "ok", command: { args: ["keys", "revoke", "fk_example"] } });
+    expect(parseCommand(["auth", "api-key", "add", "pi"])).toMatchObject({ kind: "parse-error" });
   });
 
   it("parses non-interactive on commands and nested commands", () => {
@@ -449,13 +372,13 @@ describe("command routing helpers", () => {
       },
     });
 
-    expect(parseCommand(["secrets", "set", "github.token", "--value-stdin", "--non-interactive"])).toEqual({
+    expect(parseCommand(["secrets", "set", "github.token", "--stdin", "--non-interactive"])).toEqual({
       kind: "ok",
       path: ["secrets", "set"],
       command: {
         name: "secrets",
         args: ["set", "github.token"],
-        options: { "value-stdin": true, "non-interactive": true },
+        options: { stdin: true, "non-interactive": true },
       },
     });
   });
@@ -531,12 +454,12 @@ describe("command routing helpers", () => {
     await expect(main(["secrets", "set", "--help"], secretsSet)).resolves.toBe(0);
     const output = vi.mocked(secretsSet.out.log).mock.calls.flat().join("\n");
     expect(output).toContain("Usage: ");
-    expect(output).toContain("fentaris secrets set [OPTIONS] [reference]");
+    expect(output).toContain("fentaris secrets set [reference] [OPTIONS]");
     expect(output).toContain("Arguments:");
 
     const authAdd = runtime("/tmp");
-    await expect(main(["auth", "api-key", "add", "--help"], authAdd)).resolves.toBe(0);
-    expect(vi.mocked(authAdd.out.log).mock.calls.flat().join("\n")).toContain("fentaris auth api-key add [OPTIONS] [user-id]");
+    await expect(main(["auth", "keys", "create", "--help"], authAdd)).resolves.toBe(0);
+    expect(vi.mocked(authAdd.out.log).mock.calls.flat().join("\n")).toContain("fentaris auth keys create [OPTIONS]");
   });
 
   it("reports parser errors before running commands", async () => {
@@ -557,7 +480,7 @@ describe("command routing helpers", () => {
   it("formats runtime errors separately from parser errors", async () => {
     const rt = runtime("/tmp");
     await expect(main(["check"], rt)).resolves.toBe(1);
-    expect(vi.mocked(rt.out.error).mock.calls.flat().join("\n")).toContain("Error: No Fentaris project found.");
+    expect(vi.mocked(rt.out.error).mock.calls.flat().join("\n")).toContain("error: No Fentaris project found.");
   });
 
   it("rejects removed legacy auth commands", async () => {
@@ -673,14 +596,14 @@ describe("project template", () => {
 
     expect(rendered.files["src/index.ts"]).toContain('group({\n      id: "teammates"');
     expect(rendered.files["src/index.ts"]).toContain('.allow("search")');
-    expect(rendered.files["src/index.ts"]).toContain('credentialJson("users.teammate.apiKeys.0")');
+    expect(rendered.files["src/index.ts"]).toContain('projectVaultIdentityStrategy({ root: process.cwd() })');
     expect(rendered.files["src/index.ts"]).not.toContain("allowAll");
     expect(JSON.parse(rendered.files[".fentaris/secrets.manifest.json"] ?? "{}")).toEqual({
       version: 1,
       references: [],
-      apiKeys: [{ userId: "teammate", source: { type: "local" }, count: 1 }],
+      apiKeys: [{ userId: "teammate", source: { type: "vault" }, count: 1 }],
     });
-    expect(rendered.files["README.md"]).toContain("auth api-key add teammate --generate --non-interactive");
+    expect(rendered.files["README.md"]).toContain("auth keys create --user teammate --name workstation --non-interactive");
     expect(rendered.files["README.md"]).toContain("contains no key");
   });
 
@@ -701,7 +624,7 @@ describe("project template", () => {
       status: "fail",
       ref: "teammate",
       scope: "apiKey",
-      detail: expect.stringContaining("Required local API key is missing"),
+      detail: expect.stringContaining("Required incoming project vault API key is missing"),
     }));
   });
 
@@ -988,7 +911,7 @@ describe("project commands", () => {
     await expect(main(["init", "demo", "--template", template, "--non-interactive", "--package-manager", "pnpm", "--skip-install", "--skip-git"], rt)).resolves.toBe(0);
 
     const config = await readFile(join(dir, "demo", "src", "index.ts"), "utf8");
-    expect(config.includes("credentialJson")).toBe(template === "team");
+    expect(config.includes("projectVaultIdentityStrategy")).toBe(template === "team");
   });
 
   it("defaults to the local template", async () => {
@@ -1489,53 +1412,8 @@ void app;
   });
 });
 
-describe("secrets", () => {
-  it("creates a project-local auth key on the first encrypted write", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    const authDir = join(dir, ".fentaris");
-    await mkdir(authDir, { recursive: true });
-    await writeFile(
-      join(dir, "fentaris.json"),
-      JSON.stringify({ name: "demo", packageManager: "pnpm", entrypoint: "src/index.ts", port: 4000, path: "/mcp", authDir: ".fentaris" }),
-    );
+describe("legacy manifest and recovery tooling", () => {
 
-    const rt = runtime(dir);
-    delete rt.env.FENTARIS_AUTH_KEY;
-    await expect(main(["secrets", "set", "github.token", "--value", "secret-value"], rt)).resolves.toBe(0);
-
-    const dotenv = await readFile(join(dir, ".env"), "utf8");
-    const key = dotenv.match(/^FENTARIS_AUTH_KEY=(.+)$/m)?.[1];
-    expect(key).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    const credentials = FentarisAuth.decryptCredentials(
-      JSON.parse(await readFile(join(authDir, "credentials.enc.json"), "utf8")) as unknown,
-      key ?? "",
-    );
-    expect(credentials.defaults["github.token"]).toBe("secret-value");
-    expect(rt.prompt.text).not.toHaveBeenCalled();
-  });
-
-  it("leaves no local credential state when the first secrets write is declined", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    const rt = runtime(dir, { pnpm: true, git: true, docker: true });
-    await expect(main(["init", "demo", "--skip-install"], rt)).resolves.toBe(0);
-
-    rt.cwd = join(dir, "demo");
-    delete rt.env.FENTARIS_AUTH_KEY;
-    vi.mocked(rt.prompt.confirm).mockResolvedValueOnce(false);
-
-    await expect(main(["secrets", "set", "github.token"], rt)).resolves.toBe(0);
-    await expect(readFile(join(rt.cwd, ".fentaris", "credentials.enc.json"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(readFile(join(rt.cwd, ".env"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
-
-    await writeFile(join(rt.cwd, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
-    await writeInstalledCoreVersion(rt.cwd, coreVersion);
-    vi.mocked(rt.out.log).mockClear();
-
-    await expect(main(["doctor", "--json"], rt)).resolves.toBe(0);
-    const output = String(vi.mocked(rt.out.log).mock.calls.at(-1)?.[0]);
-    expect(output).not.toContain('"label": "credentials.enc.json"');
-    expect(output).not.toContain('"label": "FENTARIS_AUTH_KEY"');
-  });
 
   it("does not require an auth key when no encrypted store exists", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
@@ -1553,530 +1431,6 @@ describe("secrets", () => {
     await expect(readFile(join(dir, ".env"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("stores redacted user secrets in FentarisAuth-compatible credentials", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    const project = join(dir, "project");
-    const authDir = join(project, ".fentaris", "auth");
-    await mkdir(authDir, { recursive: true });
-    await writeFile(
-      join(project, "fentaris.config.json"),
-      JSON.stringify({ name: "demo", packageManager: "pnpm", entrypoint: "src/index.ts", port: 4000, path: "/mcp", authDir: ".fentaris/auth" }),
-    );
-    await writeFile(
-      join(authDir, "credentials.enc.json"),
-      JSON.stringify(FentarisAuth.encryptCredentials({ users: {}, groups: {}, defaults: {} }, "test-key")),
-    );
-    await writeFile(join(authDir, "upstream-auth.json"), JSON.stringify({ servers: {} }));
-
-    const rt = runtime(project);
-    await expect(main(["secrets", "set", "github.token", "--user", "alice"], rt)).resolves.toBe(0);
-
-    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(authDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
-    expect(credentials.users.alice?.credentials["github.token"]).toBe("secret-value");
-    const output = vi.mocked(rt.out.log).mock.calls.flat().join("\n");
-    expect(output).toContain("Review");
-    expect(output).toContain("Value: <redacted>");
-    expect(rt.prompt.confirm).toHaveBeenCalledWith("Store this credential?");
-  });
-
-  it("accepts an explicit local encryption key for secrets set", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    const project = join(dir, "project");
-    const authDir = join(project, ".fentaris");
-    await mkdir(authDir, { recursive: true });
-    await writeFile(
-      join(project, "fentaris.json"),
-      JSON.stringify({ name: "demo", packageManager: "pnpm", entrypoint: "src/index.ts", port: 4000, path: "/mcp", authDir: ".fentaris" }),
-    );
-
-    const rt = runtime(project);
-    delete rt.env.FENTARIS_AUTH_KEY;
-    await expect(main(["secrets", "set", "github.token", "--key", "test-key", "--value", "-secret-value"], rt)).resolves.toBe(0);
-
-    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(authDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
-    expect(credentials.defaults["github.token"]).toBe("-secret-value");
-    expect(rt.prompt.text).not.toHaveBeenCalled();
-    expect(rt.out.error.mock.calls.flat().join("\n")).toContain("--key exposes");
-    expect(rt.out.error.mock.calls.flat().join("\n")).toContain("--value exposes");
-  });
-
-  it("loads the local encryption key from the discovered project .env for secrets set", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-
-    const rt = runtime(join(dir, "src"));
-    delete rt.env.FENTARIS_AUTH_KEY;
-    await expect(main(["secrets", "set", "github.token", "--value", "secret-value"], rt)).resolves.toBe(0);
-
-    const credentials = FentarisAuth.decryptCredentials(
-      JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown,
-      "test-key",
-    );
-    expect(credentials.defaults["github.token"]).toBe("secret-value");
-    expect(rt.prompt.text).not.toHaveBeenCalled();
-  });
-
-  it("keeps an exported auth key ahead of the project .env for secrets commands", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    await writeFile(join(dir, ".env"), "FENTARIS_AUTH_KEY=dotenv-key\n");
-    await writeFile(
-      join(dir, ".fentaris", "credentials.enc.json"),
-      JSON.stringify(FentarisAuth.encryptCredentials({ users: {}, groups: {}, defaults: {} }, "exported-key")),
-    );
-
-    const rt = runtime(dir);
-    rt.env.FENTARIS_AUTH_KEY = "exported-key";
-    await expect(main(["secrets", "set", "github.token", "--value", "secret-value"], rt)).resolves.toBe(0);
-
-    const credentials = FentarisAuth.decryptCredentials(
-      JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown,
-      "exported-key",
-    );
-    expect(credentials.defaults["github.token"]).toBe("secret-value");
-    expect(rt.prompt.text).not.toHaveBeenCalled();
-  });
-
-  it("reads secret values from stdin without prompting", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    const input = new PassThrough();
-    input.end("stdin-secret\n");
-
-    const rt = runtime(dir);
-    await withFakeStdin(input, async () => {
-      await expect(main(["secrets", "set", "github.token", "--value-stdin"], rt)).resolves.toBe(0);
-    });
-
-    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
-    expect(credentials.defaults["github.token"]).toBe("stdin-secret");
-    expect(rt.prompt.text).not.toHaveBeenCalled();
-    expect(rt.prompt.confirm).not.toHaveBeenCalled();
-  });
-
-  it("supports non-interactive secrets set when all input is explicit", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    const input = new PassThrough();
-    input.end("stdin-secret\n");
-
-    const rt = runtime(dir);
-    await withFakeStdin(input, async () => {
-      await expect(main(["secrets", "set", "github.token", "--value-stdin", "--non-interactive"], rt)).resolves.toBe(0);
-    });
-
-    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
-    expect(credentials.defaults["github.token"]).toBe("stdin-secret");
-    expect(rt.prompt.text).not.toHaveBeenCalled();
-    expect(rt.prompt.select).not.toHaveBeenCalled();
-    expect(rt.prompt.confirm).not.toHaveBeenCalled();
-  });
-
-  it("adds and lists user API keys without storing raw values", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    const input = new PassThrough();
-    input.end("alice-api-key\n");
-
-    const rt = runtime(dir);
-    await withFakeStdin(input, async () => {
-      await expect(main(["auth", "api-key", "add", "alice", "--value-stdin"], rt)).resolves.toBe(0);
-    });
-
-    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
-    expect(credentials.users.alice?.apiKeys).toHaveLength(1);
-    expect(credentials.users.alice?.apiKeys[0]).toMatch(/^sha256:/);
-    expect(credentials.users.alice?.apiKeys[0]).not.toBe("alice-api-key");
-    expect(FentarisAuth.compareApiKey(credentials.users.alice?.apiKeys[0] ?? "", "alice-api-key")).toBe(true);
-
-    const listRuntime = runtime(dir);
-    await expect(main(["auth", "api-key", "list"], listRuntime)).resolves.toBe(0);
-    const output = listRuntime.out.log.mock.calls.flat().join("\n");
-    expect(output).toContain("alice");
-    expect(output).toContain("1 key");
-    expect(output).not.toContain("alice-api-key");
-  });
-
-  it("does not duplicate existing user API keys", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const input = new PassThrough();
-      input.end("alice-api-key\n");
-      const rt = runtime(dir);
-      await withFakeStdin(input, async () => {
-        await expect(main(["auth", "api-key", "add", "alice", "--value-stdin"], rt)).resolves.toBe(0);
-      });
-    }
-
-    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
-    expect(credentials.users.alice?.apiKeys).toHaveLength(1);
-  });
-
-  it("removes user API keys by value", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    const credentialsPath = join(dir, ".fentaris", "credentials.enc.json");
-    await writeFile(
-      credentialsPath,
-      JSON.stringify(
-        FentarisAuth.encryptCredentials(
-          {
-            users: { alice: { apiKeys: [FentarisAuth.hashApiKey("alice-api-key")], credentials: {} } },
-            groups: {},
-            defaults: {},
-          },
-          "test-key",
-        ),
-      ),
-    );
-
-    const input = new PassThrough();
-    input.end("alice-api-key\n");
-    const rt = runtime(dir);
-    await withFakeStdin(input, async () => {
-      await expect(main(["auth", "api-key", "remove", "alice", "--value-stdin"], rt)).resolves.toBe(0);
-    });
-
-    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(credentialsPath, "utf8")) as unknown, "test-key");
-    expect(credentials.users.alice).toBeUndefined();
-  });
-
-  it("generates user API keys and prints them once", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    const rt = runtime(dir);
-
-    await expect(main(["auth", "api-key", "add", "alice", "--generate"], rt)).resolves.toBe(0);
-
-    const output = rt.out.log.mock.calls.flat().join("\n");
-    const match = output.match(/Generated key:[^\n]* ([A-Za-z0-9_-]+)/);
-    expect(match?.[1]).toBeTruthy();
-    const generated = match?.[1] ?? "";
-    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
-    expect(FentarisAuth.compareApiKey(credentials.users.alice?.apiKeys[0] ?? "", generated)).toBe(true);
-  });
-
-  it("adds an API key through the root auth menu with known user selection", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    await writeFile(
-      join(dir, "src", "index.ts"),
-      `import { fentaris, user } from "@fentaris/core";
-const app = fentaris({ users: [user("bob")] });
-void app;
-`,
-    );
-
-    const rt = runtime(dir);
-    rt.prompt = prompt([], ["Add API key", "bob", "Generate a new API key"]);
-
-    await expect(main(["auth"], rt)).resolves.toBe(0);
-
-    const output = rt.out.log.mock.calls.flat().join("\n");
-    const generated = output.match(/Generated key:[^\n]* ([A-Za-z0-9_-]+)/)?.[1] ?? "";
-    const credentials = FentarisAuth.decryptCredentials(
-      JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown,
-      "test-key",
-    );
-    expect(rt.prompt.select).toHaveBeenCalledWith("Auth action", ["Add API key", "List API keys", "Remove API key"]);
-    expect(rt.prompt.select).toHaveBeenCalledWith("User id", ["bob", "Add another user id"], { visibleItems: 8 });
-    expect(rt.prompt.select).toHaveBeenCalledWith("API key source", ["Generate a new API key", "Enter an existing API key"]);
-    expect(rt.prompt.confirm).toHaveBeenCalledWith("Store this API key?");
-    expect(output).toContain("Review");
-    expect(output).toContain("<redacted>");
-    expect(generated).not.toBe("");
-    expect(FentarisAuth.compareApiKey(credentials.users.bob?.apiKeys[0] ?? "", generated)).toBe(true);
-  });
-
-  it("discovers auth users from the manifest, entrypoint, and encrypted store", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    await writeFile(
-      join(dir, "src", "index.ts"),
-      `import { fentaris, user } from "@fentaris/core";
-const app = fentaris({ users: [user("entry-user")] });
-void app;
-`,
-    );
-    await writeFile(
-      join(dir, ".fentaris", "secrets.manifest.json"),
-      JSON.stringify({ version: 1, references: [{ ref: "token", scope: "user:manifest-user" }] }),
-    );
-    await writeFile(
-      join(dir, ".fentaris", "credentials.enc.json"),
-      JSON.stringify(
-        FentarisAuth.encryptCredentials(
-          {
-            users: { "stored-user": { apiKeys: [], credentials: {} } },
-            groups: {},
-            defaults: {},
-          },
-          "test-key",
-        ),
-      ),
-    );
-
-    const rt = runtime(dir);
-    rt.prompt = prompt(["manual-api-key"], ["stored-user", "Enter an existing API key"]);
-
-    await expect(main(["auth", "api-key", "add"], rt)).resolves.toBe(0);
-
-    expect(rt.prompt.select).toHaveBeenCalledWith(
-      "User id",
-      ["entry-user", "manifest-user", "stored-user", "Add another user id"],
-      { visibleItems: 8 },
-    );
-    const credentials = FentarisAuth.decryptCredentials(
-      JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown,
-      "test-key",
-    );
-    expect(FentarisAuth.compareApiKey(credentials.users["stored-user"]?.apiKeys[0] ?? "", "manual-api-key")).toBe(true);
-    expect(rt.out.log.mock.calls.flat().join("\n")).not.toContain("manual-api-key");
-  });
-
-  it("does not write a guided API key when confirmation is declined", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    const credentialsPath = join(dir, ".fentaris", "credentials.enc.json");
-    const before = await readFile(credentialsPath, "utf8");
-    const rt = runtime(dir);
-    rt.prompt = prompt([], ["Generate a new API key"]);
-    rt.prompt.confirm = vi.fn(async () => false);
-
-    await expect(main(["auth", "api-key", "add", "alice"], rt)).resolves.toBe(0);
-
-    await expect(readFile(credentialsPath, "utf8")).resolves.toBe(before);
-    const output = rt.out.log.mock.calls.flat().join("\n");
-    expect(output).toContain("API key was not stored.");
-    expect(output).not.toContain("Generated key:");
-  });
-
-  it("lists and removes API keys through the root auth menu", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    const credentialsPath = join(dir, ".fentaris", "credentials.enc.json");
-    await writeFile(
-      credentialsPath,
-      JSON.stringify(
-        FentarisAuth.encryptCredentials(
-          {
-            users: { alice: { apiKeys: [FentarisAuth.hashApiKey("alice-api-key")], credentials: {} } },
-            groups: {},
-            defaults: {},
-          },
-          "test-key",
-        ),
-      ),
-    );
-
-    const listRuntime = runtime(dir);
-    listRuntime.prompt = prompt([], ["List API keys"]);
-    await expect(main(["auth"], listRuntime)).resolves.toBe(0);
-    expect(listRuntime.out.log.mock.calls.flat().join("\n")).toContain("alice");
-
-    const removeRuntime = runtime(dir);
-    removeRuntime.prompt = prompt(["alice-api-key"], ["Remove API key", "alice"]);
-    await expect(main(["auth"], removeRuntime)).resolves.toBe(0);
-    expect(removeRuntime.prompt.confirm).toHaveBeenCalledWith("Remove this API key?");
-
-    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(credentialsPath, "utf8")) as unknown, "test-key");
-    expect(credentials.users.alice).toBeUndefined();
-  });
-
-  it("supports explicit auth commands in SDK-only projects", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeSdkOnlyProject(dir);
-    const rt = runtime(join(dir, "src"));
-
-    await expect(main(["auth", "api-key", "add", "alice", "--generate", "--non-interactive"], rt)).resolves.toBe(0);
-
-    const credentials = FentarisAuth.decryptCredentials(
-      JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown,
-      "test-key",
-    );
-    expect(credentials.users.alice?.apiKeys).toHaveLength(1);
-    expect(rt.prompt.text).not.toHaveBeenCalled();
-    expect(rt.prompt.select).not.toHaveBeenCalled();
-    expect(rt.prompt.confirm).not.toHaveBeenCalled();
-  });
-
-  it("fails guided auth commands in non-interactive mode", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    const rootRuntime = runtime(dir);
-    const addRuntime = runtime(dir);
-
-    await expect(main(["auth", "--non-interactive"], rootRuntime)).resolves.toBe(1);
-    await expect(main(["auth", "api-key", "add", "--generate", "--non-interactive"], addRuntime)).resolves.toBe(1);
-
-    expect(rootRuntime.out.error).toHaveBeenCalledWith(expect.stringContaining("Command requires interactive input"));
-    expect(addRuntime.out.error).toHaveBeenCalledWith(expect.stringContaining("Command requires interactive input"));
-  });
-
-  it("fails non-interactive secrets set instead of prompting for missing input", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    const rt = runtime(dir);
-
-    await expect(main(["secrets", "set", "--non-interactive"], rt)).resolves.toBe(1);
-
-    expect(rt.out.error).toHaveBeenCalledWith(expect.stringContaining("Command requires interactive input"));
-    expect(rt.prompt.text).not.toHaveBeenCalled();
-    expect(rt.prompt.select).not.toHaveBeenCalled();
-    expect(rt.prompt.confirm).not.toHaveBeenCalled();
-  });
-
-  it("prompts for reference, scope, and value when secrets set omits the reference", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    await writeFile(
-      join(dir, "src", "index.ts"),
-      `import { credential, fentaris, mcp } from "@fentaris/core";
-const app = fentaris({ defaults: { credentials: { "github.token": credential("github.token") } } });
-app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callTool: async () => ({}), close: async () => {} } });
-`,
-    );
-
-    const rt = runtime(dir);
-    rt.prompt = prompt(["alice", "secret-value"], ["github.token (default)", "user"]);
-
-    await expect(main(["secrets", "set"], rt)).resolves.toBe(0);
-
-    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
-    expect(credentials.users.alice?.credentials["github.token"]).toBe("secret-value");
-    expect(rt.prompt.select).toHaveBeenCalledWith("Secret reference", ["github.token (default)", "Add another reference"]);
-    expect(rt.prompt.select).toHaveBeenCalledWith("Credential scope", ["default", "user", "group"]);
-    expect(rt.prompt.confirm).toHaveBeenCalledWith("Store this credential?");
-    const output = rt.out.log.mock.calls.flat().join("\n");
-    expect(output).toContain("Stored github.token as user alice credential.");
-    expect(output.match(/Credential scope/g) ?? []).toHaveLength(0);
-  });
-
-  it("selects known user ids from the project entrypoint", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    await writeFile(
-      join(dir, "src", "index.ts"),
-      `import { credential, fentaris, group, Policy, user } from "@fentaris/core";
-const app = fentaris({
-  defaults: { credentials: { "github.token": credential("github.token") } },
-  groups: [group({ id: "support", users: [user("bob")], policy: Policy.allowAll() })],
-});
-void app;
-`,
-    );
-
-    const rt = runtime(dir);
-    rt.prompt = prompt(["secret-value"], ["github.token (default)", "user", "bob"]);
-
-    await expect(main(["secrets", "set"], rt)).resolves.toBe(0);
-
-    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
-    expect(credentials.users.bob?.credentials["github.token"]).toBe("secret-value");
-    expect(rt.prompt.select).toHaveBeenCalledWith("User id", ["bob", "Add another user id"], { visibleItems: 8 });
-    expect(rt.prompt.text).toHaveBeenCalledTimes(1);
-  });
-
-  it("selects known group ids and supports manual group id entry", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    await writeFile(
-      join(dir, "src", "index.ts"),
-      `import { credential, fentaris, group, Policy, user } from "@fentaris/core";
-const app = fentaris({
-  defaults: { credentials: { "github.token": credential("github.token") } },
-  groups: [group({ id: "support", users: [user("bob")], policy: Policy.allowAll() })],
-});
-void app;
-`,
-    );
-
-    const knownGroup = runtime(dir);
-    knownGroup.prompt = prompt(["secret-value"], ["github.token (default)", "group", "support"]);
-
-    await expect(main(["secrets", "set"], knownGroup)).resolves.toBe(0);
-
-    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
-    expect(credentials.groups.support?.["github.token"]).toBe("secret-value");
-    expect(knownGroup.prompt.select).toHaveBeenCalledWith("Group id", ["support", "Add another group id"], { visibleItems: 8 });
-
-    const manualGroup = runtime(dir);
-    manualGroup.prompt = prompt(["custom", "secret-value"], ["github.token (default)", "group", "Add another group id"]);
-
-    await expect(main(["secrets", "set"], manualGroup)).resolves.toBe(0);
-
-    const updatedCredentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
-    expect(updatedCredentials.groups.custom?.["github.token"]).toBe("secret-value");
-  });
-
-  it("does not store a prompted secret when the review is declined", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-
-    const rt = runtime(dir);
-    rt.prompt.confirm = vi.fn(async () => false);
-
-    await expect(main(["secrets", "set", "github.token"], rt)).resolves.toBe(0);
-
-    const credentials = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown, "test-key");
-    expect(credentials.defaults["github.token"]).toBeUndefined();
-    expect(rt.out.log.mock.calls.flat().join("\n")).toContain("Secret was not stored.");
-  });
-
-  it("lists stored secret references without values", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    await writeFile(
-      join(dir, "src", "index.ts"),
-      `import { credential, fentaris, mcp } from "@fentaris/core";
-const app = fentaris({ defaults: { credentials: { "github.token": credential("github.token") } } });
-app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callTool: async () => ({}), close: async () => {} } });
-`,
-    );
-    const backendDir = join(dir, ".fentaris");
-    const credentials = FentarisAuth.decryptCredentials(
-      JSON.parse(await readFile(join(backendDir, "credentials.enc.json"), "utf8")) as unknown,
-      "test-key",
-    );
-    credentials.defaults["github.token"] = "secret";
-    await writeFile(join(backendDir, "credentials.enc.json"), JSON.stringify(FentarisAuth.encryptCredentials(credentials, "test-key")));
-
-    const rt = runtime(dir);
-    await expect(main(["secrets", "list"], rt)).resolves.toBe(0);
-    const output = rt.out.log.mock.calls.flat().join("\n");
-    expect(output).toContain("github.token");
-    expect(output).toContain("set");
-    expect(output).not.toContain("secret");
-  });
-
-  it("does not satisfy required user credentials with stored API keys", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    await writeFile(
-      join(dir, ".fentaris", "secrets.manifest.json"),
-      JSON.stringify({ version: 1, references: [{ ref: "alice", scope: "user:alice" }] }),
-    );
-    const input = new PassThrough();
-    input.end("alice-api-key\n");
-
-    const rt = runtime(dir);
-    await withFakeStdin(input, async () => {
-      await expect(main(["auth", "api-key", "add", "alice", "--value-stdin"], rt)).resolves.toBe(0);
-    });
-
-    const listRuntime = runtime(dir);
-    await expect(main(["secrets", "list", "--json"], listRuntime)).resolves.toBe(0);
-    const output = JSON.parse(listRuntime.out.log.mock.calls.flat().join("\n")) as {
-      secrets: Array<{ ref: string; scope: string; kind: string; status: string }>;
-    };
-    expect(output.secrets).toEqual(
-      expect.arrayContaining([
-        { ref: "alice", scope: "user:alice", kind: "credential", status: "missing" },
-        { ref: "alice", scope: "user:alice", kind: "apiKey", status: "1 key" },
-      ]),
-    );
-  });
 
   it("generates and checks the secrets manifest from the entrypoint", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
@@ -2096,6 +1450,7 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     await expect(main(["secrets", "manifest", "--check"], rt)).resolves.toBe(0);
   });
 
+
   it("discovers SDK-only projects for secrets from package.json", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeSdkOnlyProject(dir);
@@ -2112,6 +1467,7 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     });
   });
 
+
   it("generates the secrets manifest for SDK-only projects with an explicit entrypoint", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeSdkOnlyProject(dir, { entrypoint: "src/server.ts" });
@@ -2122,21 +1478,6 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     expect(manifest.references).toEqual([{ ref: "github.token", scope: "default", source: { type: "local" } }]);
   });
 
-  it("uses package.json fentaris metadata for SDK-only secrets commands", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeSdkOnlyProject(dir, {
-      entrypoint: "src/server.ts",
-      packageFentaris: { entrypoint: "src/server.ts", authDir: ".local-fentaris" },
-    });
-
-    const manifestRuntime = runtime(dir);
-    await expect(main(["secrets", "manifest"], manifestRuntime)).resolves.toBe(0);
-    await expect(readFile(join(dir, ".local-fentaris", "secrets.manifest.json"), "utf8")).resolves.toContain("github.token");
-
-    const setRuntime = runtime(dir);
-    await expect(main(["secrets", "set", "github.token", "--value", "secret"], setRuntime)).resolves.toBe(0);
-    await expect(readFile(join(dir, ".local-fentaris", "credentials.enc.json"), "utf8")).resolves.toContain("ciphertext");
-  });
 
   it("reports a guided error when an SDK-only manifest entrypoint cannot be inferred", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
@@ -2152,6 +1493,7 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     expect(output).toContain("SDK-only Fentaris project detected");
     expect(output).toContain("fentaris secrets manifest --entrypoint src/index.ts");
   });
+
 
   it("generates scoped secret refs and credential env vars from the entrypoint", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
@@ -2182,6 +1524,7 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     expect(manifest.envVars).toEqual(["LINEAR_TOKEN", "SUPPORT_GITHUB_TOKEN"]);
   });
 
+
   it("discovers local and env API keys and flags unsupported local paths", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
@@ -2210,50 +1553,6 @@ fentaris({ users: [
     expect(rt.out.log.mock.calls.flat().join("\n")).toContain("unsupported local source custom.manual.token");
   });
 
-  it("sets up local API keys once and creates a protected project encryption key", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    await rm(join(dir, ".env"));
-    await rm(join(dir, ".fentaris", "credentials.enc.json"));
-    await writeFile(
-      join(dir, "src", "index.ts"),
-      `import { credentialJson, fentaris, user } from "@fentaris/core";
-fentaris({ users: [
-  user("admin", { apiKeys: [credentialJson("users.admin.apiKeys.0")] }),
-  user("operator", { apiKeys: [credentialJson("users.operator.apiKeys.0")] }),
-] });
-`,
-    );
-
-    const rt = runtime(dir);
-    delete rt.env.FENTARIS_AUTH_KEY;
-    await expect(main(["secrets", "setup", "--yes", "--json"], rt)).resolves.toBe(0);
-    const result = JSON.parse(rt.out.log.mock.calls.flat().join("\n")) as {
-      ok: boolean;
-      data: { createdEncryptionKey: boolean; generatedApiKeys: Array<{ userId: string; value: string }> };
-    };
-    expect(result.ok).toBe(true);
-    expect(result.data.createdEncryptionKey).toBe(true);
-    expect(result.data.generatedApiKeys.map((entry) => entry.userId)).toEqual(["admin", "operator"]);
-
-    const envContents = await readFile(join(dir, ".env"), "utf8");
-    const key = /^FENTARIS_AUTH_KEY=(.+)$/mu.exec(envContents)?.[1];
-    expect(key).toBeTruthy();
-    if (process.platform !== "win32") expect((await stat(join(dir, ".env"))).mode & 0o777).toBe(0o600);
-    const credentials = FentarisAuth.decryptCredentials(
-      JSON.parse(await readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")) as unknown,
-      key ?? "",
-    );
-    expect(credentials.users.admin?.apiKeys).toHaveLength(1);
-    expect(credentials.users.operator?.apiKeys).toHaveLength(1);
-    expect(envContents).not.toContain(result.data.generatedApiKeys[0]?.value ?? "not-present");
-
-    const rerun = runtime(dir);
-    delete rerun.env.FENTARIS_AUTH_KEY;
-    await expect(main(["secrets", "setup", "--yes", "--json"], rerun)).resolves.toBe(0);
-    const rerunResult = JSON.parse(rerun.out.log.mock.calls.flat().join("\n")) as { data: { generatedApiKeys: unknown[] } };
-    expect(rerunResult.data.generatedApiKeys).toEqual([]);
-  });
 
   it("collects external values with a hidden prompt without printing them", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
@@ -2275,6 +1574,7 @@ fentaris({ defaults: { credentials: { "github.token": credentialEnv("GITHUB_TOKE
     expect(await readFile(join(dir, ".env"), "utf8")).toContain('GITHUB_TOKEN="external-secret"');
     expect(rt.out.log.mock.calls.flat().join("\n")).not.toContain("external-secret");
   });
+
 
   it("does not write anything when non-interactive setup lacks external values", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
@@ -2299,6 +1599,7 @@ fentaris({ defaults: { credentials: { "github.token": credential("github.token")
     await expect(readFile(join(dir, ".fentaris", "secrets.manifest.json"), "utf8")).rejects.toThrow();
   });
 
+
   it("reports a setup dry run without modifying project files", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
@@ -2321,17 +1622,6 @@ fentaris({ users: [user("admin", { apiKeys: [credentialJson("users.admin.apiKeys
     await expect(readFile(join(dir, ".fentaris", "credentials.enc.json"), "utf8")).rejects.toThrow();
   });
 
-  it("wraps invalid secrets manifest JSON errors", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    await writeFile(join(dir, ".fentaris", "secrets.manifest.json"), "{ nope");
-
-    const rt = runtime(dir);
-    await expect(main(["secrets", "list"], rt)).resolves.toBe(1);
-    const output = rt.out.error.mock.calls.flat().join("\n");
-    expect(output).toContain("Unable to parse secrets manifest");
-    expect(output).not.toContain("SyntaxError");
-  });
 
   it("creates the auth directory when generating the secrets manifest", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
@@ -2350,6 +1640,7 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     await expect(readFile(join(dir, ".fentaris", "secrets.manifest.json"), "utf8")).resolves.toContain("github.token");
   });
 
+
   it("reports missing secrets via secrets doctor", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
     await writeHealthyProject(dir);
@@ -2363,8 +1654,9 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     const output = rt.out.log.mock.calls.flat().join("\n");
     expect(output).toContain("github.token");
     expect(output).toContain("missing");
-    expect(output).toContain("fentaris secrets set github.token");
+    expect(output).toContain("fentaris secrets migrate");
   });
+
 
   it("uses an explicit key for secrets doctor", async () => {
     const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
@@ -2380,31 +1672,5 @@ app.mcp("github", { transport: { listTools: async () => ({ tools: [] }), callToo
     delete rt.env.FENTARIS_AUTH_KEY;
     await expect(main(["secrets", "doctor", "--key", "explicit-key"], rt)).resolves.toBe(0);
     expect(rt.out.log.mock.calls.flat().join("\n")).toContain("All secrets checks passed.");
-  });
-
-  it("unsets stored credentials", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-    const backendDir = join(dir, ".fentaris");
-    const credentials = FentarisAuth.decryptCredentials(
-      JSON.parse(await readFile(join(backendDir, "credentials.enc.json"), "utf8")) as unknown,
-      "test-key",
-    );
-    credentials.defaults["github.token"] = "secret";
-    await writeFile(join(backendDir, "credentials.enc.json"), JSON.stringify(FentarisAuth.encryptCredentials(credentials, "test-key")));
-
-    const rt = runtime(dir);
-    await expect(main(["secrets", "unset", "github.token"], rt)).resolves.toBe(0);
-    const updated = FentarisAuth.decryptCredentials(JSON.parse(await readFile(join(backendDir, "credentials.enc.json"), "utf8")) as unknown, "test-key");
-    expect(updated.defaults["github.token"]).toBeUndefined();
-  });
-
-  it("reports when unset removes nothing", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "fentaris-cli-"));
-    await writeHealthyProject(dir);
-
-    const rt = runtime(dir);
-    await expect(main(["secrets", "unset", "github.token"], rt)).resolves.toBe(0);
-    expect(rt.out.log.mock.calls.flat().join("\n")).toContain("No github.token credential found");
   });
 });

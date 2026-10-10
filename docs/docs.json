@@ -81,9 +81,11 @@
               "guides/flows",
               "guides/end-to-end",
               "guides/sdk-only-secrets",
+              "guides/project-vault",
               "guides/error-handling",
               "guides/governance-auth",
               "guides/oauth",
+              "guides/mcp-connections",
               "guides/telegram-approval",
               "guides/security",
               "guides/edge-device"

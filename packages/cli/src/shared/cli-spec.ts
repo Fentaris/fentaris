@@ -27,6 +27,8 @@ export type CliCommandSpec = {
   details?: string[];
   usage: string;
   allowNoSubcommand?: boolean;
+  /** Complete recognized missing input at runtime; never correct unknown or invalid explicit options. */
+  progressive?: boolean;
   commandGroups?: CliCommandGroup[];
   arguments?: CliArgumentSpec[];
   options?: CliOptionSpec[];
@@ -200,6 +202,48 @@ const edgeCommandSpec: CliCommandSpec = {
   },
 };
 
+const mcpReadOptions: CliOptionSpec[] = [
+  { name: "json", description: "Output stable JSON without prompts or terminal progress." },
+  { name: "offline", description: "Read configuration and cached metadata; remote status remains unverified." },
+  { name: "account", valueName: "ALIAS", description: "Select a named upstream account; never a downstream user selector." },
+  { name: "timeout", valueName: "MS", description: "Per-connection live-check deadline (1-60000 ms). [default: 5000]" },
+  { name: "help", short: "h", description: "Print help" },
+];
+const mcpAuthOptions: CliOptionSpec[] = [
+  ...mcpReadOptions.filter((option) => option.name !== "offline"),
+  { name: "secret", valueName: "REFERENCE", description: "Reuse an existing named secret without copying its value." },
+  { name: "credential", valueName: "SLOT=REFERENCE", repeatable: true, description: "Reuse a named secret for a configured bearer/header/environment slot; repeat for a credential bundle." },
+  { name: "reauth", description: "Explicitly reauthorize an already connected account." },
+  { name: "print-url", description: "Print the browser authorization URL to stderr." },
+  { name: "port", valueName: "PORT", description: "Loopback OAuth callback port (0 selects an available port)." },
+  { name: "from-session", valueName: "SESSION", description: "Explicit legacy OAuth session to copy during migration." },
+  localSecretsKeyOption,
+];
+const mcpCommandSpec: CliCommandSpec = {
+  name: "mcp", path: ["mcp"], progressive: true, allowNoSubcommand: true,
+  description: "Inspect configured MCPs and named upstream connections without a downstream identity.",
+  usage: "fentaris mcp [OPTIONS] [COMMAND]",
+  details: ["Inventory includes failing and unconfigured connections. Exit codes: 0 success/offline, 3 partial live discovery, 1 failure, 2 invalid input.", "Example: fentaris mcp get gmail --account gabry848"],
+  commandGroups: [{ title: "Commands", commands: [{ name: "get", summary: "Inspect MCP configuration, accounts, authentication, and connectivity." }, { name: "tools", summary: "Discover tools grouped by MCP and account." }, { name: "auth", summary: "Manage upstream authentication, independently of incoming users." }] }],
+  options: mcpReadOptions,
+  commands: {
+    get: { name: "get", path: ["mcp", "get"], progressive: true, description: "Inspect a configured MCP and its connections.", usage: "fentaris mcp get [MCP] [OPTIONS]", arguments: [{ name: "MCP", description: "Configured server name." }], options: mcpReadOptions },
+    tools: { name: "tools", path: ["mcp", "tools"], progressive: true, allowNoSubcommand: true, description: "Discover all connections, optionally filtered to one MCP/account.", usage: "fentaris mcp tools [MCP] [OPTIONS] [COMMAND]", arguments: [{ name: "MCP", description: "Optional MCP filter." }], options: mcpReadOptions,
+      commandGroups: [{ title: "Commands", commands: [{ name: "get", summary: "Inspect one proxied tool on a selected connection." }, { name: "schema", summary: "Inspect input/output schemas." }] }],
+      commands: {
+        get: { name: "get", path: ["mcp", "tools", "get"], progressive: true, description: "Inspect one tool.", usage: "fentaris mcp tools get [TOOL] [OPTIONS]", arguments: [{ name: "TOOL", description: "Proxied name, for example gmail__search_messages." }], options: mcpReadOptions },
+        schema: { name: "schema", path: ["mcp", "tools", "schema"], progressive: true, description: "Inspect one tool schema.", usage: "fentaris mcp tools schema [TOOL] [OPTIONS]", arguments: [{ name: "TOOL", description: "Proxied tool name." }], options: [...mcpReadOptions, { name: "input", description: "Return the input schema." }, { name: "output", description: "Return the output schema." }] },
+      },
+    },
+    auth: { name: "auth", path: ["mcp", "auth"], progressive: true, allowNoSubcommand: true, description: "Inspect or explicitly connect/disconnect upstream accounts.", usage: "fentaris mcp auth [COMMAND] [OPTIONS]", options: mcpReadOptions,
+      commandGroups: [{ title: "Commands", commands: [{ name: "get", summary: "Inspect selected account authentication." }, { name: "connect", summary: "Complete the appropriate upstream authentication flow." }, { name: "disconnect", summary: "Disconnect one account and preserve shared secrets." }, { name: "migrate", summary: "Explicitly copy a legacy OAuth session into an upstream account." }] }],
+      commands: Object.fromEntries(["get", "connect", "disconnect", "migrate"].map((action) => [action, {
+        name: action, path: ["mcp", "auth", action], progressive: true, description: `${action[0].toUpperCase()}${action.slice(1)} upstream account authentication.`, usage: `fentaris mcp auth ${action} [MCP] [OPTIONS]`, arguments: [{ name: "MCP", description: "Configured server name." }], options: action === "get" ? mcpReadOptions : mcpAuthOptions,
+      }])),
+    },
+  },
+};
+
 export const cliSpec: CliCommandSpec = {
   name: "fentaris",
   path: [],
@@ -230,7 +274,7 @@ export const cliSpec: CliCommandSpec = {
       commands: [
         { name: "auth", summary: "Manage local identity authentication." },
         { name: "secrets", summary: "Manage local credentials and secret manifests." },
-        { name: "tools", summary: "Discover effective MCP tools for configured accounts." },
+        { name: "mcp", summary: "Inspect MCP connections, tools, and upstream authentication." },
         { name: "edge", summary: "Join and operate governed Edge computers." },
       ],
     },
@@ -374,66 +418,6 @@ export const cliSpec: CliCommandSpec = {
             { name: "help", short: "h", description: "Print help" },
           ],
         },
-        "api-key": {
-          name: "api-key",
-          path: ["auth", "api-key"],
-          description: "Manage API keys for local user identity.",
-          usage: "fentaris auth api-key [OPTIONS] [COMMAND]",
-          details: ["API keys authenticate clients through the x-fentaris-api-key header and resolve them to Fentaris users."],
-          commandGroups: [
-            {
-              title: "Commands",
-              commands: [
-                { name: "add", summary: "Store a local API key for a user." },
-                { name: "list", summary: "List local API-key counts by user." },
-                { name: "remove", summary: "Remove a local API key from a user." },
-              ],
-            },
-          ],
-          options: [{ name: "help", short: "h", description: "Print help" }],
-          commands: {
-            add: {
-              name: "add",
-              path: ["auth", "api-key", "add"],
-              description: "Store a local API key for a user.",
-              usage: "fentaris auth api-key add [OPTIONS] [user-id]",
-              details: ["Omit the user id or API-key value to use the guided setup with user selection, key generation or entry, a redacted review, and confirmation before writing."],
-              arguments: [{ name: "user-id", description: "User id resolved when the API key is presented. If omitted, an interactive prompt is used." }],
-              options: [
-                { name: "value", valueName: "VALUE", description: "API key value. Prefer --value-stdin to avoid exposing keys in process arguments." },
-                { name: "value-stdin", description: "Read the API key value from stdin instead of process arguments or an interactive prompt." },
-                { name: "generate", description: "Generate a new API key and print it once." },
-                localSecretsKeyOption,
-                { name: "help", short: "h", description: "Print help" },
-              ],
-            },
-            list: {
-              name: "list",
-              path: ["auth", "api-key", "list"],
-              description: "List local API-key counts by user.",
-              usage: "fentaris auth api-key list [OPTIONS]",
-              options: [
-                { name: "user", valueName: "ID", description: "Only list keys for one user id." },
-                { name: "json", description: "Output API-key references as JSON." },
-                localSecretsKeyOption,
-                { name: "help", short: "h", description: "Print help" },
-              ],
-            },
-            remove: {
-              name: "remove",
-              path: ["auth", "api-key", "remove"],
-              description: "Remove a local API key from a user.",
-              usage: "fentaris auth api-key remove [OPTIONS] <user-id>",
-              arguments: [{ name: "user-id", required: true, description: "User id to remove the API key from." }],
-              options: [
-                { name: "value", valueName: "VALUE", description: "API key value to remove. Prefer --value-stdin to avoid exposing keys in process arguments." },
-                { name: "value-stdin", description: "Read the API key value from stdin instead of process arguments or an interactive prompt." },
-                localSecretsKeyOption,
-                { name: "help", short: "h", description: "Print help" },
-              ],
-            },
-          },
-        },
       },
     },
     secrets: {
@@ -474,48 +458,6 @@ export const cliSpec: CliCommandSpec = {
             { name: "help", short: "h", description: "Print help" },
           ],
         },
-        set: {
-          name: "set",
-          path: ["secrets", "set"],
-          description: "Store a local credential value.",
-          usage: "fentaris secrets set [OPTIONS] [reference]",
-          details: [
-            "Omit reference or --value to use a guided setup with manifest reference selection, scope selection, a redacted review, and confirmation before writing.",
-          ],
-          arguments: [{ name: "reference", description: "Secret reference to store, for example github.token. If omitted, an interactive prompt is used." }],
-          options: [
-            { name: "user", valueName: "ID", description: "Store the credential for a user scope." },
-            { name: "group", valueName: "ID", description: "Store the credential for a group scope." },
-            { name: "value", valueName: "VALUE", description: "Credential value. Prefer --value-stdin to avoid exposing secrets in process arguments." },
-            { name: "value-stdin", description: "Read the credential value from stdin instead of process arguments or an interactive prompt." },
-            localSecretsKeyOption,
-            { name: "help", short: "h", description: "Print help" },
-          ],
-        },
-        list: {
-          name: "list",
-          path: ["secrets", "list"],
-          description: "List required and stored credentials.",
-          usage: "fentaris secrets list [OPTIONS]",
-          options: [
-            { name: "json", description: "Output credentials as JSON." },
-            localSecretsKeyOption,
-            { name: "help", short: "h", description: "Print help" },
-          ],
-        },
-        unset: {
-          name: "unset",
-          path: ["secrets", "unset"],
-          description: "Remove a local credential value.",
-          usage: "fentaris secrets unset [OPTIONS] <reference>",
-          arguments: [{ name: "reference", required: true, description: "Secret reference to remove." }],
-          options: [
-            { name: "user", valueName: "ID", description: "Remove the credential from a user scope." },
-            { name: "group", valueName: "ID", description: "Remove the credential from a group scope." },
-            localSecretsKeyOption,
-            { name: "help", short: "h", description: "Print help" },
-          ],
-        },
         manifest: {
           name: "manifest",
           path: ["secrets", "manifest"],
@@ -541,127 +483,43 @@ export const cliSpec: CliCommandSpec = {
         },
       },
     },
-    tools: {
-      name: "tools",
-      path: ["tools"],
-      description: "Discover effective MCP tools for configured accounts.",
-      usage: "fentaris tools [OPTIONS] [COMMAND]",
-      commandGroups: [
-        {
-          title: "Commands",
-          commands: [
-            { name: "list", summary: "List effective tools." },
-            { name: "search", summary: "Search effective tools." },
-            { name: "get", summary: "Inspect one tool." },
-            { name: "schema", summary: "Inspect one tool schema." },
-            { name: "auth", summary: "Inspect tool account authentication." },
-          ],
-        },
-      ],
-      options: [{ name: "help", short: "h", description: "Print help" }],
-      commands: {
-        list: {
-          name: "list",
-          path: ["tools", "list"],
-          description: "List effective MCP tools.",
-          usage: "fentaris tools list [OPTIONS]",
-          options: toolDiscoveryOptions(),
-        },
-        search: {
-          name: "search",
-          path: ["tools", "search"],
-          description: "Search effective MCP tools.",
-          usage: "fentaris tools search [OPTIONS] <query>",
-          arguments: [{ name: "query", required: true, description: "Search query." }],
-          options: toolDiscoveryOptions(),
-        },
-        get: {
-          name: "get",
-          path: ["tools", "get"],
-          description: "Inspect one effective MCP tool.",
-          usage: "fentaris tools get [OPTIONS] <tool>",
-          arguments: [{ name: "tool", required: true, description: "Proxied tool name, for example github__create_issue." }],
-          options: toolDiscoveryOptions(),
-        },
-        schema: {
-          name: "schema",
-          path: ["tools", "schema"],
-          description: "Inspect one effective MCP tool schema.",
-          usage: "fentaris tools schema [OPTIONS] <tool>",
-          arguments: [{ name: "tool", required: true, description: "Proxied tool name, for example github__create_issue." }],
-          options: [
-            ...toolDiscoveryOptions(),
-            { name: "input", description: "Return the input schema." },
-            { name: "output", description: "Return the output schema." },
-          ],
-        },
-        auth: {
-          name: "auth",
-          path: ["tools", "auth"],
-          description: "Inspect tool account authentication.",
-          usage: "fentaris tools auth [OPTIONS] [COMMAND]",
-          commandGroups: [
-            {
-              title: "Commands",
-              commands: [
-                { name: "list", summary: "List configured MCP account selectors." },
-                { name: "status", summary: "Inspect one MCP account selector." },
-                { name: "login", summary: "Start or describe login for one selector." },
-              ],
-            },
-          ],
-          options: [{ name: "help", short: "h", description: "Print help" }],
-          commands: {
-            list: {
-              name: "list",
-              path: ["tools", "auth", "list"],
-              description: "List configured MCP account selectors.",
-              usage: "fentaris tools auth list [OPTIONS]",
-              options: [{ name: "json", description: "Output a JSON envelope." }, { name: "help", short: "h", description: "Print help" }],
-            },
-            status: {
-              name: "status",
-              path: ["tools", "auth", "status"],
-              description: "Inspect one MCP account selector.",
-              usage: "fentaris tools auth status --mcp <MCP> --as <SELECTOR> [OPTIONS]",
-              options: authDiscoveryOptions(),
-            },
-            login: {
-              name: "login",
-              path: ["tools", "auth", "login"],
-              description: "Start or describe login for one selector.",
-              usage: "fentaris tools auth login --mcp <MCP> --as <SELECTOR> [OPTIONS]",
-              options: authDiscoveryOptions(),
-            },
-          },
-        },
-      },
-    },
+    mcp: mcpCommandSpec,
+
   },
 };
 
-function toolDiscoveryOptions(): CliOptionSpec[] {
-  return [
-    { name: "json", description: "Output a JSON envelope." },
-    { name: "compact", description: "Return compact metadata." },
-    { name: "limit", valueName: "N", description: "Maximum number of tools to return. [default: 20]" },
-    { name: "cursor", valueName: "CURSOR", description: "Pagination cursor from a prior response." },
-    { name: "max-tokens", valueName: "N", description: "Best-effort output token budget." },
-    { name: "mcp", valueName: "MCP", description: "Filter to one MCP server." },
-    { name: "as", valueName: "SELECTOR", description: "Use a configured account selector such as user:alice or group:support." },
-    { name: "include", valueName: "TEXT", description: "Only include tools matching text. Comma-separated values are accepted." },
-    { name: "exclude", valueName: "TEXT", description: "Exclude tools matching text. Comma-separated values are accepted." },
-    { name: "refresh", description: "Bypass cached discovery data where supported." },
-    { name: "no-start", description: "Do not start stdio MCP servers for discovery." },
-    { name: "help", short: "h", description: "Print help" },
-  ];
-}
-
-function authDiscoveryOptions(): CliOptionSpec[] {
-  return [
-    { name: "mcp", valueName: "MCP", description: "Configured MCP server name." },
-    { name: "as", valueName: "SELECTOR", description: "Configured account selector." },
-    { name: "json", description: "Output a JSON envelope." },
-    { name: "help", short: "h", description: "Print help" },
-  ];
-}
+// #298 command contract. #297 can mark its MCP specs progressive to use the same parser.
+const vaultReadOptions: CliOptionSpec[] = [{ name: "json", description: "Machine-readable metadata; never prompt." }, { name: "offline", description: "Inspect local resolution only; remote validity is unverified." }, { name: "help", short: "h", description: "Print help" }];
+const keyCommands: Record<string, CliCommandSpec> = Object.fromEntries(["create", "list", "revoke"].map((action) => [action, {
+  name: action, path: ["auth", "keys", action], progressive: true,
+  description: `${action[0]!.toUpperCase()}${action.slice(1)} named incoming client keys.`, usage: `fentaris auth keys ${action} [OPTIONS]${action === "revoke" ? " [key-id]" : ""}`,
+  ...(action === "revoke" ? { arguments: [{ name: "key-id", description: "Stable key ID, never its secret value." }] } : {}),
+  options: [...(action === "revoke" ? [] : [{ name: "user", valueName: "USER", description: "Incoming identity, distinct from upstream account aliases." }]),
+    ...(action === "create" ? [{ name: "name", valueName: "NAME", description: "Name of this incoming key." }, { name: "expires", valueName: "TIMESTAMP", description: "Optional future ISO 8601 UTC expiry." }] : []), ...vaultReadOptions.filter((option) => action === "list" || option.name !== "offline")],
+}]));
+cliSpec.commands!.auth!.allowNoSubcommand = true;
+cliSpec.commands!.auth!.description = "Manage incoming client identities and named access keys.";
+cliSpec.commands!.auth!.options = vaultReadOptions;
+cliSpec.commands!.auth!.commandGroups = [{ title: "Commands", commands: [{ name: "keys", summary: "Create, list, and revoke incoming keys by ID." }] }];
+cliSpec.commands!.auth!.commands!.keys = { name: "keys", path: ["auth", "keys"], description: "Manage incoming client keys. Choose an explicit action interactively.", usage: "fentaris auth keys [create|list|revoke] [OPTIONS]", allowNoSubcommand: true, progressive: true, options: vaultReadOptions, commands: keyCommands, commandGroups: [{ title: "Commands", commands: ["create", "list", "revoke"].map((name) => ({ name, summary: `${name} incoming keys.` })) }] };
+delete cliSpec.commands!.auth!.commands!["api-key"];
+cliSpec.commands!.secrets!.allowNoSubcommand = true;
+cliSpec.commands!.secrets!.options = vaultReadOptions;
+cliSpec.commands!.secrets!.description = "Inspect and maintain project credential references without exposing values.";
+cliSpec.commands!.secrets!.commands!.set = {
+  name: "set", path: ["secrets", "set"], progressive: true, description: "Set a hidden or stdin vault value, or explicitly bind another source.", usage: "fentaris secrets set [reference] [OPTIONS]",
+  arguments: [{ name: "reference", description: "Stable project credential reference." }],
+  options: [{ name: "stdin", description: "Read the credential from stdin; never put values in arguments." }, { name: "source", valueName: "SOURCE", description: "vault (default), environment, or external." },
+    { name: "env", valueName: "VARIABLE", description: "Explicit environment source variable." }, { name: "provider", valueName: "PROVIDER", description: "Explicit external provider ID." }, { name: "locator", valueName: "LOCATOR", description: "Public external secret locator." }, { name: "replace-source", description: "Explicitly replace the source binding without copying a value." },
+    { name: "json", description: "Machine-readable result; never prompt." }, { name: "help", short: "h", description: "Print help" }],
+};
+for (const action of ["get", "list", "remove", "check"] as const) cliSpec.commands!.secrets!.commands![action] = {
+  name: action, path: ["secrets", action], progressive: true, description: `${action[0].toUpperCase()}${action.slice(1)} project credential reference metadata.`, usage: `fentaris secrets ${action}${["get", "remove"].includes(action) ? " [reference]" : ""} [OPTIONS]`,
+  ...(["get", "remove"].includes(action) ? { arguments: [{ name: "reference", description: "Stable project credential reference." }] } : {}),
+  options: [...(action === "remove" ? [{ name: "force", description: "Explicitly delete an in-use stored value while retaining consumers for recovery." }] : []), ...vaultReadOptions.filter((option) => action !== "remove" || option.name !== "offline")],
+};
+cliSpec.commands!.secrets!.commands!.migrate = { name: "migrate", path: ["secrets", "migrate"], progressive: true, description: "Explicitly migrate legacy encrypted credentials while retaining recovery data.", usage: "fentaris secrets migrate --mapping <file> --legacy-file <file> [OPTIONS]", options: [
+  { name: "mapping", valueName: "FILE", description: "Public JSON array of {reference, scope, target} mappings." }, { name: "legacy-file", valueName: "FILE", description: "Existing encrypted store; never modified." }, { name: "incoming-keys", description: "Explicitly migrate incoming verifiers with new IDs and names." }, { name: "json", description: "Machine-readable migration result." }, { name: "help", short: "h", description: "Print help" },
+] };
+delete cliSpec.commands!.secrets!.commands!.unset;
+cliSpec.commands!.secrets!.commandGroups = [{ title: "Commands", commands: ["set", "get", "list", "remove", "check", "migrate", "manifest", "doctor", "setup"].map((name) => ({ name, summary: cliSpec.commands!.secrets!.commands![name]!.description })) }];

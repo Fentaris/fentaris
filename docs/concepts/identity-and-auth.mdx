@@ -7,45 +7,31 @@ Fentaris can map API keys to users, load local encrypted credentials, and pass s
 
 ## API Key Identity
 
-Generated projects start without API-key identity. Add API-key auth when clients need to authenticate through the `x-fentaris-api-key` header.
-
-Run `fentaris auth` to add, list, or remove downstream client keys through a guided menu:
+`fentaris auth` shows incoming users and active key counts. `fentaris auth keys` offers an explicit action menu; specified commands work without redundant questions:
 
 ```bash theme={null}
-fentaris auth
+fentaris auth keys create --user alice --name workstation
+fentaris auth keys list --user alice --json
+fentaris auth keys revoke <key-id> --non-interactive
 ```
 
-The add flow selects a known user or accepts a new user id, then generates a key or accepts an existing key. Fentaris shows a redacted review and requires confirmation before writing.
+Configure `identity: { strategy: projectVaultIdentityStrategy({root: process.cwd()}), required: true }` with your existing users/groups and access policy. Creation delivers the sensitive raw key once; only a verifier hash is persisted. Clients send `x-fentaris-api-key`. IDs and names are public metadata; expiry and revocation reject authentication. Knowing a credential reference never grants access.
 
-Use the explicit command in automation:
+## Upstream Authentication
 
-```bash theme={null}
-printf '%s' "$ADMIN_API_KEY" | fentaris auth api-key add alice --value-stdin
-```
-
-Fentaris stores only a hash of the API key. `fentaris auth api-key list` shows user key counts, and `fentaris auth api-key remove` revokes a key when you provide the raw value to match.
-
-## Upstream OAuth
-
-API keys identify the caller to Fentaris. Upstream OAuth is the other direction: how Fentaris authenticates to a protected MCP server on that caller's behalf.
+Incoming users identify clients to Fentaris. Upstream account aliases identify the connection Fentaris uses to authenticate to an MCP server; aliases must not be inferred from incoming user/group scopes.
 
 ```ts theme={null}
-mcp("linear", { transport: streamableHttp({ url: "https://mcp.linear.app/mcp" }), auth: oauth() })
+mcp("linear", { transport: streamableHttp({ url: "https://mcp.linear.app/mcp" }), accounts: { work: { auth: oauth() } } })
 ```
 
-Each Fentaris user gets their own upstream authorization, stored encrypted in `.fentaris/oauth-tokens.enc.json` and refreshed automatically. Sign a user in with `fentaris auth login linear --as user:alice`, or let the first tool call prompt them. See [Upstream OAuth 2.1](/guides/oauth).
+Each named account has its own upstream authorization, stored through the project credential vault and refreshed automatically. Connect it with `fentaris mcp auth connect linear --account work`. Runtime selects the account with `upstreamAccounts` and still checks policy. Legacy per-user OAuth sessions require explicit migration and remain separate. The project vault's `oauthStore(account)` adapter isolates lifecycle-managed tokens by server, account, and session, keeping them outside manually editable inventory. See [Named MCP connections](/guides/mcp-connections) and [Upstream OAuth 2.1](/guides/oauth).
 
-## Local Credentials
+## Project Credentials
 
-When enabled, local credentials are stored in `.fentaris/credentials.enc.json` and decrypted with `FENTARIS_AUTH_KEY`. New stores use a versioned AES-256-GCM envelope with PBKDF2 key derivation metadata. Existing legacy stores remain readable and are rewritten in the newer format after a successful update.
+Use `credentialVault("github.work.token")` in the existing credential-source abstraction. `fentaris secrets set github.work.token` uses hidden input; scripts use `--stdin`. Get/list/check show sources, resolution state, and consumers without values. macOS Keychain stores the vault unlock key; CI/unsupported platforms require an explicit `FENTARIS_VAULT_KEY` or credential-store adapter. Fentaris never generates an unlock key into project `.env` or silently uses plaintext.
 
-The first interactive write creates the project key and encrypted store only after confirmation. Declining the review does not make a project appear configured for local credentials.
-
-On Unix platforms, Fentaris writes `credentials.enc.json` with owner-only permissions (`0600`). Automation should pass secret values through `FENTARIS_AUTH_KEY`, `fentaris auth api-key add <user-id> --value-stdin`, and `fentaris secrets set --value-stdin`; interactive prompts are reserved for real terminals so secret values are not echoed in CI logs.
-
-<Note>
-  The generated `.gitignore` excludes `.fentaris/` and `.env` so local secrets do not get committed by default.
-</Note>
+Environment/external sources are explicitly bound without copying values. Project `.env` loads before configuration; defined process values take precedence. Legacy `credentialJson` and `FENTARIS_AUTH_KEY` remain supported for recovery. Migrate with explicit mappings and retain the old data/key until verification. See [Project vault and client keys](/guides/project-vault).
 
 ## OAuth Resource Server
 

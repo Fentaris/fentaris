@@ -89,15 +89,15 @@ export class OAuthManager {
    * @pk
    */
   register(server: string, registration: OAuthServerRegistration): void {
-    this.registrations.set(server, registration);
+    this.registrations.set(registration.auth.account ? `${server}\u0000account:${registration.auth.account}` : server, registration);
   }
 
-  registrationFor(server: string): OAuthServerRegistration | undefined {
-    return this.registrations.get(server);
+  registrationFor(server: string, session?: OAuthSessionKey): OAuthServerRegistration | undefined {
+    return this.registrations.get(session?.startsWith("account:") ? `${server}\u0000${session}` : server);
   }
 
   servers(): string[] {
-    return [...this.registrations.keys()];
+    return [...new Set([...this.registrations.keys()].map((key) => key.split("\u0000")[0]))];
   }
 
   /**
@@ -122,7 +122,7 @@ export class OAuthManager {
    * @pk
    */
   sessionKeyFor(server: string, user: UserContext): OAuthSessionKey {
-    const registration = this.registrations.get(server);
+    const registration = this.registrationFor(server, user.upstreamAccounts?.[server] ? `account:${user.upstreamAccounts[server]}` : undefined);
     return registration ? oauthSessionKeyFor(registration.auth, user) : "shared";
   }
 
@@ -131,7 +131,7 @@ export class OAuthManager {
    * @pk
    */
   providerFor(server: string, user: UserContext): OAuthClientProvider | undefined {
-    const registration = this.registrations.get(server);
+    const registration = this.registrationFor(server, user.upstreamAccounts?.[server] ? `account:${user.upstreamAccounts[server]}` : undefined);
     if (!registration) {
       return undefined;
     }
@@ -175,7 +175,7 @@ export class OAuthManager {
    * @pk
    */
   async status(server: string, session: OAuthSessionKey): Promise<OAuthAuthorizationStatus> {
-    const registration = this.registrations.get(server);
+    const registration = this.registrationFor(server, session);
     if (!registration) {
       return "not-configured";
     }
@@ -203,7 +203,7 @@ export class OAuthManager {
    * @pk
    */
   async beginLogin(server: string, user: UserContext): Promise<OAuthLoginStart> {
-    const registration = this.registrations.get(server);
+    const registration = this.registrationFor(server, user.upstreamAccounts?.[server] ? `account:${user.upstreamAccounts[server]}` : undefined);
     if (!registration) {
       throw new Error(`MCP server "${server}" is not declared with oauth()`);
     }
@@ -259,7 +259,7 @@ export class OAuthManager {
       throw new Error("Authorization callback is missing the authorization code");
     }
 
-    const registration = this.registrations.get(entry.server);
+    const registration = this.registrationFor(entry.server, entry.session);
     if (!registration) {
       await this.pending.fail(params.state, "server is no longer configured");
       throw new Error(`MCP server "${entry.server}" is not declared with oauth()`);

@@ -28,7 +28,7 @@ project, preserve its API style and make the smallest coherent change.
 | Add app-owned tools, resources, or prompts | `app.local("name")` | Do not build a custom transport when the capability lives in the app |
 | Define durable static authorization | `policy(...).mcp(...).allow(...)` and `.deny(...)` | Middleware is not a replacement for a stable allow-list |
 | Check runtime arguments or tenant state | `.tool(...)` routes or middleware | Static policy cannot validate arbitrary input values |
-| Configure users and API-key identity | `user(..., { apiKeys: [credentialJson(...)] })` plus `fentaris auth api-key` | Never generate, encrypt, or persist raw client keys in app code |
+| Configure users and API-key identity | `projectVaultIdentityStrategy(...)`, incoming `user(...)`, and `fentaris auth keys` | Never generate, encrypt, or persist raw client keys in app code |
 | Store upstream credentials | `credential(...)` references plus `fentaris secrets set` | Do not add plaintext `.env` values or shell interpolation to stdio commands |
 | Group users with policy and credentials | constructor `group({ ... })` | Fluent `app.group(...)` does not own credential sources |
 | Compose named groups and policies across modules | `app.policy(...)` and `app.group(...)` | Declare the named policy before startup |
@@ -85,13 +85,13 @@ invent or print real secret values.
 
 ```bash theme={null}
 printf '%s' "$UPSTREAM_TOKEN" \
-  | fentaris secrets set upstream.token --value-stdin --non-interactive
+  | fentaris secrets set upstream.token --stdin --non-interactive
 ```
 
 For client API keys:
 
 ```bash theme={null}
-fentaris auth api-key add alice --generate --non-interactive
+fentaris auth keys create --user alice --name workstation --non-interactive
 ```
 
 The handoff should say where the user must provide values and what must not be

@@ -15,7 +15,7 @@ const lockStaleMs = 15_000;
  * Authorization session an OAuth record belongs to.
  * @pk
  */
-export type OAuthSessionKey = `user:${string}` | "shared";
+export type OAuthSessionKey = `user:${string}` | `account:${string}` | "shared";
 
 /**
  * Stored OAuth tokens with the time they were obtained.

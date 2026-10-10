@@ -52,12 +52,12 @@
     "access": "public"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/node": "^26.6.2",
-    "vitest": "^5.0.2",
-    "@mcpjam/sdk": "8.20.0"
+    "@types/node": "^26.6.4",
+    "vitest": "^5.0.3",
+    "@mcpjam/sdk": "8.20.1"
   }
 }

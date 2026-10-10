@@ -13,6 +13,8 @@ export type MaybePromise<T> = T | Promise<T>;
  */
 export type UserContext = {
   id?: string;
+  /** Explicit upstream account selections. These aliases are not user identities. @pk */
+  upstreamAccounts?: Record<string, string>;
   secrets?: Record<string, string>;
   tokens?: Record<string, string>;
   [key: string]: unknown;

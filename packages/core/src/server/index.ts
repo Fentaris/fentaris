@@ -6,5 +6,7 @@ export type {
   HeaderCredentialAuth,
   McpServerAuth,
   McpServerOptions,
+  McpAccountOptions,
+  McpSecretResolver,
   ServerCredentialBinding,
 } from "./McpServer.js";

@@ -300,17 +300,15 @@ fentaris doctor
 
 If the key is lost for a disposable local project, reinitialize the project or recreate the local credential store.
 
-### Secret command asks for a key
+### Project vault is locked
 
-`fentaris secrets set` needs a local auth key. When the project has no encrypted credential store and no configured key, the CLI generates a random key in the project `.env` on the first write.
+macOS uses Keychain; servers/CI and unsupported systems require an explicit `FENTARIS_VAULT_KEY` or an application credential-store adapter. Fentaris never generates the key into `.env` and never regenerates one over existing encrypted data. Restore the original unlock mechanism. Wrong or missing keys preserve the vault and report a locked state.
 
 ```bash theme={null}
-fentaris secrets set github.token --user admin
+fentaris secrets check --offline --json
 ```
 
-Run the command inside the project or one of its subdirectories so the CLI can discover the correct `.env`. An explicit `--key` overrides an exported `FENTARIS_AUTH_KEY`, which overrides the value in `.env`.
-
-If `credentials.enc.json` already exists, Fentaris does not generate a replacement key because that would make the existing data unreadable. Restore the original key in `.env` or your secret manager.
+Run inside the project so discovery selects the correct root. Defined process environment values take precedence over automatically loaded project `.env`. Legacy `credentials.enc.json` requires its original `FENTARIS_AUTH_KEY`; preserve both during explicit migration. See [project vault recovery](/guides/project-vault).
 
 ### Proxy fails with `FENTARIS_CREDENTIALS_UNAVAILABLE`
 
@@ -325,17 +323,17 @@ fentaris secrets setup
 
 For a deployment or CI job, provide all third-party values first and use `fentaris secrets setup --non-interactive --yes --json`. Fentaris generates local API keys but never invents third-party tokens. If the source uses a custom file or non-standard JSON path, follow the manual action reported by setup.
 
-If setup created `.env` but an older project still reports the key as missing, make its start script load the file (`node --env-file-if-exists=.env dist/index.js`) or export the variables through the deployment environment. Newly generated Fentaris projects already use this form.
+Core and CLI load project `.env` automatically before configuration evaluation; defined process values win. Restore the explicit legacy key for old scoped stores, or migrate sources to the project vault before using the new secrets commands.
 
-### Auth setup requires interactive input
+### Auth setup requires missing input
 
-`fentaris auth` and `fentaris auth api-key add` without explicit values require a real terminal. In CI or other non-interactive environments, provide the user and key source:
+`fentaris auth` displays incoming identities. `auth keys` requires an explicit action. In a terminal, create asks only for missing user/name fields; JSON/noninteractive/non-TTY execution returns missing fields without waiting.
 
 ```bash theme={null}
-printf '%s' "$CLIENT_API_KEY" | fentaris auth api-key add alice --value-stdin --non-interactive
+fentaris auth keys create --user alice --name workstation --non-interactive --json
 ```
 
-Use `--generate` instead of `--value-stdin` when the job can securely capture the generated key from command output.
+This creation result deliberately includes a sensitive generated key once. Securely capture it; inventory and revoke never include the value. Revoke an undisplayed key by its ID if write verification failed. Configure `projectVaultIdentityStrategy` for runtime enforcement.
 
 ### Secrets manifest is missing or out of date
 

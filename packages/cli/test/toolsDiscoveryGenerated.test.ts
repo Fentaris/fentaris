@@ -131,9 +131,9 @@ describe("generated project tool discovery", () => {
       expect(upstream.methods).toEqual([]);
 
       const rt = runtime(root);
-      expect(await main(["tools", "list", "--mcp", "specification", "--compact", "--json"], rt)).toBe(0);
+      expect(await main(["mcp", "tools", "specification", "--json"], rt)).toBe(0);
       const envelope = JSON.parse(vi.mocked(rt.out.log).mock.calls[0][0]);
-      expect(envelope, JSON.stringify(envelope)).toMatchObject({ ok: true, data: [{ name: "specification__read", mcp: "specification" }] });
+      expect(envelope, JSON.stringify(envelope)).toMatchObject({ outcome: "success", connections: [{ server: "specification", tools: [{ name: "specification__read" }] }] });
       expect(upstream.methods).toContain("tools/list");
       expect(rt.out.error).not.toHaveBeenCalled();
     } finally {

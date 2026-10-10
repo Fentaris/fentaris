@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FentarisAuth } from "../src/auth.js";
-import { credential, credentialEnv, credentialJson } from "../src/credentials/index.js";
+import { credential, credentialEnv, credentialJson, credentialVault } from "../src/credentials/index.js";
+import { ProjectVault, type ProjectVaultOptions } from "../src/secrets/project-vault.js";
 import { mcp } from "../src/server/index.js";
 import { oauth, oauthTokens } from "../src/auth/oauth/index.js";
 import { streamableHttp } from "../src/transports/client/StreamableHttpMcpTransport.js";
@@ -58,6 +59,29 @@ describe("runtime credential readiness", () => {
     expect(error.message).toContain("user operator API key");
     expect(error.context).toMatchObject({ requirements: expect.any(Array) });
     expect(exposure.listen).not.toHaveBeenCalled();
+  });
+  it.each(["environment", "unlock", "credential-store", "external-provider"])("checks different vault %s options independently before opening a transport", async (variant) => {
+    const root = await mkdtemp(join(tmpdir(), "fentaris-readiness-vault-")); tempDirs.push(root);
+    const unlockKey = "correct-unlock-sensitive";
+    const vault = await ProjectVault.open({ root, unlockKey }); await vault.set("token", "stored-sensitive");
+    let good: ProjectVaultOptions = { root, env: {}, unlockKey };
+    let bad: ProjectVaultOptions = { root, env: {}, unlockKey };
+    if (variant === "environment") {
+      await vault.bind("token", { type: "environment", name: "TOKEN" }, { replaceSource: true });
+      good.env = { TOKEN: "environment-sensitive" };
+    } else if (variant === "unlock") bad.unlockKey = "wrong-unlock-sensitive";
+    else if (variant === "credential-store") {
+      good = { root, env: {}, credentialStore: { get: async () => unlockKey, set: async () => {} } };
+      bad = { root, env: {}, credentialStore: { get: async () => "wrong-store-sensitive", set: async () => {} } };
+    } else {
+      await vault.bind("token", { type: "external", provider: "cloud", locator: "work/token" }, { replaceSource: true });
+      good.externalProviders = { cloud: { resolve: async () => "external-sensitive" } };
+    }
+    const app = fentaris({ policy: Policy.allowAll(), defaults: { credentials: { token: credentialVault("token", good) } }, groups: [group({ id: "staff", users: [user("staff-member")], credentials: { token: credentialVault("token", bad) }, policy: Policy.allowAll() })] });
+    const exposure = new ProbeExposure();
+    const error = await app.listen(exposure).catch((caught: unknown) => caught) as { code?: string; message?: string; context?: unknown };
+    expect(error.code).toBe("FENTARIS_CREDENTIALS_UNAVAILABLE"); expect(error.message).toContain("group staff credential token");
+    expect(exposure.listen).not.toHaveBeenCalled(); expect(JSON.stringify(error)).not.toContain("sensitive");
   });
 
   it("starts when every declared environment source is available", async () => {

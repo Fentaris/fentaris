@@ -30,6 +30,8 @@ fentaris doctor --runtime
 fentaris build
 ```
 
-Local projects allow all upstream operations and do not configure authentication. Add API-key auth and an allow-list policy before exposing the endpoint outside your machine, or start from the `team` boilerplate and provision its key with the documented `fentaris auth api-key add` command.
+Local projects allow all upstream operations and do not configure authentication. Add API-key auth and an allow-list policy before exposing the endpoint outside your machine, or start from the `team` boilerplate and provision its key with the documented `fentaris auth keys create --user teammate --name workstation` command.
 
 See the [CLI reference](https://fentaris.mintlify.app/reference/cli) for commands, options, diagnostics, and secrets management.
+
+Project credential storage now uses an encrypted vault with Keychain or an explicit unlock mechanism. Use `secrets set <reference> --stdin`, metadata-only `secrets get`, and `auth keys create/list/revoke`. See [storage, source bindings, and migration](../../docs/guides/project-vault.mdx).
