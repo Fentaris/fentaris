@@ -151,6 +151,8 @@ import { FENTARIS_LOCAL_NAMESPACE, registerOAuthAgentTools } from "../auth/oauth
 import { redactOAuthMessage } from "../auth/oauth/redaction.js";
 import { createOAuthCallbackRoutes } from "../transports/exposure/oauthCallbackRoutes.js";
 import { createAuthEntrypointRoutes, DEFAULT_FENTARIS_LOGIN_PATH, DEFAULT_UPSTREAM_AUTH_PATH, type UpstreamAuthEntry } from "../transports/exposure/authEntrypointRoutes.js";
+import { setUnauthorizedChallenge } from "../transports/exposure/unauthorizedChallenge.js";
+import { capabilityPermissionsForPolicy } from "./capabilities.js";
 import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
 import type { CredentialSourceMetadata, IdentityMetadata, ResolvedSubject, UserContext } from "../types/shared.js";
 import type {
@@ -1343,6 +1345,7 @@ export class McpProxy {
             const { user, identity } = await this.resolveHttpUser(request);
             return { user, authenticated: Boolean(identity?.authenticated) };
           },
+          setUnauthorizedChallenge: (request, response) => setUnauthorizedChallenge(this.createRuntime(), request, response),
           catalog: (user, base) => this.upstreamAuthCatalog(user, base),
           beginLogin: (server, account, user) => this.beginUpstreamLogin(server, account, user),
         });
@@ -3832,7 +3835,7 @@ export class McpProxy {
     const subject = this.resolveSubject(user);
     const groups = subject ? this.subjectIndex?.groupsFor(subject.id) ?? [] : [];
     const visible = this.serverCatalog.resolve({ user, subject, operation: "tools:list" })
-      .map(({ server }) => server).filter((server) => this.shouldDiscoverToolsForServer(server.name, groups));
+      .map(({ server }) => server).filter((server) => this.shouldDiscoverCapabilitiesForServer(server.name, groups));
     const entries: UpstreamAuthEntry[] = [];
     for (const server of visible) {
       const accounts = server.hasNamedAccounts() ? server.accountNames() : [undefined];
@@ -3861,9 +3864,19 @@ export class McpProxy {
 
   private async beginUpstreamLogin(serverName: string, account: string | undefined, user: UserContext) {
     const catalog = await this.upstreamAuthCatalog(user, this.oauthOptions?.publicUrl?.trim() ?? "http://localhost");
-    if (!catalog.some((entry) => entry.server === serverName && entry.account === account && entry.status === "requires-login")) throw new Error("The requested server/account is not available for this caller or does not support browser login.");
+    const entry = catalog.find((candidate) => candidate.server === serverName && candidate.account === account);
+    if (entry?.status === "setup-required") return { status: entry.status, guidance: entry.guidance };
+    if (entry?.status !== "requires-login") throw new Error("The requested server/account is not available for this caller or does not support browser login.");
     const scoped = account ? { ...user, upstreamAccounts: { ...user.upstreamAccounts, [serverName]: account } } : user;
     return this.oauth()!.beginLogin(serverName, scoped);
+  }
+
+  private shouldDiscoverCapabilitiesForServer(serverName: string, userGroups: Group[]): boolean {
+    const hasVisibleCapability = (policy: Policy): boolean =>
+      capabilityPermissionsForPolicy(policy, serverName).some((permission) => permission.effect === "allow");
+
+    if (this.groups.length > 0) return userGroups.some((group) => hasVisibleCapability(group.policy));
+    return this.globalPolicy ? hasVisibleCapability(this.globalPolicy) : true;
   }
 
   private oauthClientSecretResolver(server: McpServer): (() => Promise<string | undefined>) | undefined {
