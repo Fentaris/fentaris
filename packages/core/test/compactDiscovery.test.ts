@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CallToolRequest, CallToolResult, ListToolsResult } from "@modelcontextprotocol/sdk/types.js";
 import { McpProxy } from "../src/proxy/McpProxy.js";
 import { McpServer } from "../src/server/McpServer.js";
-import { policy } from "../src/governance.js";
+import { group, policy, user } from "../src/governance.js";
 import type { FentarisTransport } from "../src/types.js";
 
 class CatalogTransport implements FentarisTransport {
@@ -49,6 +49,57 @@ describe("compact MCP discovery", () => {
     const denied = await compact.callTool({ name: "fentaris__tools_call", arguments: { server: "unrelated", tool: "secret_0" } });
     expect(denied.isError).toBe(true);
     expect(unrelated.callTool).not.toHaveBeenCalled();
+  });
+
+  it("reauthorizes schema retrieval for each caller instead of sharing discovered definitions", async () => {
+    const one = new CatalogTransport("one", 2);
+    const compact = new McpProxy({
+      discovery: { mode: "compact" },
+      groups: [
+        group({ id: "alice", users: [user("alice")], policy: policy("alice").mcp("one").allow("one_0") }),
+        group({ id: "bob", users: [user("bob")], policy: policy("bob").mcp("one").allow("one_1") }),
+      ],
+      servers: [new McpServer({ name: "one", transport: one })],
+    });
+
+    const aliceSearch = data(await compact.callTool({ name: "fentaris__tools_search", arguments: { server: "one" } }, { id: "alice" }));
+    expect(aliceSearch.tools.map(({ name }) => name)).toEqual(["one_0"]);
+
+    const bobSchemas = data(await compact.callTool({ name: "fentaris__tools_get", arguments: { server: "one", tools: ["one_0", "one_1"] } }, { id: "bob" }));
+    expect(bobSchemas.tools.map(({ name }) => name)).toEqual(["one_1"]);
+    expect(bobSchemas).toMatchObject({ missing: ["one_0"] });
+    expect(one.listTools).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns a bounded error rather than a nonadvancing cursor for oversized metadata", async () => {
+    const one = new CatalogTransport("one", 3);
+    one.listTools.mockResolvedValueOnce({ tools: [
+      { name: "oversized", description: "x".repeat(2_000), inputSchema: { type: "object" } },
+      { name: "reachable", description: "small", inputSchema: { type: "object" } },
+    ] });
+    const compact = new McpProxy({ discovery: { mode: "compact", maxTokens: 20 }, servers: [new McpServer({ name: "one", transport: one })] });
+
+    const result = await compact.callTool({ name: "fentaris__tools_search", arguments: { server: "one" } });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]).toMatchObject({ text: expect.stringContaining("cursor 0") });
+    expect(result.structuredContent).toBeUndefined();
+  });
+
+  it("advances cursors across token-bounded pages", async () => {
+    const one = new CatalogTransport("one", 3);
+    const compact = new McpProxy({ discovery: { mode: "compact", defaultPageSize: 1 }, servers: [new McpServer({ name: "one", transport: one })] });
+
+    const first = data(await compact.callTool({ name: "fentaris__tools_search", arguments: { server: "one" } }));
+    expect(first).toMatchObject({ tools: [{ name: "one_0" }], pagination: { cursor: 0, nextCursor: 1 } });
+    const second = data(await compact.callTool({ name: "fentaris__tools_search", arguments: { server: "one", cursor: 1 } }));
+    expect(second).toMatchObject({ tools: [{ name: "one_1" }], pagination: { cursor: 1, nextCursor: 2 } });
+    const last = data(await compact.callTool({ name: "fentaris__tools_search", arguments: { server: "one", cursor: 2 } }));
+    expect(last).toMatchObject({ tools: [{ name: "one_2" }], pagination: { cursor: 2, nextCursor: null } });
+  });
+
+  it("rejects invalid compact discovery limits at construction", () => {
+    expect(() => new McpProxy({ discovery: { mode: "compact", maxTokens: 0 } })).toThrow(/positive integer/);
+    expect(() => new McpProxy({ discovery: { mode: "compact", defaultPageSize: 3, maxPageSize: 2 } })).toThrow(/cannot exceed/);
   });
 
   it("reduces representative serialized tools/list bytes by omitting upstream schemas", async () => {

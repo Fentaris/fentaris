@@ -2151,6 +2151,7 @@ export class McpProxy {
       log,
       request,
       raw: params,
+      interaction,
       policy: this.globalPolicy,
     });
     const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];

@@ -20,7 +20,7 @@ afterEach(async () => {
   }
 });
 
-async function proxyHarness(named = false): Promise<{ app: McpProxy; upstreamUrl: string; server: ReturnType<typeof mcp> }> {
+async function proxyHarness(named = false, compact = false): Promise<{ app: McpProxy; upstreamUrl: string; server: ReturnType<typeof mcp> }> {
   const authServer = await startAuthorizationServer();
   cleanups.push(() => authServer.close());
   const upstream = await startProtectedMcpServer({ authorizationServer: authServer });
@@ -32,6 +32,7 @@ async function proxyHarness(named = false): Promise<{ app: McpProxy; upstreamUrl
     accounts: named ? { work: { auth: oauth() }, home: { auth: oauth() } } : undefined,
   });
   const app = fentaris({
+    ...(compact ? { discovery: { mode: "compact" as const } } : {}),
     policy: Policy.allowAll(),
     oauth: { store: oauthTokens.memory() },
     servers: [server],
@@ -84,6 +85,24 @@ describe("OAuth consent through URL elicitation", () => {
 
     expect(result.isError).toBeFalsy();
     expect(result.content).toEqual([{ type: "text", text: "demo-user:hello" }]);
+    expect(interaction.completions).toHaveLength(1);
+  });
+
+  it("preserves URL elicitation when an OAuth tool is called through compact discovery", async () => {
+    const { app } = await proxyHarness(false, true);
+    const manager = app.oauth();
+    const interaction = interactionStub({ supportsUrl: true, onElicit: async ({ url }) => {
+      const callback = await approveAuthorization(url);
+      await manager?.completeCallback({ state: callback.state as string, code: callback.code });
+    } });
+
+    const result = await app.callTool(
+      { name: "fentaris__tools_call", arguments: { server: "protected", tool: "echo", arguments: { message: "compact" } } },
+      { id: "alice" }, undefined, undefined, interaction,
+    );
+
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toEqual([{ type: "text", text: "demo-user:compact" }]);
     expect(interaction.completions).toHaveLength(1);
   });
 

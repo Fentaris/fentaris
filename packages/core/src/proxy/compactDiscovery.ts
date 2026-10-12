@@ -38,14 +38,14 @@ type CompactRequestContext = {
 type Arguments = Record<string, unknown> | undefined;
 
 export function registerCompactDiscoveryTools(handle: ProxyLocalHandle, options: CompactDiscoveryOptions, deps: CompactDiscoveryDeps): void {
-  const cache = new Map<string, ListToolsResult["tools"]>();
   const limits = { default: options.defaultPageSize ?? 20, max: options.maxPageSize ?? 100, tokens: options.maxTokens ?? 2_000 };
+  validateLimits(limits);
 
   handle.tool("servers_list", {
     title: "List authorized MCP servers",
     description: "List MCP servers visible to this caller without connecting to upstreams or loading tool schemas.",
     inputSchema: objectSchema({}),
-  }, async (ctx) => json({ servers: (await deps.servers(requestContext(ctx))).map((server) => ({ ...server, toolCount: cache.get(server.name)?.length ?? server.toolCount })) }));
+  }, async (ctx) => json({ servers: await deps.servers(requestContext(ctx)) }));
 
   handle.tool("tools_search", {
     title: "Search tools on one MCP server",
@@ -60,13 +60,15 @@ export function registerCompactDiscoveryTools(handle: ProxyLocalHandle, options:
     const server = requiredString(args, "server");
     if (!server.ok) return error(server.error);
     const tools = await deps.tools(server.value, requestContext(ctx));
-    cache.set(server.value, tools);
     const query = typeof args?.query === "string" ? args.query.trim().toLowerCase() : "";
     const matching = tools.filter((tool) => !query || [tool.name, tool.title, tool.description].some((value) => value?.toLowerCase().includes(query)));
     const start = integer(args?.cursor, 0);
     const limit = Math.min(integer(args?.limit, limits.default), limits.max);
     let page = matching.slice(start, start + limit).map(({ inputSchema: _input, outputSchema: _output, ...tool }) => tool);
     while (page.length && estimateTokens(page) > limits.tokens) page = page.slice(0, -1);
+    if (!page.length && start < matching.length) {
+      return error(`The tool summary at cursor ${start} exceeds the ${limits.tokens}-token response budget. Refine the query or increase maxTokens.`);
+    }
     const nextCursor = start + page.length < matching.length ? start + page.length : null;
     return json({ server: server.value, tools: page, pagination: { cursor: start, limit, returned: page.length, total: matching.length, nextCursor }, measurement: { method: "ceil(JSON UTF-8 bytes / 4)", estimatedTokens: estimateTokens(page), billingEstimate: false } });
   });
@@ -81,8 +83,9 @@ export function registerCompactDiscoveryTools(handle: ProxyLocalHandle, options:
     if (!server.ok) return error(server.error);
     const names = Array.isArray(args?.tools) ? args.tools.filter((name): name is string => typeof name === "string") : [];
     if (!names.length) return error("At least one tool name is required.");
-    const tools = cache.get(server.value) ?? await deps.tools(server.value, requestContext(ctx));
-    cache.set(server.value, tools);
+    // Re-run governed discovery for every request. Tool visibility and selected
+    // upstream accounts are caller-scoped and may change between calls.
+    const tools = await deps.tools(server.value, requestContext(ctx));
     return json({ server: server.value, tools: names.map((name) => tools.find((tool) => tool.name === name)).filter(Boolean), missing: names.filter((name) => !tools.some((tool) => tool.name === name)) });
   });
 
@@ -101,7 +104,13 @@ export function registerCompactDiscoveryTools(handle: ProxyLocalHandle, options:
 }
 
 function requestContext(context: Parameters<Parameters<ProxyLocalHandle["tool"]>[2]>[0]): CompactRequestContext {
-  return { user: context.user, identity: context.identity, subject: context.subject };
+  return { user: context.user, identity: context.identity, subject: context.subject, interaction: context.interaction };
+}
+function validateLimits(limits: { default: number; max: number; tokens: number }): void {
+  for (const [name, value] of Object.entries(limits)) {
+    if (!Number.isInteger(value) || value <= 0) throw new RangeError(`Compact discovery ${name} limit must be a positive integer.`);
+  }
+  if (limits.default > limits.max) throw new RangeError("Compact discovery default page size cannot exceed the maximum page size.");
 }
 function objectSchema(properties: Record<string, object>, required: string[] = []) { return { type: "object" as const, properties, ...(required.length ? { required } : {}), additionalProperties: false }; }
 function requiredString(args: Arguments, key: string): { ok: true; value: string } | { ok: false; error: string } { const value = args?.[key]; return typeof value === "string" && value.trim() ? { ok: true, value: value.trim() } : { ok: false, error: `A ${key} is required.` }; }
