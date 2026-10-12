@@ -3872,11 +3872,25 @@ export class McpProxy {
   }
 
   private shouldDiscoverCapabilitiesForServer(serverName: string, userGroups: Group[]): boolean {
-    const hasVisibleCapability = (policy: Policy): boolean =>
-      capabilityPermissionsForPolicy(policy, serverName).some((permission) => permission.effect === "allow");
-
-    if (this.groups.length > 0) return userGroups.some((group) => hasVisibleCapability(group.policy));
-    return this.globalPolicy ? hasVisibleCapability(this.globalPolicy) : true;
+    if (this.groups.length === 0 && !this.globalPolicy) return true;
+    const policies = this.groups.length > 0 ? userGroups.map((group) => group.policy) : [this.globalPolicy!];
+    const operations: Array<Pick<CapabilityOperationRequest, "operation" | "targetKind">> = [
+      { operation: "tools:list", targetKind: "tool" }, { operation: "tool:call", targetKind: "tool" },
+      { operation: "resources:list", targetKind: "resource" }, { operation: "resource:read", targetKind: "resource" },
+      { operation: "resource-templates:list", targetKind: "resourceTemplate" },
+      { operation: "prompts:list", targetKind: "prompt" }, { operation: "prompt:get", targetKind: "prompt" },
+      { operation: "completion:complete", targetKind: "completion" },
+    ];
+    return policies.some((policy) => capabilityPermissionsForPolicy(policy, serverName).some((permission) =>
+      permission.effect !== "deny" && operations.some(({ operation, targetKind }) =>
+        (permission.operation === "*" || permission.operation === operation) && isCapabilityAllowed(
+          { groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex },
+          { serverName, operation, targetKind, target: operation.endsWith(":list") ? undefined : permission.target ?? "*" },
+          undefined,
+          userGroups,
+        ),
+      ),
+    ));
   }
 
   private oauthClientSecretResolver(server: McpServer): (() => Promise<string | undefined>) | undefined {

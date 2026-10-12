@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fentaris } from "../../src/proxy/McpProxy.js";
 import { oauthIdentityStrategy } from "../../src/identity/oauthIdentityStrategy.js";
 import { headerIdentityStrategy } from "../../src/identity/identity.js";
@@ -108,6 +108,34 @@ describe("discoverable authentication entrypoints", () => {
       expect.objectContaining({ server: "prompts", status: "requires-login" }),
     ]));
     expect((await fetch(`${base}/_fentaris/auth/login?server=documents`, { method: "POST", headers: { "x-user": "alice" }, redirect: "manual" })).status).toBe(303);
+  });
+
+  it.each([
+    { allowTarget: "file:///allowed", denyTarget: "file:///allowed", visible: false },
+    { allowTarget: "file:///allowed", denyTarget: "*", visible: false },
+    { allowTarget: "file:///allowed", denyTarget: "file:///different", visible: true },
+    { allowTarget: "*", denyTarget: "file:///allowed", visible: true },
+  ])("uses effective overlapping-group permissions (allow=$allowTarget, deny=$denyTarget)", async ({ allowTarget, denyTarget, visible }) => {
+    const authorization = await startAuthorizationServer(); closes.push(() => authorization.close());
+    const upstream = await startProtectedMcpServer({ authorizationServer: authorization }); closes.push(() => upstream.close());
+    const app = fentaris({
+      port: 0,
+      identity: headerIdentityStrategy({ userIdHeader: "x-user" }),
+      oauth: { store: oauthTokens.memory() },
+      servers: [mcp("documents", { transport: streamableHttp({ url: upstream.url, network: { allowPrivateNetworkUrls: true } }), accounts: { work: { auth: oauth() } } })],
+      groups: [
+        group({ id: "reader", users: [user("alice")], policy: new Policy({ name: "reader" }).mcp("documents").allowCapability({ operation: "resource:read", target: allowTarget, targetKind: "resource" }) }),
+        group({ id: "restricted", users: [user("alice")], policy: new Policy({ name: "restricted" }).mcp("documents").denyCapability({ operation: "resource:read", target: denyTarget, targetKind: "resource" }) }),
+      ],
+    });
+    const server = await app.start(); closes.push(() => app.close());
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const catalog = await (await fetch(`${base}/_fentaris/auth`, { headers: { "x-user": "alice" } })).json() as { servers: unknown[] };
+    expect(catalog.servers).toHaveLength(visible ? 1 : 0);
+    const beginLogin = vi.spyOn(app.oauth()!, "beginLogin");
+    const started = await fetch(`${base}/_fentaris/auth/login?server=documents&account=work`, { method: "POST", headers: { "x-user": "alice" }, redirect: "manual" });
+    expect(started.status).toBe(visible ? 303 : 400);
+    expect(beginLogin).toHaveBeenCalledTimes(visible ? 1 : 0);
   });
 
   it("returns setup guidance without starting OAuth for a visible noninteractive account", async () => {
