@@ -26,10 +26,10 @@ Compact mode keeps `tools/list` stable for the life of the server and exposes fo
 
 Server and tool visibility is caller-scoped. Forbidden names are not included in catalogs or searches, and a guessed forbidden call is denied. A failure from a selected upstream does not query unrelated servers.
 
-The search response reports `ceil(JSON UTF-8 bytes / 4)` as an approximate token-budget measurement. This is useful for reproducible payload comparisons, but it is **not** a tokenizer result or a promise of billed savings.
+The search response reports `ceil(JSON UTF-8 bytes / 4)` for the entire serialized MCP result, including server metadata, pagination, measurement, and both content representations. This is useful for reproducible payload comparisons, but it is **not** a tokenizer result or a promise of billed savings. OAuth agent tools retain their configured policies in both discovery modes; the discovery exception applies only to the four compact meta-tools.
 
 <Note>
-  Page sizes and `maxTokens` must be positive integers, and `defaultPageSize` cannot exceed `maxPageSize`. If one tool summary exceeds the response budget, search returns an error instead of repeating an empty page. Refine the query or increase `maxTokens` to continue.
+  Page sizes and `maxTokens` must be positive integers, and `defaultPageSize` cannot exceed `maxPageSize`. If one tool summary or the response metadata exceeds the budget, search returns a bounded error instead of repeating an empty page. Refine the query or increase `maxTokens` to continue.
 </Note>
 
 ## Related Documentation

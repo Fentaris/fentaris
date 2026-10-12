@@ -148,7 +148,7 @@ import {
 } from "./oauthRuntime.js";
 import { withOAuthConsent } from "./oauthInteraction.js";
 import { FENTARIS_LOCAL_NAMESPACE, registerOAuthAgentTools } from "../auth/oauth/agentTools.js";
-import { registerCompactDiscoveryTools, type CompactDiscoveryOptions } from "./compactDiscovery.js";
+import { COMPACT_DISCOVERY_TOOL_NAMES, registerCompactDiscoveryTools, type CompactDiscoveryOptions } from "./compactDiscovery.js";
 import { redactOAuthMessage } from "../auth/oauth/redaction.js";
 import { createOAuthCallbackRoutes } from "../transports/exposure/oauthCallbackRoutes.js";
 import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
@@ -1937,7 +1937,8 @@ export class McpProxy {
       .filter(({ server }) => !this.compactDiscovery || server.name === FENTARIS_LOCAL_NAMESPACE);
     const results = await Promise.all(
       bindings.map(async ({ server }) => {
-        if (server.name !== FENTARIS_LOCAL_NAMESPACE && !this.shouldDiscoverToolsForServer(server.name, userGroups)) {
+        const compactLocal = Boolean(this.compactDiscovery && server.name === FENTARIS_LOCAL_NAMESPACE);
+        if (!compactLocal && !this.shouldDiscoverToolsForServer(server.name, userGroups)) {
           return [];
         }
         if (await this.oauthServerRequiresLogin(server, resolvedUser)) {
@@ -1973,9 +1974,13 @@ export class McpProxy {
           log_listToolsOAuthFailure(this.logger, server.name, error);
           return [];
         }
-        const tools = server.name === FENTARIS_LOCAL_NAMESPACE ? result.tools : this.groups.length > 0
+        let tools = this.groups.length > 0
           ? filterToolsByGroupPolicies(result.tools, server.name, userGroups)
           : this.globalPolicy ? filterToolsByPolicy(result.tools, server.name, this.globalPolicy) : result.tools;
+        if (compactLocal) {
+          const visibleNames = new Set(tools.map((tool) => tool.name));
+          tools = result.tools.filter((tool) => this.isCompactDiscoveryTool(server.name, tool.name) || visibleNames.has(tool.name));
+        }
         return tools.map((tool) => ({
           ...tool,
           name: toProxyToolName(server.name, tool.name),
@@ -2155,7 +2160,7 @@ export class McpProxy {
       policy: this.globalPolicy,
     });
     const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
-    if (serverName === FENTARIS_LOCAL_NAMESPACE) {
+    if (this.isCompactDiscoveryTool(serverName, toolName)) {
       // Meta-tools only select work; selected calls re-enter this governed path.
       context.policyDecision = this.defaultAllowDecision(request, resolvedUser);
     } else if (this.groups.length > 0) {
@@ -3286,7 +3291,7 @@ export class McpProxy {
   private filterVisibleProxyTools(tools: ListToolsResult["tools"], groups: Group[]): ListToolsResult["tools"] {
     return tools.filter((tool) => {
       const serverName = serverNameFromProxyTool(tool.name);
-      if (serverName === FENTARIS_LOCAL_NAMESPACE) return true;
+      if (this.isCompactDiscoveryTool(serverName, tool.name.slice(serverName.length + 2))) return true;
       if (this.groups.length > 0) {
         return filterToolsByGroupPolicies([tool], serverName, groups).length > 0;
       }
@@ -3295,6 +3300,11 @@ export class McpProxy {
       }
       return true;
     });
+  }
+
+  private isCompactDiscoveryTool(serverName: string, toolName: string): boolean {
+    return Boolean(this.compactDiscovery && serverName === FENTARIS_LOCAL_NAMESPACE
+      && COMPACT_DISCOVERY_TOOL_NAMES.some((name) => name === toolName));
   }
 
   private policyDeniedResult(context: ProxyContext): CallToolResult {

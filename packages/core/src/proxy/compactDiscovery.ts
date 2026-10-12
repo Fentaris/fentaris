@@ -65,12 +65,18 @@ export function registerCompactDiscoveryTools(handle: ProxyLocalHandle, options:
     const start = integer(args?.cursor, 0);
     const limit = Math.min(integer(args?.limit, limits.default), limits.max);
     let page = matching.slice(start, start + limit).map(({ inputSchema: _input, outputSchema: _output, ...tool }) => tool);
-    while (page.length && estimateTokens(page) > limits.tokens) page = page.slice(0, -1);
+    if (searchResponse(server.value, [], start, limit, matching.length).estimatedTokens > limits.tokens) {
+      return error(`The response metadata exceeds the ${limits.tokens}-token response budget. Increase maxTokens.`);
+    }
+    let response = searchResponse(server.value, page, start, limit, matching.length);
+    while (page.length && response.estimatedTokens > limits.tokens) {
+      page = page.slice(0, -1);
+      response = searchResponse(server.value, page, start, limit, matching.length);
+    }
     if (!page.length && start < matching.length) {
       return error(`The tool summary at cursor ${start} exceeds the ${limits.tokens}-token response budget. Refine the query or increase maxTokens.`);
     }
-    const nextCursor = start + page.length < matching.length ? start + page.length : null;
-    return json({ server: server.value, tools: page, pagination: { cursor: start, limit, returned: page.length, total: matching.length, nextCursor }, measurement: { method: "ceil(JSON UTF-8 bytes / 4)", estimatedTokens: estimateTokens(page), billingEstimate: false } });
+    return response.result;
   });
 
   handle.tool("tools_get", {
@@ -105,6 +111,23 @@ export function registerCompactDiscoveryTools(handle: ProxyLocalHandle, options:
 
 function requestContext(context: Parameters<Parameters<ProxyLocalHandle["tool"]>[2]>[0]): CompactRequestContext {
   return { user: context.user, identity: context.identity, subject: context.subject, interaction: context.interaction };
+}
+function searchResponse(server: string, tools: Omit<ListToolsResult["tools"][number], "inputSchema" | "outputSchema">[], cursor: number, limit: number, total: number) {
+  const payload = {
+    server,
+    tools,
+    pagination: { cursor, limit, returned: tools.length, total, nextCursor: cursor + tools.length < total ? cursor + tools.length : null },
+    measurement: { method: "ceil(JSON UTF-8 bytes / 4)", estimatedTokens: 0, billingEstimate: false },
+  };
+  let result = json(payload);
+  let estimatedTokens = estimateTokens(result);
+  // Include both MCP content representations and the measurement itself.
+  while (payload.measurement.estimatedTokens !== estimatedTokens) {
+    payload.measurement.estimatedTokens = estimatedTokens;
+    result = json(payload);
+    estimatedTokens = estimateTokens(result);
+  }
+  return { result, estimatedTokens };
 }
 function validateLimits(limits: { default: number; max: number; tokens: number }): void {
   for (const [name, value] of Object.entries(limits)) {

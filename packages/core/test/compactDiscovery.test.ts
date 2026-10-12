@@ -77,7 +77,7 @@ describe("compact MCP discovery", () => {
       { name: "oversized", description: "x".repeat(2_000), inputSchema: { type: "object" } },
       { name: "reachable", description: "small", inputSchema: { type: "object" } },
     ] });
-    const compact = new McpProxy({ discovery: { mode: "compact", maxTokens: 20 }, servers: [new McpServer({ name: "one", transport: one })] });
+    const compact = new McpProxy({ discovery: { mode: "compact", maxTokens: 300 }, servers: [new McpServer({ name: "one", transport: one })] });
 
     const result = await compact.callTool({ name: "fentaris__tools_search", arguments: { server: "one" } });
     expect(result.isError).toBe(true);
@@ -95,6 +95,31 @@ describe("compact MCP discovery", () => {
     expect(second).toMatchObject({ tools: [{ name: "one_1" }], pagination: { cursor: 1, nextCursor: 2 } });
     const last = data(await compact.callTool({ name: "fentaris__tools_search", arguments: { server: "one", cursor: 2 } }));
     expect(last).toMatchObject({ tools: [{ name: "one_2" }], pagination: { cursor: 2, nextCursor: null } });
+  });
+
+  it("budgets and measures the entire serialized MCP response", async () => {
+    const one = new CatalogTransport("one", 3);
+    one.listTools.mockResolvedValueOnce({ tools: Array.from({ length: 3 }, (_, index) => ({
+      name: `one_${index}`, description: "é".repeat(80), inputSchema: { type: "object" },
+    })) });
+    const maxTokens = 300;
+    const compact = new McpProxy({ discovery: { mode: "compact", maxTokens }, servers: [new McpServer({ name: "one", transport: one })] });
+
+    const result = await compact.callTool({ name: "fentaris__tools_search", arguments: { server: "one" } });
+    expect(result.isError).toBeFalsy();
+    const estimatedTokens = Math.ceil(Buffer.byteLength(JSON.stringify(result), "utf8") / 4);
+    expect(estimatedTokens).toBeLessThanOrEqual(maxTokens);
+    expect(result.structuredContent).toMatchObject({ measurement: { estimatedTokens } });
+    expect(data(result).tools.length).toBeGreaterThan(0);
+    expect(data(result).tools.length).toBeLessThan(3);
+  });
+
+  it("returns a bounded error when even an empty response exceeds the budget", async () => {
+    const compact = new McpProxy({ discovery: { mode: "compact", maxTokens: 10 }, servers: [new McpServer({ name: "one", transport: new CatalogTransport("one", 0) })] });
+    const result = await compact.callTool({ name: "fentaris__tools_search", arguments: { server: "one" } });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]).toMatchObject({ text: expect.stringContaining("response metadata exceeds") });
+    expect(result.structuredContent).toBeUndefined();
   });
 
   it("rejects invalid compact discovery limits at construction", () => {
