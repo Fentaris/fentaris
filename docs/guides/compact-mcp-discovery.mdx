@@ -1,0 +1,29 @@
+---
+title: Compact MCP tool discovery
+description: Discover servers first and load only selected MCP tool schemas.
+---
+
+# Compact MCP tool discovery
+
+Fentaris normally exposes every authorized upstream tool from `tools/list`. Opt in to compact discovery when a large catalog would spend context on schemas the model will not use:
+
+```ts
+const proxy = new McpProxy({
+  discovery: { mode: "compact", defaultPageSize: 20, maxPageSize: 100, maxTokens: 2000 },
+  servers,
+});
+```
+
+Compact mode keeps `tools/list` stable for the life of the server and exposes four tools: `fentaris__servers_list`, `fentaris__tools_search`, `fentaris__tools_get`, and `fentaris__tools_call`. It does not dynamically register tools or depend on `list_changed`, so it remains compatible with the currently negotiated MCP protocol.
+
+## Agent flow
+
+1. Call `fentaris__servers_list`. The response is built from the caller's authorized server catalog and does **not** contact upstreams. Each entry has a description, authorization state, and a tool count that is `unknown` until that server is queried.
+2. If the server reports `requires-login`, use the existing `fentaris__auth_status` and `fentaris__auth_login` tools. OAuth tools and compact tools share the reserved `fentaris` namespace.
+3. Call `fentaris__tools_search` with one `server`, an optional `query`, `cursor`, and `limit`. Only that upstream is queried. Results contain short metadata and omit schemas.
+4. Call `fentaris__tools_get` with the selected server and tool names to retrieve their full schemas.
+5. Call `fentaris__tools_call`. Fentaris sends the selected target through the same policy, approval, credential, rate-limit, middleware, and audit path as a normal flattened tool call.
+
+Server and tool visibility is caller-scoped. Forbidden names are not included in catalogs or searches, and a guessed forbidden call is denied. A failure from a selected upstream does not query unrelated servers.
+
+The search response reports `ceil(JSON UTF-8 bytes / 4)` as an approximate token-budget measurement. This is useful for reproducible payload comparisons, but it is **not** a tokenizer result or a promise of billed savings.
