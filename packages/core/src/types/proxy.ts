@@ -383,6 +383,10 @@ export type ProxyRuntime = {
   unauthorizedChallenge?(reason: import("../identity/oauthIdentityStrategy.js").OAuthChallengeReason, request?: object): string | undefined;
   /** Protected resource document served before MCP authentication. @pk */
   protectedResourceMetadata?(): import("../identity/oauthIdentityStrategy.js").ProtectedResourceMetadata;
+  /** Public Fentaris-owned login link advertised with an OAuth challenge. @pk */
+  downstreamLoginPath?(): string | undefined;
+  /** Configured issuer-owned login target for the public redirect route. @pk */
+  downstreamLoginUrl?(): string | undefined;
   /** Bind the actual listener address, including an ephemeral port. @pk */
   configureIdentityExposure?(listener: { host: string; port: number; path: string }): void;
 };
