@@ -32656,6 +32656,94 @@ Capability target selector kind for policy permissions.
 
   </Accordion>
 
+  <Accordion title="Core exports: type-aliases/CompactDiscoveryOptions">
+
+@fentaris/core / CompactDiscoveryOptions
+
+> **CompactDiscoveryOptions** = `object`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:7
+
+MCP proxy options.
+
+## Properties
+
+### defaultPageSize?
+
+> `optional` **defaultPageSize?**: `number`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:11
+
+Default and maximum number of tool summaries returned by one search.
+
+### maxPageSize?
+
+> `optional` **maxPageSize?**: `number`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:12
+
+### maxTokens?
+
+> `optional` **maxTokens?**: `number`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:14
+
+Approximate response budget (JSON bytes / 4), not a billing estimate.
+
+### mode
+
+> **mode**: `"compact"`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:9
+
+Enable stable meta-tools instead of exposing every upstream tool schema.
+
+  </Accordion>
+
+  <Accordion title="Core exports: type-aliases/CompactServer">
+
+@fentaris/core / CompactServer
+
+> **CompactServer** = `object`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:17
+
+MCP proxy options.
+
+## Properties
+
+### auth
+
+> **auth**: `"ready"` \| `"requires-login"`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:21
+
+### description?
+
+> `optional` **description?**: `string`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:20
+
+### displayName
+
+> **displayName**: `string`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:19
+
+### name
+
+> **name**: `string`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:18
+
+### toolCount
+
+> **toolCount**: `number` \| `"unknown"`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:22
+
+  </Accordion>
+
   <Accordion title="Core exports: type-aliases/CompactToolMetadata">
 
 @fentaris/core / CompactToolMetadata
@@ -38077,6 +38165,14 @@ Defined in: packages/core/src/proxy/McpProxy.ts:291
 
 > `optional` **credentials?**: `CredentialSourceMap`
 
+### discovery?
+
+> `optional` **discovery?**: `CompactDiscoveryOptions`
+
+Defined in: packages/core/src/proxy/McpProxy.ts:319
+
+Opt in to stable, server-grouped meta-tools instead of flattened upstream schemas.
+
 ### edge?
 
 > `optional` **edge?**: `EdgeRuntimeOptions`
@@ -40129,6 +40225,12 @@ Unified context for new proxy middleware, routes, and events.
 ### execution?
 
 > `optional` **execution?**: `ProxyExecutionContext`
+
+### interaction?
+
+> `optional` **interaction?**: `ProxySessionInteraction`
+
+Interaction channel for the active downstream MCP session.
 
 ### operation
 
@@ -46640,6 +46742,14 @@ Defined in: packages/core/src/proxy/McpProxy.ts:291
 #### credentials?
 
 > `optional` **credentials?**: `CredentialSourceMap`
+
+### discovery?
+
+> `optional` **discovery?**: `CompactDiscoveryOptions`
+
+Defined in: packages/core/src/proxy/McpProxy.ts:319
+
+Opt in to stable, server-grouped meta-tools instead of flattened upstream schemas.
 
 ### edge?
 
@@ -54546,6 +54656,12 @@ Unified context for new proxy middleware, routes, and events.
 ### execution?
 
 > `optional` **execution?**: `ProxyExecutionContext`
+
+### interaction?
+
+> `optional` **interaction?**: `ProxySessionInteraction`
+
+Interaction channel for the active downstream MCP session.
 
 ### operation
 
