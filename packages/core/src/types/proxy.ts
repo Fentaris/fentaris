@@ -169,6 +169,8 @@ export type ProxyContext = MiddlewareContext & {
   requestId?: string;
   transport: ProxyTransportContext;
   execution?: ProxyExecutionContext;
+  /** Interaction channel for the active downstream MCP session. @pk */
+  interaction?: ProxySessionInteraction;
   auth: ProxyAuthContext;
   policy: ProxyPolicyContext;
   credentials: {

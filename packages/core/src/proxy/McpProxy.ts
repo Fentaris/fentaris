@@ -150,6 +150,7 @@ import {
 } from "./oauthRuntime.js";
 import { withOAuthConsent } from "./oauthInteraction.js";
 import { FENTARIS_LOCAL_NAMESPACE, registerOAuthAgentTools } from "../auth/oauth/agentTools.js";
+import { COMPACT_DISCOVERY_TOOL_NAMES, registerCompactDiscoveryTools, type CompactDiscoveryOptions } from "./compactDiscovery.js";
 import { redactOAuthMessage } from "../auth/oauth/redaction.js";
 import { createOAuthCallbackRoutes } from "../transports/exposure/oauthCallbackRoutes.js";
 import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
@@ -316,6 +317,8 @@ export type McpProxyOptions = {
   cli?: FentarisCliOptions;
   /** Upstream OAuth 2.1 wiring: hosted callback, token store, and consent behavior. @pk */
   oauth?: ProxyOAuthOptions;
+  /** Opt in to stable, server-grouped meta-tools instead of flattened upstream schemas. @pk */
+  discovery?: CompactDiscoveryOptions;
   /**
    * Edge execution wiring: control-plane device resolver, replaceable
    * session-binding store, expiry, and removal listener. When omitted, edge
@@ -474,6 +477,7 @@ export class McpProxy {
   private readonly edgeChildParentSessions = new Set<string>();
   private httpServer: HttpServer | null = null;
   private readonly oauthOptions?: ProxyOAuthOptions;
+  private readonly compactDiscovery?: CompactDiscoveryOptions;
   private oauthManagerCache?: OAuthManager;
   private readonly connectionBindingVersions = new Map<string, string>();
   private oauthStoreEphemeral = false;
@@ -518,6 +522,7 @@ export class McpProxy {
     });
     this.registry = options.registry;
     this.oauthOptions = options.oauth;
+    this.compactDiscovery = options.discovery?.mode === "compact" ? options.discovery : undefined;
     this.autoLog = normalizeAutoLog(options.autoLog);
     this.profiler = new RuntimeProfiler(options.profiler === undefined ? null : normalizeRuntimeProfiler(options.profiler, this.logger));
     this.lifecycleDefaults = normalizeRuntimeLifecycleOptions(options.lifecycle);
@@ -567,6 +572,14 @@ export class McpProxy {
 
     for (const server of this.serverCatalog.allServers()) {
       this.serverByName.set(server.name, server);
+    }
+    if (this.compactDiscovery) {
+      registerCompactDiscoveryTools(this.localRegistry.namespace(FENTARIS_LOCAL_NAMESPACE), this.compactDiscovery, {
+        servers: (context) => this.compactServers(context.user, context.subject),
+        tools: (server, context) => this.listToolsForServer(server, context.user, context.identity, context.subject),
+        call: (server, tool, args, context) => this.callTool({ name: toProxyToolName(server, tool), arguments: args }, context.user, context.identity, context.subject, context.interaction),
+      });
+      this.materializeLocalNamespaces();
     }
 
     // Normalize constructor-style target, setup, and placement declarations
@@ -1452,7 +1465,7 @@ export class McpProxy {
     this.refreshDerivedGovernanceState({ validate: true });
     const validation = validateFentarisConfig({ ...this.runtimeValidationConfig, ...listener });
     const errors = validation.errors.filter((error) => !(
-      this.oauthAgentToolsRegistered && error.code === "FENTARIS_CONFIG_OAUTH_RESERVED_NAMESPACE"
+      (this.oauthAgentToolsRegistered || this.compactDiscovery) && error.code === "FENTARIS_CONFIG_OAUTH_RESERVED_NAMESPACE"
     ));
     if (errors.length > 0) {
       throw new FentarisConfigError(errors);
@@ -1922,10 +1935,12 @@ export class McpProxy {
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
-    const bindings = this.serverCatalog.resolve({ user: resolvedUser, subject: resolvedSubject, operation: "tools:list" });
+    const bindings = this.serverCatalog.resolve({ user: resolvedUser, subject: resolvedSubject, operation: "tools:list" })
+      .filter(({ server }) => !this.compactDiscovery || server.name === FENTARIS_LOCAL_NAMESPACE);
     const results = await Promise.all(
       bindings.map(async ({ server }) => {
-        if (!this.shouldDiscoverToolsForServer(server.name, userGroups)) {
+        const compactLocal = Boolean(this.compactDiscovery && server.name === FENTARIS_LOCAL_NAMESPACE);
+        if (!compactLocal && !this.shouldDiscoverToolsForServer(server.name, userGroups)) {
           return [];
         }
         const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
@@ -1965,9 +1980,13 @@ export class McpProxy {
           log_listToolsUpstreamFailure(this.logger, server.name, error);
           return [];
         }
-        const tools = this.groups.length > 0
+        let tools = this.groups.length > 0
           ? filterToolsByGroupPolicies(result.tools, server.name, userGroups)
           : this.globalPolicy ? filterToolsByPolicy(result.tools, server.name, this.globalPolicy) : result.tools;
+        if (compactLocal) {
+          const visibleNames = new Set(tools.map((tool) => tool.name));
+          tools = result.tools.filter((tool) => this.isCompactDiscoveryTool(server.name, tool.name) || visibleNames.has(tool.name));
+        }
         return tools.map((tool) => ({
           ...tool,
           name: toProxyToolName(server.name, tool.name),
@@ -2024,6 +2043,49 @@ export class McpProxy {
     }
 
     return { tools: this.filterVisibleProxyTools(tools, userGroups) };
+  }
+
+  /** Discover one explicitly selected upstream for compact meta-tools. */
+  private async listToolsForServer(
+    serverName: string,
+    user: UserContext,
+    identity?: IdentityMetadata,
+    subject?: ResolvedSubject,
+  ): Promise<ListToolsResult["tools"]> {
+    const resolvedUser = await this.resolveRegistryUser(user);
+    const resolvedSubject = this.resolveSubject(resolvedUser, subject);
+    const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
+    const server = this.serverCatalog.serverForContext(serverName, { user: resolvedUser, subject: resolvedSubject, operation: "tools:list" });
+    if (!server || server.name === FENTARIS_LOCAL_NAMESPACE || !this.shouldDiscoverToolsForServer(server.name, userGroups)) {
+      return [];
+    }
+    if (await this.oauthServerRequiresLogin(server, resolvedUser)) {
+      throw new FentarisMcpError(`MCP server "${serverName}" requires login`, { code: "FENTARIS_OAUTH_LOGIN_REQUIRED" });
+    }
+    const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
+      operation: "tools:list", serverName, targetKind: "tool", user: resolvedUser, subject: resolvedSubject, identity,
+    });
+    const { user: upstreamUser } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
+    const result = await this.dispatchTargetOperation(server, context, () => server.listTools(undefined, upstreamUser), (transport) => transport.listTools());
+    return this.groups.length > 0
+      ? filterToolsByGroupPolicies(result.tools, server.name, userGroups)
+      : this.globalPolicy ? filterToolsByPolicy(result.tools, server.name, this.globalPolicy) : result.tools;
+  }
+
+  /** Build the initial catalog exclusively from configured, caller-visible metadata. */
+  private async compactServers(user: UserContext, subject?: ResolvedSubject) {
+    const resolvedUser = await this.resolveRegistryUser(user);
+    const resolvedSubject = this.resolveSubject(resolvedUser, subject);
+    const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
+    const bindings = this.serverCatalog.resolve({ user: resolvedUser, subject: resolvedSubject, operation: "tools:list" });
+    const visible = bindings.filter(({ server }) => server.name !== FENTARIS_LOCAL_NAMESPACE && this.shouldDiscoverToolsForServer(server.name, userGroups));
+    return Promise.all(visible.map(async ({ server }) => ({
+      name: server.name,
+      displayName: server.displayName,
+      ...(server.description ? { description: server.description } : {}),
+      auth: await this.oauthServerRequiresLogin(server, resolvedUser) ? "requires-login" as const : "ready" as const,
+      toolCount: "unknown" as const,
+    })));
   }
 
   /**
@@ -2100,10 +2162,14 @@ export class McpProxy {
       log,
       request,
       raw: params,
+      interaction,
       policy: this.globalPolicy,
     });
     const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
-    if (this.groups.length > 0) {
+    if (this.isCompactDiscoveryTool(serverName, toolName)) {
+      // Meta-tools only select work; selected calls re-enter this governed path.
+      context.policyDecision = this.defaultAllowDecision(request, resolvedUser);
+    } else if (this.groups.length > 0) {
       context.policyDecision = await evaluateGroupPolicies(userGroups, request, resolvedUser, context);
     } else if (this.globalPolicy) {
       context.policyDecision = await this.globalPolicy.evaluate(request, resolvedUser, context);
@@ -3231,6 +3297,7 @@ export class McpProxy {
   private filterVisibleProxyTools(tools: ListToolsResult["tools"], groups: Group[]): ListToolsResult["tools"] {
     return tools.filter((tool) => {
       const serverName = serverNameFromProxyTool(tool.name);
+      if (this.isCompactDiscoveryTool(serverName, tool.name.slice(serverName.length + 2))) return true;
       if (this.groups.length > 0) {
         return filterToolsByGroupPolicies([tool], serverName, groups).length > 0;
       }
@@ -3239,6 +3306,11 @@ export class McpProxy {
       }
       return true;
     });
+  }
+
+  private isCompactDiscoveryTool(serverName: string, toolName: string): boolean {
+    return Boolean(this.compactDiscovery && serverName === FENTARIS_LOCAL_NAMESPACE
+      && COMPACT_DISCOVERY_TOOL_NAMES.some((name) => name === toolName));
   }
 
   private policyDeniedResult(context: ProxyContext): CallToolResult {
@@ -3783,7 +3855,7 @@ export class McpProxy {
     const interactive = oauthServers(this.serverCatalog.allServers()).some(
       (server) => server.getOAuthAuth()?.grant === "authorization_code",
     );
-    if (!interactive || this.localRegistry.hasNamespace(FENTARIS_LOCAL_NAMESPACE) || this.serverByName.has(FENTARIS_LOCAL_NAMESPACE)) {
+    if (!interactive || (this.serverByName.has(FENTARIS_LOCAL_NAMESPACE) && !this.localRegistry.hasNamespace(FENTARIS_LOCAL_NAMESPACE))) {
       return;
     }
 
