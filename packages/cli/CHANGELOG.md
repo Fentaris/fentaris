@@ -1,5 +1,15 @@
 # @fentaris/cli
 
+## 2.0.1
+
+### Patch Changes
+
+- Updated dependencies [f4372eb]
+- Updated dependencies [f4372eb]
+- Updated dependencies [f4372eb]
+  - @fentaris/core@3.4.0
+  - @fentaris/edge@0.3.8
+
 ## 2.0.0
 
 ### Major Changes
