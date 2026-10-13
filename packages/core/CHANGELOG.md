@@ -1,5 +1,14 @@
 # @fentaris/core
 
+## 3.3.0
+
+### Minor Changes
+
+- ac90c17: Replace the CLI tools namespace with mcp, without a compatibility alias. Add administrative connection inventory, grouped bounded discovery, named upstream account selection, progressive authentication, offline/JSON contracts, and explicit legacy OAuth migration. Existing scripts must migrate to the new command surface.
+  
+  Add named upstream accounts and runtime account restrictions independently of incoming client identities, shared-vault OAuth lifecycle records, safe temporary transport cleanup, and automatic project .env loading before configuration. Credentials and legacy authorizations remain separate; stored tokens alone do not establish remote validity.
+- ac90c17: Add project-isolated encrypted vaults with macOS Keychain or explicit unlock mechanisms, explicit environment/external reference sources, source binding and shared-consumer metadata, recoverable credential/OAuth migration, and an account-scoped OAuthTokenStore adapter. Add hashed incoming key verifiers, stable key IDs/names, expiry/revocation enforcement, and a vault identity strategy. Load project .env before SDK configuration evaluation while preserving process environment precedence, and sanitize credential URLs/headers in runtime logs. Existing legacy SDK sources remain supported.
+
 ## 3.2.0
 
 ### Minor Changes

@@ -1,5 +1,21 @@
 # @fentaris/cli
 
+## 2.0.0
+
+### Major Changes
+
+- ac90c17: BREAKING: replace auth api-key add/list/remove with auth keys create/list/revoke; remove raw --value arguments and scoped secret writes; replace secrets unset with secrets remove; and operate on project-vault references with metadata-only secret reads. Use hidden/stdin input, named key IDs, progressive missing-field completion, consistent JSON/noninteractive results, usage-aware removal, and explicit source bindings/unlock mechanisms. Legacy encrypted and environment-backed setups require explicit migration; original stores/keys remain available for rollback. The related tools-to-mcp namespace migration is owned by issue #297 and is not implemented by this Changeset.
+- ac90c17: Replace the CLI tools namespace with mcp, without a compatibility alias. Add administrative connection inventory, grouped bounded discovery, named upstream account selection, progressive authentication, offline/JSON contracts, and explicit legacy OAuth migration. Existing scripts must migrate to the new command surface.
+  
+  Add named upstream accounts and runtime account restrictions independently of incoming client identities, shared-vault OAuth lifecycle records, safe temporary transport cleanup, and automatic project .env loading before configuration. Credentials and legacy authorizations remain separate; stored tokens alone do not establish remote validity.
+
+### Patch Changes
+
+- Updated dependencies [ac90c17]
+- Updated dependencies [ac90c17]
+  - @fentaris/core@3.3.0
+  - @fentaris/edge@0.3.7
+
 ## 1.7.0
 
 ### Minor Changes
