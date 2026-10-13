@@ -1,4 +1,4 @@
-import { bindOAuthResource, oauthIdentityOptions } from "../identity/oauthIdentityStrategy.js";
+import { bindOAuthLoginUri, bindOAuthResource, oauthIdentityOptions } from "../identity/oauthIdentityStrategy.js";
 import { existsSync, readFileSync } from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { type IncomingHttpHeaders, type IncomingMessage, type Server as HttpServer } from "node:http";
@@ -153,6 +153,9 @@ import { FENTARIS_LOCAL_NAMESPACE, registerOAuthAgentTools } from "../auth/oauth
 import { COMPACT_DISCOVERY_TOOL_NAMES, registerCompactDiscoveryTools, type CompactDiscoveryOptions } from "./compactDiscovery.js";
 import { redactOAuthMessage } from "../auth/oauth/redaction.js";
 import { createOAuthCallbackRoutes } from "../transports/exposure/oauthCallbackRoutes.js";
+import { createAuthEntrypointRoutes, DEFAULT_FENTARIS_LOGIN_PATH, DEFAULT_UPSTREAM_AUTH_PATH, type UpstreamAuthEntry } from "../transports/exposure/authEntrypointRoutes.js";
+import { setUnauthorizedChallenge } from "../transports/exposure/unauthorizedChallenge.js";
+import { capabilityPermissionsForPolicy } from "./capabilities.js";
 import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
 import type { CredentialSourceMetadata, IdentityMetadata, ResolvedSubject, UserContext } from "../types/shared.js";
 import type {
@@ -1346,6 +1349,22 @@ export class McpProxy {
             callbackUrl: oauthManager.getCallbackUrl(),
           });
         }
+      }
+      const downstreamLoginUrl = this.inboundLoginUrl();
+      {
+        const publicBaseUrl = this.oauthOptions?.publicUrl?.trim();
+        const entrypoints = createAuthEntrypointRoutes({
+          ...(downstreamLoginUrl ? { downstreamLoginUrl } : {}),
+          ...(publicBaseUrl ? { publicBaseUrl } : {}),
+          resolveCaller: async (request) => {
+            const { user, identity } = await this.resolveHttpUser(request);
+            return { user, authenticated: Boolean(identity?.authenticated) };
+          },
+          setUnauthorizedChallenge: (request, response) => setUnauthorizedChallenge(this.createRuntime(), request, response),
+          catalog: (user, base) => this.upstreamAuthCatalog(user, base),
+          beginLogin: (server, account, user) => this.beginUpstreamLogin(server, account, user),
+        });
+        oauthRoutes = [...(oauthRoutes ?? []), ...entrypoints.httpRoutes];
       }
 
       try {
@@ -3141,10 +3160,12 @@ export class McpProxy {
     return {
       ...(challenging ? { unauthorizedChallenge: (reason, request) => challenging.challenge?.(reason === "invalid_token" || (request && this.rejectedOAuthRequests.has(request)) ? "invalid_token" : request ? challenging.challengeReason?.(request) ?? reason : reason) } : {}),
       ...(metadata ? { protectedResourceMetadata: () => metadata.metadata!() } : {}),
+      ...(this.inboundLoginUrl() ? { downstreamLoginPath: () => DEFAULT_FENTARIS_LOGIN_PATH } : {}),
+      ...(this.inboundLoginUrl() ? { downstreamLoginUrl: () => this.inboundLoginUrl() } : {}),
       configureIdentityExposure: ({ host, port, path }) => {
         this.assertRuntimeConfigValid({ host, port, path });
         const base = this.oauthOptions?.publicUrl?.replace(/\/$/, "") ?? `http://${host.includes(":") ? `[${host}]` : host}:${port}`;
-        for (const strategy of strategies) bindOAuthResource(strategy, `${base}${path}`);
+        for (const strategy of strategies) { bindOAuthResource(strategy, `${base}${path}`); bindOAuthLoginUri(strategy, `${base}${DEFAULT_FENTARIS_LOGIN_PATH}`); }
       },
       createSdkServer: (user, identity, subject) => createSdkServer(this as unknown as Parameters<typeof createSdkServer>[0], user, identity, subject),
       resolveHttpUser: (request) => this.resolveHttpUser(request as IncomingMessage),
@@ -3879,6 +3900,75 @@ export class McpProxy {
    */
   oauthCallbackPath(): string {
     return oauthCallbackPath(this.oauthOptions);
+  }
+
+  private inboundLoginUrl(): string | undefined {
+    const configured = this.identityOptions?.strategy;
+    const strategies = Array.isArray(configured) ? configured : configured ? [configured] : [];
+    return strategies.map((strategy) => oauthIdentityOptions(strategy)?.loginUrl).find(Boolean);
+  }
+
+  private async upstreamAuthCatalog(user: UserContext, baseUrl: string): Promise<UpstreamAuthEntry[]> {
+    const manager = this.oauth();
+    const subject = this.resolveSubject(user);
+    const groups = subject ? this.subjectIndex?.groupsFor(subject.id) ?? [] : [];
+    const visible = this.serverCatalog.resolve({ user, subject, operation: "tools:list" })
+      .map(({ server }) => server).filter((server) => this.shouldDiscoverCapabilitiesForServer(server.name, groups));
+    const entries: UpstreamAuthEntry[] = [];
+    for (const server of visible) {
+      const accounts = server.hasNamedAccounts() ? server.accountNames() : [undefined];
+      for (const account of accounts) {
+        const scoped = account ? { ...user, upstreamAccounts: { ...user.upstreamAccounts, [server.name]: account } } : user;
+        try {
+          if (account) server.selectedAccount(scoped);
+          const registration = manager?.registrationFor(server.name, account ? `account:${account}` : manager.sessionKeyFor(server.name, scoped));
+          if (!registration) {
+            const selected = account ? server.account(account) : server;
+            const kind = selected.getAuthType();
+            if (kind && kind !== "none") entries.push({ server: server.name, ...(account ? { account } : {}), status: "setup-required", guidance: kind === "managed" ? "This account uses managed authentication. Connect/configure it through the Fentaris operator workflow; there is no browser login." : `This account uses ${kind === "header" ? "API-key/header" : "Bearer"} authentication. Configure its credential reference and secret in Fentaris; there is no OAuth browser login.` });
+            continue;
+          }
+          if (registration.auth.grant !== "authorization_code") {
+            entries.push({ server: server.name, ...(account ? { account } : {}), status: "setup-required", guidance: "This account uses managed/client-credential authentication. Configure its credential in Fentaris; there is no browser login." });
+            continue;
+          }
+          const status = await manager!.status(server.name, manager!.sessionKeyFor(server.name, scoped));
+          entries.push({ server: server.name, ...(account ? { account } : {}), status: status === "authenticated" ? "authenticated" : "requires-login", ...(status === "requires-login" ? { loginUrl: `${baseUrl.replace(/\/$/, "")}${DEFAULT_UPSTREAM_AUTH_PATH}/login?${new URLSearchParams({ server: server.name, ...(account ? { account } : {}) })}` } : {}) });
+        } catch { /* Account is not entitled to this caller. */ }
+      }
+    }
+    return entries;
+  }
+
+  private async beginUpstreamLogin(serverName: string, account: string | undefined, user: UserContext) {
+    const catalog = await this.upstreamAuthCatalog(user, this.oauthOptions?.publicUrl?.trim() ?? "http://localhost");
+    const entry = catalog.find((candidate) => candidate.server === serverName && candidate.account === account);
+    if (entry?.status === "setup-required") return { status: entry.status, guidance: entry.guidance };
+    if (entry?.status !== "requires-login") throw new Error("The requested server/account is not available for this caller or does not support browser login.");
+    const scoped = account ? { ...user, upstreamAccounts: { ...user.upstreamAccounts, [serverName]: account } } : user;
+    return this.oauth()!.beginLogin(serverName, scoped);
+  }
+
+  private shouldDiscoverCapabilitiesForServer(serverName: string, userGroups: Group[]): boolean {
+    if (this.groups.length === 0 && !this.globalPolicy) return true;
+    const policies = this.groups.length > 0 ? userGroups.map((group) => group.policy) : [this.globalPolicy!];
+    const operations: Array<Pick<CapabilityOperationRequest, "operation" | "targetKind">> = [
+      { operation: "tools:list", targetKind: "tool" }, { operation: "tool:call", targetKind: "tool" },
+      { operation: "resources:list", targetKind: "resource" }, { operation: "resource:read", targetKind: "resource" },
+      { operation: "resource-templates:list", targetKind: "resourceTemplate" },
+      { operation: "prompts:list", targetKind: "prompt" }, { operation: "prompt:get", targetKind: "prompt" },
+      { operation: "completion:complete", targetKind: "completion" },
+    ];
+    return policies.some((policy) => capabilityPermissionsForPolicy(policy, serverName).some((permission) =>
+      permission.effect !== "deny" && operations.some(({ operation, targetKind }) =>
+        (permission.operation === "*" || permission.operation === operation) && isCapabilityAllowed(
+          { groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex },
+          { serverName, operation, targetKind, target: operation.endsWith(":list") ? undefined : permission.target ?? "*" },
+          undefined,
+          userGroups,
+        ),
+      ),
+    ));
   }
 
   private oauthClientSecretResolver(server: McpServer): (() => Promise<string | undefined>) | undefined {

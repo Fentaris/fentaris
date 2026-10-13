@@ -11414,6 +11414,18 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `completion`: \{\[`key`: `string`\]: `unknown`; `hasMore?`: `boolean`; `total?`: `number`; `values`: `string`[]; \}; \}\>
 
+### getAuthType()
+
+> **getAuthType**(): `"oauth"` \| `"none"` \| `"managed"` \| `"bearer"` \| `"header"` \| `undefined`
+
+Defined in: packages/core/src/server/McpServer.ts:352
+
+Authentication scheme name for discovery UIs; never returns credential values.
+
+#### Returns
+
+`"oauth"` \| `"none"` \| `"managed"` \| `"bearer"` \| `"header"` \| `undefined`
+
 ### getCredentialBindings()
 
 > **getCredentialBindings**(): `ServerCredentialBinding`[]
@@ -39132,6 +39144,14 @@ Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:15
 
 > **url**: `string`
 
+### loginUrl?
+
+> `optional` **loginUrl?**: `string`
+
+Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:13
+
+Existing issuer-owned sign-in page exposed through Fentaris' public login route.
+
 ### mapUser?
 
 > `optional` **mapUser?**: (`claims`) => `UserContext` \| `null` \| `Promise`\<`UserContext` \| `null`\>
@@ -40097,6 +40117,12 @@ Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:6
 ### bearer\_methods\_supported
 
 > **bearer\_methods\_supported**: `string`[]
+
+Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:6
+
+### fentaris\_login\_uri?
+
+> `optional` **fentaris\_login\_uri?**: `string`
 
 Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:6
 
@@ -41617,6 +41643,30 @@ Defined in: packages/core/src/types/proxy.ts:374
 #### Returns
 
 `unknown`
+
+### downstreamLoginPath()?
+
+> `optional` **downstreamLoginPath**(): `string` \| `undefined`
+
+Defined in: packages/core/src/types/proxy.ts:387
+
+Public Fentaris-owned login link advertised with an OAuth challenge.
+
+#### Returns
+
+`string` \| `undefined`
+
+### downstreamLoginUrl()?
+
+> `optional` **downstreamLoginUrl**(): `string` \| `undefined`
+
+Defined in: packages/core/src/types/proxy.ts:389
+
+Configured issuer-owned login target for the public redirect route.
+
+#### Returns
+
+`string` \| `undefined`
 
 ### emitRuntimeEvent()
 
@@ -47223,6 +47273,18 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `completion`: \{\[`key`: `string`\]: `unknown`; `hasMore?`: `boolean`; `total?`: `number`; `values`: `string`[]; \}; \}\>
 
+### getAuthType()
+
+> **getAuthType**(): `"oauth"` \| `"none"` \| `"managed"` \| `"bearer"` \| `"header"` \| `undefined`
+
+Defined in: packages/core/src/server/McpServer.ts:352
+
+Authentication scheme name for discovery UIs; never returns credential values.
+
+#### Returns
+
+`"oauth"` \| `"none"` \| `"managed"` \| `"bearer"` \| `"header"` \| `undefined`
+
 ### getCredentialBindings()
 
 > **getCredentialBindings**(): `ServerCredentialBinding`[]
@@ -51346,6 +51408,14 @@ Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:15
 
 > **url**: `string`
 
+### loginUrl?
+
+> `optional` **loginUrl?**: `string`
+
+Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:13
+
+Existing issuer-owned sign-in page exposed through Fentaris' public login route.
+
 ### mapUser?
 
 > `optional` **mapUser?**: (`claims`) => `UserContext` \| `null` \| `Promise`\<`UserContext` \| `null`\>
@@ -51417,6 +51487,12 @@ Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:6
 ### bearer\_methods\_supported
 
 > **bearer\_methods\_supported**: `string`[]
+
+Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:6
+
+### fentaris\_login\_uri?
+
+> `optional` **fentaris\_login\_uri?**: `string`
 
 Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:6
 
@@ -55880,6 +55956,30 @@ Defined in: packages/core/src/types/proxy.ts:374
 #### Returns
 
 `unknown`
+
+### downstreamLoginPath()?
+
+> `optional` **downstreamLoginPath**(): `string` \| `undefined`
+
+Defined in: packages/core/src/types/proxy.ts:387
+
+Public Fentaris-owned login link advertised with an OAuth challenge.
+
+#### Returns
+
+`string` \| `undefined`
+
+### downstreamLoginUrl()?
+
+> `optional` **downstreamLoginUrl**(): `string` \| `undefined`
+
+Defined in: packages/core/src/types/proxy.ts:389
+
+Configured issuer-owned login target for the public redirect route.
+
+#### Returns
+
+`string` \| `undefined`
 
 ### emitRuntimeEvent()
 

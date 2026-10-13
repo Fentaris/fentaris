@@ -348,6 +348,11 @@ export class McpServer {
     return isOAuthAuth(this.auth) ? this.auth : undefined;
   }
 
+  /** Authentication scheme name for discovery UIs; never returns credential values. @pk */
+  getAuthType(): McpServerAuth["type"] | undefined {
+    return this.auth?.type;
+  }
+
   /**
    * Bind an OAuth provider resolver so per-user transports carry the caller's authorization.
    * @internal
