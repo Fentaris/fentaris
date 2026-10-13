@@ -317,6 +317,9 @@ function validateIdentity(config: McpProxyOptions, groups: Group[], diagnostics:
     const path = ["identity", ...(Array.isArray(configured) ? [index] : [])];
     const add = (code: string, message: string) => diagnostics.push(diagnostic("error", `FENTARIS_CONFIG_OAUTH_RESOURCE_${code}`, "Invalid OAuth resource server configuration", message, { path }));
     try { secureOAuthUrl(options.issuer); } catch { add("ISSUER_INVALID", "issuer must be an absolute HTTPS URL (HTTP is allowed only on loopback), without credentials, query, or fragment."); }
+    if (options.loginUrl) {
+      try { secureOAuthUrl(options.loginUrl); } catch { add("LOGIN_URL_INVALID", "loginUrl must be an absolute HTTPS URL (HTTP is allowed only on loopback), without credentials, query, or fragment."); }
+    }
     if (options.jwks && options.verify) add("VERIFY_CONFLICT", "Configure jwks or verify, not both.");
     if (options.jwks) {
       try { secureOAuthUrl(options.jwks.url); } catch { add("JWKS_INVALID", "jwks.url must use HTTPS outside loopback."); }

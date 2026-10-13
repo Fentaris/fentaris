@@ -11,3 +11,4 @@ export type {
   PlacementBindingConfig,
 } from "./McpProxy.js";
 export type { ProxyLocalHandle } from "../local/declarations.js";
+export type { CompactDiscoveryOptions, CompactServer } from "./compactDiscovery.js";

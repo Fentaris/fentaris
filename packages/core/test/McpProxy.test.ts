@@ -19,11 +19,12 @@ import type {
 import { Logger } from "../src/logger.js";
 import { FentarisAuth } from "../src/auth.js";
 import { health } from "../src/health/index.js";
-import { credentialEnv } from "../src/credentials/index.js";
+import { credential, credentialEnv } from "../src/credentials/index.js";
 import { McpProxy, fentaris } from "../src/proxy/McpProxy.js";
 import { McpServer } from "../src/server/McpServer.js";
 import { FentarisErrorCode } from "../src/errors.js";
 import { FentarisConfigError } from "../src/config/index.js";
+import { edgeError } from "../src/edge/index.js";
 import { Policy, group, policy, user } from "../src/governance.js";
 import {
   fromProxyPromptName,
@@ -49,6 +50,8 @@ class MemoryLogDriver implements LoggerDriver {
 }
 
 class MockTransport implements FentarisTransport {
+  readonly withEnv = vi.fn((_env: Record<string, string>): FentarisTransport => this);
+
   readonly callTool = vi.fn(async (params: CallToolRequest["params"]): Promise<CallToolResult> => {
     return {
       content: [{ type: "text", text: `called:${params.name}` }],
@@ -462,6 +465,177 @@ describe("McpProxy", () => {
     expect(result.tools.map((tool) => tool.name)).toEqual(["github__create_issue", "notion__create_issue"]);
     expect(result.tools[1]?.title).toBe("Notion API: create_issue");
     expect(result.tools[1]?.description).toBe("[Notion API] Create an issue");
+  });
+
+  it("retains policy-filtered healthy tools when an unauthenticated upstream fails", async () => {
+    const loggerDriver = new MemoryLogDriver();
+    const healthy = new MockTransport();
+    healthy.listTools.mockResolvedValue({
+      tools: [
+        { name: "create_issue", inputSchema: { type: "object" } },
+        { name: "delete_issue", inputSchema: { type: "object" } },
+      ],
+    });
+    const failing = new MockTransport();
+    failing.listTools.mockRejectedValue(new Error("connect ECONNREFUSED token=super-secret"));
+    const proxy = new McpProxy({
+      logger: new Logger({ driver: loggerDriver }),
+      policy: policy("limited")
+        .mcp("healthy").deny("*").mcp("healthy").allow("create_issue")
+        .mcp("offline").allow("*"),
+      servers: [
+        new McpServer({ name: "healthy", transport: healthy }),
+        new McpServer({ name: "offline", transport: failing }),
+      ],
+    });
+
+    await expect(proxy.listTools()).resolves.toEqual({
+      tools: [{
+        name: "healthy__create_issue",
+        title: "healthy: create_issue",
+        description: "Proxied from healthy",
+        inputSchema: { type: "object" },
+      }],
+    });
+    expect(loggerDriver.entries).toContainEqual(expect.objectContaining({
+      level: "warn",
+      message: "Omitting unavailable upstream server from tools/list",
+      metadata: expect.objectContaining({ server: "offline" }),
+    }));
+    expect(JSON.stringify(loggerDriver.entries)).not.toContain("super-secret");
+  });
+
+  it.each(["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND"])(
+    "isolates a coded %s network failure while retaining the exact healthy tool list",
+    async (code) => {
+      const failing = new MockTransport();
+      failing.listTools.mockRejectedValue(Object.assign(new Error("upstream offline"), { code }));
+      const proxy = new McpProxy({
+        servers: [
+          new McpServer({ name: "healthy", transport: new MockTransport() }),
+          new McpServer({ name: "offline", transport: failing }),
+        ],
+      });
+
+      await expect(proxy.listTools()).resolves.toEqual({
+        tools: [{
+          name: "healthy__create_issue",
+          title: "healthy: create_issue",
+          description: "[healthy] Create an issue",
+          inputSchema: { type: "object" },
+        }],
+      });
+    },
+  );
+
+  it.each(["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND"])(
+    "isolates a coded %s network failure from a Bearer-configured upstream",
+    async (code) => {
+      vi.stubEnv("FENTARIS_TEST_CODED_BEARER", "test-bearer");
+      const failing = new MockTransport();
+      failing.listTools.mockRejectedValue(Object.assign(new Error("Bearer upstream offline"), { code }));
+      const proxy = new McpProxy({
+        defaults: { credentials: { bearer: credentialEnv("FENTARIS_TEST_CODED_BEARER") } },
+        groups: [group({ id: "users", users: [user("alice")], policy: Policy.allowAll() })],
+        servers: [
+          new McpServer({ name: "healthy", transport: new MockTransport() }),
+          new McpServer({
+            name: "bearer",
+            transport: failing,
+            auth: { type: "bearer", credential: credential("bearer") },
+          }),
+        ],
+      });
+
+      await expect(proxy.listTools(undefined, { id: "alice" })).resolves.toEqual({
+        tools: [{
+          name: "healthy__create_issue",
+          title: "healthy: create_issue",
+          description: "[healthy] Create an issue",
+          inputSchema: { type: "object" },
+        }],
+      });
+    },
+  );
+
+  it.each(["EDGE_INPUT_INVALID", "EDGE_UNAUTHORIZED_TARGET"] as const)(
+    "propagates normalized Edge validation or authorization error %s",
+    async (code) => {
+      const failing = new MockTransport();
+      failing.listTools.mockRejectedValue(edgeError(code, "invalid Edge request"));
+      const proxy = new McpProxy({
+        servers: [
+          new McpServer({ name: "healthy", transport: new MockTransport() }),
+          new McpServer({ name: "invalid", transport: failing }),
+        ],
+      });
+
+      await expect(proxy.listTools()).rejects.toMatchObject({ code });
+    },
+  );
+
+  it.each(["EDGE_UNAVAILABLE", "EDGE_CAPACITY", "EDGE_WORKLOAD"] as const)(
+    "isolates normalized Edge availability error %s",
+    async (code) => {
+      const failing = new MockTransport();
+      failing.listTools.mockRejectedValue(edgeError(code, "Edge upstream unavailable"));
+      const proxy = new McpProxy({
+        servers: [
+          new McpServer({ name: "healthy", transport: new MockTransport() }),
+          new McpServer({ name: "unavailable", transport: failing }),
+        ],
+      });
+
+      await expect(proxy.listTools()).resolves.toMatchObject({
+        tools: [{ name: "healthy__create_issue" }],
+      });
+    },
+  );
+
+  it("isolates Bearer transport and authentication-preparation failures", async () => {
+    vi.stubEnv("FENTARIS_TEST_BEARER", "test-bearer");
+    const bearerFailure = new MockTransport();
+    bearerFailure.listTools.mockRejectedValue(new Error("upstream unavailable"));
+    const proxy = new McpProxy({
+      defaults: { credentials: { bearer: credentialEnv("FENTARIS_TEST_BEARER") } },
+      groups: [group({ id: "users", users: [user("alice")], policy: Policy.allowAll() })],
+      servers: [
+        new McpServer({ name: "healthy", transport: new MockTransport() }),
+        new McpServer({
+          name: "bearer",
+          transport: bearerFailure,
+          auth: { type: "bearer", credential: credential("bearer") },
+        }),
+        new McpServer({
+          name: "missing",
+          transport: new MockTransport(),
+          auth: { type: "bearer", credential: credential("not-configured") },
+        }),
+      ],
+    });
+
+    await expect(proxy.listTools(undefined, { id: "alice" })).resolves.toMatchObject({
+      tools: [{ name: "healthy__create_issue" }],
+    });
+    expect(bearerFailure.listTools).toHaveBeenCalledOnce();
+  });
+
+  it("returns an empty result when every upstream fails and discovers a recovered upstream later", async () => {
+    const recovering = new MockTransport();
+    recovering.listTools.mockRejectedValueOnce(new Error("temporary outage"));
+    const alwaysFailing = new MockTransport();
+    alwaysFailing.listTools.mockRejectedValue(new Error("offline"));
+    const proxy = new McpProxy({
+      servers: [
+        new McpServer({ name: "recovering", transport: recovering }),
+        new McpServer({ name: "offline", transport: alwaysFailing }),
+      ],
+    });
+
+    await expect(proxy.listTools()).resolves.toEqual({ tools: [] });
+    await expect(proxy.listTools()).resolves.toMatchObject({
+      tools: [{ name: "recovering__create_issue" }],
+    });
   });
 
   it("routes namespaced tool calls to the original upstream tool name", async () => {

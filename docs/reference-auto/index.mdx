@@ -11414,6 +11414,18 @@ If specified, the caller is requesting out-of-band progress notifications for th
 
 `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `completion`: \{\[`key`: `string`\]: `unknown`; `hasMore?`: `boolean`; `total?`: `number`; `values`: `string`[]; \}; \}\>
 
+### getAuthType()
+
+> **getAuthType**(): `"oauth"` \| `"none"` \| `"managed"` \| `"bearer"` \| `"header"` \| `undefined`
+
+Defined in: packages/core/src/server/McpServer.ts:352
+
+Authentication scheme name for discovery UIs; never returns credential values.
+
+#### Returns
+
+`"oauth"` \| `"none"` \| `"managed"` \| `"bearer"` \| `"header"` \| `undefined`
+
 ### getCredentialBindings()
 
 > **getCredentialBindings**(): `ServerCredentialBinding`[]
@@ -32656,6 +32668,94 @@ Capability target selector kind for policy permissions.
 
   </Accordion>
 
+  <Accordion title="Core exports: type-aliases/CompactDiscoveryOptions">
+
+@fentaris/core / CompactDiscoveryOptions
+
+> **CompactDiscoveryOptions** = `object`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:7
+
+MCP proxy options.
+
+## Properties
+
+### defaultPageSize?
+
+> `optional` **defaultPageSize?**: `number`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:11
+
+Default and maximum number of tool summaries returned by one search.
+
+### maxPageSize?
+
+> `optional` **maxPageSize?**: `number`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:12
+
+### maxTokens?
+
+> `optional` **maxTokens?**: `number`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:14
+
+Approximate response budget (JSON bytes / 4), not a billing estimate.
+
+### mode
+
+> **mode**: `"compact"`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:9
+
+Enable stable meta-tools instead of exposing every upstream tool schema.
+
+  </Accordion>
+
+  <Accordion title="Core exports: type-aliases/CompactServer">
+
+@fentaris/core / CompactServer
+
+> **CompactServer** = `object`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:17
+
+MCP proxy options.
+
+## Properties
+
+### auth
+
+> **auth**: `"ready"` \| `"requires-login"`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:21
+
+### description?
+
+> `optional` **description?**: `string`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:20
+
+### displayName
+
+> **displayName**: `string`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:19
+
+### name
+
+> **name**: `string`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:18
+
+### toolCount
+
+> **toolCount**: `number` \| `"unknown"`
+
+Defined in: packages/core/src/proxy/compactDiscovery.ts:22
+
+  </Accordion>
+
   <Accordion title="Core exports: type-aliases/CompactToolMetadata">
 
 @fentaris/core / CompactToolMetadata
@@ -38077,6 +38177,14 @@ Defined in: packages/core/src/proxy/McpProxy.ts:291
 
 > `optional` **credentials?**: `CredentialSourceMap`
 
+### discovery?
+
+> `optional` **discovery?**: `CompactDiscoveryOptions`
+
+Defined in: packages/core/src/proxy/McpProxy.ts:319
+
+Opt in to stable, server-grouped meta-tools instead of flattened upstream schemas.
+
 ### edge?
 
 > `optional` **edge?**: `EdgeRuntimeOptions`
@@ -39035,6 +39143,14 @@ Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:15
 #### url
 
 > **url**: `string`
+
+### loginUrl?
+
+> `optional` **loginUrl?**: `string`
+
+Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:13
+
+Existing issuer-owned sign-in page exposed through Fentaris' public login route.
 
 ### mapUser?
 
@@ -40004,6 +40120,12 @@ Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:6
 
 Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:6
 
+### fentaris\_login\_uri?
+
+> `optional` **fentaris\_login\_uri?**: `string`
+
+Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:6
+
 ### resource
 
 > **resource**: `string`
@@ -40129,6 +40251,12 @@ Unified context for new proxy middleware, routes, and events.
 ### execution?
 
 > `optional` **execution?**: `ProxyExecutionContext`
+
+### interaction?
+
+> `optional` **interaction?**: `ProxySessionInteraction`
+
+Interaction channel for the active downstream MCP session.
 
 ### operation
 
@@ -41515,6 +41643,30 @@ Defined in: packages/core/src/types/proxy.ts:374
 #### Returns
 
 `unknown`
+
+### downstreamLoginPath()?
+
+> `optional` **downstreamLoginPath**(): `string` \| `undefined`
+
+Defined in: packages/core/src/types/proxy.ts:387
+
+Public Fentaris-owned login link advertised with an OAuth challenge.
+
+#### Returns
+
+`string` \| `undefined`
+
+### downstreamLoginUrl()?
+
+> `optional` **downstreamLoginUrl**(): `string` \| `undefined`
+
+Defined in: packages/core/src/types/proxy.ts:389
+
+Configured issuer-owned login target for the public redirect route.
+
+#### Returns
+
+`string` \| `undefined`
 
 ### emitRuntimeEvent()
 
@@ -46641,6 +46793,14 @@ Defined in: packages/core/src/proxy/McpProxy.ts:291
 
 > `optional` **credentials?**: `CredentialSourceMap`
 
+### discovery?
+
+> `optional` **discovery?**: `CompactDiscoveryOptions`
+
+Defined in: packages/core/src/proxy/McpProxy.ts:319
+
+Opt in to stable, server-grouped meta-tools instead of flattened upstream schemas.
+
 ### edge?
 
 > `optional` **edge?**: `EdgeRuntimeOptions`
@@ -47112,6 +47272,18 @@ If specified, the caller is requesting out-of-band progress notifications for th
 #### Returns
 
 `Promise`\<\{\[`key`: `string`\]: `unknown`; `_meta?`: \{\[`key`: `string`\]: `unknown`; `io.modelcontextprotocol/related-task?`: \{ `taskId`: `string`; \}; `progressToken?`: `string` \| `number`; \}; `completion`: \{\[`key`: `string`\]: `unknown`; `hasMore?`: `boolean`; `total?`: `number`; `values`: `string`[]; \}; \}\>
+
+### getAuthType()
+
+> **getAuthType**(): `"oauth"` \| `"none"` \| `"managed"` \| `"bearer"` \| `"header"` \| `undefined`
+
+Defined in: packages/core/src/server/McpServer.ts:352
+
+Authentication scheme name for discovery UIs; never returns credential values.
+
+#### Returns
+
+`"oauth"` \| `"none"` \| `"managed"` \| `"bearer"` \| `"header"` \| `undefined`
 
 ### getCredentialBindings()
 
@@ -51236,6 +51408,14 @@ Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:15
 
 > **url**: `string`
 
+### loginUrl?
+
+> `optional` **loginUrl?**: `string`
+
+Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:13
+
+Existing issuer-owned sign-in page exposed through Fentaris' public login route.
+
 ### mapUser?
 
 > `optional` **mapUser?**: (`claims`) => `UserContext` \| `null` \| `Promise`\<`UserContext` \| `null`\>
@@ -51307,6 +51487,12 @@ Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:6
 ### bearer\_methods\_supported
 
 > **bearer\_methods\_supported**: `string`[]
+
+Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:6
+
+### fentaris\_login\_uri?
+
+> `optional` **fentaris\_login\_uri?**: `string`
 
 Defined in: packages/core/src/identity/oauthIdentityStrategy.ts:6
 
@@ -54547,6 +54733,12 @@ Unified context for new proxy middleware, routes, and events.
 
 > `optional` **execution?**: `ProxyExecutionContext`
 
+### interaction?
+
+> `optional` **interaction?**: `ProxySessionInteraction`
+
+Interaction channel for the active downstream MCP session.
+
 ### operation
 
 > **operation**: `ProxyOperation`
@@ -55764,6 +55956,30 @@ Defined in: packages/core/src/types/proxy.ts:374
 #### Returns
 
 `unknown`
+
+### downstreamLoginPath()?
+
+> `optional` **downstreamLoginPath**(): `string` \| `undefined`
+
+Defined in: packages/core/src/types/proxy.ts:387
+
+Public Fentaris-owned login link advertised with an OAuth challenge.
+
+#### Returns
+
+`string` \| `undefined`
+
+### downstreamLoginUrl()?
+
+> `optional` **downstreamLoginUrl**(): `string` \| `undefined`
+
+Defined in: packages/core/src/types/proxy.ts:389
+
+Configured issuer-owned login target for the public redirect route.
+
+#### Returns
+
+`string` \| `undefined`
 
 ### emitRuntimeEvent()
 

@@ -1,4 +1,4 @@
-import { bindOAuthResource, oauthIdentityOptions } from "../identity/oauthIdentityStrategy.js";
+import { bindOAuthLoginUri, bindOAuthResource, oauthIdentityOptions } from "../identity/oauthIdentityStrategy.js";
 import { existsSync, readFileSync } from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { type IncomingHttpHeaders, type IncomingMessage, type Server as HttpServer } from "node:http";
@@ -106,6 +106,8 @@ import {
   EdgeSingleCallCoordinator,
   EdgeFanoutCoordinator,
   InMemoryEdgeChildBindingStore,
+  EDGE_ERROR_CODES,
+  isEdgeError,
   EDGE_CONTROL_NAMESPACE,
   registerEdgeControlProvider,
   type DeviceResolver,
@@ -148,8 +150,12 @@ import {
 } from "./oauthRuntime.js";
 import { withOAuthConsent } from "./oauthInteraction.js";
 import { FENTARIS_LOCAL_NAMESPACE, registerOAuthAgentTools } from "../auth/oauth/agentTools.js";
+import { COMPACT_DISCOVERY_TOOL_NAMES, registerCompactDiscoveryTools, type CompactDiscoveryOptions } from "./compactDiscovery.js";
 import { redactOAuthMessage } from "../auth/oauth/redaction.js";
 import { createOAuthCallbackRoutes } from "../transports/exposure/oauthCallbackRoutes.js";
+import { createAuthEntrypointRoutes, DEFAULT_FENTARIS_LOGIN_PATH, DEFAULT_UPSTREAM_AUTH_PATH, type UpstreamAuthEntry } from "../transports/exposure/authEntrypointRoutes.js";
+import { setUnauthorizedChallenge } from "../transports/exposure/unauthorizedChallenge.js";
+import { capabilityPermissionsForPolicy } from "./capabilities.js";
 import type { CapabilityOperationRequest, ToolCallRequest } from "../types/mcp-operation.js";
 import type { CredentialSourceMetadata, IdentityMetadata, ResolvedSubject, UserContext } from "../types/shared.js";
 import type {
@@ -314,6 +320,8 @@ export type McpProxyOptions = {
   cli?: FentarisCliOptions;
   /** Upstream OAuth 2.1 wiring: hosted callback, token store, and consent behavior. @pk */
   oauth?: ProxyOAuthOptions;
+  /** Opt in to stable, server-grouped meta-tools instead of flattened upstream schemas. @pk */
+  discovery?: CompactDiscoveryOptions;
   /**
    * Edge execution wiring: control-plane device resolver, replaceable
    * session-binding store, expiry, and removal listener. When omitted, edge
@@ -472,6 +480,7 @@ export class McpProxy {
   private readonly edgeChildParentSessions = new Set<string>();
   private httpServer: HttpServer | null = null;
   private readonly oauthOptions?: ProxyOAuthOptions;
+  private readonly compactDiscovery?: CompactDiscoveryOptions;
   private oauthManagerCache?: OAuthManager;
   private readonly connectionBindingVersions = new Map<string, string>();
   private oauthStoreEphemeral = false;
@@ -516,6 +525,7 @@ export class McpProxy {
     });
     this.registry = options.registry;
     this.oauthOptions = options.oauth;
+    this.compactDiscovery = options.discovery?.mode === "compact" ? options.discovery : undefined;
     this.autoLog = normalizeAutoLog(options.autoLog);
     this.profiler = new RuntimeProfiler(options.profiler === undefined ? null : normalizeRuntimeProfiler(options.profiler, this.logger));
     this.lifecycleDefaults = normalizeRuntimeLifecycleOptions(options.lifecycle);
@@ -565,6 +575,14 @@ export class McpProxy {
 
     for (const server of this.serverCatalog.allServers()) {
       this.serverByName.set(server.name, server);
+    }
+    if (this.compactDiscovery) {
+      registerCompactDiscoveryTools(this.localRegistry.namespace(FENTARIS_LOCAL_NAMESPACE), this.compactDiscovery, {
+        servers: (context) => this.compactServers(context.user, context.subject),
+        tools: (server, context) => this.listToolsForServer(server, context.user, context.identity, context.subject),
+        call: (server, tool, args, context) => this.callTool({ name: toProxyToolName(server, tool), arguments: args }, context.user, context.identity, context.subject, context.interaction),
+      });
+      this.materializeLocalNamespaces();
     }
 
     // Normalize constructor-style target, setup, and placement declarations
@@ -1332,6 +1350,22 @@ export class McpProxy {
           });
         }
       }
+      const downstreamLoginUrl = this.inboundLoginUrl();
+      {
+        const publicBaseUrl = this.oauthOptions?.publicUrl?.trim();
+        const entrypoints = createAuthEntrypointRoutes({
+          ...(downstreamLoginUrl ? { downstreamLoginUrl } : {}),
+          ...(publicBaseUrl ? { publicBaseUrl } : {}),
+          resolveCaller: async (request) => {
+            const { user, identity } = await this.resolveHttpUser(request);
+            return { user, authenticated: Boolean(identity?.authenticated) };
+          },
+          setUnauthorizedChallenge: (request, response) => setUnauthorizedChallenge(this.createRuntime(), request, response),
+          catalog: (user, base) => this.upstreamAuthCatalog(user, base),
+          beginLogin: (server, account, user) => this.beginUpstreamLogin(server, account, user),
+        });
+        oauthRoutes = [...(oauthRoutes ?? []), ...entrypoints.httpRoutes];
+      }
 
       try {
         if (this.edgeOptions?.controlPlane?.enabled === true) {
@@ -1450,7 +1484,7 @@ export class McpProxy {
     this.refreshDerivedGovernanceState({ validate: true });
     const validation = validateFentarisConfig({ ...this.runtimeValidationConfig, ...listener });
     const errors = validation.errors.filter((error) => !(
-      this.oauthAgentToolsRegistered && error.code === "FENTARIS_CONFIG_OAUTH_RESERVED_NAMESPACE"
+      (this.oauthAgentToolsRegistered || this.compactDiscovery) && error.code === "FENTARIS_CONFIG_OAUTH_RESERVED_NAMESPACE"
     ));
     if (errors.length > 0) {
       throw new FentarisConfigError(errors);
@@ -1920,15 +1954,12 @@ export class McpProxy {
     const resolvedUser = await this.resolveRegistryUser(user);
     const resolvedSubject = this.resolveSubject(resolvedUser, subject);
     const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
-    const bindings = this.serverCatalog.resolve({ user: resolvedUser, subject: resolvedSubject, operation: "tools:list" });
+    const bindings = this.serverCatalog.resolve({ user: resolvedUser, subject: resolvedSubject, operation: "tools:list" })
+      .filter(({ server }) => !this.compactDiscovery || server.name === FENTARIS_LOCAL_NAMESPACE);
     const results = await Promise.all(
       bindings.map(async ({ server }) => {
-        if (!this.shouldDiscoverToolsForServer(server.name, userGroups)) {
-          return [];
-        }
-        if (await this.oauthServerRequiresLogin(server, resolvedUser)) {
-          // Never contact the authorization server while listing; contribute nothing
-          // for this upstream instead of failing the whole listing. @pk
+        const compactLocal = Boolean(this.compactDiscovery && server.name === FENTARIS_LOCAL_NAMESPACE);
+        if (!compactLocal && !this.shouldDiscoverToolsForServer(server.name, userGroups)) {
           return [];
         }
         const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
@@ -1940,9 +1971,14 @@ export class McpProxy {
           subject: resolvedSubject,
           identity,
         });
-        const { user: userForServer } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
         let result: ListToolsResult;
         try {
+          if (await this.oauthServerRequiresLogin(server, resolvedUser)) {
+            // Never contact the authorization server while listing; contribute nothing
+            // for this upstream instead of failing the whole listing. @pk
+            return [];
+          }
+          const { user: userForServer } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
           result = await this.dispatchTargetOperation(
             server,
             context,
@@ -1950,18 +1986,26 @@ export class McpProxy {
             (transport) => transport.listTools(params),
           );
         } catch (error: unknown) {
-          if (!(server.hasNamedAccounts() ? server.selectedAccount(resolvedUser) : server).getOAuthAuth()) {
+          const normalizedEdgeError = isEdgeError(error)
+            && EDGE_ERROR_CODES.some((code) => code === error.code)
+            && error.name === `EdgeError[${error.code}]`;
+          if (normalizedEdgeError && !["EDGE_UNAVAILABLE", "EDGE_CAPACITY", "EDGE_WORKLOAD"].includes(error.code)) {
             throw error;
           }
-
-          // An OAuth upstream that rejects the stored authorization must not fail the
-          // whole listing for every other server. @pk
-          log_listToolsOAuthFailure(this.logger, server.name, error);
+          // Discovery is best-effort per upstream. Authentication preparation and
+          // transport failures must not hide capabilities from healthy servers. The
+          // policy and request validation above, and the global hooks below, remain
+          // outside this boundary so their failures are still request failures. @pk
+          log_listToolsUpstreamFailure(this.logger, server.name, error);
           return [];
         }
-        const tools = this.groups.length > 0
+        let tools = this.groups.length > 0
           ? filterToolsByGroupPolicies(result.tools, server.name, userGroups)
           : this.globalPolicy ? filterToolsByPolicy(result.tools, server.name, this.globalPolicy) : result.tools;
+        if (compactLocal) {
+          const visibleNames = new Set(tools.map((tool) => tool.name));
+          tools = result.tools.filter((tool) => this.isCompactDiscoveryTool(server.name, tool.name) || visibleNames.has(tool.name));
+        }
         return tools.map((tool) => ({
           ...tool,
           name: toProxyToolName(server.name, tool.name),
@@ -2018,6 +2062,49 @@ export class McpProxy {
     }
 
     return { tools: this.filterVisibleProxyTools(tools, userGroups) };
+  }
+
+  /** Discover one explicitly selected upstream for compact meta-tools. */
+  private async listToolsForServer(
+    serverName: string,
+    user: UserContext,
+    identity?: IdentityMetadata,
+    subject?: ResolvedSubject,
+  ): Promise<ListToolsResult["tools"]> {
+    const resolvedUser = await this.resolveRegistryUser(user);
+    const resolvedSubject = this.resolveSubject(resolvedUser, subject);
+    const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
+    const server = this.serverCatalog.serverForContext(serverName, { user: resolvedUser, subject: resolvedSubject, operation: "tools:list" });
+    if (!server || server.name === FENTARIS_LOCAL_NAMESPACE || !this.shouldDiscoverToolsForServer(server.name, userGroups)) {
+      return [];
+    }
+    if (await this.oauthServerRequiresLogin(server, resolvedUser)) {
+      throw new FentarisMcpError(`MCP server "${serverName}" requires login`, { code: "FENTARIS_OAUTH_LOGIN_REQUIRED" });
+    }
+    const context = createCapabilityContext({ logger: this.logger, registry: this.registry, serverByName: this.serverByName, groups: this.groups, subjectIndex: this.subjectIndex, policy: this.globalPolicy }, {
+      operation: "tools:list", serverName, targetKind: "tool", user: resolvedUser, subject: resolvedSubject, identity,
+    });
+    const { user: upstreamUser } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
+    const result = await this.dispatchTargetOperation(server, context, () => server.listTools(undefined, upstreamUser), (transport) => transport.listTools());
+    return this.groups.length > 0
+      ? filterToolsByGroupPolicies(result.tools, server.name, userGroups)
+      : this.globalPolicy ? filterToolsByPolicy(result.tools, server.name, this.globalPolicy) : result.tools;
+  }
+
+  /** Build the initial catalog exclusively from configured, caller-visible metadata. */
+  private async compactServers(user: UserContext, subject?: ResolvedSubject) {
+    const resolvedUser = await this.resolveRegistryUser(user);
+    const resolvedSubject = this.resolveSubject(resolvedUser, subject);
+    const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
+    const bindings = this.serverCatalog.resolve({ user: resolvedUser, subject: resolvedSubject, operation: "tools:list" });
+    const visible = bindings.filter(({ server }) => server.name !== FENTARIS_LOCAL_NAMESPACE && this.shouldDiscoverToolsForServer(server.name, userGroups));
+    return Promise.all(visible.map(async ({ server }) => ({
+      name: server.name,
+      displayName: server.displayName,
+      ...(server.description ? { description: server.description } : {}),
+      auth: await this.oauthServerRequiresLogin(server, resolvedUser) ? "requires-login" as const : "ready" as const,
+      toolCount: "unknown" as const,
+    })));
   }
 
   /**
@@ -2094,10 +2181,14 @@ export class McpProxy {
       log,
       request,
       raw: params,
+      interaction,
       policy: this.globalPolicy,
     });
     const userGroups = resolvedSubject ? this.subjectIndex?.groupsFor(resolvedSubject.id) ?? [] : [];
-    if (this.groups.length > 0) {
+    if (this.isCompactDiscoveryTool(serverName, toolName)) {
+      // Meta-tools only select work; selected calls re-enter this governed path.
+      context.policyDecision = this.defaultAllowDecision(request, resolvedUser);
+    } else if (this.groups.length > 0) {
       context.policyDecision = await evaluateGroupPolicies(userGroups, request, resolvedUser, context);
     } else if (this.globalPolicy) {
       context.policyDecision = await this.globalPolicy.evaluate(request, resolvedUser, context);
@@ -3069,10 +3160,12 @@ export class McpProxy {
     return {
       ...(challenging ? { unauthorizedChallenge: (reason, request) => challenging.challenge?.(reason === "invalid_token" || (request && this.rejectedOAuthRequests.has(request)) ? "invalid_token" : request ? challenging.challengeReason?.(request) ?? reason : reason) } : {}),
       ...(metadata ? { protectedResourceMetadata: () => metadata.metadata!() } : {}),
+      ...(this.inboundLoginUrl() ? { downstreamLoginPath: () => DEFAULT_FENTARIS_LOGIN_PATH } : {}),
+      ...(this.inboundLoginUrl() ? { downstreamLoginUrl: () => this.inboundLoginUrl() } : {}),
       configureIdentityExposure: ({ host, port, path }) => {
         this.assertRuntimeConfigValid({ host, port, path });
         const base = this.oauthOptions?.publicUrl?.replace(/\/$/, "") ?? `http://${host.includes(":") ? `[${host}]` : host}:${port}`;
-        for (const strategy of strategies) bindOAuthResource(strategy, `${base}${path}`);
+        for (const strategy of strategies) { bindOAuthResource(strategy, `${base}${path}`); bindOAuthLoginUri(strategy, `${base}${DEFAULT_FENTARIS_LOGIN_PATH}`); }
       },
       createSdkServer: (user, identity, subject) => createSdkServer(this as unknown as Parameters<typeof createSdkServer>[0], user, identity, subject),
       resolveHttpUser: (request) => this.resolveHttpUser(request as IncomingMessage),
@@ -3225,6 +3318,7 @@ export class McpProxy {
   private filterVisibleProxyTools(tools: ListToolsResult["tools"], groups: Group[]): ListToolsResult["tools"] {
     return tools.filter((tool) => {
       const serverName = serverNameFromProxyTool(tool.name);
+      if (this.isCompactDiscoveryTool(serverName, tool.name.slice(serverName.length + 2))) return true;
       if (this.groups.length > 0) {
         return filterToolsByGroupPolicies([tool], serverName, groups).length > 0;
       }
@@ -3233,6 +3327,11 @@ export class McpProxy {
       }
       return true;
     });
+  }
+
+  private isCompactDiscoveryTool(serverName: string, toolName: string): boolean {
+    return Boolean(this.compactDiscovery && serverName === FENTARIS_LOCAL_NAMESPACE
+      && COMPACT_DISCOVERY_TOOL_NAMES.some((name) => name === toolName));
   }
 
   private policyDeniedResult(context: ProxyContext): CallToolResult {
@@ -3777,7 +3876,7 @@ export class McpProxy {
     const interactive = oauthServers(this.serverCatalog.allServers()).some(
       (server) => server.getOAuthAuth()?.grant === "authorization_code",
     );
-    if (!interactive || this.localRegistry.hasNamespace(FENTARIS_LOCAL_NAMESPACE) || this.serverByName.has(FENTARIS_LOCAL_NAMESPACE)) {
+    if (!interactive || (this.serverByName.has(FENTARIS_LOCAL_NAMESPACE) && !this.localRegistry.hasNamespace(FENTARIS_LOCAL_NAMESPACE))) {
       return;
     }
 
@@ -3801,6 +3900,75 @@ export class McpProxy {
    */
   oauthCallbackPath(): string {
     return oauthCallbackPath(this.oauthOptions);
+  }
+
+  private inboundLoginUrl(): string | undefined {
+    const configured = this.identityOptions?.strategy;
+    const strategies = Array.isArray(configured) ? configured : configured ? [configured] : [];
+    return strategies.map((strategy) => oauthIdentityOptions(strategy)?.loginUrl).find(Boolean);
+  }
+
+  private async upstreamAuthCatalog(user: UserContext, baseUrl: string): Promise<UpstreamAuthEntry[]> {
+    const manager = this.oauth();
+    const subject = this.resolveSubject(user);
+    const groups = subject ? this.subjectIndex?.groupsFor(subject.id) ?? [] : [];
+    const visible = this.serverCatalog.resolve({ user, subject, operation: "tools:list" })
+      .map(({ server }) => server).filter((server) => this.shouldDiscoverCapabilitiesForServer(server.name, groups));
+    const entries: UpstreamAuthEntry[] = [];
+    for (const server of visible) {
+      const accounts = server.hasNamedAccounts() ? server.accountNames() : [undefined];
+      for (const account of accounts) {
+        const scoped = account ? { ...user, upstreamAccounts: { ...user.upstreamAccounts, [server.name]: account } } : user;
+        try {
+          if (account) server.selectedAccount(scoped);
+          const registration = manager?.registrationFor(server.name, account ? `account:${account}` : manager.sessionKeyFor(server.name, scoped));
+          if (!registration) {
+            const selected = account ? server.account(account) : server;
+            const kind = selected.getAuthType();
+            if (kind && kind !== "none") entries.push({ server: server.name, ...(account ? { account } : {}), status: "setup-required", guidance: kind === "managed" ? "This account uses managed authentication. Connect/configure it through the Fentaris operator workflow; there is no browser login." : `This account uses ${kind === "header" ? "API-key/header" : "Bearer"} authentication. Configure its credential reference and secret in Fentaris; there is no OAuth browser login.` });
+            continue;
+          }
+          if (registration.auth.grant !== "authorization_code") {
+            entries.push({ server: server.name, ...(account ? { account } : {}), status: "setup-required", guidance: "This account uses managed/client-credential authentication. Configure its credential in Fentaris; there is no browser login." });
+            continue;
+          }
+          const status = await manager!.status(server.name, manager!.sessionKeyFor(server.name, scoped));
+          entries.push({ server: server.name, ...(account ? { account } : {}), status: status === "authenticated" ? "authenticated" : "requires-login", ...(status === "requires-login" ? { loginUrl: `${baseUrl.replace(/\/$/, "")}${DEFAULT_UPSTREAM_AUTH_PATH}/login?${new URLSearchParams({ server: server.name, ...(account ? { account } : {}) })}` } : {}) });
+        } catch { /* Account is not entitled to this caller. */ }
+      }
+    }
+    return entries;
+  }
+
+  private async beginUpstreamLogin(serverName: string, account: string | undefined, user: UserContext) {
+    const catalog = await this.upstreamAuthCatalog(user, this.oauthOptions?.publicUrl?.trim() ?? "http://localhost");
+    const entry = catalog.find((candidate) => candidate.server === serverName && candidate.account === account);
+    if (entry?.status === "setup-required") return { status: entry.status, guidance: entry.guidance };
+    if (entry?.status !== "requires-login") throw new Error("The requested server/account is not available for this caller or does not support browser login.");
+    const scoped = account ? { ...user, upstreamAccounts: { ...user.upstreamAccounts, [serverName]: account } } : user;
+    return this.oauth()!.beginLogin(serverName, scoped);
+  }
+
+  private shouldDiscoverCapabilitiesForServer(serverName: string, userGroups: Group[]): boolean {
+    if (this.groups.length === 0 && !this.globalPolicy) return true;
+    const policies = this.groups.length > 0 ? userGroups.map((group) => group.policy) : [this.globalPolicy!];
+    const operations: Array<Pick<CapabilityOperationRequest, "operation" | "targetKind">> = [
+      { operation: "tools:list", targetKind: "tool" }, { operation: "tool:call", targetKind: "tool" },
+      { operation: "resources:list", targetKind: "resource" }, { operation: "resource:read", targetKind: "resource" },
+      { operation: "resource-templates:list", targetKind: "resourceTemplate" },
+      { operation: "prompts:list", targetKind: "prompt" }, { operation: "prompt:get", targetKind: "prompt" },
+      { operation: "completion:complete", targetKind: "completion" },
+    ];
+    return policies.some((policy) => capabilityPermissionsForPolicy(policy, serverName).some((permission) =>
+      permission.effect !== "deny" && operations.some(({ operation, targetKind }) =>
+        (permission.operation === "*" || permission.operation === operation) && isCapabilityAllowed(
+          { groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex },
+          { serverName, operation, targetKind, target: operation.endsWith(":list") ? undefined : permission.target ?? "*" },
+          undefined,
+          userGroups,
+        ),
+      ),
+    ));
   }
 
   private oauthClientSecretResolver(server: McpServer): (() => Promise<string | undefined>) | undefined {
@@ -4407,8 +4575,8 @@ function parseTimeoutMs(message: string): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
-function log_listToolsOAuthFailure(logger: Logger, serverName: string, error: unknown): void {
-  logger.warn("Omitting OAuth-protected server from tools/list", {
+function log_listToolsUpstreamFailure(logger: Logger, serverName: string, error: unknown): void {
+  logger.warn("Omitting unavailable upstream server from tools/list", {
     server: serverName,
     reason: redactOAuthMessage(error instanceof Error ? error.message : String(error)),
   });

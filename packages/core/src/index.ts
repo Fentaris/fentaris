@@ -169,6 +169,8 @@ export type {
  */
 export type {
   AutoLogOptions,
+  CompactDiscoveryOptions,
+  CompactServer,
   EdgeRuntimeOptions,
   FentarisCliMcpAccountConfig,
   FentarisCliOptions,

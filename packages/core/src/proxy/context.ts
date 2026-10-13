@@ -4,7 +4,7 @@ import { approvalDecision } from "../types/shared.js";
 import type { IdentityMetadata, ResolvedSubject, UserContext } from "../types/shared.js";
 import type { MiddlewareContext } from "../types/middleware.js";
 import type { Policy, Registry } from "../types/policy.js";
-import type { ProxyContext } from "../types/proxy.js";
+import type { ProxyContext, ProxySessionInteraction } from "../types/proxy.js";
 import { getToolPermission } from "../policy.js";
 import { type Group, type SubjectIndex } from "../governance.js";
 import type { Logger } from "../logger.js";
@@ -112,6 +112,7 @@ export function createProxyContext(
     };
     raw?: ProxyContext["raw"];
     transport?: ProxyContext["transport"];
+    interaction?: ProxySessionInteraction;
     policy?: Policy;
   }
 ): ProxyContext {
@@ -131,6 +132,7 @@ export function createProxyContext(
   };
   const context = legacyContext as ProxyContext;
   context.operation = options.operation;
+  context.interaction = options.interaction;
   context.transport = options.transport ?? {
     type: "unknown",
     sessionId: stringMetadata(options.identity?.metadata, "sessionId"),
