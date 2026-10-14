@@ -1,5 +1,16 @@
 # @fentaris/core
 
+## 3.4.0
+
+### Minor Changes
+
+- f4372eb: Add opt-in, server-grouped compact MCP discovery with stable meta-tools for selective schema loading and governed execution.
+- f4372eb: Add public downstream login discovery and authenticated, per-upstream authentication entrypoints without changing OAuth resource-server semantics or tool discovery.
+
+### Patch Changes
+
+- f4372eb: Isolate runtime tools/list authentication and transport failures per upstream so healthy servers remain discoverable.
+
 ## 3.3.0
 
 ### Minor Changes
