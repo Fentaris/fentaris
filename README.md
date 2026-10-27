@@ -178,6 +178,7 @@ Credential values are never exposed to middleware, hooks, logs, or policy callba
 | --- | --- |
 | [`@fentaris/core`](./packages/core) | Proxy runtime, MCP server wrapper, transports, policy, auth, logging, and middleware APIs. |
 | [`@fentaris/cli`](./packages/cli) | Project generator and local development commands. |
+| [`@fentaris/client`](./packages/client) | End-user CLI (`frs`): sign in to a running proxy and use its governed tools, resources, and prompts from a terminal or an agent. |
 | [`@fentaris/approval-telegram`](./packages/approval-telegram) | Telegram approval adapter for Fentaris policies. |
 
 ## Development
