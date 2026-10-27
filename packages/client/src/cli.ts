@@ -44,7 +44,7 @@ export const ROOT: CommandSpec = {
       name: "tools", path: ["tools"], summary: "Discover, inspect, and call MCP tools.", usage: "frs tools <command> [options]",
       children: [
         { name: "list", path: ["tools", "list"], summary: "List the tools visible to you.", usage: "frs tools list [options]", options: [mcp, limit(50), cursor, { name: "compact", description: "Return only name, server, and a short description." }], examples: ["frs tools list --mcp github --limit 20 --json"], run: toolsList },
-        { name: "search", path: ["tools", "search"], summary: "Search tools by name, title, or description.", usage: "frs tools search <query> [options]", args: [{ name: "query", required: true, description: "Short keywords, for example \"issue\"." }], options: [mcp, limit(10)], examples: ["frs tools search \"create issue\" --json"], run: toolsSearch },
+        { name: "search", path: ["tools", "search"], summary: "Search tools by name, title, or description.", usage: "frs tools search <query> [options]", args: [{ name: "query", required: true, description: "Short keywords, for example \"issue\"." }], options: [mcp, limit(10), cursor], examples: ["frs tools search \"create issue\" --json"], run: toolsSearch },
         { name: "get", path: ["tools", "get"], summary: "Show one tool and a summary of its arguments.", usage: "frs tools get <tool> [options]", args: [{ name: "tool", required: true, description: "Proxied tool name, for example github__create_issue." }], examples: ["frs tools get github__create_issue --json"], run: toolsGet },
         {
           name: "schema", path: ["tools", "schema"], summary: "Show a tool's input and/or output JSON schema.", usage: "frs tools schema <tool> [options]",

@@ -66,6 +66,12 @@ describe("API key login and governed usage", () => {
     expect(search.json.data.tools[0]).toMatchObject({ name: "demo__echo", server: "demo" });
     expect(search.json.data.tools[0]).not.toHaveProperty("inputSchema");
     expect(search.json.nextActions[0].command).toBe("frs tools schema demo__echo --input --json");
+    const first = await run(runtime, "tools", "search", "demo", "--limit", "2", "--json");
+    expect(first.json.pagination).toMatchObject({ limit: 2, total: 4, nextCursor: expect.any(String) });
+    expect(first.json.nextActions.at(-1).command).toBe(`frs tools search demo --limit 2 --cursor ${first.json.pagination.nextCursor}`);
+    const rest = await run(runtime, "tools", "search", "demo", "--limit", "2", "--cursor", first.json.pagination.nextCursor, "--json");
+    expect(rest.json.data.tools).toHaveLength(2);
+    expect(rest.json.pagination.nextCursor).toBeNull();
     const get = await run(runtime, "tools", "get", "demo__echo", "--json");
     expect(get.json.data.arguments).toEqual([{ name: "text", type: "string", required: true, description: "Text to echo." }, { name: "times", type: "number", required: false }]);
     const schema = await run(runtime, "tools", "schema", "demo__echo", "--input", "--json");

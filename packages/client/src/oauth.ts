@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { discoverAuthorizationServerMetadata, exchangeAuthorization, refreshAuthorization, registerClient, startAuthorization } from "@modelcontextprotocol/sdk/client/auth.js";
 import type { AuthorizationServerMetadata, OAuthClientInformationMixed, OAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js";
+import { checkResourceAllowed } from "@modelcontextprotocol/sdk/shared/auth-utils.js";
 import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { OAuthProfile } from "./config.js";
 import type { CredentialRecord } from "./credentials.js";
@@ -45,8 +46,8 @@ export async function oauthLogin(runtime: Runtime, options: LoginOptions): Promi
   const fetchFn = fetchWithin(runtime, options.requestTimeoutMs);
   const metadata = await discoverProtectedResource(fetchFn, options.url);
   if (!metadata) throw new ClientError("LOGIN_FAILED", "The proxy does not advertise OAuth protected resource metadata.", { url: options.url }, [{ description: "Sign in with an API key instead", command: `frs auth login ${options.url} --with-api-key` }]);
-  if (new URL(metadata.resource).origin !== new URL(options.url).origin) {
-    // RFC 9728: never obtain tokens for a resource other than the one being contacted.
+  if (!checkResourceAllowed({ requestedResource: options.url, configuredResource: metadata.resource })) {
+    // RFC 9728: never obtain tokens for a resource that does not cover the URL being contacted.
     throw new ClientError("LOGIN_FAILED", `The proxy advertises resource ${metadata.resource}, which does not match ${options.url}. Log in with the proxy's public URL.`, { url: options.url, advertisedResource: metadata.resource }, [{ description: "Log in with the advertised URL", command: `frs auth login ${metadata.resource}` }]);
   }
   const issuer = metadata.authorization_servers?.[0];

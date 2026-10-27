@@ -158,6 +158,22 @@ describe("OAuth login", () => {
     expect(runtime.opened).toEqual([]);
   });
 
+  it("rejects metadata whose resource does not cover the login URL", async () => {
+    const metadataServer = createServer((req, res) => {
+      const origin = `http://127.0.0.1:${(metadataServer.address() as { port: number }).port}`;
+      if (!req.url?.startsWith("/.well-known/oauth-protected-resource")) { res.writeHead(404).end(); return; }
+      res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ resource: `${origin}/other`, authorization_servers: [`${origin}/issuer`] }));
+    });
+    await new Promise<void>((resolve) => metadataServer.listen(0, "127.0.0.1", resolve));
+    cleanup.push(() => new Promise((resolve) => metadataServer.close(() => resolve())));
+    const url = `http://127.0.0.1:${(metadataServer.address() as { port: number }).port}/mcp`;
+    const runtime = testRuntime(await tempDirectory(cleanup));
+    const login = await run(runtime, "auth", "login", url, "--json");
+    expect(login.code).toBe(3);
+    expect(login.json.error).toMatchObject({ code: "LOGIN_FAILED", details: { advertisedResource: expect.stringMatching(/\/other$/) } });
+    expect(runtime.opened).toEqual([]);
+  });
+
   it("suggests API key login when the proxy has no OAuth metadata", async () => {
     const app = fentaris({ port: 0, policy: Policy.allowAll(), servers: [new McpServer({ name: "demo", transport: new DemoTransport() })] });
     const server = await app.start();

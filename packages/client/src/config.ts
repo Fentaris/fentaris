@@ -1,4 +1,5 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { isIPv4 } from "node:net";
 import { dirname, join } from "node:path";
 import { ClientError } from "./errors.js";
 import type { Runtime } from "./runtime.js";
@@ -71,5 +72,5 @@ export function normalizeUrl(value: string): string {
 
 export function isLoopback(url: string): boolean {
   const host = new URL(url).hostname;
-  return host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host.startsWith("127.");
+  return host === "localhost" || host === "[::1]" || (isIPv4(host) && host.startsWith("127."));
 }

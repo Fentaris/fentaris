@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { ROOT } from "../src/cli.js";
+import { isLoopback } from "../src/config.js";
 import { EXIT_CODES } from "../src/errors.js";
 import { parse } from "../src/framework.js";
 import { VERSION } from "../src/session.js";
@@ -39,5 +40,12 @@ describe("command framework", () => {
 
   it("keeps the documented exit code contract", () => {
     expect(EXIT_CODES).toMatchObject({ TOOL_ERROR: 1, INVALID_ARGUMENTS: 2, NOT_FOUND: 2, NOT_LOGGED_IN: 3, AUTH_REQUIRED: 3, POLICY_DENIED: 4, PROXY_UNREACHABLE: 5, TIMEOUT: 6 });
+  });
+});
+
+describe("isLoopback", () => {
+  it("treats only loopback hosts as local", () => {
+    expect(["http://localhost:1/", "http://127.0.0.1/", "http://127.4.5.6/", "http://[::1]:8080/mcp"].map((url) => isLoopback(url))).toEqual([true, true, true, true]);
+    expect(["http://127.example.com/", "http://example.com/"].map((url) => isLoopback(url))).toEqual([false, false]);
   });
 });

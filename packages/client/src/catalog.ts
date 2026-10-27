@@ -1,5 +1,5 @@
-import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
-import { ClientError } from "./errors.js";
+import { McpError, type CallToolResult, type Tool } from "@modelcontextprotocol/sdk/types.js";
+import { ClientError, toClientError } from "./errors.js";
 import type { Session } from "./session.js";
 
 /** Separator used by the proxy between server and upstream names (see @fentaris/core naming). */
@@ -11,7 +11,8 @@ export type Catalog = {
   mode: "classic" | "compact";
   list(server?: string): Promise<Tool[]>;
   get(name: string): Promise<Tool | undefined>;
-  call(name: string, args: Record<string, unknown> | undefined): Promise<CallToolResult>;
+  /** Servers whose tools could not be listed, as user-facing messages. */
+  warnings: string[];
 };
 
 export function splitName(name: string): { server: string; tool: string } | undefined {
@@ -23,7 +24,7 @@ export function serverOf(name: string): string | undefined {
   return splitName(name)?.server;
 }
 
-/** Detect compact discovery once per session and return an adapter with identical identifiers. */
+/** Detect compact discovery once per session and return an adapter with identical identifiers for discovery. */
 export async function openCatalog(session: Session): Promise<Catalog> {
   const first = await listAll(session);
   const names = new Set(first.map((tool) => tool.name));
@@ -32,7 +33,7 @@ export async function openCatalog(session: Session): Promise<Catalog> {
     mode: "classic",
     async list(server) { return server ? first.filter((tool) => serverOf(tool.name) === server) : first; },
     async get(name) { return first.find((tool) => tool.name === name); },
-    call: (name, args) => session.client.callTool({ name, arguments: args }, undefined, session.options) as Promise<CallToolResult>,
+    warnings: [],
   };
 }
 
@@ -49,9 +50,10 @@ async function listAll(session: Session): Promise<Tool[]> {
 
 function compactCatalog(session: Session, metaTools: Tool[]): Catalog {
   const local = metaTools.filter((tool) => !Object.values(COMPACT).includes(tool.name));
+  const warnings: string[] = [];
   const meta = async (name: string, args: Record<string, unknown>) => {
     const result = await session.client.callTool({ name, arguments: args }, undefined, session.options) as CallToolResult;
-    if (result.isError) throw new ClientError("NOT_FOUND", textOf(result) || `${name} failed.`, { tool: name });
+    if (result.isError) throw metaError(result, name);
     return result.structuredContent ?? JSON.parse(textOf(result) || "{}") as Record<string, unknown>;
   };
   const servers = async (): Promise<string[]> => ((await meta(COMPACT.servers, {})).servers as Array<{ name: string }> ?? []).map((server) => server.name);
@@ -70,27 +72,35 @@ function compactCatalog(session: Session, metaTools: Tool[]): Catalog {
     async list(server) {
       if (server) return server === "fentaris" ? local : searchServer(server);
       const all = [...local];
-      for (const name of await servers()) all.push(...await searchServer(name).catch(() => []));
+      for (const name of await servers()) {
+        all.push(...await searchServer(name).catch((error: unknown) => {
+          warnings.push(`Tools of "${name}" could not be listed: ${toClientError(error).message}`);
+          return [];
+        }));
+      }
       return all;
     },
     async get(name) {
       if (local.some((tool) => tool.name === name)) return local.find((tool) => tool.name === name);
       const parts = splitName(name);
       if (!parts) return undefined;
-      const result = await meta(COMPACT.get, { server: parts.server, tools: [parts.tool] }).catch((error: unknown) => {
-        if (error instanceof ClientError && error.code === "NOT_FOUND") return { tools: [] };
-        throw error;
-      }) as { tools?: Tool[] };
+      const result = await meta(COMPACT.get, { server: parts.server, tools: [parts.tool] }) as { tools?: Tool[] };
       const tool = result.tools?.[0];
       return tool ? { ...tool, name } : undefined;
     },
-    call(name, args) {
-      if (local.some((tool) => tool.name === name)) return session.client.callTool({ name, arguments: args }, undefined, session.options) as Promise<CallToolResult>;
-      const parts = splitName(name);
-      if (!parts) throw new ClientError("INVALID_ARGUMENTS", `"${name}" is not a proxied tool name such as github__create_issue.`);
-      return session.client.callTool({ name: COMPACT.call, arguments: { server: parts.server, tool: parts.tool, ...(args ? { arguments: args } : {}) } }, undefined, session.options) as Promise<CallToolResult>;
-    },
+    warnings,
   };
+}
+
+/** A failed meta-tool keeps the proxy's governance code when it carries one. */
+function metaError(result: CallToolResult, name: string): ClientError {
+  const governance = (result._meta as { error?: { code?: unknown } } | undefined)?.error;
+  const message = textOf(result) || `${name} failed.`;
+  if (governance && typeof governance.code === "number") {
+    const mapped = toClientError(new McpError(governance.code, message));
+    if (mapped.code !== "PROTOCOL_ERROR") return mapped;
+  }
+  return new ClientError("TOOL_ERROR", message, { tool: name });
 }
 
 /** Rank by query terms: every term must match name, title, or description. */

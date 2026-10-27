@@ -23,5 +23,7 @@ describe("compact discovery proxies", () => {
     const hidden = await run(runtime, "tools", "call", "demo__danger", "--json");
     expect(hidden.code).toBe(4);
     expect(hidden.json.error.code).toBe("POLICY_DENIED");
+    const unknown = await run(runtime, "tools", "get", "nope__x", "--json");
+    expect(unknown.json.error.code).toBe("NOT_FOUND");
   });
 });

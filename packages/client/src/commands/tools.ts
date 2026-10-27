@@ -2,9 +2,9 @@ import { readFile } from "node:fs/promises";
 import { McpError, type CallToolResult, type Tool } from "@modelcontextprotocol/sdk/types.js";
 import { searchTools, serverOf, splitName, textOf } from "../catalog.js";
 import { ClientError, toClientError, type NextAction } from "../errors.js";
-import { integerOption, listOption, stringOption, type CommandContext } from "../framework.js";
+import { listOption, stringOption, type CommandContext } from "../framework.js";
 import { table, truncate, type CommandResult } from "../output.js";
-import { argumentPairs, MAX_LIMIT, paginate, quote, usingCatalog, withCursor } from "./shared.js";
+import { argumentPairs, paginate, quote, usingCatalog, usingSession, withCursor } from "./shared.js";
 
 /** Structured code @fentaris/core returns when an upstream needs OAuth consent. */
 const UPSTREAM_AUTH_CODE = "FENTARIS_OAUTH_AUTHORIZATION_REQUIRED";
@@ -20,6 +20,7 @@ export function toolsList(context: CommandContext): Promise<CommandResult> {
     return {
       data: { mode: catalog.mode, tools: page.map((tool) => summary(tool, compact)) },
       pagination,
+      warnings: catalog.warnings,
       nextActions,
       human: () => page.length
         ? `${table(page.map((tool) => [tool.name, truncate(tool.description ?? tool.title ?? "", 80)]), ["TOOL", "DESCRIPTION"])}\n\n${pageFooter(pagination.total, page.length, pagination.nextCursor)}`
@@ -32,14 +33,18 @@ export function toolsSearch(context: CommandContext): Promise<CommandResult> {
   const query = context.args[0]!.trim();
   if (!query) throw new ClientError("INVALID_ARGUMENTS", "The search query is empty.");
   const server = stringOption(context.options, "mcp");
-  const limit = integerOption(context.options, "limit", 10, MAX_LIMIT);
   return usingCatalog(context, async (catalog) => {
-    const matches = searchTools(await catalog.list(server), query).slice(0, limit);
+    const { page: matches, pagination } = paginate(context, searchTools(await catalog.list(server), query), 10);
+    const nextActions = matches.slice(0, 3).map(({ tool }) => schemaAction(tool.name));
+    if (pagination.nextCursor) nextActions.push({ description: "Show more matches", command: withCursor(`frs tools search ${quote(query)}${server ? ` --mcp ${quote(server)}` : ""} --limit ${pagination.limit}`, pagination.nextCursor) });
     return {
       data: { query, mode: catalog.mode, tools: matches.map(({ tool, score }) => ({ ...summary(tool, true), score })) },
-      pagination: { limit, cursor: null, nextCursor: null, total: matches.length },
-      nextActions: matches.slice(0, 3).map(({ tool }) => schemaAction(tool.name)),
-      human: () => matches.length ? table(matches.map(({ tool }) => [tool.name, truncate(tool.description ?? tool.title ?? "", 80)]), ["TOOL", "DESCRIPTION"]) : `No tools match "${query}".`,
+      pagination,
+      warnings: catalog.warnings,
+      nextActions,
+      human: () => matches.length
+        ? `${table(matches.map(({ tool }) => [tool.name, truncate(tool.description ?? tool.title ?? "", 80)]), ["TOOL", "DESCRIPTION"])}\n\n${pageFooter(pagination.total, matches.length, pagination.nextCursor)}`
+        : `No tools match "${query}".`,
     };
   });
 }
@@ -81,10 +86,11 @@ export async function toolsCall(context: CommandContext): Promise<CommandResult>
   if (raw && context.global.json) throw new ClientError("INVALID_ARGUMENTS", "Use either --raw or --json, not both.");
   if (!splitName(name)) throw new ClientError("INVALID_ARGUMENTS", `"${name}" is not a proxied tool name such as github__create_issue.`, {}, [{ description: "Search visible tools", command: `frs tools search ${quote(name)}` }]);
   const args = await callArguments(context);
-  // No visibility pre-check: the proxy decides, does not disclose hidden tools, and
-  // exposes OAuth-protected upstream tools only after their authorization.
-  return usingCatalog(context, async (catalog) => {
-    const result = await catalog.call(name, args);
+  // No visibility pre-check or catalog listing: the proxy governs a direct call the same
+  // way in classic and compact mode, does not disclose hidden tools, and exposes
+  // OAuth-protected upstream tools only after their authorization.
+  return usingSession(context, async (session) => {
+    const result = await session.client.callTool({ name, arguments: args }, undefined, session.options) as CallToolResult;
     if (raw) {
       context.runtime.write(`${JSON.stringify(result)}\n`);
       return { data: result, written: true, exitCode: result.isError ? 1 : 0 };
