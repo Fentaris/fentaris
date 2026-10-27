@@ -49,6 +49,7 @@ import {
 import {
   RuntimeLifecycleController,
   normalizeRuntimeLifecycleOptions,
+  timeoutAfter,
   type RuntimeLifecycleOptions,
   type RuntimeLifecycleSnapshot,
   type RuntimeLifecycleTransition,
@@ -111,6 +112,7 @@ import {
   EDGE_CONTROL_NAMESPACE,
   registerEdgeControlProvider,
   type DeviceResolver,
+  type EdgeErrorCode,
   type EdgeCapabilityCache,
   type EdgeTelemetry,
   type EdgeControlProviderOptions,
@@ -281,6 +283,25 @@ export type PlacementBindingConfig = {
 type PlacementBinding = PlacementBindingConfig;
 
 const CLOUD_TARGET_NAME = "cloud";
+
+/**
+ * Budget for one upstream's contribution to an aggregated listing. It stays well
+ * below the 60s request timeout MCP clients and the SDK use by default, so one
+ * unresponsive upstream cannot time out the whole listing. A connection still
+ * starting continues in the background and joins a later listing. @pk
+ */
+const UPSTREAM_DISCOVERY_TIMEOUT_MS = 15_000;
+
+/** Normalized Edge errors that describe one upstream's health rather than the request. @pk */
+const UPSTREAM_HEALTH_EDGE_ERRORS: readonly EdgeErrorCode[] = [
+  "EDGE_UNAVAILABLE",
+  "EDGE_CAPACITY",
+  "EDGE_WORKLOAD",
+  "EDGE_SETUP_REQUIRED",
+  "EDGE_PROTOCOL",
+];
+
+type UpstreamListMethod = "tools/list" | "resources/list" | "resources/templates/list" | "prompts/list";
 
 /**
  * Options for creating an MCP proxy server.
@@ -1971,32 +1992,18 @@ export class McpProxy {
           subject: resolvedSubject,
           identity,
         });
-        let result: ListToolsResult;
-        try {
-          if (await this.oauthServerRequiresLogin(server, resolvedUser)) {
-            // Never contact the authorization server while listing; contribute nothing
-            // for this upstream instead of failing the whole listing. @pk
-            return [];
-          }
+        // The policy and request validation above, and the global hooks below, remain
+        // outside the per-upstream boundary so their failures are still request failures. @pk
+        const result = await this.discoverFromUpstream(server, "tools/list", resolvedUser, async () => {
           const { user: userForServer } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
-          result = await this.dispatchTargetOperation(
+          return this.dispatchTargetOperation(
             server,
             context,
             () => server.listTools(params, userForServer),
             (transport) => transport.listTools(params),
           );
-        } catch (error: unknown) {
-          const normalizedEdgeError = isEdgeError(error)
-            && EDGE_ERROR_CODES.some((code) => code === error.code)
-            && error.name === `EdgeError[${error.code}]`;
-          if (normalizedEdgeError && !["EDGE_UNAVAILABLE", "EDGE_CAPACITY", "EDGE_WORKLOAD"].includes(error.code)) {
-            throw error;
-          }
-          // Discovery is best-effort per upstream. Authentication preparation and
-          // transport failures must not hide capabilities from healthy servers. The
-          // policy and request validation above, and the global hooks below, remain
-          // outside this boundary so their failures are still request failures. @pk
-          log_listToolsUpstreamFailure(this.logger, server.name, error);
+        });
+        if (!result) {
           return [];
         }
         let tools = this.groups.length > 0
@@ -2105,6 +2112,36 @@ export class McpProxy {
       auth: await this.oauthServerRequiresLogin(server, resolvedUser) ? "requires-login" as const : "ready" as const,
       toolCount: "unknown" as const,
     })));
+  }
+
+  /**
+   * Run one upstream's contribution to an aggregated listing. Discovery is
+   * best-effort per upstream: authentication preparation, transport, and upstream
+   * health failures, or no answer within the discovery budget, omit only that
+   * server and are logged. Normalized Edge errors about the request itself still
+   * fail the listing. Returns `undefined` when the upstream contributes nothing. @pk
+   */
+  private async discoverFromUpstream<T>(
+    server: McpServer,
+    method: UpstreamListMethod,
+    user: UserContext,
+    discover: () => Promise<T>,
+  ): Promise<T | undefined> {
+    try {
+      return await timeoutAfter((async () => {
+        // Never contact the authorization server while listing. @pk
+        return await this.oauthServerRequiresLogin(server, user) ? undefined : discover();
+      })(), UPSTREAM_DISCOVERY_TIMEOUT_MS, `Upstream ${method} did not answer`, method);
+    } catch (error: unknown) {
+      if (isEdgeError(error)
+        && EDGE_ERROR_CODES.includes(error.code)
+        && error.name === `EdgeError[${error.code}]`
+        && !UPSTREAM_HEALTH_EDGE_ERRORS.includes(error.code)) {
+        throw error;
+      }
+      log_listUpstreamFailure(this.logger, server.name, method, error);
+      return undefined;
+    }
   }
 
   /**
@@ -2409,17 +2446,19 @@ export class McpProxy {
           return [];
         }
         const result = await this.dispatchOperationRoutes(context, async () => {
-          const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
-          context.credentialSources = credentialSource ? [credentialSource] : undefined;
-          context.credentials.sources = context.credentialSources ?? [];
-          const upstream = await this.dispatchTargetOperation(
-            server,
-            context,
-            () => server.listResources(params, userForServer),
-            (transport) => transport.listResources?.(params) ?? Promise.resolve({ resources: [] }),
-          );
+          const upstream = await this.discoverFromUpstream(server, "resources/list", resolvedUser, async () => {
+            const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
+            context.credentialSources = credentialSource ? [credentialSource] : undefined;
+            context.credentials.sources = context.credentialSources ?? [];
+            return this.dispatchTargetOperation(
+              server,
+              context,
+              () => server.listResources(params, userForServer),
+              (transport) => transport.listResources?.(params) ?? Promise.resolve({ resources: [] }),
+            );
+          });
           return {
-            resources: upstream.resources.filter((resource) =>
+            resources: (upstream?.resources ?? []).filter((resource) =>
               isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
                 {
                   serverName: server.name,
@@ -2543,17 +2582,19 @@ export class McpProxy {
           return [];
         }
         const result = await this.dispatchOperationRoutes(context, async () => {
-          const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
-          context.credentialSources = credentialSource ? [credentialSource] : undefined;
-          context.credentials.sources = context.credentialSources ?? [];
-          const upstream = await this.dispatchTargetOperation(
-            server,
-            context,
-            () => server.listResourceTemplates(params, userForServer),
-            (transport) => transport.listResourceTemplates?.(params) ?? Promise.resolve({ resourceTemplates: [] }),
-          );
+          const upstream = await this.discoverFromUpstream(server, "resources/templates/list", resolvedUser, async () => {
+            const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
+            context.credentialSources = credentialSource ? [credentialSource] : undefined;
+            context.credentials.sources = context.credentialSources ?? [];
+            return this.dispatchTargetOperation(
+              server,
+              context,
+              () => server.listResourceTemplates(params, userForServer),
+              (transport) => transport.listResourceTemplates?.(params) ?? Promise.resolve({ resourceTemplates: [] }),
+            );
+          });
           return {
-            resourceTemplates: upstream.resourceTemplates.filter((template) =>
+            resourceTemplates: (upstream?.resourceTemplates ?? []).filter((template) =>
               isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
                 {
                   serverName: server.name,
@@ -2608,17 +2649,19 @@ export class McpProxy {
           return [];
         }
         const result = await this.dispatchOperationRoutes(context, async () => {
-          const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
-          context.credentialSources = credentialSource ? [credentialSource] : undefined;
-          context.credentials.sources = context.credentialSources ?? [];
-          const upstream = await this.dispatchTargetOperation(
-            server,
-            context,
-            () => server.listPrompts(params, userForServer),
-            (transport) => transport.listPrompts?.(params) ?? Promise.resolve({ prompts: [] }),
-          );
+          const upstream = await this.discoverFromUpstream(server, "prompts/list", resolvedUser, async () => {
+            const { user: userForServer, credentialSource } = await this.applyUpstreamAuth(server, resolvedUser, resolvedSubject);
+            context.credentialSources = credentialSource ? [credentialSource] : undefined;
+            context.credentials.sources = context.credentialSources ?? [];
+            return this.dispatchTargetOperation(
+              server,
+              context,
+              () => server.listPrompts(params, userForServer),
+              (transport) => transport.listPrompts?.(params) ?? Promise.resolve({ prompts: [] }),
+            );
+          });
           return {
-            prompts: upstream.prompts.filter((prompt) =>
+            prompts: (upstream?.prompts ?? []).filter((prompt) =>
               isCapabilityAllowed({ groups: this.groups, policy: this.globalPolicy, subjectIndex: this.subjectIndex }, 
                 {
                   serverName: server.name,
@@ -4575,8 +4618,8 @@ function parseTimeoutMs(message: string): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
-function log_listToolsUpstreamFailure(logger: Logger, serverName: string, error: unknown): void {
-  logger.warn("Omitting unavailable upstream server from tools/list", {
+function log_listUpstreamFailure(logger: Logger, serverName: string, method: UpstreamListMethod, error: unknown): void {
+  logger.warn(`Omitting unavailable upstream server from ${method}`, {
     server: serverName,
     reason: redactOAuthMessage(error instanceof Error ? error.message : String(error)),
   });

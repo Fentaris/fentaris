@@ -254,6 +254,54 @@ describe("target-aware proxy dispatch", () => {
     });
   });
 
+  it.each([
+    {
+      code: "EDGE_SETUP_REQUIRED",
+      reply: (message: EdgeMcpOutboundEnvelope) => message.kind === "mcp.request" ? {
+        version: EDGE_MCP_ENVELOPE_VERSION,
+        kind: "mcp.error" as const,
+        requestId: message.requestId,
+        operation: message.operation,
+        route: message.route,
+        error: { code: "EDGE_SETUP_REQUIRED" as const, message: "Edge deployment is not locally ready." },
+      } : undefined,
+    },
+    {
+      code: "EDGE_PROTOCOL",
+      reply: (message: EdgeMcpOutboundEnvelope) => message.kind === "mcp.request" ? {
+        version: EDGE_MCP_ENVELOPE_VERSION,
+        kind: "mcp.result" as const,
+        requestId: message.requestId,
+        operation: message.operation,
+        route: message.route,
+        result: null as unknown as object,
+      } : undefined,
+    },
+  ])("keeps cloud discovery when one edge upstream replies with $code", async ({ reply }) => {
+    const channel = new TestChannel();
+    channel.responder = reply;
+    const proxy = new McpProxy({
+      policy: Policy.allowAll(),
+      servers: [
+        new McpServer({ name: "cloudy", transport: new CloudTransport() }),
+        new McpServer({ name: "fixture", transport: new CloudTransport() }),
+      ],
+      targets: { personal: edge({ device: edge.userDefaultDevice() }) },
+      placements: [{ serverName: "fixture", scope: "global", targetName: "personal" }],
+      edge: {
+        transport: new EdgeTransport({ channel }),
+        deviceResolver: { resolveUserDefaultDevice: async () => ({ edgeNodeId: "node-1" }) },
+      },
+    });
+
+    await expect(proxy.listTools(
+      undefined,
+      { id: "alice" },
+      { authenticated: true, userId: "alice", metadata: { sessionId: "session-1" } },
+    )).resolves.toMatchObject({ tools: [{ name: "cloudy__status" }] });
+    expect(channel.sent).toContainEqual(expect.objectContaining({ kind: "mcp.request", operation: "tools/list" }));
+  });
+
   it("keeps implicit cloud behavior and rejects unresolved cloud runtime references before startup", async () => {
     const cloudTransport = new CloudTransport();
     const cloudProxy = new McpProxy({
