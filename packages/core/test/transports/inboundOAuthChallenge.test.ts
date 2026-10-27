@@ -169,5 +169,22 @@ describe("OAuth configuration diagnostics", () => {
     expect(codes({ issuer, jwks: { url: "https://auth.example/jwks" }, verify: () => ({}) })).toContain("FENTARIS_CONFIG_OAUTH_RESOURCE_VERIFY_CONFLICT");
     expect(codes({ issuer, scopes: ["bad scope"] })).toContain("FENTARIS_CONFIG_OAUTH_RESOURCE_SCOPES_INVALID");
     expect(codes({ issuer }, { host: "0.0.0.0", oauth: { publicUrl: "https://proxy.example" } })).toEqual([]);
+    expect(codes({ issuer, cli: { clientId: " " } })).toContain("FENTARIS_CONFIG_OAUTH_RESOURCE_CLI_CLIENT_INVALID");
+    expect(codes({ issuer, cli: { clientId: "frs", scopes: ["bad scope"] } })).toContain("FENTARIS_CONFIG_OAUTH_RESOURCE_CLI_SCOPES_INVALID");
+    expect(codes({ issuer, cli: { clientId: "frs", scopes: ["mcp"] } })).toEqual([]);
+  });
+});
+
+describe("CLI login hint", () => {
+  it("advertises fentaris_cli only when configured and keeps the other metadata fields", async () => {
+    const hinted = fentaris({ port: 0, identity: oauthIdentityStrategy({ issuer, scopes: ["mcp"], cli: { clientId: "frs-cli", audience: "https://api.example", scopes: ["mcp", "offline_access"] } }) });
+    closes.push(() => hinted.close());
+    const base = `http://127.0.0.1:${((await hinted.start()).address() as { port: number }).port}`;
+    expect(await (await fetch(`${base}/.well-known/oauth-protected-resource/mcp`)).json()).toEqual({
+      resource: `${base}/mcp`, authorization_servers: [issuer], scopes_supported: ["mcp"], bearer_methods_supported: ["header"],
+      fentaris_cli: { client_id: "frs-cli", audience: "https://api.example", scopes: ["mcp", "offline_access"] },
+    });
+    const { base: plain } = await start("http");
+    expect(await (await fetch(`${plain}/.well-known/oauth-protected-resource`)).json()).not.toHaveProperty("fentaris_cli");
   });
 });

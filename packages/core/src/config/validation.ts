@@ -321,6 +321,8 @@ function validateIdentity(config: McpProxyOptions, groups: Group[], diagnostics:
       try { secureOAuthUrl(options.loginUrl); } catch { add("LOGIN_URL_INVALID", "loginUrl must be an absolute HTTPS URL (HTTP is allowed only on loopback), without credentials, query, or fragment."); }
     }
     if (options.jwks && options.verify) add("VERIFY_CONFLICT", "Configure jwks or verify, not both.");
+    if (options.cli && (typeof options.cli.clientId !== "string" || !options.cli.clientId.trim())) add("CLI_CLIENT_INVALID", "cli.clientId must be a non-empty OAuth client ID.");
+    if (options.cli?.scopes && (!Array.isArray(options.cli.scopes) || options.cli.scopes.some((scope) => typeof scope !== "string" || !/^[\x21\x23-\x5B\x5D-\x7E]+$/.test(scope)))) add("CLI_SCOPES_INVALID", "cli.scopes must contain non-empty OAuth scope tokens.");
     if (options.jwks) {
       try { secureOAuthUrl(options.jwks.url); } catch { add("JWKS_INVALID", "jwks.url must use HTTPS outside loopback."); }
       if (options.jwks.cacheTtlMs !== undefined && (!Number.isFinite(options.jwks.cacheTtlMs) || options.jwks.cacheTtlMs <= 0)) add("JWKS_INVALID", "cacheTtlMs must be a positive finite number.");
