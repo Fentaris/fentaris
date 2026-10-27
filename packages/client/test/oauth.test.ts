@@ -104,6 +104,37 @@ describe("OAuth login", () => {
     expect(rejected.json.nextActions[0].command).toBe(`frs auth login ${url}`);
   });
 
+  it("refreshes once when the proxy rejects the token after the handshake", async () => {
+    const as = await startAuthorizationServer();
+    cleanup.push(() => as.close());
+    const url = await oauthProxy(as);
+    const runtime = testRuntime(await tempDirectory(cleanup));
+    approveInBrowser(runtime);
+    expect((await run(runtime, "auth", "login", url, "--json")).code).toBe(0);
+
+    let expired = false;
+    runtime.fetch = (input, init) => {
+      if (!expired && typeof init?.body === "string" && init.body.includes('"tools/call"')) { expired = true; as.expireAccessTokens(); }
+      return fetch(input, init);
+    };
+    const requests = as.tokenRequests;
+    const call = await run(runtime, "tools", "call", "demo__echo", "--arg", "text=after-refresh", "--json");
+    expect(call.code).toBe(0);
+    expect(call.json.data.structuredContent).toEqual({ echoed: "after-refresh" });
+    expect(expired).toBe(true);
+    expect(as.tokenRequests).toBe(requests + 1);
+  });
+
+  it("bounds OAuth discovery requests by --timeout", async () => {
+    const stalled = createServer(() => undefined);
+    await new Promise<void>((resolve) => stalled.listen(0, "127.0.0.1", resolve));
+    cleanup.push(() => new Promise((resolve) => { stalled.closeAllConnections(); stalled.close(() => resolve()); }));
+    const url = `http://127.0.0.1:${(stalled.address() as { port: number }).port}/mcp`;
+    const login = await run(testRuntime(await tempDirectory(cleanup)), "auth", "login", url, "--timeout", "200", "--json");
+    expect(login.code).toBe(6);
+    expect(login.json.error.code).toBe("TIMEOUT");
+  });
+
   it("refreshes proactively when the stored token is about to expire", async () => {
     const as = await startAuthorizationServer({ accessTokenTtlSeconds: 1 });
     cleanup.push(() => as.close());

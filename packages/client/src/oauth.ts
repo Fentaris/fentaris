@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { discoverAuthorizationServerMetadata, exchangeAuthorization, refreshAuthorization, registerClient, startAuthorization } from "@modelcontextprotocol/sdk/client/auth.js";
 import type { AuthorizationServerMetadata, OAuthClientInformationMixed, OAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js";
+import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { OAuthProfile } from "./config.js";
 import type { CredentialRecord } from "./credentials.js";
 import { ClientError, toClientError } from "./errors.js";
@@ -16,12 +17,13 @@ export type ProtectedResourceMetadata = {
   fentaris_cli?: { client_id?: string; audience?: string; scopes?: string[] };
 };
 
-export type LoginOptions = { url: string; clientId?: string; scopes?: string[]; port?: number; printUrl: boolean; timeoutMs: number };
+/** `timeoutMs` bounds waiting for the browser; `requestTimeoutMs` bounds each HTTP request. */
+export type LoginOptions = { url: string; clientId?: string; scopes?: string[]; port?: number; printUrl: boolean; timeoutMs: number; requestTimeoutMs: number };
 
-export async function discoverProtectedResource(runtime: Runtime, url: string): Promise<ProtectedResourceMetadata | undefined> {
+export async function discoverProtectedResource(fetchFn: FetchLike, url: string): Promise<ProtectedResourceMetadata | undefined> {
   const candidates: string[] = [];
   try {
-    const probe = await runtime.fetch(url, { headers: { accept: "application/json, text/event-stream" } });
+    const probe = await fetchFn(url, { headers: { accept: "application/json, text/event-stream" } });
     await probe.body?.cancel();
     const advertised = probe.headers.get("www-authenticate")?.match(/resource_metadata="([^"]+)"/)?.[1];
     if (advertised) candidates.push(new URL(advertised, url).href);
@@ -30,7 +32,7 @@ export async function discoverProtectedResource(runtime: Runtime, url: string): 
   const path = parsed.pathname.replace(/\/$/, "");
   candidates.push(`${parsed.origin}/.well-known/oauth-protected-resource${path}`, `${parsed.origin}/.well-known/oauth-protected-resource`);
   for (const candidate of [...new Set(candidates)]) {
-    const response = await runtime.fetch(candidate, { headers: { accept: "application/json" } }).catch((error: unknown) => { throw toClientError(error, { url }); });
+    const response = await fetchFn(candidate, { headers: { accept: "application/json" } }).catch((error: unknown) => { throw toClientError(error, { url }); });
     if (!response.ok) { await response.body?.cancel(); continue; }
     const body = await response.json().catch(() => undefined) as ProtectedResourceMetadata | undefined;
     if (body && typeof body.resource === "string") return body;
@@ -40,7 +42,8 @@ export async function discoverProtectedResource(runtime: Runtime, url: string): 
 
 /** Interactive OAuth 2.1 authorization code + PKCE login with a loopback redirect. */
 export async function oauthLogin(runtime: Runtime, options: LoginOptions): Promise<{ oauth: OAuthProfile; record: CredentialRecord }> {
-  const metadata = await discoverProtectedResource(runtime, options.url);
+  const fetchFn = fetchWithin(runtime, options.requestTimeoutMs);
+  const metadata = await discoverProtectedResource(fetchFn, options.url);
   if (!metadata) throw new ClientError("LOGIN_FAILED", "The proxy does not advertise OAuth protected resource metadata.", { url: options.url }, [{ description: "Sign in with an API key instead", command: `frs auth login ${options.url} --with-api-key` }]);
   if (new URL(metadata.resource).origin !== new URL(options.url).origin) {
     // RFC 9728: never obtain tokens for a resource other than the one being contacted.
@@ -48,7 +51,7 @@ export async function oauthLogin(runtime: Runtime, options: LoginOptions): Promi
   }
   const issuer = metadata.authorization_servers?.[0];
   if (!issuer) throw new ClientError("LOGIN_FAILED", "The proxy metadata names no authorization server.");
-  const serverMetadata = await discoverAuthorizationServerMetadata(issuer, { fetchFn: runtime.fetch }).catch((error: unknown) => { throw toClientError(error, { url: issuer }); });
+  const serverMetadata = await discoverAuthorizationServerMetadata(issuer, { fetchFn }).catch((error: unknown) => { throw toClientError(error, { url: issuer }); });
   if (!serverMetadata) throw new ClientError("LOGIN_FAILED", `Cannot discover authorization server metadata for ${issuer}.`, { authorizationServer: issuer });
   const hint = metadata.fentaris_cli ?? {};
   const scopes = options.scopes ?? hint.scopes ?? metadata.scopes_supported;
@@ -56,7 +59,7 @@ export async function oauthLogin(runtime: Runtime, options: LoginOptions): Promi
 
   const listener = await startLoopback(options.port);
   try {
-    const { client, source } = await selectClient(runtime, issuer, serverMetadata, listener.redirectUri, scope, options.clientId ?? undefined, hint.client_id);
+    const { client, source } = await selectClient(fetchFn, issuer, serverMetadata, listener.redirectUri, scope, options.clientId ?? undefined, hint.client_id);
     const state = randomBytes(24).toString("base64url");
     const { authorizationUrl, codeVerifier } = await startAuthorization(issuer, { metadata: serverMetadata, clientInformation: client, redirectUrl: listener.redirectUri, scope, state, resource: new URL(metadata.resource) });
     if (hint.audience) authorizationUrl.searchParams.set("audience", hint.audience);
@@ -68,8 +71,8 @@ export async function oauthLogin(runtime: Runtime, options: LoginOptions): Promi
     if (error) throw new ClientError("LOGIN_FAILED", `The authorization server returned ${error}${callback.get("error_description") ? `: ${callback.get("error_description")}` : ""}.`, { error });
     const code = callback.get("code");
     if (!code) throw new ClientError("LOGIN_FAILED", "The authorization response contains no code.");
-    const tokens = await exchangeAuthorization(issuer, { metadata: serverMetadata, clientInformation: client, authorizationCode: code, codeVerifier, redirectUri: listener.redirectUri, resource: new URL(metadata.resource), fetchFn: runtime.fetch })
-      .catch((cause: unknown) => { throw new ClientError("LOGIN_FAILED", `The token exchange failed: ${(cause as Error).message}`); });
+    const tokens = await exchangeAuthorization(issuer, { metadata: serverMetadata, clientInformation: client, authorizationCode: code, codeVerifier, redirectUri: listener.redirectUri, resource: new URL(metadata.resource), fetchFn })
+      .catch(failure("LOGIN_FAILED", "The token exchange failed"));
     return {
       oauth: { authorizationServer: issuer, clientId: client.client_id, clientSource: source, resource: metadata.resource, ...(scopes?.length ? { scopes } : {}), ...(hint.audience ? { audience: hint.audience } : {}) },
       record: tokenRecord(tokens, client.client_secret),
@@ -79,19 +82,20 @@ export async function oauthLogin(runtime: Runtime, options: LoginOptions): Promi
   }
 }
 
-export async function refreshOAuth(runtime: Runtime, oauth: OAuthProfile, record: Extract<CredentialRecord, { type: "oauth" }>): Promise<Extract<CredentialRecord, { type: "oauth" }>> {
+export async function refreshOAuth(runtime: Runtime, oauth: OAuthProfile, record: Extract<CredentialRecord, { type: "oauth" }>, timeoutMs: number): Promise<Extract<CredentialRecord, { type: "oauth" }>> {
   if (!record.refreshToken) throw new ClientError("AUTH_REQUIRED", "The access token expired and no refresh token is available.");
+  const fetchFn = fetchWithin(runtime, timeoutMs);
   try {
-    const metadata = await discoverAuthorizationServerMetadata(oauth.authorizationServer, { fetchFn: runtime.fetch });
-    const tokens = await refreshAuthorization(oauth.authorizationServer, { metadata, clientInformation: { client_id: oauth.clientId, ...(record.clientSecret ? { client_secret: record.clientSecret } : {}) }, refreshToken: record.refreshToken, resource: new URL(oauth.resource), fetchFn: runtime.fetch });
+    const metadata = await discoverAuthorizationServerMetadata(oauth.authorizationServer, { fetchFn });
+    const tokens = await refreshAuthorization(oauth.authorizationServer, { metadata, clientInformation: { client_id: oauth.clientId, ...(record.clientSecret ? { client_secret: record.clientSecret } : {}) }, refreshToken: record.refreshToken, resource: new URL(oauth.resource), fetchFn });
     return { ...tokenRecord(tokens, record.clientSecret), refreshToken: tokens.refresh_token ?? record.refreshToken };
   } catch (error) {
     if (error instanceof ClientError) throw error;
-    throw new ClientError("AUTH_REQUIRED", `The token refresh failed: ${(error as Error).message}`);
+    return failure("AUTH_REQUIRED", "The token refresh failed")(error);
   }
 }
 
-async function selectClient(runtime: Runtime, issuer: string, metadata: AuthorizationServerMetadata, redirectUri: string, scope: string | undefined, flag: string | undefined, hinted: string | undefined): Promise<{ client: OAuthClientInformationMixed; source: OAuthProfile["clientSource"] }> {
+async function selectClient(fetchFn: FetchLike, issuer: string, metadata: AuthorizationServerMetadata, redirectUri: string, scope: string | undefined, flag: string | undefined, hinted: string | undefined): Promise<{ client: OAuthClientInformationMixed; source: OAuthProfile["clientSource"] }> {
   if (flag) return { client: { client_id: flag }, source: "flag" };
   if (hinted) return { client: { client_id: hinted }, source: "proxy-hint" };
   if (!metadata.registration_endpoint) {
@@ -100,9 +104,25 @@ async function selectClient(runtime: Runtime, issuer: string, metadata: Authoriz
   const registered = await registerClient(issuer, {
     metadata,
     clientMetadata: { client_name: "Fentaris CLI (frs)", redirect_uris: [redirectUri], grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], token_endpoint_auth_method: "none", ...(scope ? { scope } : {}) },
-    fetchFn: runtime.fetch,
-  }).catch((error: unknown) => { throw new ClientError("LOGIN_FAILED", `Dynamic client registration failed: ${(error as Error).message}`); });
+    fetchFn,
+  }).catch(failure("LOGIN_FAILED", "Dynamic client registration failed"));
   return { client: registered, source: "dynamic-registration" };
+}
+
+/** Bounds each OAuth HTTP request, so that a stalled server fails with TIMEOUT instead of hanging. */
+function fetchWithin(runtime: Runtime, timeoutMs: number): FetchLike {
+  return (url, init) => {
+    const deadline = AbortSignal.timeout(timeoutMs);
+    return runtime.fetch(url, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, deadline]) : deadline });
+  };
+}
+
+/** Maps an OAuth request failure to `code`, keeping timeouts as TIMEOUT. */
+function failure(code: "LOGIN_FAILED" | "AUTH_REQUIRED", prefix: string) {
+  return (cause: unknown): never => {
+    const mapped = toClientError(cause);
+    throw mapped.code === "TIMEOUT" ? mapped : new ClientError(code, `${prefix}: ${(cause as Error).message}`);
+  };
 }
 
 function tokenRecord(tokens: OAuthTokens, clientSecret: string | undefined): Extract<CredentialRecord, { type: "oauth" }> {

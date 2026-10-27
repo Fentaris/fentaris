@@ -54,7 +54,7 @@ export async function resolveConnection(runtime: Runtime, global: GlobalOptions)
   if (!record) throw new ClientError("NOT_LOGGED_IN", `Profile "${profileName}" has no stored credentials.`, { profile: profileName }, [{ description: "Sign in again", command: `frs auth login ${profile.url}${profileName === "default" ? "" : ` --profile ${profileName}`}${profile.method === "api-key" ? " --with-api-key" : ""}` }]);
   const refresh = async (): Promise<boolean> => {
     if (record?.type !== "oauth" || !profile.oauth || !record.refreshToken) return false;
-    record = await refreshOAuth(runtime, profile.oauth, record);
+    record = await refreshOAuth(runtime, profile.oauth, record, global.timeoutMs);
     await store.set(profileName, record);
     return true;
   };

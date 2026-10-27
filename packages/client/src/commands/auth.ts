@@ -43,6 +43,7 @@ export async function authLogin(context: CommandContext): Promise<CommandResult>
       port: options.port === undefined ? undefined : integerOption(options, "port", 0, 65535),
       printUrl: options["print-url"] === true || global.nonInteractive,
       timeoutMs: options.timeout === undefined ? LOGIN_TIMEOUT_MS : global.timeoutMs,
+      requestTimeoutMs: global.timeoutMs,
     });
     const token = login.record.type === "oauth" ? login.record.accessToken : "";
     await verify(context, { url, method: "oauth", source: "profile", headers: () => ({ authorization: `Bearer ${token}` }), loginAction: () => ({ description: "Sign in again", command: `frs auth login ${url}` }) }, "LOGIN_FAILED");

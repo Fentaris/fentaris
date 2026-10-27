@@ -1,3 +1,4 @@
+import { createServer, type IncomingHttpHeaders } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -161,5 +162,22 @@ describe("API key login and governed usage", () => {
     const result = await run(runtime, "tools", "list", "--json");
     expect(result.code).toBe(5);
     expect(result.json.error.code).toBe("PROXY_UNREACHABLE");
+  });
+
+  it("never forwards the API key through a redirect to another origin", async () => {
+    const received: IncomingHttpHeaders[] = [];
+    const elsewhere = createServer((req, res) => { received.push(req.headers); res.writeHead(404).end(); });
+    await new Promise<void>((resolve) => elsewhere.listen(0, "127.0.0.1", resolve));
+    cleanup.push(() => new Promise((resolve) => elsewhere.close(() => resolve())));
+    const target = `http://127.0.0.1:${(elsewhere.address() as { port: number }).port}/mcp`;
+    const redirecting = createServer((_req, res) => { res.writeHead(307, { location: target }).end(); });
+    await new Promise<void>((resolve) => redirecting.listen(0, "127.0.0.1", resolve));
+    cleanup.push(() => new Promise((resolve) => redirecting.close(() => resolve())));
+    const url = `http://127.0.0.1:${(redirecting.address() as { port: number }).port}/mcp`;
+
+    const result = await run(testRuntime(await tempDirectory(cleanup), { env: { FENTARIS_URL: url, FENTARIS_API_KEY: "alice-key" } }), "tools", "list", "--json");
+    expect(result.code).toBe(5);
+    expect(result.json.error.message).toContain("not followed");
+    expect(received).toEqual([]);
   });
 });

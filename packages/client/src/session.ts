@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { RequestOptions } from "@modelcontextprotocol/sdk/shared/protocol.js";
+import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { ElicitRequestSchema, type ElicitRequest, type ElicitResult } from "@modelcontextprotocol/sdk/types.js";
 import type { Connection } from "./connection.js";
 import { ClientError, toClientError } from "./errors.js";
@@ -19,22 +20,11 @@ export type Session = {
 
 /** Open one governed MCP session against the proxy; every operation runs through it. */
 export async function openSession(runtime: Runtime, connection: Connection, global: GlobalOptions): Promise<Session> {
-  const attempt = async () => {
-    const client = new Client({ name: "frs", version: VERSION }, { capabilities: { elicitation: { url: {} } } });
-    client.setRequestHandler(ElicitRequestSchema, (request) => handleElicitation(runtime, global, request.params));
-    const transport = new StreamableHTTPClientTransport(new URL(connection.url), { requestInit: { headers: connection.headers() }, fetch: runtime.fetch });
-    await client.connect(transport, { timeout: global.timeoutMs });
-    return { client, transport };
-  };
-  let opened: Awaited<ReturnType<typeof attempt>>;
-  try {
-    opened = await attempt();
-  } catch (error) {
-    if (!isUnauthorized(error) || !connection.refresh) throw authError(error, connection);
-    if (!await connection.refresh().catch((cause: unknown) => { throw authError(cause, connection); })) throw authError(error, connection);
-    opened = await attempt().catch((cause: unknown) => { throw authError(cause, connection); });
-  }
-  const { client, transport } = opened;
+  const client = new Client({ name: "frs", version: VERSION }, { capabilities: { elicitation: { url: {} } } });
+  client.setRequestHandler(ElicitRequestSchema, (request) => handleElicitation(runtime, global, request.params));
+  // Credentials must never follow a redirect to another origin.
+  const transport = new StreamableHTTPClientTransport(new URL(connection.url), { fetch: authenticatedFetch(runtime, connection), redirectPolicy: "same-origin" });
+  await client.connect(transport, { timeout: global.timeoutMs }).catch((error: unknown) => { throw authError(error, connection); });
   return {
     client,
     url: connection.url,
@@ -51,7 +41,7 @@ export async function withSession<T>(runtime: Runtime, connection: Connection, g
   try {
     return await run(session);
   } catch (error) {
-    throw toClientError(error, { url: connection.url });
+    throw authError(error, connection);
   } finally {
     await session.close();
   }
@@ -64,6 +54,27 @@ async function handleElicitation(runtime: Runtime, global: GlobalOptions, params
   await runtime.openUrl(params.url);
   runtime.error("Waiting for the authorization to complete…\n");
   return { action: "accept" };
+}
+
+/**
+ * Sends the current credentials with every proxy request. A 401 on any request, not only the
+ * handshake, refreshes OAuth credentials once per session and retries with the new token.
+ */
+function authenticatedFetch(runtime: Runtime, connection: Connection): FetchLike {
+  let refreshing: Promise<boolean> | undefined;
+  const send = (url: string | URL, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    for (const [name, value] of Object.entries(connection.headers())) headers.set(name, value);
+    return runtime.fetch(url, { ...init, headers });
+  };
+  return async (url, init) => {
+    const response = await send(url, init);
+    if (response.status !== 401 || !connection.refresh) return response;
+    refreshing ??= connection.refresh();
+    if (!await refreshing) return response;
+    await response.body?.cancel();
+    return send(url, init);
+  };
 }
 
 function isUnauthorized(error: unknown): boolean {
