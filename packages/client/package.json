@@ -1,0 +1,59 @@
+{
+  "name": "@fentaris/client",
+  "version": "0.0.0",
+  "description": "Fentaris client CLI: sign in to a Fentaris proxy and use its governed MCP tools, resources, and prompts from the terminal",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "frs": "./dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "tsc --watch",
+    "prepare": "tsc",
+    "build": "pnpm run clean && tsc",
+    "test": "vitest run --dir test",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1"
+  },
+  "devDependencies": {
+    "@fentaris/core": "workspace:*",
+    "@types/node": "^26.6.5",
+    "vitest": "^5.0.3"
+  },
+  "keywords": [
+    "fentaris",
+    "mcp",
+    "client",
+    "cli",
+    "agents"
+  ],
+  "author": "Gabriele Cipriani",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fentaris/fentaris.git",
+    "directory": "packages/client"
+  },
+  "homepage": "https://github.com/Fentaris/fentaris#readme",
+  "bugs": {
+    "url": "https://github.com/Fentaris/fentaris/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
