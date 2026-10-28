@@ -638,6 +638,124 @@ describe("McpProxy", () => {
     });
   });
 
+  const aggregatedLists = [
+    { list: "listTools", field: "tools", method: "tools/list", healthy: ["healthy__create_issue"] },
+    { list: "listResources", field: "resources", method: "resources/list", healthy: [toProxyResourceUri("healthy", "file:///shared.md")] },
+    { list: "listResourceTemplates", field: "resourceTemplates", method: "resources/templates/list", healthy: [toProxyResourceTemplateUri("healthy", "file:///{path}")] },
+    { list: "listPrompts", field: "prompts", method: "prompts/list", healthy: ["healthy__summarize"] },
+  ] as const;
+  type AggregatedList = (typeof aggregatedLists)[number];
+  const listIdentifiers = (result: Record<string, unknown>, field: AggregatedList["field"]): string[] =>
+    (result[field] as Array<{ name?: string; uri?: string; uriTemplate?: string }>).map((entry) => entry.uriTemplate ?? entry.uri ?? entry.name ?? "");
+  const listWith = (proxy: McpProxy, list: AggregatedList["list"]) =>
+    (proxy[list] as () => Promise<Record<string, unknown>>).call(proxy);
+
+  it.each(aggregatedLists)("isolates a throwing upstream from $method", async ({ list, field, method, healthy }) => {
+    const loggerDriver = new MemoryLogDriver();
+    const failing = new FeatureTransport();
+    failing[list].mockRejectedValue(new Error("connect ECONNREFUSED token=super-secret"));
+    const proxy = new McpProxy({
+      logger: new Logger({ driver: loggerDriver }),
+      policy: allowAllMcpOperations(),
+      servers: [
+        new McpServer({ name: "healthy", transport: new FeatureTransport() }),
+        new McpServer({ name: "offline", transport: failing }),
+      ],
+    });
+
+    expect(listIdentifiers(await listWith(proxy, list), field)).toEqual(healthy);
+    expect(loggerDriver.entries).toContainEqual(expect.objectContaining({
+      level: "warn",
+      message: `Omitting unavailable upstream server from ${method}`,
+      metadata: expect.objectContaining({ server: "offline" }),
+    }));
+    expect(JSON.stringify(loggerDriver.entries)).not.toContain("super-secret");
+  });
+
+  it.each(aggregatedLists)("bounds a hanging upstream in $method and keeps healthy entries", async ({ list, field, healthy }) => {
+    vi.useFakeTimers();
+    try {
+      const hanging = new FeatureTransport();
+      hanging[list].mockImplementation(() => new Promise<never>(() => undefined));
+      const slow = new FeatureTransport();
+      const original = slow[list].getMockImplementation()!;
+      slow[list].mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5_000));
+        return original() as never;
+      });
+      const proxy = new McpProxy({
+        policy: allowAllMcpOperations(),
+        servers: [
+          new McpServer({ name: "healthy", transport: new FeatureTransport() }),
+          new McpServer({ name: "hanging", transport: hanging }),
+          new McpServer({ name: "slow", transport: slow }),
+        ],
+      });
+
+      let settled: Record<string, unknown> | undefined;
+      void listWith(proxy, list).then((result) => { settled = result; });
+      await vi.advanceTimersByTimeAsync(14_999);
+      expect(settled).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(settled).toBeDefined();
+      expect(listIdentifiers(settled!, field)).toEqual([
+        ...healthy,
+        ...healthy.map((entry) => entry.replace("healthy", "slow")),
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(aggregatedLists.flatMap((entry) => (["EDGE_SETUP_REQUIRED", "EDGE_PROTOCOL"] as const).map((code) => ({ ...entry, code }))))(
+    "isolates normalized Edge upstream health error $code from $method",
+    async ({ list, field, healthy, code }) => {
+      const failing = new FeatureTransport();
+      failing[list].mockRejectedValue(edgeError(code, "Edge upstream is not healthy."));
+      const proxy = new McpProxy({
+        policy: allowAllMcpOperations(),
+        servers: [
+          new McpServer({ name: "healthy", transport: new FeatureTransport() }),
+          new McpServer({ name: "edge", transport: failing }),
+        ],
+      });
+
+      expect(listIdentifiers(await listWith(proxy, list), field)).toEqual(healthy);
+    },
+  );
+
+  it.each(aggregatedLists.flatMap((entry) => (["EDGE_INPUT_INVALID", "EDGE_UNAUTHORIZED_TARGET"] as const).map((code) => ({ ...entry, code }))))(
+    "still propagates normalized Edge validation or authorization error $code from $method",
+    async ({ list, code }) => {
+      const failing = new FeatureTransport();
+      failing[list].mockRejectedValue(edgeError(code, "invalid Edge request"));
+      const proxy = new McpProxy({
+        policy: allowAllMcpOperations(),
+        servers: [
+          new McpServer({ name: "healthy", transport: new FeatureTransport() }),
+          new McpServer({ name: "invalid", transport: failing }),
+        ],
+      });
+
+      await expect(listWith(proxy, list)).rejects.toMatchObject({ code });
+    },
+  );
+
+  it.each(aggregatedLists.filter(({ list }) => list !== "listTools"))(
+    "keeps middleware failures in $method outside the per-upstream boundary",
+    async ({ list }) => {
+      const proxy = new McpProxy({
+        policy: allowAllMcpOperations(),
+        servers: [new McpServer({ name: "healthy", transport: new FeatureTransport() })],
+      });
+      proxy.use(async () => {
+        throw new Error("middleware rejected the listing");
+      });
+
+      await expect(listWith(proxy, list)).rejects.toThrow("middleware rejected the listing");
+    },
+  );
+
   it("routes namespaced tool calls to the original upstream tool name", async () => {
     const transport = new MockTransport();
     const proxy = new McpProxy({

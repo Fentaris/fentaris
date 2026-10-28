@@ -100,11 +100,16 @@ const proxy = fentaris({
 
 Group-scoped servers reduce accidental discovery. A caller only sees tools from servers available to their resolved subject.
 
-Runtime `tools/list` discovery is isolated per upstream. A connection, transport, or
-upstream-authentication failure omits only that server and logs a redacted diagnostic;
-tools from healthy servers remain available. If every eligible upstream fails, the
-request succeeds with an empty `tools` array. OAuth login is never initiated by a list
-request, and policy filtering still applies to every successfully discovered tool.
+Runtime `tools/list`, `resources/list`, `resources/templates/list`, and `prompts/list`
+discovery is isolated per upstream. A connection, transport, or upstream-authentication
+failure, an Edge upstream that is unavailable, not set up, or replies malformed, or an
+upstream that does not answer within 15 seconds omits only that server and logs a
+redacted diagnostic; entries from healthy servers remain available. A connection that is
+still starting continues in the background and joins a later listing. If every eligible
+upstream fails, the request succeeds with an empty list. OAuth login is never initiated by
+a list request. Policy filtering still applies to every successfully discovered entry, and
+middleware, list hooks, and Edge request-validation or authorization errors still fail
+the request.
 
 ## Add Server-specific Middleware
 
